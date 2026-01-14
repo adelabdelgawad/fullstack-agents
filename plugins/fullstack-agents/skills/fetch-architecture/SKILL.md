@@ -317,10 +317,81 @@ Component → fetchClient → API Route → withAuth → backendFetch → FastAP
 Page → Server Action → serverFetch → API Route → withAuth → backendFetch → FastAPI
 ```
 
-### SWR (Data Fetching)
+### Data Fetching (Two Options)
+
+**Strategy A: Simple State (Default)**
+```
+useState(initialData) → fetchClient.get (manual refresh) → API Route → withAuth → backendFetch → FastAPI
+```
+
+**Strategy B: SWR (When Justified)**
 ```
 useSWR(url, fetcher) → fetchClient.get → API Route → withAuth → backendFetch → FastAPI
 ```
+
+## Client-Side State Management
+
+Choose based on revalidation needs:
+
+### Strategy A: Simple State (Default)
+
+Use `useState` for pages where data changes only via user actions:
+
+```tsx
+"use client";
+import { useState, useCallback } from "react";
+import { fetchClient } from "@/lib/fetch/client";
+
+function DataView({ initialData }) {
+  const [data, setData] = useState(initialData);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const { data: fresh } = await fetchClient.get(apiUrl);
+      setData(fresh);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [apiUrl]);
+
+  // Update from mutation response
+  const onUpdate = async (id: string, payload: object) => {
+    const { data: updated } = await fetchClient.put(`/api/items/${id}`, payload);
+    setData(current => ({
+      ...current,
+      items: current.items.map(i => i.id === id ? updated : i),
+    }));
+  };
+}
+```
+
+### Strategy B: SWR (When Justified)
+
+Use SWR only when data changes from external sources:
+
+```tsx
+"use client";
+import useSWR from "swr";
+import { fetchClient } from "@/lib/fetch/client";
+
+const fetcher = (url: string) => fetchClient.get(url).then(r => r.data);
+
+function DataView({ initialData }) {
+  /**
+   * SWR JUSTIFICATION:
+   * - Reason: [Why revalidation needed]
+   * - Trigger: [Interval / Focus / Manual]
+   */
+  const { data, mutate, isLoading } = useSWR(apiUrl, fetcher, {
+    fallbackData: initialData,
+    revalidateOnFocus: false,  // Set true only if justified
+  });
+}
+```
+
+See [nextjs/references/data-fetching-strategy.md](../nextjs/references/data-fetching-strategy.md) for the full decision framework.
 
 ## Key Patterns
 

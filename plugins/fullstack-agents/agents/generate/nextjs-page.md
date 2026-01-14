@@ -1,12 +1,12 @@
 ---
 name: generate-nextjs-page
-description: Generate Next.js page with SSR, SWR, and server actions. Use when user wants to create a frontend page, form, or view.
+description: Generate Next.js page with SSR and flexible data fetching. Use when user wants to create a frontend page, form, or view.
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
 # Next.js Page Generation Agent
 
-Generate Next.js pages with SSR + SWR hybrid pattern, server actions, and proper typing.
+Generate Next.js pages with SSR, flexible data fetching (simple state or SWR), server actions, and proper typing.
 
 ## When This Agent Activates
 
@@ -97,12 +97,48 @@ What data will this page display?
 - Should match your API endpoint name
 - Example: If API is `/api/products`, enter `products`
 
+### Data Fetching Strategy
+
+**Does this page need automatic data refresh?**
+
+Consider:
+- Will data change while the user is viewing the page?
+- Do multiple users edit the same records?
+- Is this a monitoring/dashboard view?
+
+| Scenario | Refresh Needed? | Strategy |
+|----------|-----------------|----------|
+| Settings page | No | A (Simple) |
+| Admin CRUD table | No | A (Simple) |
+| User profile form | No | A (Simple) |
+| Multi-user document | Yes | B (SWR) |
+| Dashboard with live stats | Yes | B (SWR) |
+| Job status monitoring | Yes | B (SWR) |
+
+**Select:**
+- [ ] **Strategy A: Simple Fetching** [recommended for most pages]
+  - Use React state for data management
+  - Update state from mutation responses
+  - Manual refresh only
+
+- [ ] **Strategy B: SWR Fetching** (requires justification)
+  - Justification (select reason):
+    - [ ] External data changes (webhooks, background jobs)
+    - [ ] Multi-user concurrent editing
+    - [ ] Real-time dashboard/monitoring
+    - [ ] Other: ___________
+  - Refresh trigger:
+    - [ ] Interval-based (every ___ seconds)
+    - [ ] Focus-based (refetch on tab focus)
+    - [ ] Manual only (with SWR caching benefits)
+
 ### Detected Patterns
 
 Based on your codebase:
 | Pattern | Detected |
 |---------|----------|
-| SSR + SWR hybrid | {Yes/No} |
+| Simple state pattern | {Yes/No} |
+| SWR pattern | {Yes/No} |
 | Server actions | {Yes/No} |
 | Context pattern | {Yes/No} |
 | URL state (nuqs) | {Yes/No} |
@@ -157,6 +193,7 @@ Provide the API endpoint, and I'll detect the structure automatically.
 
 Page: **{PageName}**
 Route: `/setting/{page-name}`
+Data Fetching: **Strategy {A/B}** {- justification if B}
 
 ### Files to Create
 
@@ -177,7 +214,7 @@ page.tsx (Server Component)
 └── Handle errors
 
 {name}-view.tsx (Client Component)
-├── useSWR for data management
+├── {Strategy A: useState | Strategy B: useSWR} for data management
 ├── Form/List rendering
 ├── Handle user interactions
 └── Call server actions
@@ -188,11 +225,17 @@ page.tsx (Server Component)
 
 ### Phase 6: Code Generation
 
-**Read skill references:**
+**Read skill references based on strategy:**
 
-1. Read `skills/nextjs/references/page-pattern.md`
-2. Read `skills/nextjs/references/context-pattern.md`
-3. Read `skills/nextjs/references/fetch-pattern.md`
+For Strategy A (Simple Fetching):
+1. Read `skills/nextjs/references/simple-fetching-pattern.md`
+2. Read `skills/nextjs/references/page-pattern.md`
+3. Read `skills/nextjs/references/context-pattern.md`
+
+For Strategy B (SWR Fetching):
+1. Read `skills/nextjs/references/swr-fetching-pattern.md`
+2. Read `skills/nextjs/references/page-pattern.md`
+3. Read `skills/nextjs/references/context-pattern.md`
 
 **Generation order:**
 
@@ -205,7 +248,8 @@ page.tsx (Server Component)
 **Key patterns:**
 
 - **Server component**: Page is server component, fetches initial data
-- **Client component**: View component uses SWR with fallbackData
+- **Client component (Strategy A)**: View uses `useState` with initialData
+- **Client component (Strategy B)**: View uses `useSWR` with fallbackData + justification comment
 - **Server actions**: Mutations use server actions with revalidation
 - **Type safety**: All data flows through TypeScript types
 

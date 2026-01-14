@@ -139,13 +139,27 @@ The single-session-per-request pattern is critical:
 - Session passed to repository methods
 - Never store session in `__init__`
 
-### SSR + SWR (Next.js)
+### Data Fetching (Next.js)
 
-The hybrid pattern:
-- Page is server component (no "use client")
-- Page fetches initial data
-- Client component uses SWR with `fallbackData`
+Two supported strategies based on revalidation needs:
+
+**Strategy A: Simple Fetching (Default)**
+- Page is server component, fetches initial data
+- Client uses `useState` with initialData
+- UI updates from server mutation responses
+- Use for: Settings, admin CRUD, forms, most tables
+
+**Strategy B: SWR Fetching (When Justified)**
+- Requires documented justification comment
+- Client uses `useSWR` with `fallbackData`
+- Configure appropriate revalidation triggers
+- Use for: Dashboards, multi-user editing, live monitoring
+
+Both strategies:
+- Server component fetches initial data (no "use client" on page)
 - Updates use server response (never optimistic)
+
+See: `plugins/fullstack-agents/skills/nextjs/references/data-fetching-strategy.md`
 
 ## Commit Message Format
 
