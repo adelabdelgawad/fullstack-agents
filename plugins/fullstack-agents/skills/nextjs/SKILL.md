@@ -1,6 +1,6 @@
 # Next.js Template Skill
 
-Generate production-ready Next.js pages with SSR initial load, SWR client-side data management, and server-response-based cache updates.
+Generate production-ready Next.js pages with SSR initial load, flexible client-side data management, and server-response-based updates.
 
 ## When to Use This Skill
 
@@ -85,9 +85,11 @@ types/
 
 ## Core Principles
 
-### 1. SSR + SWR Hybrid Pattern
+### 1. Data Fetching Strategy
 
-**Server Component (page.tsx):**
+Choose the appropriate pattern based on requirements. See [references/data-fetching-strategy.md](references/data-fetching-strategy.md) for the decision framework.
+
+**Server Component (page.tsx) - Same for both strategies:**
 ```tsx
 // NO "use client" - this is a server component
 import { auth } from "@/lib/auth/server-auth";
@@ -113,7 +115,32 @@ export default async function ItemsPage({
 }
 ```
 
-**Client Component (items-table.tsx):**
+**Strategy A: Simple Fetching (Default)**
+```tsx
+"use client";
+
+import { useState } from "react";
+import { fetchClient } from "@/lib/fetch/client";
+
+function ItemsTable({ initialData }) {
+  const [data, setData] = useState(initialData);
+
+  // Update from server response
+  const updateItems = (serverResponse: Item[]) => {
+    setData(current => ({
+      ...current,
+      items: current.items.map(item => {
+        const updated = serverResponse.find(i => i.id === item.id);
+        return updated ?? item;
+      }),
+    }));
+  };
+  // ...
+}
+```
+See [references/simple-fetching-pattern.md](references/simple-fetching-pattern.md).
+
+**Strategy B: SWR Fetching (When Justified)**
 ```tsx
 "use client";
 
@@ -125,20 +152,26 @@ const fetcher = (url: string) => fetchClient.get(url).then(r => r.data);
 function ItemsTable({ initialData }) {
   const searchParams = useSearchParams();
   const page = Number(searchParams?.get("page") || "1");
-  
+
+  /**
+   * SWR JUSTIFICATION:
+   * - Reason: [Document why revalidation needed]
+   * - Trigger: [Interval / Focus / Manual]
+   */
   const { data, mutate, isLoading } = useSWR(
     `/api/setting/items?page=${page}`,
     fetcher,
     {
-      fallbackData: initialData,      // SSR data as initial cache
-      keepPreviousData: true,         // Smooth transitions
-      revalidateOnMount: false,       // Don't refetch on mount
-      revalidateOnFocus: false,       // Don't refetch on focus
+      fallbackData: initialData,
+      keepPreviousData: true,
+      revalidateOnMount: false,
+      revalidateOnFocus: false,  // Set true only if justified
     }
   );
   // ...
 }
 ```
+See [references/swr-fetching-pattern.md](references/swr-fetching-pattern.md).
 
 ### 2. Server Response Updates (NOT Optimistic)
 
@@ -237,11 +270,15 @@ When creating a new entity page, generate files in this order:
 
 ## Quick Reference
 
-### SWR Configuration
+### Data Fetching Strategy
+- **Strategy A (Default)**: `useState` + server response updates
+- **Strategy B (Opt-in)**: `useSWR` with documented justification
+
+### SWR Configuration (Strategy B only)
 - `fallbackData` - SSR data for instant render
 - `keepPreviousData: true` - Smooth pagination
 - `revalidateOnMount: false` - Trust SSR data
-- `revalidateOnFocus: false` - Reduce API calls
+- `revalidateOnFocus: false` - Set true only if justified
 
 ### Key Files
 - `lib/fetch/client.ts` - Client-side API calls
@@ -251,8 +288,11 @@ When creating a new entity page, generate files in this order:
 ## References
 
 See the `references/` directory for detailed patterns:
+- `data-fetching-strategy.md` - Decision framework for choosing strategy
+- `simple-fetching-pattern.md` - Strategy A implementation
+- `swr-fetching-pattern.md` - Strategy B implementation
 - `page-pattern.md` - SSR page structure
-- `table-pattern.md` - SWR table component
+- `table-pattern.md` - Table component patterns
 - `context-pattern.md` - Actions context
 - `api-route-pattern.md` - API routes
 - `fetch-pattern.md` - Fetch utilities

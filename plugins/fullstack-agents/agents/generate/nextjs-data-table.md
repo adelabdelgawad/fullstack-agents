@@ -6,7 +6,7 @@ tools: Read, Write, Edit, Bash, Glob, Grep
 
 # Next.js Data Table Generation Agent
 
-Generate complete data table pages with SSR + SWR, TanStack Table, CRUD operations, and bulk actions.
+Generate complete data table pages with SSR, flexible data fetching (simple state or SWR), TanStack Table, CRUD operations, and bulk actions.
 
 ## When This Agent Activates
 
@@ -113,6 +113,37 @@ created_at: date (sortable)
 actions: actions (view, edit, delete)
 ```
 
+### Data Fetching Strategy
+
+**For this data table, consider:**
+
+1. **Is this a settings/admin management page?**
+   - Most CRUD tables don't need automatic refresh
+   - Data changes only when users perform actions
+
+2. **Will external systems update this data?**
+   - Background jobs processing items
+   - Other users editing concurrently
+   - Webhook-triggered updates
+
+| Table Type | Typical Strategy | Reason |
+|------------|------------------|--------|
+| Settings/Config | A (Simple) | Single admin manages |
+| Entity CRUD | A (Simple) | Mutation-driven |
+| Order Management | A (Simple) | Actions drive changes |
+| Live Dashboard | B (SWR) | Background job updates |
+| Multi-User Queue | B (SWR) | Concurrent editing |
+
+**Select strategy:**
+- [ ] **Strategy A: Simple Fetching** [recommended for CRUD tables]
+  - React state management
+  - No polling or automatic refetch
+  - Lower complexity, no SWR dependency
+
+- [ ] **Strategy B: SWR Fetching** (requires justification)
+  - Justification: ___________
+  - Revalidation trigger: ___________
+
 ### Detected from Backend
 
 {If backend entity exists, show detected fields}
@@ -190,6 +221,7 @@ is_featured: checkbox (default=false)
 
 Data Table Page: **{entities}**
 Route: `/setting/{entities}`
+Data Fetching: **Strategy {A/B}** {- justification if B}
 
 ### Files to Create
 
@@ -216,7 +248,7 @@ page.tsx (Server Component)
 └── Pass to client
 
 {entities}-table.tsx (Client Component)
-├── useSWR(fallbackData)
+├── {Strategy A: useState(initialData) | Strategy B: useSWR(fallbackData)}
 ├── URL state with nuqs
 ├── DataTable component
 └── Context provider
@@ -225,7 +257,7 @@ page.tsx (Server Component)
 ├── add{Entity}()
 ├── update{Entity}()
 ├── delete{Entity}()
-└── SWR mutation handlers
+└── {Strategy A: setState handlers | Strategy B: mutate handlers}
 ```
 
 ### Column Preview
@@ -239,13 +271,23 @@ page.tsx (Server Component)
 
 ### Phase 6: Code Generation
 
-**Read skill references:**
+**Read skill references based on strategy:**
 
-1. Read `skills/data-table/references/types-pattern.md`
-2. Read `skills/data-table/references/api-routes-pattern.md`
-3. Read `skills/data-table/references/context-pattern.md`
-4. Read `skills/data-table/references/table-component-pattern.md`
-5. Read `skills/data-table/references/columns-pattern.md`
+For Strategy A (Simple Fetching):
+1. Read `skills/nextjs/references/simple-fetching-pattern.md`
+2. Read `skills/data-table/references/types-pattern.md`
+3. Read `skills/data-table/references/api-routes-pattern.md`
+4. Read `skills/data-table/references/context-pattern.md`
+5. Read `skills/data-table/references/table-component-pattern.md`
+6. Read `skills/data-table/references/columns-pattern.md`
+
+For Strategy B (SWR Fetching):
+1. Read `skills/nextjs/references/swr-fetching-pattern.md`
+2. Read `skills/data-table/references/types-pattern.md`
+3. Read `skills/data-table/references/api-routes-pattern.md`
+4. Read `skills/data-table/references/context-pattern.md`
+5. Read `skills/data-table/references/table-component-pattern.md`
+6. Read `skills/data-table/references/columns-pattern.md`
 
 **Generation order:**
 
@@ -262,10 +304,12 @@ page.tsx (Server Component)
 
 **Key patterns:**
 
-- **SSR + SWR**: Server fetches initial data, client uses SWR with fallbackData
+- **SSR**: Server fetches initial data for fast first paint
+- **Strategy A**: Client uses `useState(initialData)`, no auto-refresh
+- **Strategy B**: Client uses `useSWR(fallbackData)` with justification comment
 - **URL state**: All filter/sort/pagination state in URL via nuqs
 - **Context actions**: CRUD operations via context for deeply nested access
-- **Server response**: Update cache with server response, never optimistic
+- **Server response**: Update state with server response, never optimistic
 
 ### Phase 7: Next Steps
 

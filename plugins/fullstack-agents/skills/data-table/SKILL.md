@@ -7,11 +7,38 @@ description: Create Next.js data table pages with SSR initial load, SWR caching,
 
 Create production-ready data table pages with:
 - **SSR initial data loading** for fast first paint
-- **SWR caching** with server response updates (no optimistic)
+- **Flexible data fetching** - Simple state or SWR based on needs
 - **URL-based state** for filters/pagination via `nuqs`
 - **Centralized data-table** from `@/components/data-table`
 - **Type-safe columns** with TanStack Table
 - **Context-based actions** for CRUD operations
+
+## Data Fetching Strategy
+
+**Before generating, determine the appropriate strategy:**
+
+### Decision Question
+**Does this table's data change without user action?**
+
+| Answer | Strategy | Use When |
+|--------|----------|----------|
+| **No** | A: Simple Fetching (Default) | Settings, admin CRUD, most entity tables |
+| **Yes** | B: SWR Fetching | Dashboards, multi-user editing, live monitoring |
+
+### Strategy A: Simple Fetching (Recommended for CRUD Tables)
+- Use `useState` for local data management
+- Update state from server mutation responses
+- No automatic revalidation
+- Lower complexity, no SWR dependency
+- **See:** [nextjs/references/simple-fetching-pattern.md](../nextjs/references/simple-fetching-pattern.md)
+
+### Strategy B: SWR Fetching (Requires Justification)
+- Use `useSWR` with documented justification
+- Configure appropriate revalidation triggers
+- For dashboards and multi-user scenarios
+- **See:** [nextjs/references/swr-fetching-pattern.md](../nextjs/references/swr-fetching-pattern.md)
+
+**Decision framework:** [nextjs/references/data-fetching-strategy.md](../nextjs/references/data-fetching-strategy.md)
 
 ## Architecture Overview
 
@@ -116,24 +143,50 @@ See [references/context-pattern.md](references/context-pattern.md) for:
 ## Core Principles
 
 ### Server Response Updates (NOT Optimistic)
+
+Both strategies use server responses to update the UI:
+
 ```tsx
 // ✅ CORRECT: Use server response
 const { data: updated } = await fetchClient.put(`/api/entity/${id}`, body);
-await updateItems([updated]); // Cache mutation with server data
+updateItems([updated]); // Update local state with server data
 
 // ❌ WRONG: Optimistic update
 const optimistic = { ...current, ...changes };
-await mutate({ items: [...items.filter(i => i.id !== id), optimistic] });
+setData({ items: [...items.filter(i => i.id !== id), optimistic] });
 ```
 
-### SWR Configuration
+### Strategy A: Simple State Management (Default)
 ```tsx
+// No SWR - use React state
+const [data, setData] = useState<Response>(initialData);
+
+const updateItems = (serverResponse: Item[]) => {
+  setData(current => {
+    const responseMap = new Map(serverResponse.map(i => [i.id, i]));
+    return {
+      ...current,
+      items: current.items.map(item =>
+        responseMap.has(item.id) ? responseMap.get(item.id)! : item
+      ),
+    };
+  });
+};
+```
+
+### Strategy B: SWR Configuration (When Justified)
+```tsx
+/**
+ * SWR JUSTIFICATION:
+ * - Reason: [Document why revalidation is needed]
+ * - Trigger: [Interval / Focus / Manual]
+ */
 const { data, mutate } = useSWR<Response>(apiUrl, fetcher, {
   fallbackData: initialData ?? undefined,
   keepPreviousData: true,
   revalidateOnMount: false,
   revalidateIfStale: true,
-  revalidateOnFocus: false,
+  revalidateOnFocus: false,  // Set true only if justified
   revalidateOnReconnect: false,
 });
 ```
@@ -172,17 +225,20 @@ const updateItems = async (serverResponse: EntityResponse[]) => {
 ## Required Dependencies
 
 Ensure project has:
-- `swr` - Data fetching/caching
 - `nuqs` - URL state management
 - `@tanstack/react-table` - Table primitives
 - `@/components/data-table` - Reusable table components (must exist)
+- `swr` - Only if using Strategy B (SWR fetching)
 
 ## Checklist
 
+- [ ] Data fetching strategy selected (A or B)
 - [ ] Types defined for entity and response
 - [ ] API routes created (GET, POST, PUT, bulk status)
 - [ ] SSR page fetches initial data
-- [ ] Main table uses SWR with fallbackData
+- [ ] Main table uses selected strategy:
+  - Strategy A: `useState` with initialData
+  - Strategy B: `useSWR` with fallbackData + justification comment
 - [ ] Actions return server response (not optimistic)
 - [ ] Columns show loading state via updatingIds
 - [ ] Context provides actions to children

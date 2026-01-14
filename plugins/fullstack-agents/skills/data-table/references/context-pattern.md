@@ -2,6 +2,12 @@
 
 Context provides actions to child components without prop drilling.
 
+**Note:** This pattern works with both data fetching strategies:
+- **Strategy A (Simple)**: Parent uses `useState`, passes `updateItems` that calls `setData`
+- **Strategy B (SWR)**: Parent uses `useSWR`, passes `updateItems` that calls `mutate`
+
+The context interface is identical - children don't need to know which strategy is used.
+
 ## Context Provider
 
 ```tsx
