@@ -1,6 +1,6 @@
 {
   "name": "fullstack-agents",
-  "description": "Unified fullstack development toolkit with 28 AI agents, 8 commands, and 7 skill domains for FastAPI, Next.js, Docker, Celery, and more. Features intelligent code generation with interactive dialogue, pattern detection, and multi-agent orchestration.",
+  "description": "Unified fullstack development toolkit with 28 AI agents, 8 commands, and 8 skill domains for FastAPI, Next.js, Docker, Celery, WebSocket, and more. Features intelligent code generation with interactive dialogue, pattern detection, and multi-agent orchestration.",
   "version": "1.0.0",
   "license": "MIT",
   "author": {
