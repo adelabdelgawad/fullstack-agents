@@ -159,6 +159,18 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
       }
     },
 
+    onFetchEntity: async (id: string) => {
+      try {
+        const { data } = await fetchClient.get<[Entity]Response>(
+          `/[section]/[entity]/${id}`
+        );
+        return { success: true, data };
+      } catch (error: unknown) {
+        const err = error as { data?: { detail?: string }; message?: string };
+        return { success: false, error: err.data?.detail || err.message || "Failed to load" };
+      }
+    },
+
     onRefresh: refresh,
     updateItems,
   }), [updateItems, refresh]);
@@ -382,6 +394,18 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
           success: false,
           error: err.data?.detail || err.message || "Failed to update status",
         };
+      }
+    },
+
+    onFetchEntity: async (id: string) => {
+      try {
+        const { data } = await fetchClient.get<[Entity]Response>(
+          `/[section]/[entity]/${id}`
+        );
+        return { success: true, data };
+      } catch (error: unknown) {
+        const err = error as { data?: { detail?: string }; message?: string };
+        return { success: false, error: err.data?.detail || err.message || "Failed to load" };
       }
     },
 

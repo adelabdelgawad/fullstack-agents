@@ -140,6 +140,13 @@ See [references/context-pattern.md](references/context-pattern.md) for:
 - Bulk action hooks
 - Error handling patterns
 
+### 7. Edit/Add Sheets
+See [references/edit-sheet-pattern.md](references/edit-sheet-pattern.md) for:
+- Fetch-then-open pattern (load complete entity before opening sheet)
+- Row actions with loading states
+- Edit sheet component structure
+- Form handling with server response updates
+
 ## Core Principles
 
 ### Server Response Updates (NOT Optimistic)
@@ -244,3 +251,4 @@ Ensure project has:
 - [ ] Context provides actions to children
 - [ ] Bulk actions use hook pattern
 - [ ] URL params drive filtering/pagination
+- [ ] Edit sheets use fetch-then-open pattern (not row.original)
