@@ -244,3 +244,92 @@ export function [Entity]TableController({
 3. **Loading States**: `markUpdating`/`clearUpdating` control spinner display
 4. **Toast Notifications**: Success/error feedback for all actions
 5. **Server Response**: Always use API response to update cache
+
+---
+
+## Edit Sheet Pattern
+
+When editing a row, table data contains only partial fields (columns shown). The edit form needs the complete entity.
+
+**Solution:** Use `onFetchEntity` to load complete data before opening the sheet.
+
+See [edit-sheet-pattern.md](edit-sheet-pattern.md) for the full pattern.
+
+### Context Type with onFetchEntity
+
+```tsx
+export interface ActionResult<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
+export interface [Entity]ActionsContextType {
+  onToggleStatus: (id: string, isActive: boolean) => Promise<ActionResult>;
+  onUpdate: (id: string, payload: Record<string, unknown>) => Promise<ActionResult>;
+  onBulkUpdateStatus: (ids: string[], isActive: boolean) => Promise<ActionResult>;
+  onFetchEntity: (id: string) => Promise<ActionResult<[Entity]Response>>;
+  onRefresh: () => Promise<ActionResult>;
+  updateItems: (items: [Entity]Response[]) => void;
+}
+```
+
+### Usage in Row Actions
+
+```tsx
+// _components/table/[entity]-row-actions.tsx
+"use client";
+
+import { useState, useTransition } from "react";
+import { use[Entity]Actions } from "../../context/[entity]-actions-context";
+import { Edit[Entity]Sheet } from "../modal/edit-[entity]-sheet";
+import { toast } from "@/components/ui/custom-toast";
+import type { [Entity]Response } from "@/types/[entity]";
+
+export function [Entity]RowActions({ entityId }: { entityId: string }) {
+  const { onFetchEntity, updateItems } = use[Entity]Actions();
+  const [editingData, setEditingData] = useState<[Entity]Response | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const handleEditClick = () => {
+    startTransition(async () => {
+      const result = await onFetchEntity(entityId);
+      if (result.success && result.data) {
+        setEditingData(result.data);
+      } else {
+        toast.error(result.error || "Failed to load item");
+      }
+    });
+  };
+
+  const handleUpdate = (updated: [Entity]Response) => {
+    updateItems([updated]);
+    setEditingData(null);
+  };
+
+  return (
+    <>
+      <Button onClick={handleEditClick} disabled={isPending}>
+        {isPending ? <Loader2 className="animate-spin" /> : "Edit"}
+      </Button>
+
+      {editingData && (
+        <Edit[Entity]Sheet
+          item={editingData}
+          open={!!editingData}
+          onClose={() => setEditingData(null)}
+          onUpdate={handleUpdate}
+        />
+      )}
+    </>
+  );
+}
+```
+
+### Key Points
+
+1. **Button shows loading** - spinner on the edit button during fetch
+2. **Sheet opens ready** - no loading state inside the sheet
+3. **Error handling** - toast on fetch failure, sheet doesn't open
+4. **Uses context actions** - `onFetchEntity` and `updateItems` from context
