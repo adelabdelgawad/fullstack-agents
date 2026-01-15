@@ -19,6 +19,7 @@
     "docker",
     "celery",
     "apscheduler",
+    "websocket",
     "fullstack",
     "agents",
     "code-generation",
@@ -125,7 +126,8 @@
     "fetch-architecture",
     "celery",
     "tasks-management",
-    "docker"
+    "docker",
+    "websocket"
   ],
   "dependencies": [],
   "compatibility": {
