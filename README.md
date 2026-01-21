@@ -1,6 +1,6 @@
 # Fullstack Agents
 
-AI-powered fullstack development toolkit for Claude Code. **28 agents**, **8 commands**, **8 skills** for intelligent code generation, review, analysis, and optimization.
+AI-powered fullstack development toolkit for Claude Code. **28 agents**, **8 commands**, **9 skills** for intelligent code generation, review, analysis, and optimization.
 
 ## Installation
 
@@ -38,7 +38,7 @@ AI-powered fullstack development toolkit for Claude Code. **28 agents**, **8 com
 | `/validate` | Validate entity follows patterns |
 | `/status` | Show project status and available actions |
 
-### 8 Skill Domains
+### 9 Skill Domains
 
 - **FastAPI** - Backend API patterns (model, schema, repository, service, router)
 - **Next.js** - Frontend patterns (pages, components, server actions)
@@ -48,6 +48,7 @@ AI-powered fullstack development toolkit for Claude Code. **28 agents**, **8 com
 - **Tasks Management** - APScheduler job patterns
 - **Docker** - Container infrastructure patterns
 - **WebSocket** - Real-time connection patterns (manager, rooms, messaging)
+- **Batch Error Resolution** - Disciplined batch error handling (collect, analyze, resolve, verify)
 
 ## Supported Technologies
 
@@ -143,7 +144,8 @@ plugins/fullstack-agents/
     ├── celery/
     ├── tasks-management/
     ├── docker/
-    └── websocket/
+    ├── websocket/
+    └── batch-error-resolution/
 ```
 
 ## Philosophy

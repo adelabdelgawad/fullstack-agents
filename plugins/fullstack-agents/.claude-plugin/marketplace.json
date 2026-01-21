@@ -127,7 +127,8 @@
     "celery",
     "tasks-management",
     "docker",
-    "websocket"
+    "websocket",
+    "batch-error-resolution"
   ],
   "dependencies": [],
   "compatibility": {
