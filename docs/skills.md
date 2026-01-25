@@ -1,6 +1,6 @@
 # Skills Reference
 
-This document provides a complete reference for all 7 skill domains in the fullstack-agents plugin.
+This document provides a complete reference for all 9 skill domains in the fullstack-agents plugin.
 
 ## Skills Overview
 
@@ -13,6 +13,8 @@ This document provides a complete reference for all 7 skill domains in the fulls
 | Celery | Background task patterns |
 | Tasks Management | APScheduler job patterns |
 | Docker | Container infrastructure patterns |
+| WebSocket | Real-time connection patterns |
+| Batch Error Resolution | Disciplined batch error handling |
 
 ---
 
@@ -75,11 +77,27 @@ class ItemRepository:
         return result.scalars().all()
 ```
 
+### Pattern Files
+
+**Core Patterns:**
+- `model-pattern.md` - SQLAlchemy models
+- `schema-pattern.md` - Pydantic DTO patterns
+- `repository-pattern.md` - Data access layer
+- `service-pattern.md` - Business logic layer
+- `router-pattern.md` - API endpoints (PATCH, multiple responses)
+
+**Advanced Patterns:**
+- `file-upload-pattern.md` - File uploads with UploadFile, validation, S3
+- `testing-pattern.md` - pytest fixtures, async tests, dependency overrides
+- `response-types-pattern.md` - HTML, file downloads, streaming, redirects
+- `middleware-pattern.md` - Security headers, correlation ID, timing, logging
+- `form-data-pattern.md` - Form handling, OAuth2 password flow, headers, cookies
+
 ### References
 
 - `skills/fastapi/SKILL.md` - Complete skill overview
 - `skills/fastapi/examples.md` - Usage examples
-- `skills/fastapi/references/` - Detailed pattern documentation
+- `skills/fastapi/references/` - All pattern documentation
 
 ---
 

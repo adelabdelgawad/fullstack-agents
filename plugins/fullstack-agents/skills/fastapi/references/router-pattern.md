@@ -9,6 +9,9 @@ API endpoints with FastAPI using dependency injection.
 3. **Pass session to service** - `await service.method(session, ...)`
 4. **Use response_model** - For automatic validation and documentation
 5. **Let exceptions propagate** - Exception handlers convert to HTTP
+6. **Document multiple responses** - Use `responses` parameter for OpenAPI
+7. **Include PATCH endpoints** - Support partial updates with `exclude_unset=True`
+8. **Configure path operations** - Use `tags`, `summary`, `description`, `deprecated`
 
 ## Basic Router Structure
 
@@ -99,14 +102,14 @@ async def list_items(
     return [ItemResponse.model_validate(item) for item in items]
 
 
-# UPDATE
+# UPDATE (Full - PUT)
 @router.put("/{item_id}", response_model=ItemResponse)
 async def update_item(
     item_id: int,
     item_update: ItemUpdate,
     session: AsyncSession = Depends(get_session),
 ):
-    """Update an existing item."""
+    """Update an existing item (full replacement)."""
     service = ItemService()
     item = await service.update_item(
         session,
@@ -115,6 +118,33 @@ async def update_item(
         name_ar=item_update.name_ar,
         description_en=item_update.description_en,
         description_ar=item_update.description_ar,
+    )
+    return ItemResponse.model_validate(item)
+
+
+# UPDATE (Partial - PATCH)
+@router.patch("/{item_id}", response_model=ItemResponse)
+async def partial_update_item(
+    item_id: int,
+    item_patch: ItemPatch,  # All fields Optional
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Partially update an item.
+
+    Only fields included in the request body will be updated.
+    Uses `exclude_unset=True` to distinguish between:
+    - Field not sent (keep existing value)
+    - Field sent as null (set to null)
+    """
+    service = ItemService()
+    # Only get fields that were actually sent
+    update_data = item_patch.model_dump(exclude_unset=True)
+
+    item = await service.partial_update_item(
+        session,
+        item_id=item_id,
+        **update_data,
     )
     return ItemResponse.model_validate(item)
 
@@ -353,6 +383,146 @@ app.include_router(orders.router, prefix="/api/v1")
 app.include_router(customers.router, prefix="/api/v1")
 ```
 
+## Multiple Response Status Codes
+
+Document all possible responses for better OpenAPI documentation:
+
+```python
+from api.schemas.error_schemas import ErrorResponse
+
+@router.post(
+    "",
+    response_model=ItemResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new item",
+    description="Create a new item with the provided data.",
+    responses={
+        201: {"model": ItemResponse, "description": "Item created successfully"},
+        400: {"model": ErrorResponse, "description": "Validation error"},
+        409: {"model": ErrorResponse, "description": "Item already exists"},
+        401: {"model": ErrorResponse, "description": "Not authenticated"},
+    },
+)
+async def create_item(
+    item_create: ItemCreate,
+    session: AsyncSession = Depends(get_session),
+):
+    """Create a new item."""
+    service = ItemService()
+    item = await service.create_item(session, item_create)
+    return ItemResponse.model_validate(item)
+
+
+@router.get(
+    "/{item_id}",
+    response_model=ItemResponse,
+    responses={
+        200: {"model": ItemResponse, "description": "Item found"},
+        404: {"model": ErrorResponse, "description": "Item not found"},
+    },
+)
+async def get_item(
+    item_id: int,
+    session: AsyncSession = Depends(get_session),
+):
+    """Get item by ID."""
+    service = ItemService()
+    item = await service.get_item(session, item_id)
+    return ItemResponse.model_validate(item)
+```
+
+## Path Operation Configuration
+
+Configure endpoints with metadata for better documentation:
+
+```python
+@router.get(
+    "/deprecated-endpoint",
+    response_model=ItemResponse,
+    deprecated=True,  # Shows as deprecated in docs
+    tags=["items", "legacy"],
+    summary="Get item (deprecated)",
+    description="**DEPRECATED**: Use `/api/v2/items/{id}` instead.",
+    operation_id="get_item_legacy",
+    response_description="The requested item",
+)
+async def get_item_deprecated(item_id: int):
+    """Deprecated endpoint - use v2 instead."""
+    ...
+
+
+@router.post(
+    "",
+    response_model=ItemResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["items"],
+    summary="Create item",
+    description="""
+    Create a new item with the provided data.
+
+    **Required fields:**
+    - `nameEn`: English name
+    - `nameAr`: Arabic name
+
+    **Optional fields:**
+    - `descriptionEn`: English description
+    - `descriptionAr`: Arabic description
+    - `price`: Item price (defaults to 0)
+    """,
+)
+async def create_item(item_create: ItemCreate):
+    ...
+```
+
+## Error Response Schema
+
+```python
+# api/schemas/error_schemas.py
+from typing import Optional, List
+from api.schemas._base import CamelModel
+
+
+class ErrorResponse(CamelModel):
+    """Standard error response for API errors."""
+    detail: str
+    code: Optional[str] = None
+
+
+class ValidationErrorItem(CamelModel):
+    """Single validation error."""
+    loc: List[str]
+    msg: str
+    type: str
+
+
+class ValidationErrorResponse(CamelModel):
+    """Validation error response (422)."""
+    detail: List[ValidationErrorItem]
+```
+
+## ItemPatch Schema for PATCH
+
+```python
+# api/schemas/item_schemas.py
+from typing import Optional
+from api.schemas._base import CamelModel
+
+
+class ItemPatch(CamelModel):
+    """
+    Schema for partial item updates (PATCH).
+
+    All fields are optional. Only fields included in the
+    request will be updated.
+    """
+    name_en: Optional[str] = None
+    name_ar: Optional[str] = None
+    description_en: Optional[str] = None
+    description_ar: Optional[str] = None
+    price: Optional[Decimal] = None
+    is_active: Optional[bool] = None
+```
+
 ## Key Points
 
 1. **Always include session dependency** - Required for single-session-per-request
@@ -362,3 +532,6 @@ app.include_router(customers.router, prefix="/api/v1")
 5. **Let exceptions propagate** - Exception handlers do the work
 6. **Use Query() for params** - Adds validation and docs
 7. **HTTP status codes** - 201 for create, 204 for delete
+8. **Document responses** - Use `responses` for all possible status codes
+9. **Support PATCH** - Use `exclude_unset=True` for partial updates
+10. **Configure operations** - Use `tags`, `summary`, `description`, `deprecated`

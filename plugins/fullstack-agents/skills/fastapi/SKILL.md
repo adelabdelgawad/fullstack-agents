@@ -151,8 +151,17 @@ When creating a new entity, generate files in this order:
 ## References
 
 See the `references/` directory for detailed patterns:
+
+### Core Patterns
+- `model-pattern.md` - SQLAlchemy models
 - `schema-pattern.md` - Pydantic DTO patterns
 - `repository-pattern.md` - Data access layer
 - `service-pattern.md` - Business logic layer
-- `router-pattern.md` - API endpoints
-- `model-pattern.md` - SQLAlchemy models
+- `router-pattern.md` - API endpoints (includes PATCH, multiple responses)
+
+### Advanced Patterns
+- `file-upload-pattern.md` - File uploads with UploadFile, validation, S3
+- `testing-pattern.md` - pytest fixtures, async tests, dependency overrides
+- `response-types-pattern.md` - HTML, file downloads, streaming, redirects
+- `middleware-pattern.md` - Security headers, correlation ID, timing, logging
+- `form-data-pattern.md` - Form handling, OAuth2 password flow, headers, cookies

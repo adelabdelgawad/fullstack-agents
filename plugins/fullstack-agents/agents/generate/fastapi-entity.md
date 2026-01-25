@@ -122,6 +122,25 @@ quantity: int (default=0)
 category_id: int (foreign_key=category.id)
 ```
 
+**3. File Uploads** (Optional)
+Does this entity need file uploads?
+
+- [ ] **No files** - Standard CRUD only
+- [ ] **Single file** - Profile image, document, attachment
+- [ ] **Multiple files** - Gallery, attachments collection
+
+If file uploads needed:
+- **Allowed types:** (e.g., `image/jpeg, image/png, application/pdf`)
+- **Max size:** (e.g., `10MB`)
+- **Storage:** Local / S3 / MinIO
+
+**4. Update Strategy**
+How should updates work?
+
+- [ ] **PUT only** - Full replacement (all fields required)
+- [ ] **PATCH only** - Partial updates (only sent fields updated)
+- [ ] **Both PUT and PATCH** - Support both strategies [recommended]
+
 ### Detected Patterns (will apply automatically)
 
 Based on your codebase:
@@ -193,13 +212,19 @@ class {EntityName}(Base):
 
 ### Endpoints to Create
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/{entities}` | List with pagination |
-| GET | `/api/v1/{entities}/{id}` | Get by ID |
-| POST | `/api/v1/{entities}` | Create |
-| PUT | `/api/v1/{entities}/{id}` | Update |
-| DELETE | `/api/v1/{entities}/{id}` | Soft delete |
+| Method | Endpoint | Description | Status Codes |
+|--------|----------|-------------|--------------|
+| GET | `/api/v1/{entities}` | List with pagination | 200, 401 |
+| GET | `/api/v1/{entities}/{id}` | Get by ID | 200, 404, 401 |
+| POST | `/api/v1/{entities}` | Create | 201, 400, 409, 401 |
+| PUT | `/api/v1/{entities}/{id}` | Full update | 200, 400, 404, 401 |
+| PATCH | `/api/v1/{entities}/{id}` | Partial update | 200, 400, 404, 401 |
+| DELETE | `/api/v1/{entities}/{id}` | Soft delete | 204, 404, 401 |
+
+{If file uploads selected}
+| POST | `/api/v1/{entities}/{id}/upload` | Upload file(s) | 201, 400, 404, 413 |
+| GET | `/api/v1/{entities}/{id}/files` | List files | 200, 404 |
+| DELETE | `/api/v1/{entities}/{id}/files/{file_id}` | Delete file | 204, 404 |
 
 **Confirm?** Reply "yes" to generate, or specify changes.
 ```
@@ -213,6 +238,8 @@ class {EntityName}(Base):
 3. Read `skills/fastapi/references/repository-pattern.md`
 4. Read `skills/fastapi/references/service-pattern.md`
 5. Read `skills/fastapi/references/router-pattern.md`
+6. Read `skills/fastapi/references/file-upload-pattern.md` (if file uploads)
+7. Read `skills/fastapi/references/testing-pattern.md` (for test generation)
 
 **Generation order (dependencies first):**
 
