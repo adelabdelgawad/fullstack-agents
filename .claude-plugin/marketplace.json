@@ -9,7 +9,7 @@
       "name": "fullstack-agents",
       "source": "./plugins/fullstack-agents",
       "description": "AI-powered fullstack development toolkit with 28 agents, 8 commands, and 7 skill domains for FastAPI, Next.js, Docker, Celery, and more.",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": {
         "name": "Adel Abdelgawad"
       }
