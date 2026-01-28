@@ -85,7 +85,7 @@ Each debug session produces:
 /debug logs | grep error
 
 # Profile specific endpoint
-/debug performance GET /api/v1/products
+/debug performance GET /setting/products
 
 # Debug CORS issue
 /debug api cors

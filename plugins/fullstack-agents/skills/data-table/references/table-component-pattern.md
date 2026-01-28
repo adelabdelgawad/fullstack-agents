@@ -20,7 +20,7 @@ Use this for most CRUD/admin tables where data changes only via user actions.
 
 import { useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import type { [Entity]ListResponse, [Entity]Response } from "@/types/[entity]";
+import type { [Entity]ListResponse, [Entity]Response } from "@/lib/types/api/[entity]";
 import { StatusPanel } from "../sidebar/status-panel";
 import [Entity]TableBody from "./[entity]-table-body";
 import LoadingSkeleton from "@/components/loading-skeleton";
@@ -213,7 +213,7 @@ Use this for dashboards, multi-user editing, or when external sources update dat
 
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
-import type { [Entity]ListResponse, [Entity]Response } from "@/types/[entity]";
+import type { [Entity]ListResponse, [Entity]Response } from "@/lib/types/api/[entity]";
 import { StatusPanel } from "../sidebar/status-panel";
 import [Entity]TableBody from "./[entity]-table-body";
 import LoadingSkeleton from "@/components/loading-skeleton";

@@ -31,7 +31,7 @@ grep -E "took [0-9]{3,}ms" logs/app.log
 **From application code:**
 ```bash
 # Find query patterns
-grep -rn "select\|execute\|filter" --include="*.py" api/repositories/
+grep -rn "select\|execute\|filter" --include="*.py" api/crud/
 ```
 
 ### 2. Analyze Query Structure

@@ -164,7 +164,7 @@ grep -rn "DEBUG.*=.*True\|debug=True\|CORS.*\*" --include="*.py" --include="*.en
 
 #### 1. SQL Injection in User Search
 
-**Location:** `api/v1/users.py:89`
+**Location:** `api/routers/setting/users.py:89`
 **CVSS:** 9.8 (Critical)
 
 **Vulnerable Code:**
@@ -202,7 +202,7 @@ API_KEY = "sk_live_abc123..."  # Production key exposed
 
 #### 1. Missing Authentication on Admin Endpoint
 
-**Location:** `api/v1/admin.py:45`
+**Location:** `api/routers/setting/admin.py:45`
 
 The `/admin/users/delete` endpoint has no authentication.
 

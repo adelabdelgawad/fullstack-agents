@@ -173,12 +173,11 @@ I will generate the following files for the **Product** entity:
 
 | Action | File | Description |
 |--------|------|-------------|
-| Modify | `db/models.py` | Add Product model |
-| Create | `api/schemas/product_schemas.py` | Pydantic DTOs |
-| Create | `api/repositories/product_repository.py` | Data access layer |
-| Create | `api/services/product_service.py` | Business logic |
-| Create | `api/v1/products.py` | REST endpoints |
-| Modify | `app.py` | Register products router |
+| Modify | `db/model.py` | Add Product model |
+| Create | `api/schemas/product_schema.py` | Pydantic DTOs |
+| Create | `api/crud/products.py` | CRUD helper functions |
+| Create | `api/routers/setting/product_router.py` | REST endpoints |
+| Modify | `core/app_setup/routers_group/setting_routers.py` | Register products router |
 
 ### Pattern Matching
 
@@ -219,16 +218,15 @@ Reply **"yes"** to generate, or specify changes needed.
 
 ### Generation Order (FastAPI)
 
-1. Model (db/models.py)
-2. Schemas (api/schemas/{entity}_schemas.py)
-3. Repository (api/repositories/{entity}_repository.py)
-4. Service (api/services/{entity}_service.py)
-5. Router (api/v1/{entity}.py)
-6. Register router (app.py)
+1. Model (db/model.py)
+2. Schemas (api/schemas/{entity}_schema.py)
+3. CRUD helpers (api/crud/{entity}.py) - only if reusable (3+ uses)
+4. Router (api/routers/setting/{entity}_router.py)
+5. Register router (core/app_setup/routers_group/setting_routers.py)
 
 ### Generation Order (Next.js)
 
-1. Types (types/{entity}.d.ts)
+1. Types (lib/types/api/{entity}.ts)
 2. Server Actions (lib/actions/{entity}.actions.ts)
 3. API Routes (app/api/setting/{entity}/route.ts)
 4. Context (app/(pages)/setting/{entity}/context/)
@@ -246,12 +244,11 @@ Your **Product** entity has been created successfully.
 
 ### Files Created/Modified
 
-- [x] `db/models.py` - Product model added
-- [x] `api/schemas/product_schemas.py` - Created
-- [x] `api/repositories/product_repository.py` - Created
-- [x] `api/services/product_service.py` - Created
-- [x] `api/v1/products.py` - Created
-- [x] `app.py` - Router registered
+- [x] `db/model.py` - Product model added
+- [x] `api/schemas/product_schema.py` - Created
+- [x] `api/crud/products.py` - Created
+- [x] `api/routers/setting/product_router.py` - Created
+- [x] `core/app_setup/routers_group/setting_routers.py` - Router registered
 
 ### Immediate Actions
 
@@ -264,8 +261,8 @@ Your **Product** entity has been created successfully.
 2. **Test the endpoints**:
    - Start server: `uvicorn app:app --reload`
    - Visit: `http://localhost:8000/docs`
-   - POST `/api/v1/products` - Create product
-   - GET `/api/v1/products` - List products
+   - POST `/setting/products/` - Create product
+   - GET `/setting/products/` - List products
 
 ### Related Actions
 
@@ -319,8 +316,8 @@ I found conflicting patterns in your codebase:
 
 ### Conflict: Session Management
 
-- `api/v1/users.py` uses: `session` passed to service
-- `api/v1/products.py` uses: `session` stored in service `__init__`
+- `api/routers/setting/user_router.py` uses: `SessionDep` passed to CRUD helpers
+- `api/routers/setting/product_router.py` uses: `session` stored in service `__init__`
 
 ### Recommendation
 

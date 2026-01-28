@@ -26,7 +26,7 @@ Optimize your codebase for performance, cleanliness, or maintainability.
 
 ```bash
 # Optimize performance
-/optimize performance api/v1/products.py
+/optimize performance api/routers/setting/products.py
 
 # Clean up code
 /optimize cleanup api/services/

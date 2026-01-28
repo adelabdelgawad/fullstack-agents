@@ -109,7 +109,7 @@ from uuid import uuid4
 from datetime import datetime
 
 from models.user import User
-from api.repositories.user_repository import UserRepository
+from api.crud import users as users_crud
 from api.schemas.user import UserCreate, UserUpdate
 
 
@@ -178,7 +178,7 @@ class UserService:
 ## Example 3: Repository Pattern
 
 ```python
-# api/repositories/user_repository.py
+# api/crud/users.py
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, delete
 from sqlalchemy.orm import selectinload

@@ -81,7 +81,7 @@ app/api/[section]/[entity]/
 ## File Generation Order
 
 ### 1. Types (if not existing)
-Define response types in `@/types/[entity].d.ts`. See [references/types-pattern.md](references/types-pattern.md).
+Define response types in `@/lib/types/api/[entity].ts`. See [references/types-pattern.md](references/types-pattern.md).
 
 ### 2. API Routes
 Create Next.js API routes that proxy to backend. See [references/api-routes-pattern.md](references/api-routes-pattern.md).

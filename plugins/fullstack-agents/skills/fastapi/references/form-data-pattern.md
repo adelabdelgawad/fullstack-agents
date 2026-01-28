@@ -13,11 +13,11 @@ Handle HTML form submissions, OAuth2 password flow, headers, and cookies in Fast
 ## Basic Form Data
 
 ```python
-# api/v1/forms.py
+# api/routers/forms.py
 """Form data handling endpoints."""
 
 from fastapi import APIRouter, Form, status
-from api.schemas.contact_schemas import ContactResponse
+from api.schemas.contact_schema import ContactResponse
 
 router = APIRouter(prefix="/forms", tags=["forms"])
 
@@ -40,7 +40,7 @@ async def submit_contact_form(
 
     HTML form example:
     ```html
-    <form action="/api/v1/forms/contact" method="POST">
+    <form action="/setting/forms/contact" method="POST">
         <input name="name" type="text" required>
         <input name="email" type="email" required>
         <textarea name="message" required></textarea>
@@ -61,7 +61,7 @@ async def submit_contact_form(
 ## OAuth2 Password Flow (Form-Based Login)
 
 ```python
-# api/v1/auth.py
+# api/routers/auth.py
 """Authentication with OAuth2 password flow."""
 
 from fastapi import APIRouter, Form, Depends, HTTPException, status
@@ -69,14 +69,14 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_session
-from api.schemas.auth_schemas import TokenResponse
+from api.schemas.auth_schema import TokenResponse
 from api.services.auth_service import AuthService
 from core.security import verify_password
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 # OAuth2 scheme for token extraction
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 
 @router.post(
@@ -87,7 +87,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 )
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
     """
     OAuth2 compatible token login.
@@ -102,7 +102,7 @@ async def login_for_access_token(
 
     Example with curl:
     ```bash
-    curl -X POST "http://localhost:8000/api/v1/auth/token" \
+    curl -X POST "http://localhost:8000/auth/token" \
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "username=user@example.com&password=secret"
     ```
@@ -142,7 +142,7 @@ async def login_custom_form(
     username: str = Form(...),
     password: str = Form(...),
     remember_me: bool = Form(False),
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
     """
     Custom login form with additional fields.
@@ -182,7 +182,7 @@ async def login_custom_form(
 ## Header Parameters
 
 ```python
-# api/v1/headers.py
+# api/routers/headers.py
 """Reading header parameters."""
 
 from typing import Optional
@@ -261,7 +261,7 @@ async def get_locale_from_header(
 ## Cookie Parameters
 
 ```python
-# api/v1/cookies.py
+# api/routers/cookies.py
 """Reading and setting cookies."""
 
 from typing import Optional
@@ -381,7 +381,7 @@ async def validate_session(
 ## Combining Form, Headers, and Cookies
 
 ```python
-# api/v1/combined.py
+# api/routers/combined.py
 """Combining multiple input sources."""
 
 from typing import Optional
@@ -408,7 +408,7 @@ async def combined_submission(
     locale: str = Cookie("en"),
 
     # Database session
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
     """
     Endpoint using form data, headers, and cookies together.
@@ -435,7 +435,7 @@ async def combined_submission(
 ## HTTP Basic Authentication
 
 ```python
-# api/v1/basic_auth.py
+# api/routers/basic_auth.py
 """HTTP Basic Authentication."""
 
 import secrets
@@ -484,7 +484,7 @@ async def basic_protected_endpoint(
 
     curl example:
     ```bash
-    curl -u admin:secret http://localhost:8000/api/v1/basic/protected
+    curl -u admin:secret http://localhost:8000/setting/basic/protected
     ```
     """
     return {"message": f"Hello, {username}!"}
@@ -493,7 +493,7 @@ async def basic_protected_endpoint(
 ## Form Data Schemas
 
 ```python
-# api/schemas/form_schemas.py
+# api/schemas/form_schema.py
 """Schemas for form-based endpoints."""
 
 from typing import Optional

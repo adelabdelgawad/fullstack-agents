@@ -433,7 +433,7 @@ class DatabaseSessionMiddleware(BaseHTTPMiddleware):
     - Commits on success, rollbacks on error
     - Closes session after response
 
-    Note: Consider using FastAPI's Depends(get_session) instead
+    Note: Consider using FastAPI's SessionDep type alias instead
     for more granular control.
     """
 

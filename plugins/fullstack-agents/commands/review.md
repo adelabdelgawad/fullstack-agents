@@ -39,7 +39,7 @@ Review code for various quality aspects.
 /review security
 
 # Performance review
-/review performance api/v1/products.py
+/review performance api/routers/setting/product_router.py
 
 # Pattern compliance for entity
 /review patterns product
@@ -73,8 +73,8 @@ Each review produces a report with:
 ### Pattern Compliance
 - Session flow validation
 - Schema inheritance check
-- Repository pattern compliance
-- SSR + SWR hybrid check
+- CRUD helper pattern compliance
+- SSR + simplified pattern check
 - Context pattern validation
 
 ## Severity Levels

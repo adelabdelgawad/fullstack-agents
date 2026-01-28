@@ -14,7 +14,7 @@ FASTAPI_INDICATORS = {
     "structure": {
         "minimal": exists("app.py") or exists("main.py"),
         "standard": exists("api/") and exists("db/"),
-        "complete": exists("api/v1/") and exists("api/services/") and exists("api/repositories/")
+        "complete": exists("api/routers/") and exists("api/crud/") and exists("api/schemas/")
     },
     "features": {
         "auth": exists("api/auth/") or grep("OAuth|JWT", "**/*.py"),
@@ -34,7 +34,7 @@ cat requirements.txt 2>/dev/null | grep -i "fastapi"
 # Check structure
 ls -la app.py main.py 2>/dev/null
 ls -d api/ db/ 2>/dev/null
-ls -d api/v1/ api/services/ api/repositories/ api/schemas/ 2>/dev/null
+ls -d api/routers/setting/ api/crud/ api/schemas/ 2>/dev/null
 ```
 
 ### Next.js Project
@@ -138,16 +138,16 @@ SCHEDULER_INDICATORS = {
 grep -h "class.*\(Base\):" db/models.py 2>/dev/null | sed 's/class \([A-Za-z]*\)(Base):/\1/'
 
 # Find all routers
-ls api/v1/*.py 2>/dev/null | xargs -I {} basename {} .py
+ls api/routers/setting/*.py 2>/dev/null | xargs -I {} basename {} .py
 
 # Find all services
 ls api/services/*_service.py 2>/dev/null | xargs -I {} basename {} _service.py
 
-# Find all repositories
-ls api/repositories/*_repository.py 2>/dev/null | xargs -I {} basename {} _repository.py
+# Find all CRUD helpers
+ls api/crud/*.py 2>/dev/null | xargs -I {} basename {} .py
 
 # Find all schemas
-ls api/schemas/*_schemas.py 2>/dev/null | xargs -I {} basename {} _schemas.py
+ls api/schemas/*_schema.py 2>/dev/null | xargs -I {} basename {} _schema.py
 ```
 
 ### Detect All Entities (Next.js)
@@ -160,7 +160,7 @@ ls -d app/\(pages\)/setting/*/ 2>/dev/null | xargs -I {} basename {}
 ls -d app/api/setting/*/ 2>/dev/null | xargs -I {} basename {}
 
 # Find all types
-ls types/*.d.ts 2>/dev/null | xargs -I {} basename {} .d.ts
+ls lib/types/api/*.ts 2>/dev/null | xargs -I {} basename {} .ts
 ```
 
 ### Entity Completeness Check
@@ -171,14 +171,13 @@ def check_entity_completeness(entity_name):
 
     fastapi_files = {
         "model": f"db/models.py contains class {entity_name}",
-        "schema": f"api/schemas/{entity_name}_schemas.py",
-        "repository": f"api/repositories/{entity_name}_repository.py",
-        "service": f"api/services/{entity_name}_service.py",
-        "router": f"api/v1/{entity_name}.py",
+        "schema": f"api/schemas/{entity_name}_schema.py",
+        "crud": f"api/crud/{entity_name}.py",
+        "router": f"api/routers/setting/{entity_name}_router.py",
     }
 
     nextjs_files = {
-        "types": f"types/{entity_name}.d.ts",
+        "types": f"lib/types/api/{entity_name}.ts",
         "api_route": f"app/api/setting/{entity_name}/route.ts",
         "page": f"app/(pages)/setting/{entity_name}/page.tsx",
         "table": f"app/(pages)/setting/{entity_name}/_components/table/{entity_name}-table.tsx",
@@ -197,7 +196,7 @@ def check_entity_completeness(entity_name):
 
 ```bash
 # File naming (snake_case vs kebab-case)
-ls api/v1/*.py 2>/dev/null  # snake_case: user_profile.py
+ls api/routers/setting/*.py 2>/dev/null  # snake_case: user_router.py
 ls app/**/*.tsx 2>/dev/null  # kebab-case: user-profile.tsx
 
 # Class naming (always PascalCase)
@@ -226,14 +225,14 @@ grep -l "UUID.*primary_key" db/models.py 2>/dev/null
 ### Detect Architecture Patterns
 
 ```bash
-# Single-session-per-request
-grep -l "session: AsyncSession = Depends(get_session)" api/v1/*.py 2>/dev/null
+# Single-session-per-request (using SessionDep type alias)
+grep -l "session: SessionDep" api/routers/setting/*.py 2>/dev/null
 
 # CamelModel usage
 grep -l "from.*CamelModel\|class.*CamelModel" api/schemas/*.py 2>/dev/null
 
-# Repository pattern
-grep -l "class.*Repository" api/repositories/*.py 2>/dev/null
+# CRUD helper pattern
+ls api/crud/*.py 2>/dev/null
 
 # Service pattern
 grep -l "class.*Service" api/services/*.py 2>/dev/null
@@ -258,26 +257,26 @@ grep -l "class.*Service" api/services/*.py 2>/dev/null
 
 | Component | Status | Path |
 |-----------|--------|------|
-| Entry Point | Found | `app.py` |
-| Models | Found | `db/models.py` |
-| Routers | Found | `api/v1/` |
+| Entry Point | Found | `main.py` |
+| Models | Found | `db/model.py` |
+| Routers | Found | `api/routers/setting/` |
+| CRUD Helpers | Found | `api/crud/` |
 | Services | Found | `api/services/` |
-| Repositories | Found | `api/repositories/` |
 | Schemas | Found | `api/schemas/` |
 
 ### Detected Entities
 
-| Entity | Model | Schema | Repo | Service | Router | Frontend |
-|--------|-------|--------|------|---------|--------|----------|
-| User | [x] | [x] | [x] | [x] | [x] | [x] |
-| Product | [x] | [x] | [x] | [x] | [x] | [ ] |
-| Category | [x] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| Entity | Model | Schema | CRUD | Router | Frontend |
+|--------|-------|--------|------|--------|----------|
+| User | [x] | [x] | [x] | [x] | [x] |
+| Product | [x] | [x] | [x] | [x] | [ ] |
+| Category | [x] | [ ] | [ ] | [ ] | [ ] |
 
 ### Detected Patterns
 
 | Pattern | Detected | Notes |
 |---------|----------|-------|
-| Single-session-per-request | Yes | All routers |
+| SessionDep injection | Yes | All routers |
 | CamelModel | Yes | All schemas |
 | Bilingual fields | Yes | name_en/name_ar |
 | Soft delete | Yes | is_active |
@@ -286,7 +285,7 @@ grep -l "class.*Service" api/services/*.py 2>/dev/null
 
 ### Recommendations
 
-1. **Complete Category entity** - Missing repository, service, router
+1. **Complete Category entity** - Missing CRUD helpers, router
 2. **Create Product frontend** - Backend complete, frontend missing
 3. **Add Docker monitoring** - Infrastructure partial
 ```
@@ -303,7 +302,7 @@ START
   |     |
   |     v
   |   [Check structure]
-  |     +-- Has api/v1/, services/, repos? --> COMPLETE_FASTAPI
+  |     +-- Has api/routers/, crud/, schemas? --> COMPLETE_FASTAPI
   |     +-- Has app.py only? --> MINIMAL_FASTAPI
   |     +-- Missing base? --> NEEDS_SCAFFOLD
   |

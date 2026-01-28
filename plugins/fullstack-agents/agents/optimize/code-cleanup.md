@@ -133,7 +133,7 @@ from datetime import datetime, timezone
 user.created_at = datetime.now(timezone.utc)
 ```
 
-**File:** `api/schemas/user_schemas.py`
+**File:** `api/schemas/user_schema.py`
 
 **Before:**
 ```python
@@ -152,7 +152,7 @@ class UserResponse(BaseModel):
 ### Commented Code Removed
 
 **Files cleaned:**
-- `api/v1/users.py:45-67` - Old implementation (23 lines)
+- `api/routers/setting/users.py:45-67` - Old implementation (23 lines)
 - `api/services/order_service.py:123-145` - Debug code (22 lines)
 - `db/models.py:89-95` - Old field definition (7 lines)
 
@@ -178,8 +178,8 @@ class UserResponse(BaseModel):
 | `api/services/product_service.py` | 3 unused imports |
 | `api/services/user_service.py` | 2 deprecated patterns |
 | `api/utils/helpers.py` | 1 dead function |
-| `api/v1/users.py` | 23 lines commented code |
-| `api/schemas/user_schemas.py` | 5 typing updates |
+| `api/routers/setting/users.py` | 23 lines commented code |
+| `api/schemas/user_schema.py` | 5 typing updates |
 
 ### Recommendations
 

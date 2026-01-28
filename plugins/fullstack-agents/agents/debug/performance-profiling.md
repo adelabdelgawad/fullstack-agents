@@ -24,7 +24,7 @@ Profile application performance to identify bottlenecks, slow code, and optimiza
 
 **What would you like to profile?**
 
-- [ ] Specific endpoint (e.g., GET /api/v1/products)
+- [ ] Specific endpoint (e.g., GET /setting/products)
 - [ ] Specific function/method
 - [ ] Database queries
 - [ ] Overall application
@@ -82,7 +82,7 @@ grep -c "SELECT\|INSERT\|UPDATE\|DELETE" logs/sqlalchemy.log
 ```markdown
 ## Performance Profiling Report
 
-**Target:** GET /api/v1/products
+**Target:** GET /setting/products
 **Date:** {timestamp}
 **Requests Analyzed:** 100
 
@@ -171,7 +171,7 @@ category_id: Mapped[int] = mapped_column(
 
 #### 3. Serialization Overhead
 
-**Location:** `api/schemas/product_schemas.py`
+**Location:** `api/schemas/product_schema.py`
 
 **Current:**
 - Each product serializes 15 fields

@@ -29,11 +29,11 @@ Detects and displays:
 Shows all entities and their completeness:
 
 ```
-| Entity | Model | Schema | Repo | Service | Router | Frontend |
-|--------|-------|--------|------|---------|--------|----------|
-| User   | [x]   | [x]    | [x]  | [x]     | [x]    | [x]      |
-| Product| [x]   | [x]    | [x]  | [x]     | [x]    | [ ]      |
-| Order  | [x]   | [ ]    | [ ]  | [ ]     | [ ]    | [ ]      |
+| Entity | Model | Schema | CRUD | Router | Frontend |
+|--------|-------|--------|------|--------|----------|
+| User   | [x]   | [x]    | [x]  | [x]    | [x]      |
+| Product| [x]   | [x]    | [x]  | [x]    | [ ]      |
+| Order  | [x]   | [ ]    | [ ]  | [ ]    | [ ]      |
 ```
 
 ### 3. Available Actions

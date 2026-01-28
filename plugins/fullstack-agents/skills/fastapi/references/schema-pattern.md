@@ -2,6 +2,12 @@
 
 Pydantic DTOs (Data Transfer Objects) for request/response validation.
 
+## Schema File Locations
+
+- **Domain schemas**: `api/schemas/product_schema.py` - Shared/domain-level schemas
+- **HTTP schemas**: `api/http_schema/product_schema.py` - Request/response schemas for endpoints
+- **Base class**: `api/schemas/_base.py` - CamelModel base class
+
 ## Base Class: CamelModel
 
 All schemas MUST inherit from `CamelModel` for automatic camelCase JSON serialization:
@@ -15,7 +21,7 @@ from pydantic.alias_generators import to_camel
 
 class CamelModel(BaseModel):
     """Base model with camelCase aliases and UTC datetime handling."""
-    
+
     model_config = ConfigDict(
         alias_generator=to_camel,
         populate_by_name=True,
@@ -34,7 +40,7 @@ from api.schemas._base import CamelModel
 
 class ItemBase(CamelModel):
     """Base item schema with shared fields."""
-    
+
     name_en: str = Field(min_length=1, max_length=64, description="Name in English")
     name_ar: str = Field(min_length=1, max_length=64, description="Name in Arabic")
     description_en: Optional[str] = Field(None, max_length=256)
@@ -46,10 +52,10 @@ class ItemBase(CamelModel):
 ```python
 class ItemCreate(ItemBase):
     """Schema for creating a new item."""
-    
+
     # Optional legacy field mapping
     name: Optional[str] = Field(None, description="Legacy name field")
-    
+
     @model_validator(mode='after')
     def map_legacy_fields(self):
         """Map legacy fields to bilingual fields."""
@@ -64,7 +70,7 @@ class ItemCreate(ItemBase):
 ```python
 class ItemUpdate(CamelModel):
     """Schema for updating an item. All fields optional."""
-    
+
     name_en: Optional[str] = Field(None, min_length=1, max_length=64)
     name_ar: Optional[str] = Field(None, min_length=1, max_length=64)
     description_en: Optional[str] = Field(None, max_length=256)
@@ -79,12 +85,12 @@ from datetime import datetime
 
 class ItemResponse(ItemBase):
     """Schema for returning item data in API responses."""
-    
+
     id: int
     is_active: bool = Field(default=True)
     created_at: datetime
     updated_at: datetime
-    
+
     # Computed field for backward compatibility
     name: Optional[str] = Field(None, description="Computed based on locale")
 ```
@@ -94,7 +100,7 @@ class ItemResponse(ItemBase):
 ```python
 class ItemStatusUpdate(CamelModel):
     """Schema for toggling item status."""
-    
+
     is_active: bool = Field(description="New active status")
 ```
 
@@ -105,7 +111,7 @@ from typing import List
 
 class ItemListResponse(CamelModel):
     """Paginated list of items."""
-    
+
     items: List[ItemResponse]
     total: int
     page: int
@@ -118,7 +124,7 @@ class ItemListResponse(CamelModel):
 ```python
 class SimpleItem(CamelModel):
     """Minimal item schema for dropdowns."""
-    
+
     id: int
     name: str
     name_en: Optional[str] = None
@@ -139,7 +145,7 @@ class ItemCreate(CamelModel):
     )
     quantity: int = Field(ge=0, le=1000, description="Quantity (0-1000)")
     email: str = Field(pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$")
-    
+
     @field_validator('name')
     @classmethod
     def validate_name(cls, v: str) -> str:
@@ -147,7 +153,7 @@ class ItemCreate(CamelModel):
         if v.lower() == 'admin':
             raise ValueError('Name cannot be "admin"')
         return v.strip()
-    
+
     @model_validator(mode='after')
     def validate_model(self):
         """Cross-field validation."""
@@ -161,16 +167,16 @@ class ItemCreate(CamelModel):
 ```python
 class BilingualEntity(CamelModel):
     """Entity with English and Arabic names."""
-    
+
     name_en: str = Field(min_length=1, max_length=64)
     name_ar: str = Field(min_length=1, max_length=64)
     description_en: Optional[str] = None
     description_ar: Optional[str] = None
-    
+
     def get_name(self, locale: str = 'en') -> str:
         """Get name for specified locale."""
         return self.name_ar if locale == 'ar' else self.name_en
-    
+
     def get_description(self, locale: str = 'en') -> Optional[str]:
         """Get description for specified locale."""
         return self.description_ar if locale == 'ar' else self.description_en
@@ -179,8 +185,19 @@ class BilingualEntity(CamelModel):
 ## Complete Example
 
 ```python
-# api/schemas/product_schemas.py
-"""Product Schemas - Pydantic DTOs for Product entity."""
+# api/schemas/product_schema.py (domain schemas)
+"""Product Domain Schemas."""
+
+from api.schemas._base import CamelModel
+
+class ProductBase(CamelModel):
+    """Base product schema."""
+    name_en: str
+    name_ar: str
+
+
+# api/http_schema/product_schema.py (request/response schemas)
+"""Product HTTP Schemas - Pydantic DTOs for Product endpoints."""
 
 from datetime import datetime
 from typing import Optional, List
@@ -190,7 +207,7 @@ from api.schemas._base import CamelModel
 
 class ProductBase(CamelModel):
     """Base product schema."""
-    
+
     name_en: str = Field(min_length=1, max_length=128)
     name_ar: str = Field(min_length=1, max_length=128)
     description_en: Optional[str] = Field(None, max_length=512)
@@ -206,7 +223,7 @@ class ProductCreate(ProductBase):
 
 class ProductUpdate(CamelModel):
     """Schema for updating a product."""
-    
+
     name_en: Optional[str] = Field(None, min_length=1, max_length=128)
     name_ar: Optional[str] = Field(None, min_length=1, max_length=128)
     description_en: Optional[str] = Field(None, max_length=512)
@@ -218,7 +235,7 @@ class ProductUpdate(CamelModel):
 
 class ProductResponse(ProductBase):
     """Schema for product API responses."""
-    
+
     id: int
     is_active: bool = True
     created_at: datetime
@@ -228,13 +245,13 @@ class ProductResponse(ProductBase):
 
 class ProductStatusUpdate(CamelModel):
     """Schema for toggling product status."""
-    
+
     is_active: bool
 
 
 class SimpleProduct(CamelModel):
     """Minimal product for dropdowns."""
-    
+
     id: int
     name: str
     price: float
@@ -247,4 +264,6 @@ class SimpleProduct(CamelModel):
 3. **Separate Create/Update schemas** - Update has all optional fields
 4. **Include timestamps in Response** - created_at, updated_at
 5. **Add computed locale field** - For backward compatibility
-6. **Use from_attributes=True** - Enables automatic ORM → Pydantic conversion
+6. **Use from_attributes=True** - Enables automatic ORM to Pydantic conversion
+7. **Domain schemas** in `api/schemas/` - Shared across layers
+8. **HTTP schemas** in `api/http_schema/` - Specific to endpoints

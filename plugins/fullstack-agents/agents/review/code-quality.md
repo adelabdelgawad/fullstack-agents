@@ -32,7 +32,7 @@ Review code for quality, best practices, clean code principles, and maintainabil
 
 | Location | Current | Suggestion | Severity |
 |----------|---------|------------|----------|
-| `api/v1/users.py:45` | `d` | `user_data` | Warning |
+| `api/routers/setting/users.py:45` | `d` | `user_data` | Warning |
 | `api/services/order.py:23` | `process` | `process_order` | Info |
 ```
 
@@ -141,7 +141,7 @@ except Exception:
        raise
    ```
 
-2. **Missing error handling for API call in `api/v1/sync.py:45`**
+2. **Missing error handling for API call in `api/routers/setting/sync.py:45`**
    - External API call without timeout
    - No retry logic
    - No error response handling

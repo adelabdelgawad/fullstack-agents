@@ -24,14 +24,14 @@ Refactor code to improve structure, readability, maintainability, and adherence 
 async def create_order(self, session: AsyncSession, data: OrderCreate):
     # Validate stock
     for item in data.items:
-        product = await self.product_repo.get(session, item.product_id)
+        product = await products_crud.get_by_id(session, item.product_id)
         if product.stock < item.quantity:
             raise ValidationError(f"Insufficient stock for {product.name}")
 
     # Calculate total
     total = Decimal("0")
     for item in data.items:
-        product = await self.product_repo.get(session, item.product_id)
+        product = await products_crud.get_by_id(session, item.product_id)
         total += product.price * item.quantity
 
     # Create order
@@ -58,14 +58,14 @@ async def create_order(self, session: AsyncSession, data: OrderCreate):
 
 async def _validate_stock(self, session: AsyncSession, items: list[OrderItemCreate]):
     for item in items:
-        product = await self.product_repo.get(session, item.product_id)
+        product = await products_crud.get_by_id(session, item.product_id)
         if product.stock < item.quantity:
             raise ValidationError(f"Insufficient stock for {product.name}")
 
 async def _calculate_total(self, session: AsyncSession, items: list[OrderItemCreate]) -> Decimal:
     total = Decimal("0")
     for item in items:
-        product = await self.product_repo.get(session, item.product_id)
+        product = await products_crud.get_by_id(session, item.product_id)
         total += product.price * item.quantity
     return total
 
@@ -291,5 +291,5 @@ New testable units:
 | `api/services/order_service.py` | Extract methods |
 | `api/services/payment_service.py` | Polymorphism |
 | `core/constants.py` | New file |
-| `api/v1/orders.py` | Use constants |
+| `api/routers/setting/orders.py` | Use constants |
 ```

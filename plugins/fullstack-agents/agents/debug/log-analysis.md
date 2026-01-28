@@ -107,8 +107,8 @@ email
 ```
 
 **Source Endpoints:**
-- POST /api/v1/users (15 errors)
-- POST /api/v1/auth/register (8 errors)
+- POST /setting/users (15 errors)
+- POST /setting/auth/register (8 errors)
 
 **Recommendation:**
 - Add frontend email validation
@@ -121,14 +121,14 @@ email
 
 | Endpoint | Avg Time | Max Time | Count |
 |----------|----------|----------|-------|
-| GET /api/v1/products | 2.3s | 8.5s | 156 |
-| POST /api/v1/orders | 1.8s | 4.2s | 89 |
-| GET /api/v1/reports | 5.6s | 15.3s | 12 |
+| GET /setting/products | 2.3s | 8.5s | 156 |
+| POST /setting/orders | 1.8s | 4.2s | 89 |
+| GET /setting/reports | 5.6s | 15.3s | 12 |
 
 **Recommendation:**
-- Review `/api/v1/products` for N+1 queries
-- Add caching for `/api/v1/products`
-- Consider async processing for `/api/v1/reports`
+- Review `/setting/products` for N+1 queries
+- Add caching for `/setting/products`
+- Consider async processing for `/setting/reports`
 
 ### Request Patterns
 

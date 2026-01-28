@@ -44,9 +44,9 @@ Add pre-built modules to an existing FastAPI project (authentication, file uploa
 
 | File | Purpose |
 |------|---------|
-| `api/v1/auth.py` | Auth endpoints (login, register, refresh) |
+| `api/routers/setting/auth_router.py` | Auth endpoints (login, register, refresh) |
 | `api/services/auth_service.py` | Auth business logic |
-| `api/schemas/auth_schemas.py` | Auth DTOs |
+| `api/schemas/auth_schema.py` | Auth DTOs |
 | `core/security.py` | JWT utilities |
 | `api/dependencies.py` | get_current_user dependency |
 ```
@@ -87,9 +87,9 @@ Add pre-built modules to an existing FastAPI project (authentication, file uploa
 
 | File | Purpose |
 |------|---------|
-| `api/v1/files.py` | Upload/download endpoints |
+| `api/routers/setting/file_router.py` | Upload/download endpoints |
 | `api/services/file_service.py` | File handling logic |
-| `api/schemas/file_schemas.py` | File DTOs |
+| `api/schemas/file_schema.py` | File DTOs |
 | `core/storage.py` | Storage backend abstraction |
 ```
 
@@ -220,7 +220,7 @@ After configuration, generate the module files following the patterns from skill
 The module has been integrated with your existing project:
 - Dependencies added to requirements.txt
 - Environment variables documented in .env.example
-- Router registered in app.py (if applicable)
+- Router registered in `core/app_setup/routers_group/setting_routers.py` (if applicable)
 
 ### Next Steps
 

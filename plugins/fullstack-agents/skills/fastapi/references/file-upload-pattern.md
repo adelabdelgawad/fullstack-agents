@@ -13,7 +13,7 @@ Handle file uploads with FastAPI using `UploadFile`, `File`, validation, and sto
 ## Basic File Upload
 
 ```python
-# api/v1/files.py
+# api/routers/files.py
 """File upload endpoints."""
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, status
@@ -44,7 +44,7 @@ ALLOWED_DOCUMENT_TYPES = ["application/pdf", "application/msword",
 )
 async def upload_file(
     file: UploadFile = File(..., description="File to upload"),
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
     """
     Upload a single file.
@@ -103,7 +103,7 @@ from typing import List
 )
 async def upload_multiple_files(
     files: List[UploadFile] = File(..., description="Files to upload (max 10)"),
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
     """
     Upload multiple files at once.
@@ -161,7 +161,7 @@ async def upload_file_with_metadata(
     title: str = Form(..., max_length=100),
     description: str = Form(None, max_length=500),
     category_id: int = Form(...),
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
     """
     Upload file with additional form data.
@@ -196,7 +196,7 @@ from pathlib import Path
 import aiofiles
 from typing import Optional
 
-from api.repositories.file_repository import FileRepository
+from api.crud import files as files_crud
 from core.exceptions import ValidationError
 
 
@@ -325,7 +325,7 @@ class S3FileService:
 ## File Upload Schemas
 
 ```python
-# api/schemas/file_schemas.py
+# api/schemas/file_schema.py
 """File upload schemas."""
 
 from datetime import datetime
@@ -391,7 +391,7 @@ class UploadedFile(Base):
         """Generate file URL based on storage backend."""
         if self.storage_backend == "s3":
             return self.storage_path  # Already a URL
-        return f"/api/v1/files/{self.id}/download"
+        return f"/setting/files/{self.id}/download"
 ```
 
 ## Security Considerations

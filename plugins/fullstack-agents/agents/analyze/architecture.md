@@ -24,9 +24,9 @@ Analyze system architecture including component relationships, data flow, and ar
 ```bash
 # Backend layers
 echo "=== Backend Layers ==="
-[ -d "api/v1" ] && echo "Presentation: api/v1/ (Routers)"
-[ -d "api/services" ] && echo "Business: api/services/"
-[ -d "api/repositories" ] && echo "Data Access: api/repositories/"
+[ -d "api/routers/setting" ] && echo "Presentation: api/routers/setting/ (Routers)"
+[ -d "api/services" ] && echo "Business: api/services/ (external integrations only)"
+[ -d "api/crud" ] && echo "Data Access: api/crud/ (CRUD helpers)"
 [ -d "db" ] && echo "Database: db/"
 
 # Frontend layers
@@ -43,12 +43,12 @@ echo "=== Frontend Layers ==="
 
 ```bash
 # Router dependencies
-echo "=== Router → Service Dependencies ==="
-grep -rh "from.*service import\|import.*service" api/v1/*.py 2>/dev/null
+echo "=== Router → CRUD/Service Dependencies ==="
+grep -rh "from.*crud import\|from.*service import" api/routers/setting/*.py 2>/dev/null
 
 # Service dependencies
-echo "=== Service → Repository Dependencies ==="
-grep -rh "from.*repository import\|import.*repository" api/services/*.py 2>/dev/null
+echo "=== Service → CRUD Dependencies ==="
+grep -rh "from.*crud import" api/services/*.py 2>/dev/null
 ```
 
 ### 3. API Surface
@@ -58,7 +58,7 @@ grep -rh "from.*repository import\|import.*repository" api/services/*.py 2>/dev/
 ```bash
 # FastAPI endpoints
 echo "=== Backend API Endpoints ==="
-grep -rh "@router\.\(get\|post\|put\|delete\|patch\)" api/v1/*.py 2>/dev/null
+grep -rh "@router\.\(get\|post\|put\|delete\|patch\)" api/routers/setting/*.py 2>/dev/null
 
 # Next.js API routes
 echo "=== Frontend API Routes ==="
@@ -107,15 +107,15 @@ grep -n "relationship\|ForeignKey" db/models.py 2>/dev/null
 ┌─────────────────────────────────────────────────────────────────┐
 │                     FastAPI Backend                              │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │
-│  │   Routers   │→ │  Services   │→ │     Repositories        │ │
-│  │   (v1/)     │  │ (Business)  │  │    (Data Access)        │ │
+│  │   Routers   │→ │ CRUD Helpers│→ │     Services            │ │
+│  │ (routers/)  │  │  (crud/)    │  │ (external integrations) │ │
 │  └─────────────┘  └─────────────┘  └───────────┬─────────────┘ │
 │                                                 │               │
 └─────────────────────────────────────────────────┬───────────────┘
                               │                   │
                               ▼                   ▼
 ┌────────────────────┐  ┌─────────────────────────────────────────┐
-│   Redis            │  │              PostgreSQL                  │
+│   Redis            │  │              MariaDB                     │
 │  (Cache/Queue)     │  │             (Database)                   │
 └────────────────────┘  └─────────────────────────────────────────┘
                               │
@@ -135,13 +135,13 @@ grep -n "relationship\|ForeignKey" db/models.py 2>/dev/null
 
 | Layer | Purpose | Location | Dependencies |
 |-------|---------|----------|--------------|
-| **Router** | HTTP handling, validation | `api/v1/` | Service |
-| **Service** | Business logic | `api/services/` | Repository |
-| **Repository** | Data access | `api/repositories/` | Database |
+| **Router** | HTTP handling, validation | `api/routers/setting/` | CRUD helper / Service |
+| **CRUD Helper** | Reusable queries (3+ uses) | `api/crud/` | Database |
+| **Service** | External integrations only | `api/services/` | CRUD helper / Database |
 | **Schema** | Data transfer objects | `api/schemas/` | None |
 | **Model** | Database entities | `db/models.py` | SQLAlchemy |
 
-**Dependency Rule:** Router → Service → Repository (never reverse)
+**Dependency Rule:** Router → CRUD helper (simple) or Router → Service → CRUD helper (complex, never reverse)
 
 #### Frontend (Next.js)
 
@@ -161,13 +161,11 @@ grep -n "relationship\|ForeignKey" db/models.py 2>/dev/null
 2. Next.js Page (Server)
    └→ Fetch /api/setting/products (with cookies)
 3. API Route (Server)
-   └→ Proxy to backend /api/v1/products (with token)
+   └→ Proxy to backend /setting/products/ (with token)
 4. FastAPI Router
-   └→ Inject session dependency
-   └→ Call ProductService.list()
-5. ProductService
-   └→ Call ProductRepository.list()
-6. ProductRepository
+   └→ Inject session via SessionDep
+   └→ Call products_crud.list() or direct query
+5. CRUD Helper / Direct Query
    └→ Execute SQL query
 7. Response flows back
 8. Page renders with initial data
@@ -182,9 +180,8 @@ grep -n "relationship\|ForeignKey" db/models.py 2>/dev/null
 3. fetchClient POST /api/setting/products
 4. API Route proxies to backend
 5. FastAPI validates with ProductCreate schema
-6. ProductService.create()
-7. ProductRepository.create()
-8. Database INSERT
+6. Router creates Product directly or via CRUD helper
+7. Database INSERT
 9. Response returns created product
 10. SWR mutate() updates cache with response
 11. UI updates to show new product
@@ -226,29 +223,29 @@ grep -n "relationship\|ForeignKey" db/models.py 2>/dev/null
 
 | Pattern | Implementation | Location |
 |---------|----------------|----------|
-| Repository Pattern | Data access abstraction | `api/repositories/` |
-| Service Layer | Business logic isolation | `api/services/` |
-| Single Session Per Request | Session passed through layers | Router → Service → Repo |
+| CRUD Helper Pattern | Reusable query functions | `api/crud/` |
+| Service Layer | External integrations only | `api/services/` |
+| SessionDep Injection | Session via type alias | Router → CRUD helper |
 | SSR + SWR Hybrid | Server render + client updates | Next.js pages |
 | API Proxy | Frontend doesn't call backend directly | `app/api/` routes |
 | Context Pattern | State management for CRUD | `context/*.tsx` |
 
 ### Architectural Decisions
 
-1. **Why Repository Pattern?**
-   - Isolates data access logic
-   - Makes services testable with mocks
-   - Single place for query optimization
+1. **Why CRUD Helpers?**
+   - Plain functions, no class boilerplate
+   - Reusable queries used in 3+ places
+   - Simple operations stay directly in routers
 
-2. **Why Single Session Per Request?**
+2. **Why SessionDep?**
+   - Type alias keeps code concise
    - Ensures transaction consistency
    - Avoids connection pool exhaustion
-   - Simplifies error handling
 
-3. **Why SSR + SWR?**
+3. **Why SSR + Simplified Pattern?**
    - SEO-friendly initial render
-   - Fast client-side updates
-   - Automatic background revalidation
+   - Simple useState for mutation-driven tables
+   - SWR only when automatic revalidation is justified
 
 4. **Why API Proxy?**
    - Hides backend from client
@@ -258,8 +255,8 @@ grep -n "relationship\|ForeignKey" db/models.py 2>/dev/null
 ### Recommendations
 
 1. **Consider adding API versioning**
-   - Current: `/api/v1/`
-   - Allows breaking changes in future versions
+   - Current: `/setting/` grouped routers
+   - Could add versioned prefix if needed
 
 2. **Add circuit breaker for external services**
    - Prevents cascade failures
