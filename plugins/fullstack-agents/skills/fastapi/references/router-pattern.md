@@ -1,37 +1,39 @@
 # Router Pattern Reference
 
-API endpoints with FastAPI using dependency injection.
+API endpoints with FastAPI using typed session dependency and simplified architecture.
 
 ## Key Principles
 
-1. **Always declare session dependency** - `session: AsyncSession = Depends(get_session)`
-2. **Instantiate service directly** - `service = ItemService()`
-3. **Pass session to service** - `await service.method(session, ...)`
-4. **Use response_model** - For automatic validation and documentation
-5. **Let exceptions propagate** - Exception handlers convert to HTTP
-6. **Document multiple responses** - Use `responses` parameter for OpenAPI
-7. **Include PATCH endpoints** - Support partial updates with `exclude_unset=True`
-8. **Configure path operations** - Use `tags`, `summary`, `description`, `deprecated`
+1. **Use `SessionDep` typed dependency** - Not `Depends(get_session)`
+2. **Simple CRUD directly in router** - No service layer for basic operations
+3. **Import CRUD helpers for reusable queries** - `from api.crud import items as items_crud`
+4. **Service only for complex orchestration** - External integrations, multi-step operations
+5. **Use response_model** - For automatic validation and documentation
+6. **Let exceptions propagate** - Exception handlers convert to HTTP
+7. **Router path**: `api/routers/setting/item_router.py` - Not `api/v1/`
+8. **Router registration**: `core/app_setup/routers_group/setting_routers.py`
 
-## Basic Router Structure
+## Basic Router Structure (Simple CRUD - No Service)
 
 ```python
-# api/v1/items.py
+# api/routers/setting/item_router.py
 """Item Endpoints - CRUD operations for items."""
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Query, status
+from sqlalchemy import select, func
 
-from api.deps import get_session
-from api.schemas.item_schemas import (
+from api.crud import items as items_crud
+from api.http_schema.item_schema import (
     ItemCreate,
     ItemUpdate,
     ItemResponse,
+    ItemListResponse,
     ItemStatusUpdate,
 )
-from api.services.item_service import ItemService
-from core.exceptions import NotFoundError, ConflictError, ValidationError
+from api.exceptions import DetailedHTTPException
+from core.dependencies import SessionDep
+from db.model import Item
 
 router = APIRouter(prefix="/items", tags=["items"])
 
@@ -44,109 +46,79 @@ router = APIRouter(prefix="/items", tags=["items"])
 )
 async def create_item(
     item_create: ItemCreate,
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
-    """
-    Create a new item.
-    
-    - **name_en**: English name (required)
-    - **name_ar**: Arabic name (required)
-    - **description_en**: English description (optional)
-    - **description_ar**: Arabic description (optional)
-    """
-    service = ItemService()
-    item = await service.create_item(
-        session,
-        name_en=item_create.name_en,
-        name_ar=item_create.name_ar,
-        description_en=item_create.description_en,
-        description_ar=item_create.description_ar,
+    """Create a new item."""
+    # Check for duplicate name (simple inline query)
+    existing = await session.scalar(
+        select(Item).where(Item.name_en == item_create.name_en)
     )
-    return ItemResponse.model_validate(item)
+    if existing:
+        raise DetailedHTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Item with name '{item_create.name_en}' already exists",
+        )
+
+    item = Item(**item_create.model_dump())
+    session.add(item)
+    await session.commit()
+    await session.refresh(item)
+    return item
 
 
-# READ (single)
+# READ (single) - uses CRUD helper for reusable query
 @router.get("/{item_id}", response_model=ItemResponse)
 async def get_item(
     item_id: int,
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
     """Get item by ID."""
-    service = ItemService()
-    item = await service.get_item(session, item_id)
-    return ItemResponse.model_validate(item)
+    item = await items_crud.ensure_item_exists(session, item_id)
+    return item
 
 
-# READ (list)
-@router.get("", response_model=List[ItemResponse])
+# READ (list) - simple query directly in router
+@router.get("", response_model=ItemListResponse)
 async def list_items(
-    page: int = Query(1, ge=1, description="Page number"),
-    per_page: int = Query(25, ge=1, le=100, description="Items per page"),
+    session: SessionDep,
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=100, description="Max records to return"),
     search: Optional[str] = Query(None, description="Search in name"),
     is_active: Optional[bool] = Query(None, description="Filter by status"),
-    session: AsyncSession = Depends(get_session),
 ):
-    """
-    List items with pagination and filtering.
-    
-    Returns paginated list of items matching filters.
-    """
-    service = ItemService()
-    items, total = await service.list_items(
-        session,
-        page=page,
-        per_page=per_page,
-        name_filter=search,
-        is_active=is_active,
-    )
-    return [ItemResponse.model_validate(item) for item in items]
+    """List items with pagination and filtering."""
+    # Count
+    count = await session.scalar(select(func.count()).select_from(Item))
+
+    # Query
+    stmt = select(Item)
+    if is_active is not None:
+        stmt = stmt.where(Item.is_active == is_active)
+    if search:
+        stmt = stmt.where(Item.name_en.ilike(f"%{search}%"))
+    stmt = stmt.offset(skip).limit(limit).order_by(Item.created_at.desc())
+    items = (await session.scalars(stmt)).all()
+
+    return ItemListResponse(items=items, total=count)
 
 
-# UPDATE (Full - PUT)
+# UPDATE (PUT)
 @router.put("/{item_id}", response_model=ItemResponse)
 async def update_item(
     item_id: int,
     item_update: ItemUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
-    """Update an existing item (full replacement)."""
-    service = ItemService()
-    item = await service.update_item(
-        session,
-        item_id=item_id,
-        name_en=item_update.name_en,
-        name_ar=item_update.name_ar,
-        description_en=item_update.description_en,
-        description_ar=item_update.description_ar,
-    )
-    return ItemResponse.model_validate(item)
+    """Update an existing item."""
+    item = await items_crud.ensure_item_exists(session, item_id)
 
+    update_data = item_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(item, key, value)
 
-# UPDATE (Partial - PATCH)
-@router.patch("/{item_id}", response_model=ItemResponse)
-async def partial_update_item(
-    item_id: int,
-    item_patch: ItemPatch,  # All fields Optional
-    session: AsyncSession = Depends(get_session),
-):
-    """
-    Partially update an item.
-
-    Only fields included in the request body will be updated.
-    Uses `exclude_unset=True` to distinguish between:
-    - Field not sent (keep existing value)
-    - Field sent as null (set to null)
-    """
-    service = ItemService()
-    # Only get fields that were actually sent
-    update_data = item_patch.model_dump(exclude_unset=True)
-
-    item = await service.partial_update_item(
-        session,
-        item_id=item_id,
-        **update_data,
-    )
-    return ItemResponse.model_validate(item)
+    await session.commit()
+    await session.refresh(item)
+    return item
 
 
 # UPDATE STATUS
@@ -154,384 +126,165 @@ async def partial_update_item(
 async def update_item_status(
     item_id: int,
     status_update: ItemStatusUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
     """Toggle item active/inactive status."""
-    service = ItemService()
-    item = await service.update_item_status(
-        session,
-        item_id=item_id,
-        is_active=status_update.is_active,
-    )
-    return ItemResponse.model_validate(item)
+    item = await items_crud.ensure_item_exists(session, item_id)
+    item.is_active = status_update.is_active
+    await session.commit()
+    await session.refresh(item)
+    return item
 
 
 # DELETE
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_item(
     item_id: int,
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
     """Delete an item."""
-    service = ItemService()
-    await service.delete_item(session, item_id)
+    item = await items_crud.ensure_item_exists(session, item_id)
+    await session.delete(item)
+    await session.commit()
 ```
 
-## Authentication Required Endpoints
+## Complex Operations (Service Required)
+
+Use a service ONLY when the operation involves external integrations or multi-step orchestration:
 
 ```python
-from utils.security import require_admin, require_super_admin
+# api/routers/setting/user_router.py
+from api.services.ad_client_service import ADClientService
 
-@router.post(
-    "/admin/items",
-    response_model=ItemResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_item_admin(
-    item_create: ItemCreate,
-    session: AsyncSession = Depends(get_session),
-    payload: dict = Depends(require_admin),  # Requires admin role
+@router.post("/sync-ad", response_model=UserResponse)
+async def sync_user_from_ad(
+    username: str,
+    session: SessionDep,
 ):
-    """Create item (admin only)."""
-    service = ItemService()
-    item = await service.create_item(
-        session,
-        name_en=item_create.name_en,
-        name_ar=item_create.name_ar,
-        created_by_id=payload["user_id"],  # Use auth payload
-    )
-    return ItemResponse.model_validate(item)
+    """Sync user from Active Directory - requires service for external integration."""
+    ad_service = ADClientService()
+    ad_user = await ad_service.get_user(username)
 
+    if not ad_user:
+        raise DetailedHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User '{username}' not found in Active Directory",
+        )
 
-@router.delete(
-    "/admin/items/{item_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_item_admin(
-    item_id: int,
-    session: AsyncSession = Depends(get_session),
-    _: dict = Depends(require_super_admin),  # Requires super admin
-):
-    """Delete item (super admin only)."""
-    service = ItemService()
-    await service.delete_item(session, item_id)
-```
-
-## Locale-Aware Endpoints
-
-```python
-from fastapi import Request
-from settings import settings
-
-def get_locale_from_request(request: Request) -> str:
-    """Extract locale from JWT or Accept-Language header."""
-    # Try JWT payload first (no DB query)
-    refresh_token = request.cookies.get(settings.SESSION_COOKIE_NAME)
-    if refresh_token:
-        payload = verify_refresh_token(refresh_token)
-        if payload and "locale" in payload:
-            return payload["locale"]
-    
-    # Fallback to Accept-Language
-    accept_lang = request.headers.get("accept-language", "")
-    if "ar" in accept_lang.lower():
-        return "ar"
-    return "en"
-
-
-@router.get("/{item_id}", response_model=ItemResponse)
-async def get_item_localized(
-    request: Request,
-    item_id: int,
-    session: AsyncSession = Depends(get_session),
-):
-    """Get item with locale-aware name."""
-    service = ItemService()
-    locale = get_locale_from_request(request)
-    
-    item = await service.get_item(session, item_id)
-    
-    # Add computed locale field
-    response = ItemResponse.model_validate(item)
-    response.name = item.get_name(locale)
-    response.description = item.get_description(locale)
-    
-    return response
+    # Use CRUD helper for DB operation
+    from api.crud import users as users_crud
+    user = await users_crud.create_or_update_from_ad(session, ad_user)
+    await session.commit()
+    return user
 ```
 
 ## Bulk Operations
 
 ```python
-from pydantic import BaseModel
-from typing import List
+from api.http_schema.item_schema import BulkStatusUpdate
 
-class BulkStatusUpdate(BaseModel):
-    item_ids: List[int]
-    is_active: bool
-
-
-@router.post("/bulk/status", response_model=dict)
+@router.put("/bulk/status", response_model=dict)
 async def bulk_update_status(
     update: BulkStatusUpdate,
-    session: AsyncSession = Depends(get_session),
-    payload: dict = Depends(require_admin),
+    session: SessionDep,
 ):
     """Bulk update item status."""
-    service = ItemService()
-    count = await service.bulk_update_status(
+    count = await items_crud.bulk_update_status(
         session,
         item_ids=update.item_ids,
         is_active=update.is_active,
     )
+    await session.commit()
     return {"updated_count": count}
 ```
 
 ## Paginated Response with Metadata
 
 ```python
-from api.schemas._base import CamelModel
-from core.pagination import calculate_pagination_metadata
+from api.http_schema.item_schema import ItemListResponse
 
-class ItemListResponse(CamelModel):
-    items: List[ItemResponse]
-    total: int
-    page: int
-    per_page: int
-    total_pages: int
-    has_next: bool
-    has_previous: bool
-
-
-@router.get("/paginated", response_model=ItemListResponse)
+@router.get("/", response_model=ItemListResponse)
 async def list_items_paginated(
-    page: int = Query(1, ge=1),
-    per_page: int = Query(25, ge=1, le=100),
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=100),
 ):
     """List items with pagination metadata."""
-    service = ItemService()
-    items, total = await service.list_items(session, page=page, per_page=per_page)
-    
-    meta = calculate_pagination_metadata(total, page, per_page)
-    
-    return ItemListResponse(
-        items=[ItemResponse.model_validate(i) for i in items],
-        total=meta.total_count,
-        page=meta.page,
-        per_page=meta.page_size,
-        total_pages=meta.total_pages,
-        has_next=meta.has_next,
-        has_previous=meta.has_previous,
-    )
+    count = await session.scalar(select(func.count()).select_from(Item))
+    stmt = select(Item).offset(skip).limit(limit).order_by(Item.created_at.desc())
+    items = (await session.scalars(stmt)).all()
+
+    return ItemListResponse(items=items, total=count)
 ```
 
-## Multiple Services in One Endpoint
+## Router Registration
 
 ```python
-@router.post("/orders", response_model=OrderResponse, status_code=201)
-async def create_order(
-    order_data: OrderCreate,
-    session: AsyncSession = Depends(get_session),
-    payload: dict = Depends(require_admin),
+# core/app_setup/routers_group/setting_routers.py
+from api.routers.setting.item_router import router as item_router
+
+setting_routers = [
+    item_router,
+    # ... other setting routers
+]
+```
+
+## Authentication Required Endpoints
+
+```python
+from core.dependencies import SessionDep, CurrentUserDep
+
+@router.post(
+    "",
+    response_model=ItemResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_item_admin(
+    item_create: ItemCreate,
+    session: SessionDep,
+    current_user: CurrentUserDep,
 ):
-    """
-    Create order with validation across services.
-    
-    All services use the SAME session for atomicity.
-    """
-    order_service = OrderService()
-    item_service = ItemService()
-    customer_service = CustomerService()
-    
-    # Validate customer
-    customer = await customer_service.get_customer(
-        session, 
-        order_data.customer_id
-    )
-    
-    # Validate items
-    for item_id in order_data.item_ids:
-        await item_service.get_item(session, item_id)
-    
-    # Create order (same session)
-    order = await order_service.create_order(
-        session,
-        customer_id=order_data.customer_id,
-        item_ids=order_data.item_ids,
-        created_by_id=payload["user_id"],
-    )
-    
-    return OrderResponse.model_validate(order)
-```
-
-## Router Registration in app.py
-
-```python
-# app.py
-from fastapi import FastAPI
-from api.v1 import items, orders, customers
-from api.exception_handlers import register_exception_handlers
-
-app = FastAPI(title="My API")
-
-# Register exception handlers
-register_exception_handlers(app)
-
-# Register routers
-app.include_router(items.router, prefix="/api/v1")
-app.include_router(orders.router, prefix="/api/v1")
-app.include_router(customers.router, prefix="/api/v1")
+    """Create item (authenticated user)."""
+    item = Item(**item_create.model_dump(), created_by_id=current_user.id)
+    session.add(item)
+    await session.commit()
+    await session.refresh(item)
+    return item
 ```
 
 ## Multiple Response Status Codes
 
-Document all possible responses for better OpenAPI documentation:
-
 ```python
-from api.schemas.error_schemas import ErrorResponse
+from api.http_schema.error_schema import ErrorResponse
 
 @router.post(
     "",
     response_model=ItemResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new item",
-    description="Create a new item with the provided data.",
     responses={
         201: {"model": ItemResponse, "description": "Item created successfully"},
-        400: {"model": ErrorResponse, "description": "Validation error"},
         409: {"model": ErrorResponse, "description": "Item already exists"},
         401: {"model": ErrorResponse, "description": "Not authenticated"},
     },
 )
 async def create_item(
     item_create: ItemCreate,
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
     """Create a new item."""
-    service = ItemService()
-    item = await service.create_item(session, item_create)
-    return ItemResponse.model_validate(item)
-
-
-@router.get(
-    "/{item_id}",
-    response_model=ItemResponse,
-    responses={
-        200: {"model": ItemResponse, "description": "Item found"},
-        404: {"model": ErrorResponse, "description": "Item not found"},
-    },
-)
-async def get_item(
-    item_id: int,
-    session: AsyncSession = Depends(get_session),
-):
-    """Get item by ID."""
-    service = ItemService()
-    item = await service.get_item(session, item_id)
-    return ItemResponse.model_validate(item)
-```
-
-## Path Operation Configuration
-
-Configure endpoints with metadata for better documentation:
-
-```python
-@router.get(
-    "/deprecated-endpoint",
-    response_model=ItemResponse,
-    deprecated=True,  # Shows as deprecated in docs
-    tags=["items", "legacy"],
-    summary="Get item (deprecated)",
-    description="**DEPRECATED**: Use `/api/v2/items/{id}` instead.",
-    operation_id="get_item_legacy",
-    response_description="The requested item",
-)
-async def get_item_deprecated(item_id: int):
-    """Deprecated endpoint - use v2 instead."""
     ...
-
-
-@router.post(
-    "",
-    response_model=ItemResponse,
-    status_code=status.HTTP_201_CREATED,
-    tags=["items"],
-    summary="Create item",
-    description="""
-    Create a new item with the provided data.
-
-    **Required fields:**
-    - `nameEn`: English name
-    - `nameAr`: Arabic name
-
-    **Optional fields:**
-    - `descriptionEn`: English description
-    - `descriptionAr`: Arabic description
-    - `price`: Item price (defaults to 0)
-    """,
-)
-async def create_item(item_create: ItemCreate):
-    ...
-```
-
-## Error Response Schema
-
-```python
-# api/schemas/error_schemas.py
-from typing import Optional, List
-from api.schemas._base import CamelModel
-
-
-class ErrorResponse(CamelModel):
-    """Standard error response for API errors."""
-    detail: str
-    code: Optional[str] = None
-
-
-class ValidationErrorItem(CamelModel):
-    """Single validation error."""
-    loc: List[str]
-    msg: str
-    type: str
-
-
-class ValidationErrorResponse(CamelModel):
-    """Validation error response (422)."""
-    detail: List[ValidationErrorItem]
-```
-
-## ItemPatch Schema for PATCH
-
-```python
-# api/schemas/item_schemas.py
-from typing import Optional
-from api.schemas._base import CamelModel
-
-
-class ItemPatch(CamelModel):
-    """
-    Schema for partial item updates (PATCH).
-
-    All fields are optional. Only fields included in the
-    request will be updated.
-    """
-    name_en: Optional[str] = None
-    name_ar: Optional[str] = None
-    description_en: Optional[str] = None
-    description_ar: Optional[str] = None
-    price: Optional[Decimal] = None
-    is_active: Optional[bool] = None
 ```
 
 ## Key Points
 
-1. **Always include session dependency** - Required for single-session-per-request
-2. **Instantiate service in endpoint** - Not as dependency
-3. **Pass session to every service call** - First parameter
-4. **Use response_model** - Automatic validation and docs
-5. **Let exceptions propagate** - Exception handlers do the work
-6. **Use Query() for params** - Adds validation and docs
-7. **HTTP status codes** - 201 for create, 204 for delete
-8. **Document responses** - Use `responses` for all possible status codes
-9. **Support PATCH** - Use `exclude_unset=True` for partial updates
-10. **Configure operations** - Use `tags`, `summary`, `description`, `deprecated`
+1. **Use `SessionDep`** - Typed dependency, not `Depends(get_session)`
+2. **Simple CRUD in router** - No service layer needed for basic operations
+3. **CRUD helpers for reusable queries** - Import as `items_crud`
+4. **Service only for complex ops** - External integrations, multi-step orchestration
+5. **Router path** - `api/routers/setting/item_router.py`
+6. **Registration** - `core/app_setup/routers_group/setting_routers.py`
+7. **commit() in router** - Router owns the transaction
+8. **Let exceptions propagate** - Exception handlers do the work
+9. **Use Query() for params** - Adds validation and docs
+10. **HTTP status codes** - 201 for create, 204 for delete

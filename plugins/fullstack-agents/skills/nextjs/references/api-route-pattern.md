@@ -2,6 +2,30 @@
 
 Next.js API routes that proxy requests to FastAPI backend with authentication.
 
+## RECOMMENDED: Route Factory Pattern
+
+Use route factories to eliminate boilerplate:
+
+```typescript
+// app/api/setting/items/route.ts
+import { createCollectionRoutes } from "@/lib/fetch/route-factory";
+export const { GET, POST } = createCollectionRoutes('/setting/items/');
+
+// app/api/setting/items/[itemId]/route.ts
+import { createResourceRoutes } from "@/lib/fetch/route-factory";
+export const { GET, PUT, DELETE } = createResourceRoutes('/setting/items/', 'itemId');
+
+// app/api/setting/items/[itemId]/status/route.ts
+import { createStatusRoute } from "@/lib/fetch/route-factory";
+export const { PUT } = createStatusRoute('/setting/items/', 'itemId');
+```
+
+---
+
+## Manual Pattern (Legacy)
+
+Use only when route factories don't cover your use case.
+
 ## Key Principles
 
 1. **withAuth wrapper** - Handle authentication and errors

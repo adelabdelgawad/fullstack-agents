@@ -17,7 +17,7 @@ Generate code using intelligent agents with pattern detection and interactive di
 
 | Type | Agent | Description |
 |------|-------|-------------|
-| `entity` | generate/fastapi-entity | FastAPI CRUD entity (model, schema, repo, service, router) |
+| `entity` | generate/fastapi-entity | FastAPI CRUD entity (model, schema, CRUD helpers, router) |
 | `page` | generate/nextjs-page | Next.js page with SSR and server actions |
 | `data-table` | generate/nextjs-data-table | Next.js data table page with full CRUD |
 | `api-route` | generate/api-route | Next.js API routes proxying to backend |

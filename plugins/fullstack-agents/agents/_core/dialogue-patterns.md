@@ -328,10 +328,10 @@ Reply with your review configuration.
 **Create Files:**
 | File | Size | Description |
 |------|------|-------------|
-| `api/schemas/product_schemas.py` | ~50 lines | Pydantic DTOs |
-| `api/repositories/product_repository.py` | ~80 lines | Data access |
+| `api/schemas/product_schema.py` | ~50 lines | Pydantic DTOs |
+| `api/crud/products.py` | ~80 lines | Data access |
 | `api/services/product_service.py` | ~100 lines | Business logic |
-| `api/v1/products.py` | ~120 lines | REST endpoints |
+| `api/routers/setting/products.py` | ~120 lines | REST endpoints |
 
 **Modify Files:**
 | File | Changes |

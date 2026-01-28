@@ -15,7 +15,7 @@ The context interface is identical - children don't need to know which strategy 
 "use client";
 
 import { createContext, useContext, ReactNode } from "react";
-import type { [Entity]ActionsContextType } from "@/types/[entity]";
+import type { [Entity]ActionsContextType } from "@/lib/types/api/[entity]";
 
 const [Entity]ActionsContext = createContext<[Entity]ActionsContextType | null>(null);
 
@@ -52,7 +52,7 @@ export function use[Entity]Actions() {
 
 import { toast } from "@/components/ui/custom-toast";
 import { updateBulkStatus } from "@/lib/api/[entity]";
-import type { [Entity]Response } from "@/types/[entity]";
+import type { [Entity]Response } from "@/lib/types/api/[entity]";
 
 interface [Entity]TableActionsProps {
   items: [Entity]Response[];
@@ -285,7 +285,7 @@ import { useState, useTransition } from "react";
 import { use[Entity]Actions } from "../../context/[entity]-actions-context";
 import { Edit[Entity]Sheet } from "../modal/edit-[entity]-sheet";
 import { toast } from "@/components/ui/custom-toast";
-import type { [Entity]Response } from "@/types/[entity]";
+import type { [Entity]Response } from "@/lib/types/api/[entity]";
 
 export function [Entity]RowActions({ entityId }: { entityId: string }) {
   const { onFetchEntity, updateItems } = use[Entity]Actions();

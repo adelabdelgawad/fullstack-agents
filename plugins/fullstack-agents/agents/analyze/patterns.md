@@ -22,7 +22,7 @@ Detect and document coding patterns, conventions, and architectural styles in th
 **File naming:**
 ```bash
 # Python files
-ls api/v1/*.py api/services/*.py api/repositories/*.py 2>/dev/null | head -10
+ls api/routers/setting/*.py api/services/*.py api/crud/*.py 2>/dev/null | head -10
 
 # TypeScript files
 ls app/**/*.tsx components/**/*.tsx 2>/dev/null | head -10
@@ -40,10 +40,10 @@ grep -rh "^def \|^async def " --include="*.py" | head -20
 
 ### 2. Architecture Patterns
 
-**Repository pattern:**
+**CRUD helper pattern:**
 ```bash
-grep -rl "class.*Repository" --include="*.py" | head -5
-grep -rh "self.repository\." --include="*.py" | head -5
+ls api/crud/*.py 2>/dev/null | head -5
+grep -rh "from api.crud import" --include="*.py" | head -5
 ```
 
 **Service pattern:**
@@ -54,7 +54,7 @@ grep -rl "class.*Service" --include="*.py" | head -5
 **Session management:**
 ```bash
 grep -rh "session: AsyncSession" --include="*.py" | head -5
-grep -rh "Depends(get_session)" --include="*.py" | head -5
+grep -rh "session: SessionDep" --include="*.py" | head -5
 ```
 
 ### 3. Frontend Patterns
@@ -99,9 +99,9 @@ grep -rh '% ' --include="*.py" | head -5  # % formatting
 
 | Type | Pattern | Examples |
 |------|---------|----------|
-| Python files | snake_case | `user_service.py`, `order_repository.py` |
+| Python files | snake_case | `user_service.py`, `user_router.py` |
 | TypeScript files | kebab-case | `products-table.tsx`, `add-product-sheet.tsx` |
-| Python classes | PascalCase | `UserService`, `ProductRepository` |
+| Python classes | PascalCase | `UserService`, `UserCreate` |
 | Python functions | snake_case | `get_user_by_id`, `create_order` |
 | TypeScript functions | camelCase | `fetchProducts`, `handleSubmit` |
 | Constants | UPPER_SNAKE | `MAX_RETRIES`, `DEFAULT_PAGE_SIZE` |
@@ -113,20 +113,24 @@ grep -rh '% ' --include="*.py" | head -5  # % formatting
 
 | Pattern | Detected | Implementation |
 |---------|----------|----------------|
-| **Repository Pattern** | Yes | `api/repositories/*.py` |
-| **Service Layer** | Yes | `api/services/*.py` |
-| **Single Session Per Request** | Yes | Session via Depends() |
+| **CRUD Helper Pattern** | Yes | `api/crud/*.py` |
+| **Service Layer** | Yes | `api/services/*.py` (external integrations only) |
+| **SessionDep Injection** | Yes | Session via SessionDep type alias |
 | **Domain Exceptions** | Yes | `api/exceptions.py` |
 | **DTO Pattern (Schemas)** | Yes | `api/schemas/*.py` |
 | **CamelModel** | Yes | All response schemas |
 
 **Session Flow:**
 ```python
-# Detected pattern
-Router (Depends(get_session))
-    → Service.method(session)
-        → Repository.method(session)
-            → session.execute(query)
+# Detected pattern (simple operations)
+Router (session: SessionDep)
+    → CRUD helper function(session, ...) or direct query
+        → session.execute(query)
+
+# Detected pattern (complex operations with external integrations)
+Router (session: SessionDep)
+    → Service.method(session, ...)
+        → CRUD helper / external API call
 ```
 
 #### Frontend (Next.js)
@@ -195,8 +199,8 @@ class Entity(Base):
 
 **Endpoint Structure:**
 ```
-/api/v1/{entities}          GET (list), POST (create)
-/api/v1/{entities}/{id}     GET (single), PUT (update), DELETE (soft delete)
+/setting/{entities}/         GET (list), POST (create)
+/setting/{entities}/{id}     GET (single), PUT (update), DELETE (soft delete)
 ```
 
 **Response Pattern:**
@@ -231,23 +235,19 @@ Based on analysis, here's a pattern guide for new code:
    - Include `is_active` for soft delete
    - Include `created_at`, `updated_at`
 
-2. Schemas in `api/schemas/{entity}_schemas.py`:
+2. Schemas in `api/schemas/{entity}_schema.py`:
    - `{Entity}Create` for creation
    - `{Entity}Update` for updates
    - `{Entity}Response(CamelModel)` for responses
 
-3. Repository in `api/repositories/{entity}_repository.py`:
-   - Receive session in each method
-   - No business logic
+3. CRUD helpers in `api/crud/{entity}.py` (if reusable, 3+ uses):
+   - Plain async functions (no classes)
+   - Receive session as first parameter
 
-4. Service in `api/services/{entity}_service.py`:
-   - Receive session in each method
-   - Business logic here
-   - Use domain exceptions
-
-5. Router in `api/v1/{entities}.py`:
-   - Inject session with Depends
-   - Pass session to service
+4. Router in `api/routers/setting/{entity}_router.py`:
+   - Inject session with `SessionDep`
+   - Use CRUD helpers or direct queries for simple ops
+   - Use services only for external integrations
 
 #### Creating New Page (Frontend)
 
@@ -258,11 +258,11 @@ Based on analysis, here's a pattern guide for new code:
 
 2. Table in `_components/table/{entity}-table.tsx`:
    - Client component
-   - useSWR with fallbackData
+   - `useState(initialData)` (default) or `useSWR` (when justified)
    - Use context for mutations
 
-3. Context in `context/{entity}-context.tsx`:
+3. Context in `context/{entity}-actions-context.tsx`:
    - Provide CRUD operations
-   - Handle SWR mutations
-   - Use server response for updates
+   - Handle state mutations with server responses
+   - No optimistic updates
 ```

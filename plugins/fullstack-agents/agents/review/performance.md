@@ -155,7 +155,7 @@ grep -rn "onClick={(" --include="*.tsx"
 
 #### 1. N+1 Query in Order List API
 
-**Location:** `api/v1/orders.py:45`
+**Location:** `api/routers/setting/orders.py:45`
 **Impact:** ~100ms per item, 10 seconds for 100 orders
 
 **Current Code:**
@@ -208,7 +208,7 @@ created_at: Mapped[datetime] = mapped_column(
 
 #### 3. Large Dataset Loaded Into Memory
 
-**Location:** `api/v1/reports.py:78`
+**Location:** `api/routers/setting/reports.py:78`
 
 ```python
 all_transactions = Transaction.query.all()  # Could be millions
@@ -232,6 +232,6 @@ def stream_transactions():
 2. **Consider read replicas** for heavy read operations
 
 3. **Implement response caching** for:
-   - `/api/v1/products` (cache 5 min)
-   - `/api/v1/categories` (cache 1 hour)
+   - `/setting/products` (cache 5 min)
+   - `/setting/categories` (cache 1 hour)
 ```

@@ -108,7 +108,7 @@ async def async_client(test_session):
 async def authenticated_client(async_client, test_session):
     """Create authenticated client with valid JWT."""
     from api.services.auth_service import AuthService
-    from api.repositories.user_repository import UserRepository
+    from api.crud import users as users_crud
 
     # Create test user
     user_repo = UserRepository()
@@ -155,7 +155,7 @@ from httpx import AsyncClient
 
 
 class TestItemsAPI:
-    """Test suite for /api/v1/items endpoints."""
+    """Test suite for /setting/items endpoints."""
 
     @pytest.mark.asyncio
     async def test_create_item_success(
@@ -167,7 +167,7 @@ class TestItemsAPI:
         client, user = authenticated_client
 
         response = await client.post(
-            "/api/v1/items",
+            "/setting/items",
             json=sample_item_data,
         )
 
@@ -187,7 +187,7 @@ class TestItemsAPI:
         client, _ = authenticated_client
 
         response = await client.post(
-            "/api/v1/items",
+            "/setting/items",
             json={"nameEn": ""},  # Missing required fields
         )
 
@@ -204,13 +204,13 @@ class TestItemsAPI:
 
         # First create an item
         create_response = await client.post(
-            "/api/v1/items",
+            "/setting/items",
             json=sample_item_data,
         )
         item_id = create_response.json()["id"]
 
         # Then get it
-        response = await client.get(f"/api/v1/items/{item_id}")
+        response = await client.get(f"/setting/items/{item_id}")
 
         assert response.status_code == 200
         assert response.json()["id"] == item_id
@@ -223,7 +223,7 @@ class TestItemsAPI:
         """Test getting non-existent item returns 404."""
         client, _ = authenticated_client
 
-        response = await client.get("/api/v1/items/99999")
+        response = await client.get("/setting/items/99999")
 
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
@@ -240,12 +240,12 @@ class TestItemsAPI:
         # Create multiple items
         for i in range(15):
             await client.post(
-                "/api/v1/items",
+                "/setting/items",
                 json={**sample_item_data, "nameEn": f"Item {i}"},
             )
 
         # Get first page
-        response = await client.get("/api/v1/items?page=1&perPage=10")
+        response = await client.get("/setting/items?page=1&perPage=10")
 
         assert response.status_code == 200
         data = response.json()
@@ -264,7 +264,7 @@ class TestItemsAPI:
 
         # Create item
         create_response = await client.post(
-            "/api/v1/items",
+            "/setting/items",
             json=sample_item_data,
         )
         item_id = create_response.json()["id"]
@@ -272,7 +272,7 @@ class TestItemsAPI:
         # Update item
         update_data = {"nameEn": "Updated Name"}
         response = await client.patch(
-            f"/api/v1/items/{item_id}",
+            f"/setting/items/{item_id}",
             json=update_data,
         )
 
@@ -290,18 +290,18 @@ class TestItemsAPI:
 
         # Create item
         create_response = await client.post(
-            "/api/v1/items",
+            "/setting/items",
             json=sample_item_data,
         )
         item_id = create_response.json()["id"]
 
         # Delete item
-        response = await client.delete(f"/api/v1/items/{item_id}")
+        response = await client.delete(f"/setting/items/{item_id}")
 
         assert response.status_code == 204
 
         # Verify deleted
-        get_response = await client.get(f"/api/v1/items/{item_id}")
+        get_response = await client.get(f"/setting/items/{item_id}")
         assert get_response.status_code == 404
 
     @pytest.mark.asyncio
@@ -310,7 +310,7 @@ class TestItemsAPI:
         async_client: AsyncClient,
     ):
         """Test that unauthenticated requests are rejected."""
-        response = await async_client.get("/api/v1/items")
+        response = await async_client.get("/setting/items")
 
         assert response.status_code == 401
 ```
@@ -416,7 +416,7 @@ class TestItemService:
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.repositories.item_repository import ItemRepository
+from api.crud import items as items_crud
 from db.models import Item
 
 
@@ -502,7 +502,7 @@ class TestAuthAPI:
     ):
         """Test successful login."""
         # First create a user
-        from api.repositories.user_repository import UserRepository
+        from api.crud import users as users_crud
         from core.security import hash_password
 
         user_repo = UserRepository()
@@ -517,7 +517,7 @@ class TestAuthAPI:
 
         # Login
         response = await async_client.post(
-            "/api/v1/auth/login",
+            "/setting/auth/login",
             data={
                 "username": "testuser",
                 "password": "password123",
@@ -536,7 +536,7 @@ class TestAuthAPI:
     ):
         """Test login with wrong password."""
         response = await async_client.post(
-            "/api/v1/auth/login",
+            "/setting/auth/login",
             data={
                 "username": "testuser",
                 "password": "wrongpassword",

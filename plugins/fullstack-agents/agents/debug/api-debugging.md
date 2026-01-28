@@ -103,7 +103,7 @@ grep -rn "raise\|except" --include="*.py" -A 2 | head -30
 
 | Field | Value |
 |-------|-------|
-| Endpoint | POST /api/v1/users |
+| Endpoint | POST /setting/users/ |
 | Status Code | 500 Internal Server Error |
 | Request ID | abc-123-def |
 | Timestamp | 2024-01-15 14:23:45 |
@@ -141,7 +141,7 @@ X-Request-ID: abc-123-def
 **Server Logs:**
 ```
 2024-01-15 14:23:45 ERROR - Traceback (most recent call last):
-  File "api/v1/users.py", line 23, in create_user
+  File "api/routers/setting/user_router.py", line 23, in create_user
     result = await user_service.create(session, data)
   File "api/services/user_service.py", line 45, in create
     user = User(**data.dict())
@@ -160,7 +160,7 @@ The request body contains a `role` field that the `User` model doesn't accept in
 
 **Option 1: Update the schema to exclude extra fields**
 ```python
-# api/schemas/user_schemas.py
+# api/schemas/user_schema.py
 class UserCreate(BaseModel):
     email: EmailStr
     name: str
@@ -181,7 +181,7 @@ class User(Base):
 // Don't send role in creation request
 const createUser = (data: UserCreate) => {
   const { role, ...userData } = data  // Remove role
-  return fetchClient('/api/v1/users', {
+  return fetchClient('/setting/users/', {
     method: 'POST',
     body: JSON.stringify(userData),
   })
@@ -192,7 +192,7 @@ const createUser = (data: UserCreate) => {
 
 **cURL command to test:**
 ```bash
-curl -X POST http://localhost:8000/api/v1/users \
+curl -X POST http://localhost:8000/setting/users \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{"email": "john@example.com", "name": "John Doe"}'
@@ -220,18 +220,18 @@ curl -X POST http://localhost:8000/api/v1/users \
 
 ```bash
 # Test endpoint with curl
-curl -v http://localhost:8000/api/v1/health
+curl -v http://localhost:8000/setting/health
 
 # Test with auth
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/users
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/setting/users
 
 # Check CORS preflight
-curl -X OPTIONS http://localhost:8000/api/v1/users \
+curl -X OPTIONS http://localhost:8000/setting/users \
   -H "Origin: http://localhost:3000" \
   -H "Access-Control-Request-Method: POST"
 
 # Test POST with body
-curl -X POST http://localhost:8000/api/v1/users \
+curl -X POST http://localhost:8000/setting/users \
   -H "Content-Type: application/json" \
   -d '{"email": "test@test.com", "name": "Test"}'
 ```

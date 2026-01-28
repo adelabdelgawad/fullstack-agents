@@ -1,51 +1,57 @@
 # FastAPI Template Skill
 
-Generate production-ready FastAPI CRUD modules following a proven single-session-per-request architecture.
+Generate production-ready FastAPI CRUD modules following a simplified architecture with CRUD helpers.
 
 ## When to Use This Skill
 
 Use this skill when asked to:
-- Create a new FastAPI entity/module (router, service, repository, schemas)
+- Create a new FastAPI entity/module (router, CRUD helpers, schemas)
 - Add CRUD endpoints to an existing FastAPI application
-- Generate data access layers following the repository pattern
+- Generate reusable query functions following the CRUD helper pattern
 - Build REST APIs with SQLAlchemy and Pydantic
 
 ## Architecture Overview
 
 ```
+Simple Operations:
 ┌─────────────────────────────────────────────────────────────┐
 │                    HTTP Request                              │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Router (api/v1/{entity}.py)                                │
+│  Router (api/routers/setting/{entity}_router.py)            │
 │  • Endpoint definitions                                      │
 │  • Request/Response validation                               │
-│  • session: AsyncSession = Depends(get_session)             │
+│  • session: SessionDep                                       │
+│  • Simple CRUD directly here OR delegates to CRUD helpers    │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Service (api/services/{entity}_service.py)                 │
-│  • Business logic                                            │
-│  • Validation rules                                          │
-│  • Orchestrates repositories                                 │
+│  CRUD Helper (api/crud/{entity}.py) — if reused 3+ times    │
+│  OR direct SQLAlchemy query in router                        │
+│  • Plain async functions (no classes)                        │
+│  • Session as first parameter                                │
+│  • flush() not commit()                                      │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Repository (api/repositories/{entity}_repository.py)       │
-│  • Data access                                               │
-│  • SQLAlchemy queries                                        │
-│  • No business logic                                         │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-                           ▼
+│  Model (db/model.py) + Schemas                               │
+│  • SQLModel ORM models                                       │
+│  • api/schemas/ (domain) + api/http_schema/ (request/resp)   │
+│  • Pydantic DTOs with CamelModel                             │
+└─────────────────────────────────────────────────────────────┘
+
+Complex Operations (external integrations, multi-step orchestration):
 ┌─────────────────────────────────────────────────────────────┐
-│  Model (db/models.py) + Schema (api/schemas/{entity}.py)    │
-│  • SQLAlchemy ORM models                                     │
-│  • Pydantic DTOs with CamelModel                            │
+│  Router → Service → CRUD helper / Direct queries → Model     │
+│                                                               │
+│  Services ONLY for:                                           │
+│  • External integrations (AD/LDAP, email, Redis, SMS)        │
+│  • Complex multi-step orchestration                          │
+│  • Cross-cutting concerns (audit, notifications)             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -53,52 +59,63 @@ Use this skill when asked to:
 
 ```
 api/
-├── v1/
-│   └── {entity}.py              # Router with endpoints
+├── routers/
+│   └── setting/
+│       └── {entity}_router.py      # Router with endpoints
+├── crud/
+│   ├── __init__.py                  # Re-exports all CRUD helpers
+│   └── {entity}.py                  # Reusable query functions (3+ uses)
 ├── services/
-│   └── {entity}_service.py      # Business logic
-├── repositories/
-│   └── {entity}_repository.py   # Data access layer
-└── schemas/
-    ├── _base.py                 # CamelModel base class
-    └── {entity}_schemas.py      # Pydantic DTOs
+│   └── {entity}_service.py          # ONLY for external integrations
+├── schemas/
+│   ├── _base.py                     # CamelModel base class
+│   └── {entity}_schema.py           # Domain schemas
+└── http_schema/
+    └── {entity}_schema.py           # Request/response Pydantic DTOs
 
 db/
-└── models.py                    # SQLAlchemy models
+└── model.py                         # SQLModel ORM models
 
 core/
-├── exceptions.py                # Domain exceptions
-└── pagination.py                # Pagination utilities
+├── dependencies.py                  # SessionDep, CurrentUserDep
+├── app_setup/
+│   └── routers_group/
+│       └── setting_routers.py       # Router registration
+└── exceptions.py                    # DetailedHTTPException
 ```
 
 ## Core Principles
 
 ### 1. Single Session Per Request
 
-Every request uses exactly ONE database session:
+Every request uses exactly ONE database session via typed dependency:
 
 ```python
 @router.post("/items")
 async def create_item(
     item_create: ItemCreate,
-    session: AsyncSession = Depends(get_session),  # Session injected here
+    session: SessionDep,  # Typed dependency - NOT Depends(get_session)
 ):
-    service = ItemService()
-    return await service.create_item(session, item_create)  # Passed to service
+    item = Item(**item_create.model_dump())
+    session.add(item)
+    await session.commit()
+    await session.refresh(item)
+    return item
 ```
 
 ### 2. Session Flow
 
 ```
-Endpoint (session created)
-    → Service (receives session as param)
-        → Repository (receives session as param)
-            → Database operations
+Simple:
+Endpoint (SessionDep) → Direct query OR CRUD helper → Database
+
+Complex:
+Endpoint (SessionDep) → Service (receives session) → CRUD helper → Database
 ```
 
 ### 3. CamelModel for API Responses
 
-All schemas inherit from CamelModel for automatic snake_case → camelCase conversion:
+All schemas inherit from CamelModel for automatic snake_case to camelCase conversion:
 
 ```python
 class ItemResponse(CamelModel):
@@ -109,44 +126,50 @@ class ItemResponse(CamelModel):
 
 ### 4. Domain Exceptions
 
-Use typed exceptions that map to HTTP status codes:
+Use `DetailedHTTPException` for errors:
 
-| Exception | HTTP Status |
-|-----------|-------------|
-| NotFoundError | 404 |
-| ConflictError | 409 |
-| ValidationError | 422 |
-| AuthenticationError | 401 |
-| AuthorizationError | 403 |
-| DatabaseError | 500 |
+```python
+from api.exceptions import DetailedHTTPException
+from fastapi import status
+
+raise DetailedHTTPException(
+    status_code=status.HTTP_404_NOT_FOUND,
+    detail=f"Item not found with ID: {item_id}",
+)
+```
 
 ## Generation Order
 
 When creating a new entity, generate files in this order:
 
-1. **Model** (db/models.py) - Add SQLAlchemy model
-2. **Schemas** (api/schemas/{entity}_schemas.py) - Pydantic DTOs
-3. **Repository** (api/repositories/{entity}_repository.py) - Data access
-4. **Service** (api/services/{entity}_service.py) - Business logic
-5. **Router** (api/v1/{entity}.py) - API endpoints
-6. **Register router** in app.py
+1. **Model** (`db/model.py`) - Add SQLModel model
+2. **Schemas** (`api/schemas/{entity}_schema.py` + `api/http_schema/{entity}_schema.py`) - Pydantic DTOs
+3. **CRUD helpers** (`api/crud/{entity}.py`) - Only if queries are reused 3+ times
+4. **Router** (`api/routers/setting/{entity}_router.py`) - API endpoints
+5. **Register router** in `core/app_setup/routers_group/setting_routers.py`
 
 ## Quick Reference
 
-### Repository Pattern
-- `__init__` takes no parameters
-- All methods receive `session` as first parameter
-- Use `session.flush()` to persist, `session.refresh()` to reload
+### CRUD Helper Pattern
+- Plain async functions (no classes)
+- Session as first parameter
+- `flush()` not `commit()` - caller commits
+- Only create when query is reused 3+ times
+- Import as: `from api.crud import items as items_crud`
 
 ### Service Pattern
-- `__init__` creates repository instances
-- All methods receive `session` as first parameter
-- Contains business validation logic
+- ONLY for external integrations (AD, email, Redis, SMS)
+- ONLY for complex multi-step orchestration
+- Uses CRUD helpers for database access (not repositories)
+- Session passed as parameter, commit in router
 
 ### Router Pattern
-- Always include `session: AsyncSession = Depends(get_session)`
-- Instantiate service directly: `service = EntityService()`
-- Pass session to service methods
+- Use `SessionDep` typed dependency
+- Simple CRUD directly in router (no service)
+- Import CRUD helpers for reusable queries
+- Router owns the transaction (commit/rollback)
+- Path: `api/routers/setting/{entity}_router.py`
+- Registration: `core/app_setup/routers_group/setting_routers.py`
 
 ## References
 
@@ -155,9 +178,9 @@ See the `references/` directory for detailed patterns:
 ### Core Patterns
 - `model-pattern.md` - SQLAlchemy models
 - `schema-pattern.md` - Pydantic DTO patterns
-- `repository-pattern.md` - Data access layer
-- `service-pattern.md` - Business logic layer
-- `router-pattern.md` - API endpoints (includes PATCH, multiple responses)
+- `crud-helper-pattern.md` - Reusable query functions (replaces repository pattern)
+- `service-pattern.md` - External integrations and complex orchestration
+- `router-pattern.md` - API endpoints with SessionDep
 
 ### Advanced Patterns
 - `file-upload-pattern.md` - File uploads with UploadFile, validation, S3

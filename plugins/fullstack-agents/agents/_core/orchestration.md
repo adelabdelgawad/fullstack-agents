@@ -55,7 +55,7 @@ FLOW:
 ┌─────────────────────────────────────────────────────────────┐
 │  Step 3: Generate Backend                                   │
 │  Agent: generate/fastapi-entity                             │
-│  Creates: Model, Schema, Repository, Service, Router        │
+│  Creates: Model, Schema, CRUD helpers, Router                │
 │  Status: Mark as "backend complete"                         │
 └──────────────────────────┬──────────────────────────────────┘
                            │
@@ -96,7 +96,7 @@ FLOW:
    - Both? Run fullstack orchestration
 
 2. For each layer:
-   - Backend: Model → Schema → Repository → Service → Router
+   - Backend: Model → Schema → CRUD helper → Router → Register
    - Frontend: Types → API Route → Context → Components → Page
 
 3. Post-generation:
@@ -204,15 +204,14 @@ Map types across technologies:
 Entity: **Product**
 
 ### Backend (FastAPI)
-- [x] Model created (`db/models.py`)
-- [x] Schemas created (`api/schemas/product_schemas.py`)
-- [x] Repository created (`api/repositories/product_repository.py`)
-- [x] Service created (`api/services/product_service.py`)
-- [x] Router created (`api/v1/products.py`)
-- [x] Router registered (`app.py`)
+- [x] Model created (`db/model.py`)
+- [x] Schemas created (`api/schemas/product_schema.py`)
+- [x] CRUD helpers created (`api/crud/products.py`)
+- [x] Router created (`api/routers/setting/product_router.py`)
+- [x] Router registered (`core/app_setup/routers_group/setting_routers.py`)
 
 ### API Routes (Next.js)
-- [x] Types created (`types/product.d.ts`)
+- [x] Types created (`lib/types/api/product.ts`)
 - [x] GET route (`app/api/setting/products/route.ts`)
 - [x] POST route (`app/api/setting/products/route.ts`)
 - [x] PUT route (`app/api/setting/products/[id]/route.ts`)
@@ -332,14 +331,13 @@ Generate a complete fullstack feature spanning backend and frontend.
 ## What It Creates
 
 ### Backend (FastAPI)
-- SQLAlchemy model in `db/models.py`
-- Pydantic schemas in `api/schemas/{entity}_schemas.py`
-- Repository in `api/repositories/{entity}_repository.py`
-- Service in `api/services/{entity}_service.py`
-- Router in `api/v1/{entity}.py`
+- SQLAlchemy model in `db/model.py`
+- Pydantic schemas in `api/schemas/{entity}_schema.py`
+- CRUD helpers in `api/crud/{entity}.py`
+- Router in `api/routers/setting/{entity}_router.py`
 
 ### Frontend (Next.js)
-- TypeScript types in `types/{entity}.d.ts`
+- TypeScript types in `lib/types/api/{entity}.ts`
 - API routes in `app/api/setting/{entity}/`
 - Context provider in `app/(pages)/setting/{entity}/context/`
 - Data table page in `app/(pages)/setting/{entity}/`
@@ -401,7 +399,7 @@ Create a complete fullstack project with backend, frontend, and infrastructure.
 ### Infrastructure
 - Docker Compose configuration
 - Nginx reverse proxy
-- PostgreSQL database
+- MariaDB database
 - Redis cache (optional)
 
 ## Process

@@ -55,7 +55,7 @@ error_info = {
     "line": 45,
     "function": "create_user",
     "call_stack": [
-        {"file": "api/v1/users.py", "line": 23, "function": "create_user_endpoint"},
+        {"file": "api/routers/setting/users.py", "line": 23, "function": "create_user_endpoint"},
         {"file": "api/services/user_service.py", "line": 45, "function": "create_user"},
     ]
 }
@@ -94,7 +94,7 @@ git diff HEAD~5 -- {file_path}
 
 ```
 Traceback (most recent call last):
-  File "api/v1/users.py", line 23, in create_user_endpoint
+  File "api/routers/setting/users.py", line 23, in create_user_endpoint
     result = await user_service.create_user(session, data)
   File "api/services/user_service.py", line 45, in create_user    <-- Error here
     validated = UserCreate(**data)
@@ -102,7 +102,7 @@ ValueError: Invalid value for field 'email'
 ```
 
 **Call Path:**
-1. `api/v1/users.py:23` - Router receives request
+1. `api/routers/setting/users.py:23` - Router receives request
 2. `api/services/user_service.py:45` - Service validates data ← **Error occurs here**
 
 ### Root Cause
@@ -127,7 +127,7 @@ The `UserCreate` schema expects a valid email format, but the input doesn't matc
 
 **UserCreate schema:**
 ```python
-# api/schemas/user_schemas.py
+# api/schemas/user_schema.py
 class UserCreate(BaseModel):
     email: EmailStr  # Requires valid email format
     name: str
@@ -162,7 +162,7 @@ async def create_user(self, session: AsyncSession, data: dict):
 **Option 3: Make email optional**
 If email should be optional:
 ```python
-# api/schemas/user_schemas.py
+# api/schemas/user_schema.py
 class UserCreate(BaseModel):
     email: EmailStr | None = None
     name: str
@@ -177,7 +177,7 @@ To prevent this error in the future:
    @router.post("")
    async def create_user(
        data: UserCreate,  # FastAPI validates automatically
-       session: AsyncSession = Depends(get_session),
+       session: SessionDep,
    ):
    ```
 
@@ -193,5 +193,5 @@ To prevent this error in the future:
 
 Similar errors might occur in:
 - `api/services/user_service.py:78` - `update_user` uses same schema
-- `api/v1/auth.py:34` - `register` creates user
+- `api/routers/auth.py:34` - `register` creates user
 ```

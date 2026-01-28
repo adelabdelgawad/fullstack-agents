@@ -46,10 +46,10 @@ grep -rq "apscheduler" *.py requirements.txt pyproject.toml 2>/dev/null && echo 
 
 ```bash
 echo "=== FastAPI Structure ==="
-[ -f "app.py" ] && echo "Entry: app.py" || [ -f "main.py" ] && echo "Entry: main.py"
-[ -d "api/v1" ] && echo "Routers: api/v1/"
+[ -f "main.py" ] && echo "Entry: main.py"
+[ -d "api/routers/setting" ] && echo "Routers: api/routers/setting/"
+[ -d "api/crud" ] && echo "CRUD Helpers: api/crud/"
 [ -d "api/services" ] && echo "Services: api/services/"
-[ -d "api/repositories" ] && echo "Repositories: api/repositories/"
 [ -d "api/schemas" ] && echo "Schemas: api/schemas/"
 [ -d "db" ] && echo "Database: db/"
 ```
@@ -62,7 +62,7 @@ echo "=== Next.js Structure ==="
 [ -d "pages" ] && echo "Pages Router: pages/"
 [ -d "components" ] && echo "Components: components/"
 [ -d "lib" ] && echo "Lib: lib/"
-[ -d "types" ] && echo "Types: types/"
+[ -d "lib/types" ] && echo "Types: lib/types/api/"
 ```
 
 ### 3. Entity Inventory
@@ -78,10 +78,9 @@ grep -h "class.*Base\):" db/models.py 2>/dev/null | sed 's/class \([A-Za-z]*\)(B
 for entity in $(grep -h "class.*Base\):" db/models.py 2>/dev/null | sed 's/class \([A-Za-z]*\)(Base):/\1/'); do
     lower=$(echo $entity | tr '[:upper:]' '[:lower:]')
     echo -n "$entity: "
-    [ -f "api/schemas/${lower}_schemas.py" ] && echo -n "Schema " || echo -n "- "
-    [ -f "api/repositories/${lower}_repository.py" ] && echo -n "Repo " || echo -n "- "
-    [ -f "api/services/${lower}_service.py" ] && echo -n "Service " || echo -n "- "
-    [ -f "api/v1/${lower}s.py" ] && echo -n "Router" || echo -n "-"
+    [ -f "api/schemas/${lower}_schema.py" ] && echo -n "Schema " || echo -n "- "
+    [ -f "api/crud/${lower}.py" ] && echo -n "CRUD " || echo -n "- "
+    [ -f "api/routers/setting/${lower}_router.py" ] && echo -n "Router" || echo -n "-"
     echo ""
 done
 ```
@@ -133,15 +132,15 @@ find . -name "*.test.ts" -o -name "*.test.tsx" -o -name "*.spec.ts" | wc -l
 
 ```
 ./
-├── app.py                 # Application entry
+├── main.py                # Application entry
 ├── db/
-│   ├── models.py          # SQLAlchemy models
-│   └── database.py        # Database connection
+│   ├── model.py           # SQLAlchemy models
+│   └── setup_database.py  # Database connection
 ├── api/
-│   ├── v1/               # API routers
-│   ├── services/         # Business logic
-│   ├── repositories/     # Data access
-│   └── schemas/          # Pydantic DTOs
+│   ├── routers/setting/   # API routers
+│   ├── crud/              # CRUD helper functions
+│   ├── services/          # External integrations only
+│   └── schemas/           # Pydantic DTOs
 └── alembic/              # Migrations
 ```
 
@@ -154,18 +153,18 @@ find . -name "*.test.ts" -o -name "*.test.tsx" -o -name "*.spec.ts" | wc -l
 │   │   └── setting/      # Settings section
 │   └── api/              # API routes
 ├── components/           # Shared components
-├── lib/                  # Utilities
-└── types/                # TypeScript types
+└── lib/                  # Utilities
+    └── types/api/        # TypeScript types
 ```
 
 ### Entity Inventory
 
-| Entity | Model | Schema | Repo | Service | Router | Frontend |
-|--------|-------|--------|------|---------|--------|----------|
-| User | [x] | [x] | [x] | [x] | [x] | [x] |
-| Product | [x] | [x] | [x] | [x] | [x] | [ ] |
-| Category | [x] | [x] | [ ] | [ ] | [ ] | [ ] |
-| Order | [x] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| Entity | Model | Schema | CRUD | Router | Frontend |
+|--------|-------|--------|------|--------|----------|
+| User | [x] | [x] | [x] | [x] | [x] |
+| Product | [x] | [x] | [x] | [x] | [ ] |
+| Category | [x] | [x] | [ ] | [ ] | [ ] |
+| Order | [x] | [ ] | [ ] | [ ] | [ ] |
 
 **Legend:** [x] = Exists, [ ] = Missing
 
@@ -174,7 +173,7 @@ find . -name "*.test.ts" -o -name "*.test.tsx" -o -name "*.spec.ts" | wc -l
 1. **Product** - Missing frontend page
    - Action: `/generate data-table products`
 
-2. **Category** - Missing repository, service, router
+2. **Category** - Missing CRUD helpers, router
    - Action: `/generate entity category` (will update existing model)
 
 3. **Order** - Only model exists

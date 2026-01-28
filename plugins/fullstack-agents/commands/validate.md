@@ -32,18 +32,18 @@ Validate that an entity follows the established architecture patterns.
 
 | Check | Description |
 |-------|-------------|
-| Session Flow | Session passed from router → service → repository |
+| SessionDep | Router uses `SessionDep` type alias |
 | No Session Storage | Session not stored in `__init__` |
 | CamelModel | Response schemas inherit from CamelModel |
 | Domain Exceptions | Uses NotFoundError, not HTTPException |
-| Repository Pattern | Repository is stateless, handles data access only |
+| CRUD Helpers | Plain functions in `api/crud/`, no classes |
 
 ### Next.js Patterns
 
 | Check | Description |
 |-------|-------------|
 | SSR Page | Page is server component (no "use client") |
-| SWR Usage | Table uses SWR with fallbackData |
+| Data Pattern | Table uses `useState(initialData)` (default) or SWR (with justification) |
 | Server Response | Updates use server response, not optimistic |
 | URL State | Filters/pagination in URL via nuqs |
 | Context Pattern | CRUD actions via context |
@@ -67,12 +67,12 @@ Validate that an entity follows the established architecture patterns.
 
 ### Passed Checks
 
-- [x] Session passed to service methods
-- [x] Session passed to repository methods
+- [x] SessionDep used in router endpoints
+- [x] CRUD helpers are plain functions
 - [x] No session stored in __init__
 - [x] Schemas inherit from CamelModel
 - [x] Page is server component
-- [x] SWR uses fallbackData
+- [x] Table uses simplified pattern (or SWR with justification)
 ...
 ```
 

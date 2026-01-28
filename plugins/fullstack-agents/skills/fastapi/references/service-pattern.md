@@ -1,358 +1,252 @@
 # Service Pattern Reference
 
-Business logic layer that orchestrates repositories and applies domain rules.
+Services handle external integrations and complex multi-step orchestration ONLY. Simple CRUD operations go directly in routers.
 
-## Key Principles
+## When to Use Services
 
-1. **Create repositories in `__init__`** - Services own their repositories
-2. **Session as first parameter** - Every method receives session
-3. **Business logic here** - Validation, rules, orchestration
-4. **No direct SQL** - Use repositories for data access
-5. **Raise domain exceptions** - For validation failures
+- **External integrations**: Active Directory/LDAP, email/SMTP, Redis, SMS, Elasticsearch
+- **Complex multi-step orchestration**: User creation + AD sync + role assignment + welcome email
+- **Cross-cutting concerns**: Audit logging across multiple entities, notification dispatch
 
-## Basic Service Structure
+## When NOT to Use Services
+
+- **Simple CRUD operations** - Put directly in routers
+- **Single-table queries** - Use CRUD helpers or inline queries
+- **Basic data formatting** - Do in router or schema
+- **Forwarding to data layer** - This is unnecessary indirection
 
 ```python
-# api/services/item_service.py
-"""Item Service - Business logic for item management."""
+# BAD - Unnecessary service layer for simple CRUD
+class ItemService:
+    async def get_items(self, session: AsyncSession, skip: int, limit: int):
+        # This just forwards to a query - put it directly in the router
+        stmt = select(Item).offset(skip).limit(limit)
+        return (await session.scalars(stmt)).all()
 
-from typing import List, Optional, Tuple
+# GOOD - Simple query directly in router
+@router.get("/")
+async def list_items(session: SessionDep, skip: int = 0, limit: int = 100):
+    stmt = select(Item).offset(skip).limit(limit)
+    return (await session.scalars(stmt)).all()
+```
+
+## Service Structure
+
+Services use CRUD helpers or direct queries for database access. No repository classes.
+
+```python
+# api/services/user_sync_service.py
+"""User Sync Service - Orchestrates user synchronization with Active Directory."""
+
+import logging
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.repositories.item_repository import ItemRepository
-from core.exceptions import NotFoundError, ValidationError, ConflictError
-from db.models import Item
-
-
-class ItemService:
-    """Service for item management."""
-
-    def __init__(self):
-        """Initialize service with repositories."""
-        self._repo = ItemRepository()
-
-    async def create_item(
-        self,
-        session: AsyncSession,
-        name_en: str,
-        name_ar: str,
-        description_en: Optional[str] = None,
-        description_ar: Optional[str] = None,
-        category_id: Optional[int] = None,
-    ) -> Item:
-        """
-        Create a new item.
-        
-        Business rules:
-        - Name must be unique
-        - Category must exist if provided
-        """
-        # Check for duplicate name
-        existing = await self._repo.get_by_name_en(session, name_en)
-        if existing:
-            raise ConflictError(
-                entity="Item",
-                field="name_en",
-                value=name_en,
-            )
-        
-        # Validate category if provided
-        if category_id:
-            from api.repositories.category_repository import CategoryRepository
-            cat_repo = CategoryRepository()
-            category = await cat_repo.get_by_id(session, category_id)
-            if not category:
-                raise ValidationError(f"Category {category_id} not found")
-        
-        # Create item
-        item = Item(
-            name_en=name_en,
-            name_ar=name_ar,
-            description_en=description_en,
-            description_ar=description_ar,
-            category_id=category_id,
-        )
-        return await self._repo.create(session, item)
-
-    async def get_item(self, session: AsyncSession, item_id: int) -> Item:
-        """Get an item by ID."""
-        item = await self._repo.get_by_id(session, item_id)
-        if not item:
-            raise NotFoundError(entity="Item", identifier=item_id)
-        return item
-
-    async def list_items(
-        self,
-        session: AsyncSession,
-        page: int = 1,
-        per_page: int = 25,
-        name_filter: Optional[str] = None,
-        is_active: Optional[bool] = None,
-    ) -> Tuple[List[Item], int]:
-        """List items with pagination and filtering."""
-        return await self._repo.list(
-            session,
-            page=page,
-            per_page=per_page,
-            name_filter=name_filter,
-            is_active=is_active,
-        )
-
-    async def update_item(
-        self,
-        session: AsyncSession,
-        item_id: int,
-        name_en: Optional[str] = None,
-        name_ar: Optional[str] = None,
-        description_en: Optional[str] = None,
-        description_ar: Optional[str] = None,
-    ) -> Item:
-        """
-        Update an item.
-        
-        Business rules:
-        - Item must exist
-        - New name must be unique
-        """
-        # Check item exists
-        item = await self._repo.get_by_id(session, item_id)
-        if not item:
-            raise NotFoundError(entity="Item", identifier=item_id)
-        
-        # Check name uniqueness if changing
-        if name_en and name_en != item.name_en:
-            existing = await self._repo.get_by_name_en(session, name_en)
-            if existing:
-                raise ConflictError(
-                    entity="Item",
-                    field="name_en",
-                    value=name_en,
-                )
-        
-        # Build update dict
-        update_data = {}
-        if name_en is not None:
-            update_data["name_en"] = name_en
-        if name_ar is not None:
-            update_data["name_ar"] = name_ar
-        if description_en is not None:
-            update_data["description_en"] = description_en
-        if description_ar is not None:
-            update_data["description_ar"] = description_ar
-        
-        return await self._repo.update(session, item_id, update_data)
-
-    async def update_item_status(
-        self,
-        session: AsyncSession,
-        item_id: int,
-        is_active: bool,
-    ) -> Item:
-        """Toggle item active/inactive status."""
-        update_data = {"is_active": is_active}
-        return await self._repo.update(session, item_id, update_data)
-
-    async def delete_item(self, session: AsyncSession, item_id: int) -> None:
-        """Delete an item."""
-        await self._repo.delete(session, item_id)
-```
-
-## Multi-Repository Service
-
-```python
-class OrderService:
-    """Service managing orders with multiple repositories."""
-
-    def __init__(self):
-        self._order_repo = OrderRepository()
-        self._item_repo = ItemRepository()
-        self._customer_repo = CustomerRepository()
-
-    async def create_order(
-        self,
-        session: AsyncSession,
-        customer_id: int,
-        item_ids: List[int],
-    ) -> Order:
-        """
-        Create order with validation across entities.
-        
-        All operations use the SAME session for atomicity.
-        """
-        # Validate customer
-        customer = await self._customer_repo.get_by_id(session, customer_id)
-        if not customer:
-            raise NotFoundError(entity="Customer", identifier=customer_id)
-        
-        if not customer.is_active:
-            raise ValidationError("Cannot create order for inactive customer")
-        
-        # Validate items
-        items = await self._item_repo.get_by_ids(session, item_ids)
-        if len(items) != len(item_ids):
-            found_ids = {i.id for i in items}
-            missing = set(item_ids) - found_ids
-            raise ValidationError(f"Items not found: {missing}")
-        
-        # Check all items active
-        inactive_items = [i for i in items if not i.is_active]
-        if inactive_items:
-            raise ValidationError(f"Cannot order inactive items: {[i.id for i in inactive_items]}")
-        
-        # Create order
-        order = Order(
-            customer_id=customer_id,
-            total=sum(item.price for item in items),
-        )
-        order = await self._order_repo.create(session, order)
-        
-        # Create order lines
-        for item in items:
-            line = OrderLine(order_id=order.id, item_id=item.id, price=item.price)
-            await self._order_repo.create_line(session, line)
-        
-        return order
-```
-
-## Service with External Dependencies
-
-```python
-class UserService:
-    """Service with external service dependencies."""
-
-    def __init__(self):
-        self._user_repo = UserRepository()
-        self._role_repo = RoleRepository()
-
-    async def create_user_with_role(
-        self,
-        session: AsyncSession,
-        username: str,
-        role_name: str,
-    ) -> User:
-        """Create user and assign role in single transaction."""
-        # Check username unique
-        existing = await self._user_repo.get_by_username(session, username)
-        if existing:
-            raise ConflictError(entity="User", field="username", value=username)
-        
-        # Get or create role
-        role = await self._role_repo.get_by_name_en(session, role_name)
-        if not role:
-            raise ValidationError(f"Role '{role_name}' not found")
-        
-        # Create user
-        user = User(username=username)
-        user = await self._user_repo.create(session, user)
-        
-        # Assign role (same session)
-        await self._role_repo.assign_to_user(session, user.id, role.id)
-        
-        return user
-```
-
-## Bulk Operations
-
-```python
-async def bulk_update_status(
-    self,
-    session: AsyncSession,
-    item_ids: List[int],
-    is_active: bool,
-) -> int:
-    """
-    Bulk update item status.
-    
-    Returns count of updated items.
-    """
-    # Validate all items exist
-    items = await self._repo.get_by_ids(session, item_ids)
-    if len(items) != len(item_ids):
-        found_ids = {i.id for i in items}
-        missing = set(item_ids) - found_ids
-        raise ValidationError(f"Items not found: {missing}")
-    
-    # Filter items already in target state
-    to_update = [i.id for i in items if i.is_active != is_active]
-    
-    if not to_update:
-        return 0
-    
-    return await self._repo.bulk_update_status(session, to_update, is_active)
-```
-
-## Validation Helpers
-
-```python
-async def _validate_unique_name(
-    self,
-    session: AsyncSession,
-    name_en: str,
-    exclude_id: Optional[int] = None,
-) -> None:
-    """Check name is unique, optionally excluding an ID (for updates)."""
-    existing = await self._repo.get_by_name_en(session, name_en)
-    if existing and (exclude_id is None or existing.id != exclude_id):
-        raise ConflictError(entity="Item", field="name_en", value=name_en)
-
-async def _validate_category_exists(
-    self,
-    session: AsyncSession,
-    category_id: int,
-) -> None:
-    """Validate category exists and is active."""
-    from api.repositories.category_repository import CategoryRepository
-    cat_repo = CategoryRepository()
-    category = await cat_repo.get_by_id(session, category_id)
-    if not category:
-        raise ValidationError(f"Category {category_id} not found")
-    if not category.is_active:
-        raise ValidationError(f"Category {category_id} is inactive")
-```
-
-## Service with Logging
-
-```python
-import logging
+from api.crud import users as users_crud
+from api.services.async_ad_client_service import AsyncADClientService
+from api.exceptions import DetailedHTTPException
+from db.model import User
+from fastapi import status
 
 logger = logging.getLogger(__name__)
 
-class AuditedItemService:
-    """Service with audit logging."""
 
-    def __init__(self):
-        self._repo = ItemRepository()
-        self._log_repo = LogItemRepository()
+class UserSyncService:
+    """Orchestrates user synchronization with Active Directory."""
 
-    async def create_item(
+    def __init__(self, ad_service: AsyncADClientService):
+        self.ad_service = ad_service
+
+    async def sync_user_from_ad(
         self,
         session: AsyncSession,
-        created_by_id: str,
-        **kwargs,
-    ) -> Item:
-        """Create item with audit log."""
-        item = Item(**kwargs)
-        item = await self._repo.create(session, item)
-        
-        # Log creation
-        await self._log_repo.log_operation(
+        username: str,
+    ) -> User:
+        """
+        Sync a user from Active Directory.
+
+        Steps:
+        1. Fetch user from AD (external integration)
+        2. Create or update in database (CRUD helper)
+        3. Assign default roles if new user
+        4. Log the sync operation
+        """
+        # Step 1: External integration
+        ad_user_data = await self.ad_service.get_user(username)
+        if not ad_user_data:
+            raise DetailedHTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User '{username}' not found in Active Directory",
+            )
+
+        # Step 2: Database operation via CRUD helper
+        existing_user = await users_crud.get_user_by_username(session, username)
+
+        if existing_user:
+            # Update existing user with AD data
+            existing_user.first_name = ad_user_data.get("first_name", existing_user.first_name)
+            existing_user.last_name = ad_user_data.get("last_name", existing_user.last_name)
+            existing_user.email = ad_user_data.get("email", existing_user.email)
+            await session.flush()
+            await session.refresh(existing_user)
+            logger.info(f"Updated user {username} from AD")
+            return existing_user
+
+        # Step 3: Create new user
+        user = await users_crud.create_user(
             session,
-            operation_type="create",
-            item_id=item.id,
-            user_id=created_by_id,
-            details={"name_en": item.name_en},
+            username=username,
+            first_name=ad_user_data.get("first_name", ""),
+            last_name=ad_user_data.get("last_name", ""),
+            email=ad_user_data.get("email", ""),
         )
-        
-        logger.info(f"Item {item.id} created by {created_by_id}")
-        return item
+
+        # Step 4: Assign default role
+        await users_crud.assign_default_role(session, user.id)
+
+        logger.info(f"Created new user {username} from AD sync")
+        return user
+```
+
+## Service with Multiple External Integrations
+
+```python
+# api/services/notification_service.py
+"""Notification Service - Sends notifications via multiple channels."""
+
+from api.services.email_service import EmailService
+from api.services.sms_service import SMSService
+from api.crud import users as users_crud
+
+
+class NotificationService:
+    """Orchestrates notifications across channels."""
+
+    def __init__(
+        self,
+        email_service: EmailService,
+        sms_service: Optional[SMSService] = None,
+    ):
+        self.email_service = email_service
+        self.sms_service = sms_service
+
+    async def notify_user_created(
+        self,
+        session: AsyncSession,
+        user_id: int,
+    ) -> None:
+        """
+        Send welcome notifications for a new user.
+
+        External integrations:
+        - Email service (SMTP)
+        - SMS service (optional)
+        """
+        user = await users_crud.ensure_user_exists(session, user_id)
+
+        # Send welcome email
+        await self.email_service.send_welcome_email(
+            to_email=user.email,
+            first_name=user.first_name,
+        )
+
+        # Send SMS if configured
+        if self.sms_service and user.phone:
+            await self.sms_service.send_welcome_sms(
+                phone=user.phone,
+                first_name=user.first_name,
+            )
+```
+
+## Service Using CRUD Helpers (Not Repositories)
+
+```python
+# api/services/domain_credentials_service.py
+"""Domain Credentials Service - Manages domain authentication credentials."""
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+from api.exceptions import DetailedHTTPException
+from db.model import DomainCredential
+from fastapi import status
+
+
+class DomainCredentialsService:
+    """Service for domain credential operations with external validation."""
+
+    async def create_credential(
+        self,
+        session: AsyncSession,
+        domain: str,
+        username: str,
+        password: str,
+    ) -> DomainCredential:
+        """Create credential after validating against external domain."""
+        # External validation (justifies service layer)
+        is_valid = await self._validate_domain_credentials(domain, username, password)
+        if not is_valid:
+            raise DetailedHTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid domain credentials",
+            )
+
+        # Direct query (simple, no CRUD helper needed)
+        credential = DomainCredential(
+            domain=domain,
+            username=username,
+            password=password,  # Encrypted by model
+        )
+        session.add(credential)
+        await session.flush()
+        await session.refresh(credential)
+        return credential
+
+    async def _validate_domain_credentials(
+        self,
+        domain: str,
+        username: str,
+        password: str,
+    ) -> bool:
+        """Validate credentials against the domain controller."""
+        # External integration logic here
+        ...
+```
+
+## Usage in Router
+
+```python
+# api/routers/setting/user_router.py
+from api.services.user_sync_service import UserSyncService
+from api.services.async_ad_client_service import AsyncADClientService
+
+@router.post("/sync-ad")
+async def sync_user_from_ad(
+    username: str,
+    session: SessionDep,
+):
+    """Sync user from Active Directory - complex operation needs service."""
+    ad_service = AsyncADClientService()
+    sync_service = UserSyncService(ad_service)
+    user = await sync_service.sync_user_from_ad(session, username)
+    await session.commit()
+    return user
+
+
+# Simple CRUD - NO service needed
+@router.get("/")
+async def list_users(session: SessionDep, skip: int = 0, limit: int = 100):
+    """List users - simple query, no service."""
+    stmt = select(User).offset(skip).limit(limit)
+    return (await session.scalars(stmt)).all()
 ```
 
 ## Key Points
 
-1. **Repositories in `__init__`** - Service owns its data access
-2. **Session as first param** - Consistent with repository pattern
-3. **Business rules in service** - Uniqueness, existence, state validation
-4. **Same session for multi-repo** - Ensures atomicity
-5. **Raise domain exceptions** - ValidationError, ConflictError, NotFoundError
-6. **No SQL in service** - All data access through repositories
-7. **Return domain objects** - Let endpoint convert to response
+1. **Services ONLY for**: external integrations, complex orchestration, cross-cutting concerns
+2. **No services for simple CRUD** - Put directly in routers
+3. **Use CRUD helpers** for database access, not repositories
+4. **Session passed as parameter** - Service does not own the session
+5. **flush() in service, commit() in router** - Router owns the transaction
+6. **Inject external dependencies** - Pass services via constructor
+7. **Log operations** - Use Python logging for audit trail

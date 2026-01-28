@@ -20,45 +20,56 @@ Validate that code follows the established architecture patterns for FastAPI and
 
 ### FastAPI Patterns
 
-#### 1. Single-Session-Per-Request
+#### 1. SessionDep Injection
 
 **Required Pattern:**
-- Session is injected via `Depends(get_session)` in router
-- Session is passed to service methods
-- Session is passed to repository methods
+- Session is injected via `SessionDep` type alias in router
+- Session is passed to CRUD helpers or used directly in router
+- For complex operations, session is passed to service methods
 - No session stored in `__init__`
 
 **Validation:**
 ```bash
-# Check router has session dependency
-grep -n "Depends(get_session)" api/v1/{entity}.py
-
-# Check service receives session
-grep -n "session: AsyncSession" api/services/{entity}_service.py
+# Check router has SessionDep
+grep -n "session: SessionDep" api/routers/setting/{entity}_router.py
 
 # Check NO session in __init__
-grep -n "self._session\|self.session" api/services/{entity}_service.py api/repositories/{entity}_repository.py
+grep -n "self._session\|self.session" api/services/{entity}_service.py 2>/dev/null
 ```
 
 **Pass criteria:**
 ```python
-# Router
+# Router - simple operations (direct queries or CRUD helpers)
 @router.get("")
 async def list_items(
-    session: AsyncSession = Depends(get_session),  # REQUIRED
+    session: SessionDep,  # REQUIRED - type alias for AsyncSession
 ):
-    return await service.list_items(session)  # Session passed
+    return await items_crud.get_items(session, skip, limit)
 
-# Service
-async def list_items(self, session: AsyncSession):  # Session received
-    return await self.repository.list_items(session)  # Session passed
-
-# Repository
-async def list_items(self, session: AsyncSession):  # Session received
-    return await session.execute(query)
+# CRUD helper (plain function, not class)
+async def get_items(session: AsyncSession, skip: int, limit: int) -> list[Item]:
+    stmt = select(Item).offset(skip).limit(limit)
+    return (await session.scalars(stmt)).all()
 ```
 
-#### 2. Schema Inheritance
+#### 2. CRUD Helper Pattern
+
+**Required Pattern:**
+- CRUD helpers are plain async functions in `api/crud/{entity}.py`
+- No classes, no state
+- Used for reusable queries (3+ uses)
+- Simple queries can go directly in routers
+
+**Validation:**
+```bash
+# Check CRUD helpers exist
+ls api/crud/{entity}.py 2>/dev/null
+
+# Check NO classes in CRUD helpers (should be plain functions)
+grep -n "^class " api/crud/{entity}.py 2>/dev/null
+```
+
+#### 3. Schema Inheritance
 
 **Required Pattern:**
 - Response schemas inherit from `CamelModel`
@@ -67,51 +78,41 @@ async def list_items(self, session: AsyncSession):  # Session received
 
 **Validation:**
 ```bash
-grep -n "class.*Response.*CamelModel\|class.*Response.*BaseModel" api/schemas/{entity}_schemas.py
+grep -n "class.*Response.*CamelModel\|class.*Response.*BaseModel" api/schemas/{entity}_schema.py
 ```
 
-#### 3. Domain Exceptions
+#### 4. Domain Exceptions
 
 **Required Pattern:**
 - Use domain exceptions (NotFoundError, ConflictError, ValidationError)
 - Exceptions mapped to HTTP status codes
-- No raw HTTP exceptions in service/repository
+- No raw HTTP exceptions in services
 
 **Validation:**
 ```bash
-# Should find domain exceptions
-grep -n "raise NotFoundError\|raise ConflictError\|raise ValidationError" api/services/{entity}_service.py
-
-# Should NOT find raw HTTP exceptions
-grep -n "raise HTTPException" api/services/{entity}_service.py api/repositories/{entity}_repository.py
+# Should NOT find raw HTTP exceptions in services
+grep -n "raise HTTPException" api/services/{entity}_service.py 2>/dev/null
 ```
-
-#### 4. Repository Pattern
-
-**Required Pattern:**
-- Repository handles data access only
-- No business logic in repository
-- Repository is stateless
 
 ### Next.js Patterns
 
-#### 1. SSR + SWR Hybrid
+#### 1. SSR + Simplified Pattern (Default)
 
 **Required Pattern:**
 - Page component is server component (no "use client")
 - Page fetches initial data
-- Client component uses SWR with `fallbackData`
+- Client component uses `useState(initialData)` (default) or `useSWR` (when justified)
 
 **Validation:**
 ```bash
 # Page should NOT have "use client"
 grep -n '"use client"' app/\(pages\)/setting/{entity}/page.tsx
 
-# Client component should use SWR
-grep -n "useSWR" app/\(pages\)/setting/{entity}/_components/table/{entity}-table.tsx
+# Client component should use useState with initialData (default pattern)
+grep -n "useState.*initialData\|useState(initialData" app/\(pages\)/setting/{entity}/_components/table/{entity}-table.tsx
 
-# Should have fallbackData
-grep -n "fallbackData" app/\(pages\)/setting/{entity}/_components/table/{entity}-table.tsx
+# OR if SWR is used, should have justification comment
+grep -n "SWR JUSTIFICATION" app/\(pages\)/setting/{entity}/_components/table/{entity}-table.tsx
 ```
 
 #### 2. Server Response Updates
@@ -161,11 +162,11 @@ grep -n "useQueryState\|parseAsInteger\|parseAsString" app/\(pages\)/setting/{en
 
 | Pattern | Status | Notes |
 |---------|--------|-------|
-| Single-session-per-request | PASS | All endpoints compliant |
+| SessionDep injection | PASS | All endpoints compliant |
 | CamelModel schemas | PASS | All responses inherit correctly |
 | Domain exceptions | FAIL | HTTPException in service |
-| Repository stateless | PASS | No state stored |
-| SSR + SWR hybrid | PASS | Correct pattern |
+| CRUD helpers are plain functions | PASS | No classes in crud/ |
+| SSR + Simplified pattern | PASS | Correct pattern |
 | Server response updates | WARN | Missing in delete action |
 | URL state | PASS | Using nuqs |
 
@@ -206,12 +207,12 @@ mutate(data => data.filter(item => item.id !== id), false)
 
 ### Passed Checks
 
-- [x] Session passed from router to service (5/5 endpoints)
-- [x] Session passed from service to repository (5/5 methods)
+- [x] SessionDep used in all router endpoints (5/5 endpoints)
+- [x] CRUD helpers are plain functions (no classes)
 - [x] No session stored in constructors
 - [x] Response schemas inherit from CamelModel
 - [x] Page is server component
-- [x] Table uses SWR with fallbackData
+- [x] Table uses useState with initialData (simplified pattern)
 - [x] URL state managed with nuqs
 - [x] Context provides CRUD actions
 
@@ -233,18 +234,20 @@ For rapid validation, run:
 ```bash
 # FastAPI entity validation
 echo "=== FastAPI Patterns ==="
-echo "Session in router:"
-grep -c "Depends(get_session)" api/v1/{entity}.py
-echo "Session in service:"
-grep -c "session: AsyncSession" api/services/{entity}_service.py
+echo "SessionDep in router:"
+grep -c "session: SessionDep" api/routers/setting/{entity}_router.py
+echo "CRUD helpers exist:"
+ls api/crud/{entity}.py 2>/dev/null && echo "Yes" || echo "No"
+echo "Classes in CRUD helpers (should be 0):"
+grep -c "^class " api/crud/{entity}.py 2>/dev/null || echo "0"
 echo "HTTPException in service (should be 0):"
-grep -c "HTTPException" api/services/{entity}_service.py
+grep -c "HTTPException" api/services/{entity}_service.py 2>/dev/null || echo "0"
 echo ""
 echo "=== Next.js Patterns ==="
 echo "'use client' in page (should be 0):"
 grep -c '"use client"' app/\(pages\)/setting/{entity}/page.tsx 2>/dev/null || echo "0"
-echo "SWR usage:"
+echo "useState with initialData (simplified pattern):"
+grep -c "useState.*initialData" app/\(pages\)/setting/{entity}/_components/table/*.tsx 2>/dev/null || echo "0"
+echo "SWR usage (optional, needs justification):"
 grep -c "useSWR" app/\(pages\)/setting/{entity}/_components/table/*.tsx 2>/dev/null || echo "0"
-echo "fallbackData:"
-grep -c "fallbackData" app/\(pages\)/setting/{entity}/_components/table/*.tsx 2>/dev/null || echo "0"
 ```

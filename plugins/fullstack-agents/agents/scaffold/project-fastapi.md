@@ -282,7 +282,7 @@ class ForbiddenError(DomainException):
 6. **Visit:**
    - API: http://localhost:8000
    - Docs: http://localhost:8000/docs
-   - Health: http://localhost:8000/api/v1/health
+   - Health: http://localhost:8000/health
 
 ### Next Steps
 

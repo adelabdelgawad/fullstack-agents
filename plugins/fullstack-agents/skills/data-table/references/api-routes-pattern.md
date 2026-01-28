@@ -2,6 +2,53 @@
 
 Next.js API routes act as a proxy layer between frontend and backend, handling authentication.
 
+## RECOMMENDED: Route Factory Pattern
+
+Use route factories to eliminate boilerplate (10 lines instead of 24+):
+
+```typescript
+// app/api/setting/[entity]/route.ts
+import { createCollectionRoutes } from "@/lib/fetch/route-factory";
+
+/**
+ * GET /api/setting/[entity] - List with pagination
+ * POST /api/setting/[entity] - Create new
+ */
+export const { GET, POST } = createCollectionRoutes('/setting/[entity]/');
+```
+
+```typescript
+// app/api/setting/[entity]/[entityId]/route.ts
+import { createResourceRoutes } from "@/lib/fetch/route-factory";
+
+/**
+ * GET /api/setting/[entity]/:id - Get single
+ * PUT /api/setting/[entity]/:id - Update
+ * DELETE /api/setting/[entity]/:id - Delete
+ */
+export const { GET, PUT, DELETE } = createResourceRoutes('/setting/[entity]/', 'entityId');
+```
+
+```typescript
+// app/api/setting/[entity]/[entityId]/status/route.ts
+import { createStatusRoute } from "@/lib/fetch/route-factory";
+
+export const { PUT } = createStatusRoute('/setting/[entity]/', 'entityId');
+```
+
+**Available factories:**
+- `createCollectionRoutes(path)` - GET list, POST create
+- `createResourceRoutes(path, paramName)` - GET single, PUT update, DELETE
+- `createStatusRoute(path, paramName)` - PUT status toggle
+- `createCountsRoute(path)` - GET counts/statistics
+- `createCollectionRoutesWithBulkUpdate(path)` - GET, POST, PUT bulk
+
+---
+
+## Manual Pattern (Legacy)
+
+Use only when route factories don't cover your use case.
+
 ## Directory Structure
 
 ```

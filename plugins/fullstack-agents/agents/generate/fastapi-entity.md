@@ -27,9 +27,9 @@ cat pyproject.toml 2>/dev/null | grep -i "fastapi"
 cat requirements.txt 2>/dev/null | grep -i "fastapi"
 
 # Check structure
-ls -la app.py main.py 2>/dev/null
+ls -la main.py 2>/dev/null
 ls -d api/ db/ 2>/dev/null
-ls -d api/v1/ api/services/ api/repositories/ api/schemas/ 2>/dev/null
+ls -d api/routers/ api/crud/ api/schemas/ api/http_schema/ api/services/ 2>/dev/null
 ```
 
 **Decision Tree:**
@@ -40,7 +40,7 @@ IF no FastAPI project detected:
     → Suggest: /scaffold fastapi
 
 IF project exists but missing base structure:
-    → "Base structure missing (api/v1/, services/, repositories/, schemas/)."
+    → "Base structure missing (api/routers/, api/crud/, api/schemas/)."
     → "Would you like me to create the base structure first?"
 
 IF fully structured project:
@@ -53,22 +53,28 @@ IF fully structured project:
 
 ```bash
 # Check for existing models
-grep -l "class.*Base\):" db/models.py 2>/dev/null
+grep -l "class.*SQLModel\|class.*Base\):" db/model.py 2>/dev/null
 
-# Check naming patterns
-ls api/v1/*.py 2>/dev/null | head -5
+# Check naming patterns in routers
+ls api/routers/setting/*.py 2>/dev/null | head -5
+
+# Check CRUD helpers
+ls api/crud/*.py 2>/dev/null | head -5
 
 # Check for bilingual fields
-grep -l "name_en.*name_ar\|name_ar.*name_en" db/models.py 2>/dev/null
+grep -l "name_en.*name_ar\|name_ar.*name_en" db/model.py 2>/dev/null
 
 # Check for soft delete
-grep -l "is_active.*Boolean" db/models.py 2>/dev/null
+grep -l "is_active.*Boolean\|is_active.*bool" db/model.py 2>/dev/null
 
 # Check for audit fields
-grep -l "created_at.*updated_at" db/models.py 2>/dev/null
+grep -l "created_at.*updated_at" db/model.py 2>/dev/null
 
 # Check for CamelModel
-grep -l "CamelModel" api/schemas/*.py 2>/dev/null
+grep -l "CamelModel" api/schemas/*.py api/http_schema/*.py 2>/dev/null
+
+# Check session dependency pattern
+grep -l "SessionDep" api/routers/setting/*.py 2>/dev/null | head -3
 ```
 
 **Present detection results:**
@@ -85,7 +91,8 @@ I've analyzed your existing codebase and detected the following patterns:
 | Audit fields (created_at, updated_at) | {Yes/No} | {Yes/No} |
 | UUID primary keys | {Yes/No} | {Yes/No} |
 | CamelModel schemas | {Yes/No} | {Yes/No} |
-| Single-session-per-request | {Yes/No} | {Yes/No} |
+| SessionDep dependency | {Yes/No} | {Yes/No} |
+| CRUD helpers pattern | {Yes/No} | {Yes/No} |
 ```
 
 ### Phase 3: Interactive Dialogue
@@ -190,41 +197,45 @@ Entity: **{EntityName}**
 
 | Action | File | Description |
 |--------|------|-------------|
-| Modify | `db/models.py` | Add {EntityName} model |
-| Create | `api/schemas/{entity}_schemas.py` | Pydantic DTOs |
-| Create | `api/repositories/{entity}_repository.py` | Data access layer |
-| Create | `api/services/{entity}_service.py` | Business logic |
-| Create | `api/v1/{entities}.py` | REST endpoints |
-| Modify | `app.py` | Register router |
+| Modify | `db/model.py` | Add {EntityName} model |
+| Create | `api/schemas/{entity}_schema.py` | Pydantic DTOs (database-facing) |
+| Create | `api/http_schema/{entity}_schema.py` | Pydantic DTOs (API-facing, CamelModel) |
+| Create | `api/crud/{entity}.py` | CRUD helper functions |
+| Create | `api/routers/setting/{entity}_router.py` | REST endpoints |
+| Modify | `core/app_setup/routers_group/setting_routers.py` | Register router |
+
+**Note:** No service layer is created by default. Services are only needed for external integrations (AD, email, Redis) or complex multi-step orchestration.
 
 ### Model Preview
 
 ```python
-class {EntityName}(Base):
+class {EntityName}(SQLModel, table=True):
     __tablename__ = "{entity}"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: int | None = Field(default=None, primary_key=True)
     {fields}
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), onupdate=func.now())
+    is_active: bool = Field(default=True)
+    created_at: datetime | None = Field(default=None, sa_column_kwargs={"server_default": func.now()})
+    updated_at: datetime | None = Field(default=None, sa_column_kwargs={"onupdate": func.now()})
 ```
 
 ### Endpoints to Create
 
 | Method | Endpoint | Description | Status Codes |
 |--------|----------|-------------|--------------|
-| GET | `/api/v1/{entities}` | List with pagination | 200, 401 |
-| GET | `/api/v1/{entities}/{id}` | Get by ID | 200, 404, 401 |
-| POST | `/api/v1/{entities}` | Create | 201, 400, 409, 401 |
-| PUT | `/api/v1/{entities}/{id}` | Full update | 200, 400, 404, 401 |
-| PATCH | `/api/v1/{entities}/{id}` | Partial update | 200, 400, 404, 401 |
-| DELETE | `/api/v1/{entities}/{id}` | Soft delete | 204, 404, 401 |
+| GET | `/setting/{entities}/` | List with pagination | 200, 401 |
+| GET | `/setting/{entities}/{id}` | Get by ID | 200, 404, 401 |
+| POST | `/setting/{entities}/` | Create | 201, 400, 409, 401 |
+| PUT | `/setting/{entities}/{id}` | Full update | 200, 400, 404, 401 |
+| PATCH | `/setting/{entities}/{id}` | Partial update | 200, 400, 404, 401 |
+| DELETE | `/setting/{entities}/{id}` | Soft delete | 204, 404, 401 |
+| PUT | `/setting/{entities}/{id}/status` | Toggle active status | 200, 404, 401 |
+| PUT | `/setting/{entities}/status` | Bulk status toggle | 200, 401 |
 
 {If file uploads selected}
-| POST | `/api/v1/{entities}/{id}/upload` | Upload file(s) | 201, 400, 404, 413 |
-| GET | `/api/v1/{entities}/{id}/files` | List files | 200, 404 |
-| DELETE | `/api/v1/{entities}/{id}/files/{file_id}` | Delete file | 204, 404 |
+| POST | `/setting/{entities}/{id}/upload` | Upload file(s) | 201, 400, 404, 413 |
+| GET | `/setting/{entities}/{id}/files` | List files | 200, 404 |
+| DELETE | `/setting/{entities}/{id}/files/{file_id}` | Delete file | 204, 404 |
 
 **Confirm?** Reply "yes" to generate, or specify changes.
 ```
@@ -235,28 +246,86 @@ class {EntityName}(Base):
 
 1. Read `skills/fastapi/references/model-pattern.md`
 2. Read `skills/fastapi/references/schema-pattern.md`
-3. Read `skills/fastapi/references/repository-pattern.md`
-4. Read `skills/fastapi/references/service-pattern.md`
-5. Read `skills/fastapi/references/router-pattern.md`
-6. Read `skills/fastapi/references/file-upload-pattern.md` (if file uploads)
-7. Read `skills/fastapi/references/testing-pattern.md` (for test generation)
+3. Read `skills/fastapi/references/crud-helper-pattern.md`
+4. Read `skills/fastapi/references/router-pattern.md`
+5. Read `skills/fastapi/references/file-upload-pattern.md` (if file uploads)
+6. Read `skills/fastapi/references/testing-pattern.md` (for test generation)
 
 **Generation order (dependencies first):**
 
-1. Model in `db/models.py`
-2. Schemas in `api/schemas/{entity}_schemas.py`
-3. Repository in `api/repositories/{entity}_repository.py`
-4. Service in `api/services/{entity}_service.py`
-5. Router in `api/v1/{entities}.py`
-6. Register router in `app.py`
+1. Model in `db/model.py`
+2. Database-facing schemas in `api/schemas/{entity}_schema.py`
+3. API-facing schemas in `api/http_schema/{entity}_schema.py`
+4. CRUD helpers in `api/crud/{entity}.py`
+5. Router in `api/routers/setting/{entity}_router.py`
+6. Register router in `core/app_setup/routers_group/setting_routers.py`
 
 **Key patterns to follow:**
 
-- **Session flow**: Session passed from router → service → repository
+- **Session flow (simple)**: Router → CRUD helper (direct `SessionDep` parameter)
+- **Session flow (complex)**: Router → Service → CRUD helper (for external integrations only)
+- **SessionDep**: Use `SessionDep` type alias, NOT `Depends(get_session)`
 - **No session storage**: Never store session in `__init__`
-- **CamelModel**: All response schemas inherit from CamelModel
-- **Domain exceptions**: Use NotFoundError, ConflictError, ValidationError
-- **Pagination**: Use PaginatedResponse for list endpoints
+- **CamelModel**: All API response schemas inherit from CamelModel (snake_case in Python → camelCase in JSON)
+- **Domain exceptions**: Use `HTTPException` with appropriate status codes
+- **Pagination**: Return `{ {entities}: T[], total, activeCount, inactiveCount }`
+- **CRUD helpers**: Plain async functions (not classes), each taking `session: AsyncSession` as first parameter
+- **Return complete records**: All mutation endpoints return the full updated/created record
+
+**CRUD helper pattern example:**
+
+```python
+# api/crud/{entity}.py
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from db.model import {EntityName}
+
+async def get_{entity}_by_id(
+    session: AsyncSession,
+    {entity}_id: int,
+) -> {EntityName} | None:
+    return await session.get({EntityName}, {entity}_id)
+
+async def get_{entities}(
+    session: AsyncSession,
+    skip: int = 0,
+    limit: int = 100,
+) -> list[{EntityName}]:
+    stmt = select({EntityName}).offset(skip).limit(limit)
+    result = await session.scalars(stmt)
+    return list(result.all())
+```
+
+**Router pattern example:**
+
+```python
+# api/routers/setting/{entity}_router.py
+from fastapi import APIRouter, HTTPException
+from core.dependencies import SessionDep
+from api.crud import {entity} as {entity}_crud
+
+router = APIRouter()
+
+@router.get("/")
+async def get_{entities}(
+    session: SessionDep,
+    skip: int = 0,
+    limit: int = 100,
+):
+    {entities} = await {entity}_crud.get_{entities}(session, skip=skip, limit=limit)
+    total = await {entity}_crud.count_{entities}(session)
+    return {"{entities}": {entities}, "total": total}
+```
+
+**Router registration example:**
+
+```python
+# core/app_setup/routers_group/setting_routers.py
+from api.routers.setting.{entity}_router import router as {entity}_router
+
+# Add to the router group:
+setting_router.include_router({entity}_router, prefix="/{entities}", tags=["{Entities}"])
+```
 
 ### Phase 7: Next Steps
 
@@ -267,26 +336,31 @@ Your **{EntityName}** entity has been created successfully.
 
 ### Files Created/Modified
 
-- [x] `db/models.py` - {EntityName} model added
-- [x] `api/schemas/{entity}_schemas.py` - Created
-- [x] `api/repositories/{entity}_repository.py` - Created
-- [x] `api/services/{entity}_service.py` - Created
-- [x] `api/v1/{entities}.py` - Created
-- [x] `app.py` - Router registered
+- [x] `db/model.py` - {EntityName} model added
+- [x] `api/schemas/{entity}_schema.py` - Created
+- [x] `api/http_schema/{entity}_schema.py` - Created
+- [x] `api/crud/{entity}.py` - Created
+- [x] `api/routers/setting/{entity}_router.py` - Created
+- [x] `core/app_setup/routers_group/setting_routers.py` - Router registered
 
 ### Immediate Actions
 
 1. **Create database migration:**
    ```bash
-   alembic revision --autogenerate -m "add {entity} table"
-   alembic upgrade head
+   cd src/backend
+   python -m alembic revision --autogenerate -m "add {entity} table"
+   python -m alembic upgrade head
    ```
 
 2. **Test the API:**
    ```bash
-   uvicorn app:app --reload
+   cd src/backend
+   uv run fastapi dev main.py
    # Visit http://localhost:8000/docs
    ```
+
+3. **Update API documentation:**
+   Update `/docs/backend-api-reference.md` with the new endpoints.
 
 ### Related Actions
 
@@ -294,6 +368,9 @@ Would you like me to:
 
 - [ ] **Generate Next.js page** for {EntityName} management?
       → `/generate data-table {entities}`
+
+- [ ] **Generate frontend API routes** using route factory?
+      → `/generate api-route {entities}`
 
 - [ ] **Create Celery tasks** for async {entity} operations?
       → `/generate task {entity}-sync`
@@ -318,11 +395,11 @@ The entity **{EntityName}** already exists in your codebase.
 
 | Component | Status | Path |
 |-----------|--------|------|
-| Model | Exists | `db/models.py` |
-| Schema | Exists | `api/schemas/{entity}_schemas.py` |
-| Repository | Exists | `api/repositories/{entity}_repository.py` |
-| Service | Exists | `api/services/{entity}_service.py` |
-| Router | Exists | `api/v1/{entities}.py` |
+| Model | Exists | `db/model.py` |
+| Schema | Exists | `api/schemas/{entity}_schema.py` |
+| HTTP Schema | Exists | `api/http_schema/{entity}_schema.py` |
+| CRUD Helpers | Exists | `api/crud/{entity}.py` |
+| Router | Exists | `api/routers/setting/{entity}_router.py` |
 
 ### Options
 

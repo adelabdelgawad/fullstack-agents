@@ -71,7 +71,7 @@ project/
 │   ├── repositories/
 │   │   └── scheduler_repository.py
 │   └── schemas/
-│       └── scheduler_schemas.py
+│       └── scheduler_schema.py
 └── db/
     └── models.py              # Job & execution models
 ```

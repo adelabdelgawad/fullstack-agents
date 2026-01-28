@@ -79,8 +79,10 @@ lib/
     ├── server.ts               # Server-side fetch
     └── api-route-helper.ts     # API route helpers
 
-types/
-└── {entity}.d.ts               # TypeScript types
+lib/
+├── types/
+│   └── api/
+│       └── {entity}.ts         # TypeScript types
 ```
 
 ## Core Principles
@@ -261,7 +263,7 @@ export async function POST(request: NextRequest) {
 
 When creating a new entity page, generate files in this order:
 
-1. **Types** (types/{entity}.d.ts)
+1. **Types** (lib/types/api/{entity}.ts)
 2. **Server Actions** (lib/actions/{entity}.actions.ts)
 3. **API Routes** (app/api/setting/{entity}/...)
 4. **Context** (app/(pages)/setting/{entity}/context/)

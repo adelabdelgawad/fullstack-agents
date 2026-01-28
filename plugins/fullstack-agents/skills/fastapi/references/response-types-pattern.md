@@ -23,7 +23,7 @@ Handle different response types in FastAPI: HTML, files, streams, redirects, and
 ## HTML Response
 
 ```python
-# api/v1/pages.py
+# api/routers/pages.py
 """HTML page endpoints."""
 
 from fastapi import APIRouter
@@ -69,7 +69,7 @@ async def get_dashboard(username: str = "Guest"):
 ## File Download Response
 
 ```python
-# api/v1/downloads.py
+# api/routers/downloads.py
 """File download endpoints."""
 
 from pathlib import Path
@@ -86,7 +86,7 @@ router = APIRouter(prefix="/downloads", tags=["downloads"])
 @router.get("/{file_id}")
 async def download_file(
     file_id: int,
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
     """
     Download a file by ID.
@@ -115,7 +115,7 @@ async def download_file(
 @router.get("/reports/{report_id}/pdf")
 async def download_report_pdf(
     report_id: int,
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
     """Download report as PDF."""
     service = FileService()
@@ -131,7 +131,7 @@ async def download_report_pdf(
 ## Streaming Response
 
 ```python
-# api/v1/stream.py
+# api/routers/stream.py
 """Streaming response endpoints."""
 
 import asyncio
@@ -184,7 +184,7 @@ async def stream_events():
 
     Client can connect with:
     ```javascript
-    const eventSource = new EventSource('/api/v1/stream/events');
+    const eventSource = new EventSource('/setting/stream/events');
     eventSource.onmessage = (e) => console.log(e.data);
     ```
     """
@@ -211,7 +211,7 @@ async def stream_query_results(session, query) -> AsyncGenerator[str, None]:
 
 @router.get("/export/items")
 async def export_items_stream(
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
     """Export items as JSON lines (streaming)."""
     from sqlalchemy import select
@@ -236,7 +236,7 @@ async def export_items_stream(
 ## Redirect Response
 
 ```python
-# api/v1/redirects.py
+# api/routers/redirects.py
 """Redirect endpoints."""
 
 from fastapi import APIRouter, status
@@ -249,7 +249,7 @@ router = APIRouter(prefix="/redirect", tags=["redirects"])
 async def redirect_old_path():
     """Permanent redirect (301) to new path."""
     return RedirectResponse(
-        url="/api/v1/new-path",
+        url="/setting/new-path",
         status_code=status.HTTP_301_MOVED_PERMANENTLY,
     )
 
@@ -258,7 +258,7 @@ async def redirect_old_path():
 async def redirect_temporary():
     """Temporary redirect (302)."""
     return RedirectResponse(
-        url="/api/v1/target",
+        url="/setting/target",
         status_code=status.HTTP_302_FOUND,
     )
 
@@ -270,7 +270,7 @@ async def redirect_after_create():
     new_id = 123
 
     return RedirectResponse(
-        url=f"/api/v1/items/{new_id}",
+        url=f"/setting/items/{new_id}",
         status_code=status.HTTP_303_SEE_OTHER,
     )
 
@@ -287,7 +287,7 @@ async def redirect_external():
 ## Custom Response with Headers
 
 ```python
-# api/v1/custom.py
+# api/routers/custom.py
 """Custom response examples."""
 
 from fastapi import APIRouter, Response
@@ -358,15 +358,15 @@ async def no_cache_response():
 ## Multiple Response Status Codes
 
 ```python
-# api/v1/items.py
+# api/routers/items.py
 """Items with documented multiple responses."""
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_session
-from api.schemas.item_schemas import ItemCreate, ItemResponse
-from api.schemas.error_schemas import ErrorResponse
+from api.schemas.item_schema import ItemCreate, ItemResponse
+from api.schemas.error_schema import ErrorResponse
 from api.services.item_service import ItemService
 
 router = APIRouter(prefix="/items", tags=["items"])
@@ -405,7 +405,7 @@ router = APIRouter(prefix="/items", tags=["items"])
 )
 async def create_item(
     item_create: ItemCreate,
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
     """Create a new item."""
     service = ItemService()
@@ -431,7 +431,7 @@ async def create_item(
 )
 async def get_item(
     item_id: int,
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ):
     """Get item by ID."""
     service = ItemService()
@@ -442,7 +442,7 @@ async def get_item(
 ## Error Response Schema
 
 ```python
-# api/schemas/error_schemas.py
+# api/schemas/error_schema.py
 """Error response schemas for OpenAPI documentation."""
 
 from typing import Optional, List, Any

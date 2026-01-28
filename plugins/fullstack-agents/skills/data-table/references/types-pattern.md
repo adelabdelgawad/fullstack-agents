@@ -3,7 +3,7 @@
 ## Entity Response Type
 
 ```typescript
-// types/[entity].d.ts
+// lib/types/api/[entity].ts
 
 export interface [Entity]Response {
   id: string;
