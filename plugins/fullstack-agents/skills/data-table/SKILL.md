@@ -1,21 +1,181 @@
 ---
 name: nextjs-data-table-page
-description: Create Next.js data table pages with SSR initial load, SWR caching, and server-response-based UI updates. Use when asked to create a new data table page, entity management page, CRUD table, or admin list view. Generates page.tsx (SSR), table components, columns, context, actions, and API routes following a proven architecture with centralized reusable data-table component.
+description: Create Next.js data table pages with SSR initial load, simplified state management, and server-response-based UI updates. Use when asked to create a new data table page, entity management page, CRUD table, or admin list view. Generates page.tsx (SSR), table components, columns, context, actions, and API routes following a proven architecture with centralized reusable data-table component.
 ---
 
 # Next.js Data Table Page Generator
 
 Create production-ready data table pages with:
 - **SSR initial data loading** for fast first paint
-- **Flexible data fetching** - Simple state or SWR based on needs
-- **URL-based state** for filters/pagination via `nuqs`
+- **Simple state management** (`useState`) as the default — SWR only when justified
+- **URL-based state** for filters/pagination/sorting via URL params
 - **Centralized data-table** from `@/components/data-table`
 - **Type-safe columns** with TanStack Table
 - **Context-based actions** for CRUD operations
 
+## Reusable Data-Table Component Library
+
+The project includes a comprehensive reusable data-table component library at `@/components/data-table`. **Always use these components — never build table UI from scratch.**
+
+### Component Library Structure
+
+```
+components/data-table/
+├── index.ts                  # Main exports (14 components)
+├── types.ts                  # Shared type definitions
+├── table/
+│   ├── data-table.tsx        # Core TanStack Table wrapper (generic <TData>)
+│   ├── data-table-bar.tsx    # Flexible 3-section toolbar (left/middle/right)
+│   └── pagination.tsx        # Server-side pagination synced to URL params
+├── controls/
+│   ├── search-input.tsx      # Debounced URL-synced search (default 2000ms)
+│   ├── column-toggle.tsx     # Column visibility dropdown
+│   ├── sort-list.tsx         # Advanced multi-column sort with drag-reorder
+│   ├── column-header.tsx     # Per-column sort header dropdown
+│   └── refresh-button.tsx    # Manual refresh trigger
+├── filters/
+│   ├── status-filter-bar.tsx # Tab-style status filters (All/Active/Inactive)
+│   └── status-badge-filter.tsx # Badge-style status filters (inline mode available)
+├── actions/
+│   ├── selection-display.tsx # Selected count with clear button
+│   ├── export-button.tsx     # CSV export of visible columns
+│   ├── print-button.tsx      # HTML/PDF print of table
+│   ├── enable-button.tsx     # Bulk enable with confirmation dialog
+│   └── disable-button.tsx    # Bulk disable with confirmation dialog
+└── ui/
+    ├── button.tsx            # Custom button with icon + tooltip
+    ├── status-badge.tsx      # Status indicator (Online/Offline/Warning)
+    └── status-circle.tsx     # Circular status with click-filtering
+```
+
+### Core Components and Usage
+
+#### DataTable — Core Table Wrapper
+
+```tsx
+import { DataTable } from "@/components/data-table";
+
+<DataTable
+  data={items}
+  columns={columns}
+  onRowSelectionChange={(selectedRows) => setSelected(selectedRows)}
+  renderToolbar={(table) => <MyToolbar table={table} />}
+  isLoading={isLoading}
+  enableRowSelection={true}
+  enableSorting={true}
+/>
+```
+
+**Key features:** Generic `<TData>`, column visibility, row selection, column resizing, RTL support, i18n, loading overlay.
+
+#### DynamicTableBar — Flexible Toolbar Layout
+
+```tsx
+import { DynamicTableBar } from "@/components/data-table";
+
+// Header bar (search, filters, column toggle)
+<DynamicTableBar
+  variant="header"
+  left={<SearchInput />}
+  middle={<StatusBadgeFilter totalCount={25} activeCount={20} inactiveCount={5} />}
+  right={<ColumnToggleButton table={table} />}
+/>
+
+// Controller bar (selection count, bulk actions) — shows accent bg when items selected
+<DynamicTableBar
+  variant="controller"
+  hasSelection={selectedCount > 0}
+  left={<SelectionDisplay selectedCount={3} onClearSelection={clear} i18n={{...}} />}
+  right={
+    <>
+      <EnableButton selectedIds={ids} onEnable={enable} />
+      <DisableButton selectedIds={ids} onDisable={disable} />
+    </>
+  }
+/>
+```
+
+#### Pagination — URL-Synced Page Controls
+
+```tsx
+import { Pagination } from "@/components/data-table";
+
+<Pagination
+  currentPage={page}
+  totalPages={totalPages}
+  pageSize={limit}
+  totalItems={totalItems}
+/>
+```
+
+Syncs `page` and `limit` URL params automatically. Supports page sizes 10/25/50/100, first/prev/next/last buttons, entry count display.
+
+#### Filter Components
+
+```tsx
+import { StatusBadgeFilter, StatusFilterBar } from "@/components/data-table";
+
+// Badge-style (preferred, supports inline mode for embedding in toolbars)
+<StatusBadgeFilter
+  totalCount={total}
+  activeCount={activeCount}
+  inactiveCount={inactiveCount}
+  inline={true}  // Render without wrapper for embedding in DynamicTableBar
+/>
+
+// Tab-style alternative
+<StatusFilterBar totalCount={total} activeCount={activeCount} inactiveCount={inactiveCount} />
+```
+
+Both filter on `is_active` URL param and reset pagination to page 1 on change.
+
+#### Search and Sort Controls
+
+```tsx
+import { SearchInput, DataTableSortList, DataTableColumnHeader, ColumnToggleButton } from "@/components/data-table";
+
+// Debounced search synced to URL ?filter= param
+<SearchInput placeholder="Search..." debounceMs={2000} urlParam="filter" />
+
+// Multi-column sort with drag reorder
+<DataTableSortList sortableColumns={[
+  { id: "firstName", label: "First Name" },
+  { id: "role", label: "Role" },
+]} />
+
+// Per-column sort header (use in column definitions)
+<DataTableColumnHeader column={column} title="Name" />
+
+// Column visibility toggle
+<ColumnToggleButton table={table} />
+```
+
+Sort syncs to URL: `?sort=firstName:asc,role:desc`
+
+#### Bulk Action Components
+
+```tsx
+import { SelectionDisplay, EnableButton, DisableButton, ExportButton, PrintButton } from "@/components/data-table";
+
+<SelectionDisplay selectedCount={3} onClearSelection={clear} i18n={{ selected: "{count} {item} selected", clearSelection: "Clear", itemName: "user" }} />
+<EnableButton selectedIds={ids} onEnable={handleEnable} />
+<DisableButton selectedIds={ids} onDisable={handleDisable} />
+<ExportButton table={table} />
+<PrintButton table={table} title="Users" />
+```
+
+### Key Patterns
+
+1. **URL-Driven State**: Search, filter, sort, pagination ALL sync to URL params
+2. **Generic `<TData>`**: All components use TypeScript generics
+3. **i18n**: Language hook integration throughout with fallback strings
+4. **RTL Support**: `ltr:` / `rtl:` Tailwind classes throughout
+5. **Composition**: `DynamicTableBar` + controls = flexible toolbars
+6. **Confirmation Dialogs**: Bulk actions use `useConfirmationDialog` hook
+
 ## Data Fetching Strategy
 
-**Before generating, determine the appropriate strategy:**
+**This application uses Strategy A (Simple Fetching) exclusively.** All current tables use `useState` + server response updates.
 
 ### Decision Question
 **Does this table's data change without user action?**
@@ -25,14 +185,14 @@ Create production-ready data table pages with:
 | **No** | A: Simple Fetching (Default) | Settings, admin CRUD, most entity tables |
 | **Yes** | B: SWR Fetching | Dashboards, multi-user editing, live monitoring |
 
-### Strategy A: Simple Fetching (Recommended for CRUD Tables)
+### Strategy A: Simple Fetching (Default — Used by All Current Tables)
 - Use `useState` for local data management
 - Update state from server mutation responses
 - No automatic revalidation
 - Lower complexity, no SWR dependency
 - **See:** [nextjs/references/simple-fetching-pattern.md](../nextjs/references/simple-fetching-pattern.md)
 
-### Strategy B: SWR Fetching (Requires Justification)
+### Strategy B: SWR Fetching (Reference Only — Requires Justification)
 - Use `useSWR` with documented justification
 - Configure appropriate revalidation triggers
 - For dashboards and multi-user scenarios
@@ -49,7 +209,7 @@ app/(pages)/[section]/[entity]/
 │   └── [entity]-actions-context.tsx  # Actions provider
 └── _components/
     ├── table/
-    │   ├── [entity]-table.tsx        # Main client wrapper (SWR)
+    │   ├── [entity]-table.tsx        # Main client wrapper (useState)
     │   ├── [entity]-table-body.tsx   # DataTable + columns
     │   ├── [entity]-table-columns.tsx# Column definitions
     │   ├── [entity]-table-controller.tsx # Toolbar/bulk actions
@@ -63,28 +223,21 @@ app/(pages)/[section]/[entity]/
     │   └── view-[entity]-sheet.tsx   # View details
     └── sidebar/
         └── status-panel.tsx          # Stats sidebar
-
-app/api/[section]/[entity]/
-├── route.ts                          # GET (list) + POST (create)
-├── [entityId]/
-│   ├── route.ts                      # PUT (update)
-│   └── status/route.ts               # PUT (status toggle)
-└── status/route.ts                   # POST (bulk status)
 ```
 
 ## Quick Start
 
 1. **Gather requirements**: Entity name, fields, API endpoints, actions needed
-2. **Generate files** in order: types → API routes → page → table → columns → context → actions
-3. **Verify** data-table component exists at `@/components/data-table`
+2. **Generate files** in order: types → server actions → page → table → columns → context → actions
+3. **Use data-table components** from `@/components/data-table` — never build table UI from scratch
 
 ## File Generation Order
 
 ### 1. Types (if not existing)
 Define response types in `@/lib/types/api/[entity].ts`. See [references/types-pattern.md](references/types-pattern.md).
 
-### 2. API Routes
-Create Next.js API routes that proxy to backend. See [references/api-routes-pattern.md](references/api-routes-pattern.md).
+### 2. Server Actions
+Create server actions in `@/lib/actions/[entity].actions.ts`.
 
 ### 3. SSR Page (`page.tsx`)
 ```tsx
@@ -122,10 +275,11 @@ export default async function [Entity]Page({
 
 ### 4. Main Table Component
 See [references/table-component-pattern.md](references/table-component-pattern.md) for the full pattern with:
-- SWR setup with `fallbackData: initialData`
+- `useState` with initialData (Strategy A — default)
 - Action handlers that return server responses
-- `updateItems()` function for cache mutation
+- `updateItems()` function for state mutation
 - `ActionsProvider` wrapper
+- Composition using `DataTable`, `DynamicTableBar`, `Pagination`, and filter components
 
 ### 5. Table Body + Columns
 See [references/columns-pattern.md](references/columns-pattern.md) for:
@@ -133,6 +287,7 @@ See [references/columns-pattern.md](references/columns-pattern.md) for:
 - Selection column with checkbox
 - Status toggle with confirmation
 - Actions column placeholder
+- Use `DataTableColumnHeader` for sortable column headers
 
 ### 6. Context + Actions
 See [references/context-pattern.md](references/context-pattern.md) for:
@@ -151,8 +306,6 @@ See [references/edit-sheet-pattern.md](references/edit-sheet-pattern.md) for:
 
 ### Server Response Updates (NOT Optimistic)
 
-Both strategies use server responses to update the UI:
-
 ```tsx
 // ✅ CORRECT: Use server response
 const { data: updated } = await fetchClient.put(`/api/entity/${id}`, body);
@@ -163,13 +316,14 @@ const optimistic = { ...current, ...changes };
 setData({ items: [...items.filter(i => i.id !== id), optimistic] });
 ```
 
-### Strategy A: Simple State Management (Default)
+### Simple State Management (Default)
 ```tsx
-// No SWR - use React state
+// React state — no SWR
 const [data, setData] = useState<Response>(initialData);
 
 const updateItems = (serverResponse: Item[]) => {
   setData(current => {
+    if (!current) return current;
     const responseMap = new Map(serverResponse.map(i => [i.id, i]));
     return {
       ...current,
@@ -181,74 +335,71 @@ const updateItems = (serverResponse: Item[]) => {
 };
 ```
 
-### Strategy B: SWR Configuration (When Justified)
+### Typical Table Composition Pattern
 ```tsx
-/**
- * SWR JUSTIFICATION:
- * - Reason: [Document why revalidation is needed]
- * - Trigger: [Interval / Focus / Manual]
- */
-const { data, mutate } = useSWR<Response>(apiUrl, fetcher, {
-  fallbackData: initialData ?? undefined,
-  keepPreviousData: true,
-  revalidateOnMount: false,
-  revalidateIfStale: true,
-  revalidateOnFocus: false,  // Set true only if justified
-  revalidateOnReconnect: false,
-});
+// In [entity]-table-body.tsx — compose using data-table components
+import { DataTable, DynamicTableBar, SearchInput, StatusBadgeFilter, ColumnToggleButton, RefreshButton } from "@/components/data-table";
+
+<DataTable
+  data={items}
+  columns={columns}
+  onRowSelectionChange={handleSelectionChange}
+  renderToolbar={(table) => (
+    <>
+      <DynamicTableBar
+        variant="header"
+        left={<SearchInput />}
+        middle={<StatusBadgeFilter inline totalCount={total} activeCount={active} inactiveCount={inactive} />}
+        right={
+          <>
+            <DataTableSortList sortableColumns={sortableColumns} />
+            <ColumnToggleButton table={table} />
+            <RefreshButton onRefresh={onRefresh} />
+          </>
+        }
+      />
+      {selectedCount > 0 && (
+        <DynamicTableBar
+          variant="controller"
+          hasSelection
+          left={<SelectionDisplay selectedCount={selectedCount} onClearSelection={clear} i18n={i18n} />}
+          right={
+            <>
+              <EnableButton selectedIds={selectedIds} onEnable={handleEnable} />
+              <DisableButton selectedIds={selectedIds} onDisable={handleDisable} />
+            </>
+          }
+        />
+      )}
+    </>
+  )}
+/>
 ```
 
-### URL-Based State
-```tsx
-// Use nuqs for URL params (auto-triggers SWR refetch)
-const [page, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
-const [filter] = useQueryState("filter");
+## Reference Implementations
 
-// Build API URL from params
-const params = new URLSearchParams();
-params.append("skip", ((page - 1) * limit).toString());
-if (filter) params.append("search", filter);
-const apiUrl = `/api/entity?${params.toString()}`;
-```
-
-### Cache Update Pattern
-```tsx
-const updateItems = async (serverResponse: EntityResponse[]) => {
-  const currentData = data;
-  if (!currentData) return;
-
-  const responseMap = new Map(serverResponse.map(item => [item.id, item]));
-  const updatedList = currentData.items.map(item =>
-    responseMap.has(item.id) ? responseMap.get(item.id)! : item
-  );
-
-  await mutate(
-    { ...currentData, items: updatedList },
-    { revalidate: false }
-  );
-};
-```
+- `src/frontend/app/(pages)/setting/users/` — canonical users table (Strategy A)
+- `src/frontend/app/(pages)/setting/roles/` — roles table (Strategy A)
 
 ## Required Dependencies
 
 Ensure project has:
-- `nuqs` - URL state management
 - `@tanstack/react-table` - Table primitives
 - `@/components/data-table` - Reusable table components (must exist)
 - `swr` - Only if using Strategy B (SWR fetching)
 
 ## Checklist
 
-- [ ] Data fetching strategy selected (A or B)
+- [ ] Data fetching strategy selected (A is default)
 - [ ] Types defined for entity and response
-- [ ] API routes created (GET, POST, PUT, bulk status)
+- [ ] Server actions created in `lib/actions/`
 - [ ] SSR page fetches initial data
-- [ ] Main table uses selected strategy:
-  - Strategy A: `useState` with initialData
-  - Strategy B: `useSWR` with fallbackData + justification comment
+- [ ] Main table uses `useState` with initialData
+- [ ] Table body composes `DataTable`, `DynamicTableBar`, filters, controls from `@/components/data-table`
 - [ ] Actions return server response (not optimistic)
 - [ ] Columns show loading state via updatingIds
+- [ ] Columns use `DataTableColumnHeader` for sortable headers
 - [ ] Context provides actions to children
-- [ ] Bulk actions use hook pattern
-- [ ] URL params drive filtering/pagination
+- [ ] Bulk actions use `EnableButton`/`DisableButton` with confirmation
+- [ ] URL params drive filtering/pagination/sorting
 - [ ] Edit sheets use fetch-then-open pattern (not row.original)

@@ -260,7 +260,7 @@ class SimpleProduct(CamelModel):
 ## Key Points
 
 1. **Always inherit from CamelModel** - Never use raw BaseModel
-2. **Use Field() for validation** - min_length, max_length, ge, le, pattern
+2. **Avoid Field() unless you need explicit validation constraints** (min_length, max_length, ge, le, pattern). Plain type annotations are preferred in this codebase.
 3. **Separate Create/Update schemas** - Update has all optional fields
 4. **Include timestamps in Response** - created_at, updated_at
 5. **Add computed locale field** - For backward compatibility

@@ -3,10 +3,14 @@
 The main table component is a "use client" component that manages data and wraps with context.
 
 **Choose based on data fetching strategy:**
-- **Strategy A (Default)**: Simple state with `useState` - for most CRUD tables
-- **Strategy B (When Justified)**: SWR with `useSWR` - for dashboards/multi-user scenarios
+- **Strategy A (Default)**: Simple state with `useState` - for most CRUD tables. **All current tables in the app use this.**
+- **Strategy B (When Justified)**: SWR with `useSWR` - for dashboards/multi-user scenarios (reference only — not currently used)
 
 See [data-fetching-strategy.md](../../nextjs/references/data-fetching-strategy.md) for the decision framework.
+
+**Reference implementations in the actual codebase:**
+- `src/frontend/app/(pages)/setting/users/_components/table/users-table.tsx` (Strategy A)
+- `src/frontend/app/(pages)/setting/roles/_components/table/roles-table.tsx` (Strategy A)
 
 ---
 

@@ -105,10 +105,14 @@ Select all that apply:
 | Notification feed | B (SWR) | New items arrive externally |
 | Collaborative document | B (SWR) | Multiple users editing |
 
+## Current Application State
+
+**This application uses Strategy A (Simple Fetching) exclusively.** All data tables (users, roles, etc.) use `useState` + server response updates. No SWR is currently used anywhere in the codebase.
+
 ## Implementation References
 
 - **Strategy A**: See [simple-fetching-pattern.md](simple-fetching-pattern.md)
-- **Strategy B**: See [swr-fetching-pattern.md](swr-fetching-pattern.md)
+- **Strategy B**: See [swr-fetching-pattern.md](swr-fetching-pattern.md) (reference only — not currently used)
 
 ## Key Principle
 

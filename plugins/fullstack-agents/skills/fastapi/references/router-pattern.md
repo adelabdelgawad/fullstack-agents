@@ -1,17 +1,54 @@
 # Router Pattern Reference
 
-API endpoints with FastAPI using typed session dependency and simplified architecture.
+API endpoints with FastAPI using typed session dependency.
 
 ## Key Principles
 
 1. **Use `SessionDep` typed dependency** - Not `Depends(get_session)`
-2. **Simple CRUD directly in router** - No service layer for basic operations
+2. **Most routers delegate to Service/Controller** - This is the primary pattern
 3. **Import CRUD helpers for reusable queries** - `from api.crud import items as items_crud`
-4. **Service only for complex orchestration** - External integrations, multi-step operations
+4. **Direct queries in router only for simple entities** - Schedulers, OUs, domain-users
 5. **Use response_model** - For automatic validation and documentation
 6. **Let exceptions propagate** - Exception handlers convert to HTTP
 7. **Router path**: `api/routers/setting/item_router.py` - Not `api/v1/`
 8. **Router registration**: `core/app_setup/routers_group/setting_routers.py`
+
+## Primary Pattern: Router → Service/Controller
+
+Most routers in this project delegate to a Service or Controller class:
+
+```python
+# api/routers/setting/user_router.py
+"""User Endpoints - delegates to UserService."""
+
+from api.services.user_service import UserService
+from api.schemas.user_schema import UserResponse, UserCreate, SettingUsersResponse
+from core.dependencies import SessionDep
+
+router = APIRouter(prefix="/users", tags=["users"])
+
+@router.get("", response_model=SettingUsersResponse)
+async def get_users(session: SessionDep, skip: int = 0, limit: int = 100):
+    """List users with pagination."""
+    service = UserService(session)
+    return await service.get_users(skip, limit)
+
+@router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(user_create: UserCreate, session: SessionDep):
+    """Create a new user."""
+    service = UserService(session)
+    return await service.create_user(user_create)
+
+@router.put("/{user_id}", response_model=UserResponse)
+async def update_user(user_id: int, user_update: UserUpdate, session: SessionDep):
+    """Update an existing user."""
+    service = UserService(session)
+    return await service.update_user(user_id, user_update)
+```
+
+## Secondary Pattern: Simple CRUD Directly in Router
+
+Use this ONLY for simple entities with no business logic (schedulers, domain-users, OUs):
 
 ## Basic Router Structure (Simple CRUD - No Service)
 
@@ -279,12 +316,12 @@ async def create_item(
 ## Key Points
 
 1. **Use `SessionDep`** - Typed dependency, not `Depends(get_session)`
-2. **Simple CRUD in router** - No service layer needed for basic operations
-3. **CRUD helpers for reusable queries** - Import as `items_crud`
-4. **Service only for complex ops** - External integrations, multi-step orchestration
+2. **Most routers delegate to Service/Controller** - This is the primary pattern
+3. **Direct CRUD in router only for simple entities** - Schedulers, OUs, domain-users
+4. **CRUD helpers for reusable queries** - Import as `items_crud`
 5. **Router path** - `api/routers/setting/item_router.py`
 6. **Registration** - `core/app_setup/routers_group/setting_routers.py`
-7. **commit() in router** - Router owns the transaction
+7. **commit() in router or service** - Whoever owns the transaction
 8. **Let exceptions propagate** - Exception handlers do the work
 9. **Use Query() for params** - Adds validation and docs
 10. **HTTP status codes** - 201 for create, 204 for delete

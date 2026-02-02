@@ -13,7 +13,7 @@ Use this skill when asked to:
 ## Architecture Overview
 
 ```
-Simple Operations:
+Primary Pattern (most endpoints):
 ┌─────────────────────────────────────────────────────────────┐
 │                    HTTP Request                              │
 └──────────────────────────┬──────────────────────────────────┘
@@ -24,13 +24,20 @@ Simple Operations:
 │  • Endpoint definitions                                      │
 │  • Request/Response validation                               │
 │  • session: SessionDep                                       │
-│  • Simple CRUD directly here OR delegates to CRUD helpers    │
+│  • Delegates to Service/Controller for most operations       │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  CRUD Helper (api/crud/{entity}.py) — if reused 3+ times    │
-│  OR direct SQLAlchemy query in router                        │
+│  Service/Controller (api/services/ or api/controllers/)      │
+│  • Business logic, validation, orchestration                 │
+│  • External integrations (AD/LDAP, email, Redis, SMS)       │
+│  • Cross-cutting concerns (audit, notifications)             │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  CRUD Helper (api/crud/{entity}.py) — reusable queries       │
 │  • Plain async functions (no classes)                        │
 │  • Session as first parameter                                │
 │  • flush() not commit()                                      │
@@ -44,14 +51,10 @@ Simple Operations:
 │  • Pydantic DTOs with CamelModel                             │
 └─────────────────────────────────────────────────────────────┘
 
-Complex Operations (external integrations, multi-step orchestration):
+Secondary Pattern (simple entities like schedulers, OUs, domain-users):
 ┌─────────────────────────────────────────────────────────────┐
-│  Router → Service → CRUD helper / Direct queries → Model     │
-│                                                               │
-│  Services ONLY for:                                           │
-│  • External integrations (AD/LDAP, email, Redis, SMS)        │
-│  • Complex multi-step orchestration                          │
-│  • Cross-cutting concerns (audit, notifications)             │
+│  Router → CRUD helper / Direct queries → Model               │
+│  Use only for simple entities with no business logic         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -157,17 +160,18 @@ When creating a new entity, generate files in this order:
 - Only create when query is reused 3+ times
 - Import as: `from api.crud import items as items_crud`
 
-### Service Pattern
-- ONLY for external integrations (AD, email, Redis, SMS)
-- ONLY for complex multi-step orchestration
+### Service/Controller Pattern (Primary)
+- Most routers delegate to a Service or Controller class
+- Business logic, validation, orchestration
+- External integrations (AD, email, Redis, SMS)
 - Uses CRUD helpers for database access (not repositories)
-- Session passed as parameter, commit in router
+- Session passed as parameter
 
 ### Router Pattern
 - Use `SessionDep` typed dependency
-- Simple CRUD directly in router (no service)
+- Most routers delegate to Service/Controller
+- Direct queries only for simple entities (schedulers, OUs, domain-users)
 - Import CRUD helpers for reusable queries
-- Router owns the transaction (commit/rollback)
 - Path: `api/routers/setting/{entity}_router.py`
 - Registration: `core/app_setup/routers_group/setting_routers.py`
 
