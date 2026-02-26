@@ -202,7 +202,30 @@ services:
 - Network configuration
 - Volume management
 
-### Phase 5: Next Steps
+### Phase 5: Mandatory Post-Generation Chain
+
+After generation completes, AUTOMATICALLY run these steps without asking the user:
+
+1. **Pattern compliance review** — Check generated Docker service against codebase profile:
+   - Service naming convention matches existing services
+   - Environment variable pattern follows conventions
+   - Health check configuration matches existing services
+   - Network and volume naming follows project conventions
+
+2. **Report violations** — List any pattern violations found.
+
+3. **Fix violations** — Immediately fix any violations. Do not ask for permission.
+
+4. **Validation** — Run:
+   ```bash
+   docker compose config --quiet
+   ```
+
+5. **Only THEN present next steps** to the user (Phase 6 below).
+
+**Do NOT ask the user's permission for steps 1-4. They are mandatory.**
+
+### Phase 6: Next Steps
 
 ```markdown
 ## Generation Complete

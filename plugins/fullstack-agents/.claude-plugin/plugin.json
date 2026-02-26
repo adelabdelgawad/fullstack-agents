@@ -1,6 +1,6 @@
 {
   "name": "fullstack-agents",
-  "description": "Unified fullstack development toolkit with 28 AI agents, 8 commands, and 9 skill domains for FastAPI, Next.js, Docker, Celery, WebSocket, and more. Features intelligent code generation with interactive dialogue, pattern detection, and multi-agent orchestration.",
+  "description": "Unified fullstack development toolkit with 28 AI agents, 8 commands, and 11 skill domains for FastAPI, Next.js, Docker, Celery, WebSocket, and more. Auto-triggers via SessionStart hook. Features intelligent code generation with interactive dialogue, pattern detection, and multi-agent orchestration.",
   "version": "2.1.0",
   "license": "MIT",
   "author": {
@@ -28,5 +28,6 @@
     "sqlalchemy",
     "tanstack-table"
   ],
-  "repository": "https://github.com/adelabdelgawad/fullstack-agents"
+  "repository": "https://github.com/adelabdelgawad/fullstack-agents",
+  "hooks": "./hooks/hooks.json"
 }

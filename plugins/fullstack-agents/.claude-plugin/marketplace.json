@@ -1,7 +1,7 @@
 {
   "name": "fullstack-agents",
   "title": "Fullstack Agents",
-  "description": "Unified fullstack development plugin with 28 specialized AI agents for code generation, review, analysis, scaffolding, debugging, and optimization. Supports FastAPI, Next.js, Docker, Celery, and APScheduler with interactive dialogue and smart pattern detection.",
+  "description": "Unified fullstack development plugin with 28 specialized AI agents for code generation, review, analysis, scaffolding, debugging, and optimization. Auto-triggers via SessionStart hook on FastAPI/Next.js projects. Supports FastAPI, Next.js, Docker, Celery, and APScheduler with interactive dialogue and smart pattern detection.",
   "version": "2.1.0",
   "license": "MIT",
   "homepage": "https://github.com/adelabdelgawad/fullstack-agents",
@@ -120,6 +120,8 @@
     }
   ],
   "skills": [
+    "using-fullstack-agents",
+    "codebase-scanning",
     "fastapi",
     "nextjs",
     "data-table",

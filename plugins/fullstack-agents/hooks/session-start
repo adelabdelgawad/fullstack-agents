@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# SessionStart hook for fullstack-agents plugin
+
+set -euo pipefail
+
+# Determine plugin root directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# --- Project Detection ---
+# Lightweight checks for FastAPI + Next.js project markers
+project_info=""
+
+# FastAPI detection
+if [ -f "pyproject.toml" ] && grep -qi "fastapi" pyproject.toml 2>/dev/null; then
+    project_info="${project_info}FastAPI backend detected (pyproject.toml). "
+elif [ -f "requirements.txt" ] && grep -qi "fastapi" requirements.txt 2>/dev/null; then
+    project_info="${project_info}FastAPI backend detected (requirements.txt). "
+elif [ -f "src/backend/pyproject.toml" ] && grep -qi "fastapi" src/backend/pyproject.toml 2>/dev/null; then
+    project_info="${project_info}FastAPI backend detected (src/backend/). "
+fi
+
+# Next.js detection
+if [ -f "package.json" ] && grep -q '"next"' package.json 2>/dev/null; then
+    project_info="${project_info}Next.js frontend detected (package.json). "
+elif [ -f "src/frontend/package.json" ] && grep -q '"next"' src/frontend/package.json 2>/dev/null; then
+    project_info="${project_info}Next.js frontend detected (src/frontend/). "
+fi
+
+# Docker detection
+if [ -f "docker-compose.yml" ] || [ -f "docker-compose.yaml" ]; then
+    project_info="${project_info}Docker infrastructure detected. "
+fi
+
+# Default message if nothing detected
+if [ -z "$project_info" ]; then
+    project_info="No FastAPI/Next.js project detected. Fullstack-agents skills are available if needed."
+fi
+
+# --- Read bootstrapping skill ---
+using_skill_content=$(cat "${PLUGIN_ROOT}/skills/using-fullstack-agents/SKILL.md" 2>&1 || echo "Error reading using-fullstack-agents skill")
+
+# --- Escape for JSON ---
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+using_skill_escaped=$(escape_for_json "$using_skill_content")
+project_info_escaped=$(escape_for_json "$project_info")
+
+session_context="<EXTREMELY_IMPORTANT>\nYou have fullstack-agents.\n\n**Project Detection:** ${project_info_escaped}\n\n**Below is the full content of your 'fullstack-agents:using-fullstack-agents' skill — your guide to auto-triggering code generation skills. For all other skills, use the 'Skill' tool:**\n\n---\n\n${using_skill_escaped}\n\n</EXTREMELY_IMPORTANT>"
+
+# Output context injection as JSON.
+# Keep both shapes for compatibility:
+# - Cursor hooks expect additional_context.
+# - Claude hooks expect hookSpecificOutput.additionalContext.
+cat <<EOF
+{
+  "additional_context": "${session_context}",
+  "hookSpecificOutput": {
+    "hookEventName": "SessionStart",
+    "additionalContext": "${session_context}"
+  }
+}
+EOF
+
+exit 0

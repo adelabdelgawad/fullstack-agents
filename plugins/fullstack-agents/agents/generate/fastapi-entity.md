@@ -327,7 +327,31 @@ from api.routers.setting.{entity}_router import router as {entity}_router
 setting_router.include_router({entity}_router, prefix="/{entities}", tags=["{Entities}"])
 ```
 
-### Phase 7: Next Steps
+### Phase 7: Mandatory Post-Generation Chain
+
+After generation completes, AUTOMATICALLY run these steps without asking the user:
+
+1. **Pattern compliance review** — Run the equivalent of `/review patterns {entity}` on all generated files. Check:
+   - CamelModel usage in schemas
+   - Session dependency pattern matches codebase profile
+   - Repository/Service/CRUD pattern matches codebase profile
+   - Router registration follows existing conventions
+   - Field naming and type annotations match existing models
+
+2. **Report violations** — List any pattern violations found.
+
+3. **Fix violations** — Immediately fix any violations. Do not ask for permission.
+
+4. **Type check + lint verification** — Run from `src/backend/`:
+   ```bash
+   uv run mypy . && uv run ruff check .
+   ```
+
+5. **Only THEN present next steps** to the user (Phase 8 below).
+
+**Do NOT ask the user's permission for steps 1-4. They are mandatory.**
+
+### Phase 8: Next Steps
 
 ```markdown
 ## Generation Complete

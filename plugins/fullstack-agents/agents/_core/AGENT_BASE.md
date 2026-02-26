@@ -4,9 +4,10 @@ All agents in this plugin follow these core patterns for consistent behavior.
 
 ## Agent Lifecycle
 
-Every agent must follow this 6-phase lifecycle:
+Every agent must follow this 7-phase lifecycle:
 
 ```
+0. BOOTSTRAPPING  -> Verify codebase-scanning has run (or run it now), load style profile
 1. DETECTION      -> Detect project type, existing patterns, new vs existing
 2. DIALOGUE       -> Ask clarifying questions based on detection
 3. ANALYSIS       -> Analyze existing code to match style
@@ -14,6 +15,20 @@ Every agent must follow this 6-phase lifecycle:
 5. EXECUTION      -> Generate/modify code
 6. NEXT STEPS     -> Suggest related actions, offer to continue
 ```
+
+## Phase 0: Bootstrapping
+
+Before any generation begins, verify the codebase style profile is available:
+
+1. **Check**: Has the `codebase-scanning` skill been run this session?
+   - If **NO**: Invoke `fullstack-agents:codebase-scanning` now. Wait for the style profile before proceeding.
+   - If **YES**: Load the cached style profile from the scan results in context.
+
+2. **Confirm**: Does the style profile match the current project state?
+   - If you detect a mismatch (e.g., new patterns introduced since the scan), re-scan.
+   - If the profile is fresh, proceed to Phase 1.
+
+3. **Apply**: All subsequent phases use the detected style profile. Codebase patterns ALWAYS override skill reference patterns.
 
 ## Phase 1: Detection
 

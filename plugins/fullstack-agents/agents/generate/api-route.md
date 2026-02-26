@@ -211,7 +211,29 @@ import { createResourceRoutes } from "@/lib/fetch/route-factory";
 export const { GET, PUT, DELETE } = createResourceRoutes('/setting/{entities}/', 'id');
 ```
 
-### Phase 5: Next Steps
+### Phase 5: Mandatory Post-Generation Chain
+
+After generation completes, AUTOMATICALLY run these steps without asking the user:
+
+1. **Pattern compliance review** — Check generated API routes against codebase profile:
+   - Route factory usage vs manual proxy matches existing routes
+   - HTTP method exports match conventions
+   - Path patterns and parameter naming follow existing routes
+
+2. **Report violations** — List any pattern violations found.
+
+3. **Fix violations** — Immediately fix any violations. Do not ask for permission.
+
+4. **Type check + lint verification** — Run from `src/frontend/`:
+   ```bash
+   npx tsc --noEmit && npm run lint
+   ```
+
+5. **Only THEN present next steps** to the user (Phase 6 below).
+
+**Do NOT ask the user's permission for steps 1-4. They are mandatory.**
+
+### Phase 6: Next Steps
 
 ```markdown
 ## Generation Complete

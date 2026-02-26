@@ -253,7 +253,30 @@ For Strategy B (SWR Fetching):
 - **Server actions**: Mutations use server actions with revalidation
 - **Type safety**: All data flows through TypeScript types
 
-### Phase 7: Next Steps
+### Phase 7: Mandatory Post-Generation Chain
+
+After generation completes, AUTOMATICALLY run these steps without asking the user:
+
+1. **Pattern compliance review** — Run the equivalent of `/review patterns {page}` on all generated files. Check:
+   - Server component vs client component usage matches codebase profile
+   - Data fetching pattern (useState vs useSWR) matches codebase profile
+   - Import style and naming conventions match existing pages
+   - Type definitions follow existing conventions
+
+2. **Report violations** — List any pattern violations found.
+
+3. **Fix violations** — Immediately fix any violations. Do not ask for permission.
+
+4. **Type check + lint verification** — Run from `src/frontend/`:
+   ```bash
+   npx tsc --noEmit && npm run lint
+   ```
+
+5. **Only THEN present next steps** to the user (Phase 8 below).
+
+**Do NOT ask the user's permission for steps 1-4. They are mandatory.**
+
+### Phase 8: Next Steps
 
 ```markdown
 ## Generation Complete

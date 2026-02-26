@@ -1,11 +1,14 @@
 # Fullstack Agents
 
-Unified fullstack development plugin with **25 specialized AI agents** for intelligent code generation, review, analysis, scaffolding, debugging, and optimization.
+Unified fullstack development plugin with **28 specialized AI agents** and **11 skill domains** for intelligent code generation, review, analysis, scaffolding, debugging, and optimization. **Auto-triggers** on FastAPI/Next.js projects via SessionStart hook.
 
 ## Features
 
+- **Auto-Triggering** - SessionStart hook detects FastAPI/Next.js projects and injects routing context. Claude automatically invokes the right skill before writing any backend or frontend code — no manual commands needed.
 - **Smart Code Generation** - Not static templates. Agents analyze existing code, ask clarifying questions, and generate context-aware code that matches your patterns.
+- **Codebase Scanning** - Before first generation, scans your project to build a style profile (session patterns, schema bases, naming conventions, etc.) ensuring generated code matches exactly.
 - **Interactive Dialogue** - Agents detect your codebase patterns, ask about relationships and edge cases, confirm before generating, and suggest next steps.
+- **Mandatory Post-Generation Review** - After every generation, pattern compliance review + type check + lint runs automatically. No manual step needed.
 - **Multi-Agent Orchestration** - Chain agents together for fullstack feature generation (backend + frontend + docker).
 - **Pattern Detection** - Automatically detects your coding style, naming conventions, and architectural patterns.
 
@@ -110,11 +113,25 @@ Validates that your entity follows architecture patterns:
 - Schema inheritance
 - SSR + SWR hybrid pattern
 
+## Auto-Triggering (SessionStart Hook)
+
+When installed, the plugin automatically:
+
+1. **Detects** your project type on session start (FastAPI, Next.js, Docker)
+2. **Injects** routing context so Claude knows which skill to invoke for each request
+3. **Scans** your codebase patterns before the first code generation
+4. **Reviews** generated code automatically after every generation (pattern compliance + type check + lint)
+
+No manual `/generate entity` commands needed — just say "create a Product entity" and the plugin activates.
+
+Manual commands (`/generate entity`, `/review patterns`, etc.) still work exactly as before for explicit invocation.
+
 ## Agent Lifecycle
 
 All agents follow this lifecycle:
 
 ```
+0. BOOTSTRAPPING  -> Verify codebase-scanning has run, load style profile
 1. DETECTION      -> Detect project type, existing patterns, new vs existing
 2. DIALOGUE       -> Ask clarifying questions based on detection
 3. ANALYSIS       -> Analyze existing code to match style

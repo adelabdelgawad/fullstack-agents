@@ -565,7 +565,31 @@ export default async function {Entity}Page({ searchParams }: PageProps) {
 
 **Why Add uses `router.refresh()`**: New entities affect pagination, counts, and sort order. A full server re-fetch is correct. Edits only change existing rows, so in-place update is sufficient.
 
-### Phase 7: Next Steps
+### Phase 7: Mandatory Post-Generation Chain
+
+After generation completes, AUTOMATICALLY run these steps without asking the user:
+
+1. **Pattern compliance review** — Run the equivalent of `/review patterns {entity}` on all generated files. Check:
+   - Table state pattern (useState vs useSWR) matches codebase profile
+   - Mutation approach (client api vs server actions) matches codebase profile
+   - Update pattern (updateItems in-place vs router.refresh) follows conventions
+   - API route pattern (route factory vs manual proxy) matches codebase profile
+   - Column definitions, sheet forms, and action menus follow existing conventions
+
+2. **Report violations** — List any pattern violations found.
+
+3. **Fix violations** — Immediately fix any violations. Do not ask for permission.
+
+4. **Type check + lint verification** — Run from `src/frontend/`:
+   ```bash
+   npx tsc --noEmit && npm run lint
+   ```
+
+5. **Only THEN present next steps** to the user (Phase 8 below).
+
+**Do NOT ask the user's permission for steps 1-4. They are mandatory.**
+
+### Phase 8: Next Steps
 
 ```markdown
 ## Generation Complete

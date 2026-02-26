@@ -215,7 +215,29 @@ class {JobName}Job(BaseJob):
 - Execution history tracking
 - Celery integration (if selected)
 
-### Phase 5: Next Steps
+### Phase 5: Mandatory Post-Generation Chain
+
+After generation completes, AUTOMATICALLY run these steps without asking the user:
+
+1. **Pattern compliance review** — Check generated scheduled job against codebase profile:
+   - Job class structure matches existing jobs
+   - Trigger configuration follows conventions
+   - Scheduler registration pattern matches existing setup
+
+2. **Report violations** — List any pattern violations found.
+
+3. **Fix violations** — Immediately fix any violations. Do not ask for permission.
+
+4. **Type check + lint verification** — Run from `src/backend/`:
+   ```bash
+   uv run mypy . && uv run ruff check .
+   ```
+
+5. **Only THEN present next steps** to the user (Phase 6 below).
+
+**Do NOT ask the user's permission for steps 1-4. They are mandatory.**
+
+### Phase 6: Next Steps
 
 ```markdown
 ## Generation Complete
