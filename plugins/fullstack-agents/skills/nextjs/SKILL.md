@@ -298,3 +298,4 @@ See the `references/` directory for detailed patterns:
 - `context-pattern.md` - Actions context
 - `api-route-pattern.md` - API routes
 - `fetch-pattern.md` - Fetch utilities
+- `select-components.md` - SingleSelect and MultiSelect component source and usage
