@@ -403,3 +403,7 @@ Ensure project has:
 - [ ] Bulk actions use `EnableButton`/`DisableButton` with confirmation
 - [ ] URL params drive filtering/pagination/sorting
 - [ ] Edit sheets use fetch-then-open pattern (not row.original)
+
+## References
+
+- [references/select-in-tables.md](references/select-in-tables.md) - SingleSelect in toolbar filters, MultiSelect in edit sheets
