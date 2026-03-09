@@ -12,7 +12,8 @@ Wire it to a URL param so the filter survives navigation and SSR picks it up on 
 // In [entity]-table.tsx or [entity]-table-controller.tsx
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useTransition } from "react";
 import { SingleSelect } from "@/components/ui/single-select";
 
 const statusOptions = [
@@ -25,6 +26,8 @@ const statusOptions = [
 export function CampaignStatusFilter() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const [, startTransition] = useTransition();
   const current = searchParams.get("status") ?? "";
 
   return (
@@ -32,10 +35,12 @@ export function CampaignStatusFilter() {
       options={statusOptions}
       value={current}
       onValueChange={(v) => {
-        const params = new URLSearchParams(searchParams.toString());
-        if (v) { params.set("status", v); } else { params.delete("status"); }
-        params.delete("page"); // reset to page 1
-        router.push(`?${params.toString()}`);
+        startTransition(() => {
+          const params = new URLSearchParams(searchParams.toString());
+          if (v) { params.set("status", v); } else { params.delete("status"); }
+          params.delete("page"); // reset to page 1
+          router.replace(`${pathname}?${params.toString()}`);
+        });
       }}
       placeholder="All statuses"
       className="w-[180px]"
@@ -67,6 +72,7 @@ appears behind the sheet overlay (z-index clash).
 "use client";
 
 import { useState } from "react";
+import { fetchClient } from "@/lib/fetch/client";
 import { MultiSelect } from "@/components/ui/multi-select";
 import type { MultiSelectOption } from "@/components/ui/multi-select";
 
@@ -83,7 +89,7 @@ export function AddUserSheet({ roles }: Props) {
   }));
 
   const handleSubmit = async () => {
-    await api.post("/api/setting/users", {
+    const { data } = await fetchClient.post("/api/setting/users", {
       roleIds: selectedRoleIds.map(Number),
     });
   };
@@ -93,7 +99,7 @@ export function AddUserSheet({ roles }: Props) {
       <SheetContent>
         <MultiSelect
           options={roleOptions}
-          value={selectedRoleIds}
+          defaultValue={selectedRoleIds}
           onValueChange={setSelectedRoleIds}
           placeholder="Select roles"
           modalPopover={true}   // Required inside Sheet
