@@ -72,7 +72,7 @@ appears behind the sheet overlay (z-index clash).
 "use client";
 
 import { useState } from "react";
-import { fetchClient } from "@/lib/fetch/client";
+import { api } from "@/lib/fetch/client";
 import { MultiSelect } from "@/components/ui/multi-select";
 import type { MultiSelectOption } from "@/components/ui/multi-select";
 
@@ -89,7 +89,7 @@ export function AddUserSheet({ roles }: Props) {
   }));
 
   const handleSubmit = async () => {
-    const { data } = await fetchClient.post("/api/setting/users", {
+    const result = await api.post("/api/setting/users", {
       roleIds: selectedRoleIds.map(Number),
     });
   };
