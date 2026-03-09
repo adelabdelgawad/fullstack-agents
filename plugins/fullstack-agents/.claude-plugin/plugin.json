@@ -1,7 +1,7 @@
 {
   "name": "fullstack-agents",
   "description": "Unified fullstack development toolkit with 28 AI agents, 8 commands, and 12 skill domains for FastAPI, Next.js, Docker, Celery, WebSocket, and more. Auto-triggers via SessionStart hook. Features intelligent code generation with interactive dialogue, pattern detection, and multi-agent orchestration.",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "license": "MIT",
   "author": {
     "name": "Adel Abdelgawad",
