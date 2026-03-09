@@ -11,6 +11,8 @@ Two controlled, searchable select components built on Popover + Command (shadcn)
 
 Both are **fully controlled** — the parent owns state via `value` + `onValueChange`.
 
+> **Note:** This reference documents the canonical controlled implementation sourced from a reference project. If your project has a different MultiSelect installed (e.g. one that uses `defaultValue` instead of `value`, or exposes a ref handle), adapt the API accordingly. The SingleSelect component may also need to be scaffolded if not present — the source above is the complete file to create at `components/ui/single-select.tsx`.
+
 ## Option Interface
 
 Both components share the same option shape:
@@ -26,6 +28,8 @@ interface Option {
 ```
 
 ## SingleSelect
+
+> ⚠️ **Inside Sheet or Dialog:** Always pass `modalPopover={true}` to prevent the popover from rendering behind the overlay.
 
 Scaffold at: `components/ui/single-select.tsx`
 
@@ -182,6 +186,8 @@ export type { SingleSelectProps };
 ```
 
 ## MultiSelect
+
+> ⚠️ **Inside Sheet or Dialog:** Always pass `modalPopover={true}` to prevent the popover from rendering behind the overlay.
 
 Scaffold at: `components/ui/multi-select.tsx`
 
