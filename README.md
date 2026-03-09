@@ -1,171 +1,80 @@
 # Fullstack Agents
 
-AI-powered fullstack development toolkit for Claude Code. **28 agents**, **8 commands**, **9 skills** for intelligent code generation, review, analysis, and optimization.
+A Claude Code plugin that brings intelligent, pattern-aware code generation to fullstack projects. Instead of static templates, it reads your codebase, asks the right questions, and generates code that fits—first time.
 
 ## Installation
 
 ```bash
-# Add the marketplace
 /plugin marketplace add https://github.com/adelabdelgawad/fullstack-agents
-
-# Install the plugin
 /plugin install fullstack-agents
 ```
 
-## What's Included
+## What You Get
 
-### 28 Specialized Agents
-
-| Category | Count | Purpose |
-|----------|-------|---------|
-| **Generate** | 7 | Smart code generation with interactive dialogue |
-| **Review** | 4 | Code quality, security, performance, patterns |
-| **Analyze** | 4 | Codebase, architecture, dependencies, patterns |
-| **Scaffold** | 5 | Project and module scaffolding |
-| **Debug** | 4 | Error diagnosis, log analysis, profiling |
-| **Optimize** | 4 | Performance, cleanup, refactoring, queries |
-
-### 8 Commands
-
-| Command | Description |
-|---------|-------------|
-| `/generate` | Generate code with pattern detection and dialogue |
-| `/review` | Review code for quality, security, performance |
-| `/analyze` | Analyze codebase, architecture, dependencies |
-| `/scaffold` | Scaffold new projects or modules |
-| `/debug` | Debug errors, logs, performance issues |
-| `/optimize` | Optimize performance, cleanup, refactor |
-| `/validate` | Validate entity follows patterns |
-| `/status` | Show project status and available actions |
-
-### 9 Skill Domains
-
-- **FastAPI** - Backend API patterns (model, schema, repository, service, router)
-- **Next.js** - Frontend patterns (pages, components, server actions)
-- **Data Table** - TanStack Table with CRUD operations
-- **Fetch Architecture** - Client/server fetch utilities
-- **Celery** - Background task patterns
-- **Tasks Management** - APScheduler job patterns
-- **Docker** - Container infrastructure patterns
-- **WebSocket** - Real-time connection patterns (manager, rooms, messaging)
-- **Batch Error Resolution** - Disciplined batch error handling (collect, analyze, resolve, verify)
-
-## Supported Technologies
-
-| Category | Technologies |
-|----------|-------------|
-| **Backend** | FastAPI, SQLAlchemy 2.0, Pydantic, Celery, APScheduler |
-| **Frontend** | Next.js 15+, React 19, TanStack Table, SWR, Tailwind |
-| **Infrastructure** | Docker, Docker Compose, Nginx, PostgreSQL, Redis |
-
-## Key Features
-
-### Smart Code Generation
-
-Unlike static templates, our agents:
-- **Detect existing patterns** in your codebase
-- **Ask clarifying questions** about relationships and edge cases
-- **Match your coding style** automatically
-- **Suggest next steps** after generation
-
-### Interactive Dialogue
-
-```
-/generate entity product
-
-## Entity Configuration
-
-I've analyzed your codebase and detected:
-- Bilingual fields (name_en/name_ar): Yes
-- Soft delete (is_active): Yes
-- Audit fields: Yes
-
-What fields should this entity have?
-```
-
-### Multi-Agent Orchestration
-
-```
-/generate fullstack order
-
-# Orchestrates:
-1. generate/fastapi-entity → Backend CRUD
-2. generate/api-route → Next.js API routes
-3. generate/nextjs-data-table → Management page
-```
+- **28 specialized agents** across generation, review, analysis, scaffolding, debug, and optimization
+- **8 slash commands** for common workflows (`/generate`, `/review`, `/analyze`, `/scaffold`, `/debug`, `/optimize`, `/validate`, `/status`)
+- **9 skill domains** covering FastAPI, Next.js, TanStack Table, Celery, Docker, WebSocket, and more
+- **Multi-agent orchestration** — `/generate fullstack order` coordinates backend, API routes, and frontend in one shot
+- **Pattern detection** — agents read your existing code before generating anything
 
 ## Quick Start
 
 ```bash
-# Check project status
-/status
-
-# Generate a backend entity
-/generate entity product
-
-# Generate a data table page
-/generate data-table products
-
-# Generate complete fullstack feature
-/generate fullstack order
-
-# Review code patterns
-/review patterns product
-
-# Analyze codebase
-/analyze codebase
+/status                          # Detect your stack and available actions
+/generate entity product         # Generate FastAPI entity with full CRUD
+/generate data-table products    # Generate Next.js management table
+/generate fullstack order        # Generate complete fullstack feature
+/review patterns src/            # Validate code follows your architecture
+/analyze codebase                # Get a full project health overview
 ```
 
-## Documentation
+## How It Works
+
+Agents follow a structured lifecycle: they detect your project type and existing patterns, ask clarifying questions, show a plan for approval, then generate. Every output is grounded in your actual codebase—not assumptions.
+
+```
+/generate entity product
+
+> Analyzing codebase...
+> Detected: bilingual fields (name_en/name_ar), soft delete (is_active), audit fields
+>
+> What relationships should this entity have?
+```
+
+## Supported Stack
+
+| Layer | Technologies |
+|-------|-------------|
+| Backend | FastAPI, SQLAlchemy 2.0, Pydantic, Celery, APScheduler |
+| Frontend | Next.js 15+, React 19, TanStack Table, SWR, Tailwind |
+| Infrastructure | Docker, Docker Compose, PostgreSQL, Redis, Nginx |
+
+## Skill Domains
+
+- **FastAPI** — model, schema, repository, service, router patterns
+- **Next.js** — pages, server components, server actions, SSR+SWR strategy
+- **Data Table** — TanStack Table with filtering, sorting, bulk actions, CRUD
+- **Fetch Architecture** — client/server fetch utilities and API-route-only pattern
+- **Celery** — background task patterns with retry and monitoring
+- **Tasks Management** — APScheduler jobs with database persistence
+- **Docker** — service configuration and infrastructure composition
+- **WebSocket** — connection manager, rooms, and message protocol patterns
+- **Batch Error Resolution** — disciplined collect → analyze → resolve → verify workflow
+
+## Philosophy
+
+> **Compounding Engineering**: each unit of work should make the next unit easier.
+
+This plugin embodies that by detecting your patterns, building on existing work instead of replacing it, and suggesting what to do next after every generation.
+
+## Links
 
 - [Agents Reference](docs/agents.md)
 - [Commands Reference](docs/commands.md)
 - [Skills Reference](docs/skills.md)
-- [Getting Started Guide](docs/getting-started.md)
-
-## Architecture
-
-```
-plugins/fullstack-agents/
-├── agents/
-│   ├── _core/          # Base patterns for all agents
-│   ├── generate/       # Code generation agents
-│   ├── review/         # Code review agents
-│   ├── analyze/        # Analysis agents
-│   ├── scaffold/       # Scaffolding agents
-│   ├── debug/          # Debugging agents
-│   └── optimize/       # Optimization agents
-├── commands/           # Slash commands
-└── skills/             # Domain knowledge
-    ├── fastapi/
-    ├── nextjs/
-    ├── data-table/
-    ├── fetch-architecture/
-    ├── celery/
-    ├── tasks-management/
-    ├── docker/
-    ├── websocket/
-    └── batch-error-resolution/
-```
-
-## Philosophy
-
-> **Compounding Engineering**: Each unit of engineering work should make subsequent units of work easier—not harder.
-
-This plugin embodies this philosophy by:
-1. **Learning from your codebase** - Detecting and following your patterns
-2. **Building on existing work** - Extending rather than replacing
-3. **Automating the repetitive** - So you can focus on the unique
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
+- [Getting Started](docs/getting-started.md)
+- **Author**: [Adel Abdelgawad](https://github.com/adelabdelgawad)
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
-
-## Author
-
-**Adel Abdelgawad**
-- GitHub: [@adelabdelgawad](https://github.com/adelabdelgawad)
+MIT
