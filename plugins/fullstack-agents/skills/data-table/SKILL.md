@@ -407,3 +407,4 @@ Ensure project has:
 ## References
 
 - [references/select-in-tables.md](references/select-in-tables.md) - SingleSelect in toolbar filters, MultiSelect in edit sheets
+- [references/form-sheet-guard.md](references/form-sheet-guard.md) - Unsaved-changes guard for Sheet/Dialog close (X, Escape, overlay click)
