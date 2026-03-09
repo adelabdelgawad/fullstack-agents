@@ -130,7 +130,8 @@
     "tasks-management",
     "docker",
     "websocket",
-    "batch-error-resolution"
+    "batch-error-resolution",
+    "debug"
   ],
   "dependencies": [],
   "compatibility": {

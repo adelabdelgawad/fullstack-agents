@@ -13,7 +13,7 @@ A Claude Code plugin that brings intelligent, pattern-aware code generation to f
 
 - **28 specialized agents** across generation, review, analysis, scaffolding, debug, and optimization
 - **8 slash commands** for common workflows (`/generate`, `/review`, `/analyze`, `/scaffold`, `/debug`, `/optimize`, `/validate`, `/status`)
-- **9 skill domains** covering FastAPI, Next.js, TanStack Table, Celery, Docker, WebSocket, and more
+- **10 skill domains** covering FastAPI, Next.js, TanStack Table, Celery, Docker, WebSocket, debugging discipline, and more
 - **Multi-agent orchestration** — `/generate fullstack order` coordinates backend, API routes, and frontend in one shot
 - **Pattern detection** — agents read your existing code before generating anything
 
@@ -60,6 +60,7 @@ Agents follow a structured lifecycle: they detect your project type and existing
 - **Docker** — service configuration and infrastructure composition
 - **WebSocket** — connection manager, rooms, and message protocol patterns
 - **Batch Error Resolution** — disciplined collect → analyze → resolve → verify workflow
+- **Debug** — root-cause-first debugging discipline: reproduce → investigate → fix → verify
 
 ## Philosophy
 
