@@ -45,3 +45,6 @@ temp/
 # Editor backup files
 *~
 *.bak
+
+# Claude Code
+CLAUDE.md
