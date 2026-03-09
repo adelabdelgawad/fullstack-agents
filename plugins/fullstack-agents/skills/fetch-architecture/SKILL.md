@@ -52,6 +52,31 @@ Use this skill when asked to:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+## Anti-Patterns (NEVER DO)
+
+Server actions and server components MUST route through Next.js API routes.
+Direct FastAPI calls from server actions are FORBIDDEN.
+
+```typescript
+// ❌ WRONG — server action calling FastAPI directly
+import { getBackendURL } from '@/lib/auth/auth-cookies';
+import { getAccessToken } from '@/lib/auth/server-auth';
+const token = await getAccessToken();
+const res = await fetch(`${getBackendURL()}/setting/users`, {
+  headers: { Authorization: `Bearer ${token}` }
+});
+
+// ❌ WRONG — importing backendFetch in a server action
+import { backendFetch } from '@/lib/fetch/backend';
+const data = await backendFetch('/setting/users', token);
+
+// ✅ CORRECT — server action routes through Next.js API route
+import { serverGet } from '@/lib/fetch/server';
+const data = await serverGet('/api/setting/users');
+```
+
+**Rule:** `backendFetch` is only ever imported in files under `app/api/`. Everything else uses `serverGet/serverPost/fetchClient`.
+
 ## Directory Structure
 
 ```
@@ -206,66 +231,112 @@ export const fetchClient = {
 // lib/fetch/server.ts
 "use server";
 
+/**
+ * Server-side fetch utilities for server actions.
+ * Routes all calls through Next.js API routes (unified proxy pattern).
+ * Never calls FastAPI directly — use backendFetch inside app/api/ routes only.
+ */
+
 import { cookies, headers } from 'next/headers';
 import { ApiError, extractErrorMessage } from './errors';
-import type { FetchRequestOptions } from './types';
+import type { FetchOptions, FetchRequestOptions } from './types';
 
-// Server → Next.js API routes
-export async function serverFetch<T>(
+const DEFAULT_TIMEOUT = 30000;
+
+async function getCookieHeader(): Promise<string> {
+  try {
+    const cookieStore = await cookies();
+    return cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
+  } catch {
+    return '';
+  }
+}
+
+async function getBaseUrl(): Promise<string> {
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL;
+  }
+  try {
+    const headersList = await headers();
+    const host = headersList.get('host');
+    const protocol = headersList.get('x-forwarded-proto') || 'http';
+    if (host) return `${protocol}://${host}`;
+  } catch {}
+  return 'http://localhost:3000';
+}
+
+async function serverFetch<T>(
   url: string,
   options: FetchRequestOptions = {}
 ): Promise<T> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-  const cookieStore = await cookies();
-  const cookieHeader = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
+  const baseUrl = await getBaseUrl();
+  const fullUrl = `${baseUrl}${url}`;
+  const method = options.method || 'GET';
 
-  const response = await fetch(`${baseUrl}${url}`, {
-    method: options.method || 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(cookieHeader && { Cookie: cookieHeader }),
-      ...options.headers,
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    options.timeout || DEFAULT_TIMEOUT
+  );
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new ApiError(extractErrorMessage(data), response.status, data);
+  const cookieHeader = await getCookieHeader();
+
+  try {
+    const response = await fetch(fullUrl, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Request-ID': crypto.randomUUID(),
+        ...(cookieHeader && { Cookie: cookieHeader }),
+        ...options.headers,
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
+      cache: options.cache ?? (method === 'GET' ? undefined : 'no-store'),
+      next: options.next,
+    });
+
+    let data: unknown;
+    try {
+      data = await response.json();
+    } catch {
+      data = {};
+    }
+
+    if (!response.ok) {
+      throw new ApiError(extractErrorMessage(data), response.status, data);
+    }
+
+    return data as T;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new ApiError('Request timeout', 408);
+    }
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      error instanceof Error ? error.message : 'Network error',
+      500
+    );
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return data as T;
 }
 
-// API routes → FastAPI backend
-export async function backendFetch<T>(
-  url: string,
-  token: string,
-  options: FetchRequestOptions = {}
-): Promise<T> {
-  const baseUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
-
-  const response = await fetch(`${baseUrl}${url}`, {
-    method: options.method || 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-      ...options.headers,
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new ApiError(extractErrorMessage(data), response.status, data);
-  }
-  return data as T;
+export async function serverGet<T>(url: string, opts?: FetchOptions): Promise<T> {
+  return serverFetch<T>(url, { ...opts, method: 'GET' });
 }
 
-// Convenience methods
-export const serverGet = <T>(url: string) => serverFetch<T>(url, { method: 'GET' });
-export const serverPost = <T>(url: string, body: unknown) => serverFetch<T>(url, { method: 'POST', body });
-export const serverPut = <T>(url: string, body: unknown) => serverFetch<T>(url, { method: 'PUT', body });
-export const serverDelete = <T>(url: string) => serverFetch<T>(url, { method: 'DELETE' });
+export async function serverPost<T>(url: string, body: unknown, opts?: FetchOptions): Promise<T> {
+  return serverFetch<T>(url, { ...opts, method: 'POST', body });
+}
+
+export async function serverPut<T>(url: string, body: unknown, opts?: FetchOptions): Promise<T> {
+  return serverFetch<T>(url, { ...opts, method: 'PUT', body });
+}
+
+export async function serverDelete<T>(url: string, opts?: FetchOptions & { body?: unknown }): Promise<T> {
+  return serverFetch<T>(url, { ...opts, method: 'DELETE', body: opts?.body });
+}
 ```
 
 ### 5. API Route Helper

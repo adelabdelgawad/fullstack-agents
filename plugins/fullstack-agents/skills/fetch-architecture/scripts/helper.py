@@ -16,12 +16,12 @@ import os
 import re
 
 def validate_fetch_config():
-    """Validate fetch architecture configuration."""
+    """Validate fetch architecture configuration and scan for violations."""
     print("Validating fetch architecture...")
-    
+
     issues = []
-    
-    # Check directory structure
+
+    # Check required files exist
     required_files = [
         'lib/fetch/client.ts',
         'lib/fetch/server.ts',
@@ -29,47 +29,70 @@ def validate_fetch_config():
         'lib/fetch/errors.ts',
         'lib/fetch/types.ts',
     ]
-    
+
     for file in required_files:
         if os.path.exists(file):
             print(f"✓ {file}")
-            
-            # Check file content
             with open(file, 'r') as f:
                 content = f.read()
-                
-                if file.endswith('client.ts'):
-                    if '"use client"' not in content:
-                        issues.append(f"⚠ {file}: Missing 'use client' directive")
-                    if 'AbortController' not in content:
-                        issues.append(f"ℹ {file}: No timeout handling")
-                
                 if file.endswith('server.ts'):
                     if '"use server"' not in content:
                         issues.append(f"⚠ {file}: Missing 'use server' directive")
-                    if 'cookies()' not in content:
-                        issues.append(f"ℹ {file}: No cookie forwarding")
-                
+                    # server.ts should NOT call backend directly
+                    if 'getBackendURL' in content:
+                        issues.append(f"✗ {file}: Contains getBackendURL — server.ts must not call FastAPI directly")
+                    if 'getAccessToken' in content:
+                        issues.append(f"✗ {file}: Contains getAccessToken — server.ts must not call FastAPI directly")
+                    if 'Authorization' in content and 'Bearer' in content:
+                        issues.append(f"✗ {file}: Contains Bearer token — server.ts must not call FastAPI directly")
+                if file.endswith('client.ts'):
+                    if '"use client"' not in content:
+                        issues.append(f"⚠ {file}: Missing 'use client' directive")
                 if file.endswith('api-route-helper.ts'):
                     if 'withAuth' not in content:
                         issues.append(f"⚠ {file}: Missing withAuth wrapper")
         else:
             issues.append(f"✗ {file}: Not found")
-    
-    # Check for auth
-    auth_files = ['lib/auth/server-auth.ts', 'lib/auth.ts', 'auth.ts']
-    auth_found = any(os.path.exists(f) for f in auth_files)
-    if auth_found:
-        print("✓ Auth module found")
-    else:
-        issues.append("ℹ No auth module found (lib/auth/server-auth.ts)")
-    
+
+    # Scan server action files for direct backend violations
+    actions_dir = 'lib/actions'
+    if os.path.isdir(actions_dir):
+        print(f"\nScanning {actions_dir}/ for direct backend calls...")
+        violation_patterns = [
+            ('getBackendURL', 'Direct backend URL access'),
+            ('getAccessToken', 'Direct token access'),
+            ('backendFetch', 'Importing backendFetch (only allowed in app/api/)'),
+        ]
+
+        for root, _, files in os.walk(actions_dir):
+            for filename in files:
+                if not filename.endswith('.ts'):
+                    continue
+                filepath = os.path.join(root, filename)
+                with open(filepath, 'r') as f:
+                    lines = f.readlines()
+                for lineno, line in enumerate(lines, 1):
+                    for pattern, description in violation_patterns:
+                        if pattern in line and not line.strip().startswith('//'):
+                            issues.append(
+                                f"✗ {filepath}:{lineno}: {description} — '{pattern}'"
+                            )
+                    # Check for Authorization Bearer header
+                    if 'Authorization' in line and 'Bearer' in line and not line.strip().startswith('//'):
+                        issues.append(
+                            f"✗ {filepath}:{lineno}: Direct Bearer token header in server action"
+                        )
+
+        print("✓ Action files scanned")
+
     if issues:
         print("\nIssues found:")
         for issue in issues:
             print(f"  {issue}")
+        return False
     else:
         print("\n✓ Fetch architecture validation passed!")
+        return True
 
 def list_api_routes():
     """List all API routes in the application."""

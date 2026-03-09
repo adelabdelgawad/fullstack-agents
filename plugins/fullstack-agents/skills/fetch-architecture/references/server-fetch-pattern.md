@@ -8,16 +8,18 @@ Server-side fetch utilities for Next.js server actions and API routes.
 // lib/fetch/server.ts
 "use server";
 
+/**
+ * Server-side fetch utilities for server actions.
+ * Routes all calls through Next.js API routes (unified proxy pattern).
+ * Never calls FastAPI directly — use backendFetch inside app/api/ routes only.
+ */
+
 import { cookies, headers } from 'next/headers';
 import { ApiError, extractErrorMessage } from './errors';
-import type { FetchRequestOptions } from './types';
+import type { FetchOptions, FetchRequestOptions } from './types';
 
 const DEFAULT_TIMEOUT = 30000;
 
-/**
- * Get cookie header for server-to-server requests
- * Forwards session cookies from the original request
- */
 async function getCookieHeader(): Promise<string> {
   try {
     const cookieStore = await cookies();
@@ -27,38 +29,26 @@ async function getCookieHeader(): Promise<string> {
   }
 }
 
-/**
- * Get base URL for internal API calls
- * Uses env var or extracts from request headers
- */
 async function getBaseUrl(): Promise<string> {
-  // Prefer explicit env var
   if (process.env.NEXT_PUBLIC_SITE_URL) {
     return process.env.NEXT_PUBLIC_SITE_URL;
   }
-
-  // Extract from request headers
   try {
     const headersList = await headers();
     const host = headersList.get('host');
     const protocol = headersList.get('x-forwarded-proto') || 'http';
     if (host) return `${protocol}://${host}`;
   } catch {}
-
-  // Default fallback
   return 'http://localhost:3000';
 }
 
-/**
- * Server fetch for calling Next.js API routes from server actions
- * Automatically forwards cookies for authentication
- */
-export async function serverFetch<T>(
+async function serverFetch<T>(
   url: string,
   options: FetchRequestOptions = {}
 ): Promise<T> {
   const baseUrl = await getBaseUrl();
   const fullUrl = `${baseUrl}${url}`;
+  const method = options.method || 'GET';
 
   const controller = new AbortController();
   const timeoutId = setTimeout(
@@ -70,7 +60,7 @@ export async function serverFetch<T>(
 
   try {
     const response = await fetch(fullUrl, {
-      method: options.method || 'GET',
+      method,
       headers: {
         'Content-Type': 'application/json',
         'X-Request-ID': crypto.randomUUID(),
@@ -79,6 +69,8 @@ export async function serverFetch<T>(
       },
       body: options.body ? JSON.stringify(options.body) : undefined,
       signal: controller.signal,
+      cache: options.cache ?? (method === 'GET' ? undefined : 'no-store'),
+      next: options.next,
     });
 
     let data: unknown;
@@ -107,7 +99,6 @@ export async function serverFetch<T>(
   }
 }
 
-// Convenience methods for common HTTP methods
 export async function serverGet<T>(url: string, opts?: FetchOptions): Promise<T> {
   return serverFetch<T>(url, { ...opts, method: 'GET' });
 }
@@ -120,73 +111,8 @@ export async function serverPut<T>(url: string, body: unknown, opts?: FetchOptio
   return serverFetch<T>(url, { ...opts, method: 'PUT', body });
 }
 
-export async function serverPatch<T>(url: string, body: unknown, opts?: FetchOptions): Promise<T> {
-  return serverFetch<T>(url, { ...opts, method: 'PATCH', body });
-}
-
-export async function serverDelete<T>(url: string, opts?: FetchOptions): Promise<T> {
-  return serverFetch<T>(url, { ...opts, method: 'DELETE' });
-}
-```
-
-## Backend Fetch for API Routes
-
-```typescript
-/**
- * Backend fetch for API routes calling FastAPI backend
- * Uses Bearer token authentication
- */
-export async function backendFetch<T>(
-  url: string,
-  accessToken: string,
-  options: FetchRequestOptions = {}
-): Promise<T> {
-  const baseUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
-  const fullUrl = `${baseUrl}${url}`;
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(
-    () => controller.abort(),
-    options.timeout || DEFAULT_TIMEOUT
-  );
-
-  try {
-    const response = await fetch(fullUrl, {
-      method: options.method || 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
-        'X-Request-ID': crypto.randomUUID(),
-        ...options.headers,
-      },
-      body: options.body ? JSON.stringify(options.body) : undefined,
-      signal: controller.signal,
-    });
-
-    let data: unknown;
-    try {
-      data = await response.json();
-    } catch {
-      data = {};
-    }
-
-    if (!response.ok) {
-      throw new ApiError(extractErrorMessage(data), response.status, data);
-    }
-
-    return data as T;
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new ApiError('Request timeout', 408);
-    }
-    if (error instanceof ApiError) throw error;
-    throw new ApiError(
-      error instanceof Error ? error.message : 'Network error',
-      500
-    );
-  } finally {
-    clearTimeout(timeoutId);
-  }
+export async function serverDelete<T>(url: string, opts?: FetchOptions & { body?: unknown }): Promise<T> {
+  return serverFetch<T>(url, { ...opts, method: 'DELETE', body: opts?.body });
 }
 ```
 
@@ -215,6 +141,7 @@ export async function getUsers(
   }
   
   return serverGet<UsersResponse>(`/api/setting/users?${params.toString()}`);
+  // ^^^^ Always /api/ prefix — routes through Next.js API route
 }
 
 export async function createUser(userData: UserCreate): Promise<User> {
