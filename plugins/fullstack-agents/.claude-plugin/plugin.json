@@ -29,6 +29,5 @@
     "sqlalchemy",
     "tanstack-table"
   ],
-  "repository": "https://github.com/adelabdelgawad/fullstack-agents",
-  "hooks": "./hooks/hooks.json"
+  "repository": "https://github.com/adelabdelgawad/fullstack-agents"
 }
