@@ -6,30 +6,44 @@ Client and server-side fetch utilities for API communication.
 
 ```
 lib/fetch/
-├── client.ts           # Client-side fetch (browser)
-├── server.ts           # Server-side fetch (server actions, API routes)
-├── api-route-helper.ts # API route wrappers
+├── client.ts           # Client-side fetch (browser) — exports `api` object
+├── server.ts           # Server-side fetch (server actions) — direct backend calls
+├── backend.ts          # Backend fetch (API routes only) — calls FastAPI
+├── api-route-helper.ts # withAuth wrapper for API routes
 ├── errors.ts           # Error classes
 ├── types.ts            # TypeScript types
 └── index.ts            # Exports
 ```
 
-## Client-Side Fetch
+## Two Data Paths
+
+```
+SERVER PATH (1 hop):  Server Action → directBackendFetch() → FastAPI
+                      URLs: /backend/setting/users
+
+CLIENT PATH (2 hops): Client → api.post() → /api/... → withAuth() → backendFetch() → FastAPI
+```
+
+## Client-Side Fetch (`lib/fetch/client.ts`)
 
 ```tsx
-// lib/fetch/client.ts
 "use client";
 
 import { AuthService } from '@/lib/auth/auth-service';
+import { csrfManager } from '@/lib/auth/csrf-manager';
+import { redirectGuard } from '@/lib/auth/redirect-guard';
+import { authLogger } from '@/lib/auth/auth-logger';
 import { ApiError, extractErrorMessage } from './errors';
 import type { FetchOptions, FetchRequestOptions } from './types';
 
 const DEFAULT_TIMEOUT = 30000;
 const MAX_RETRIES = 2;
 const RETRY_DELAY = 1000;
+const API_PREFIX = '/api';
 
 /**
  * Client fetch for calling Next.js API routes
+ * Auto-prefixes URLs with /api/ if not already prefixed
  */
 async function clientFetch<T>(
   url: string,
@@ -37,18 +51,26 @@ async function clientFetch<T>(
   attempt = 1,
   isRetryAfterRefresh = false
 ): Promise<T> {
+  // Auto-prefix URL
+  const fullUrl = url.startsWith('/api') ? url : `${API_PREFIX}${url}`;
+
   const controller = new AbortController();
   const timeoutId = setTimeout(
     () => controller.abort(),
     options.timeout || DEFAULT_TIMEOUT
   );
 
+  // Add CSRF token for mutations
+  const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(options.method || 'GET');
+  const csrfToken = isMutation ? csrfManager.getToken() : null;
+
   try {
-    const response = await fetch(url, {
+    const response = await fetch(fullUrl, {
       method: options.method || 'GET',
       headers: {
         'Content-Type': 'application/json',
         'X-Request-ID': crypto.randomUUID(),
+        ...(csrfToken && { 'X-CSRF-Token': csrfToken }),
         ...options.headers,
       },
       body: options.body ? JSON.stringify(options.body) : undefined,
@@ -64,24 +86,24 @@ async function clientFetch<T>(
     }
 
     if (!response.ok) {
-      // Handle 401 - attempt token refresh once
       if (response.status === 401 && !isRetryAfterRefresh) {
         clearTimeout(timeoutId);
+        if (redirectGuard.isLooping()) {
+          throw new ApiError('Redirect loop detected', 401);
+        }
         try {
           const newToken = await AuthService.refreshAccessToken();
           if (newToken) {
+            authLogger.logRefresh('client-fetch');
             return clientFetch<T>(url, options, attempt, true);
           }
-        } catch {
-          // Refresh failed
-        }
+        } catch { /* Refresh failed */ }
         if (typeof window !== 'undefined') {
           window.location.href = '/login';
         }
         throw new ApiError('Session expired', 401);
       }
 
-      // Retry on 429/503
       if ((response.status === 429 || response.status === 503) && attempt < MAX_RETRIES) {
         clearTimeout(timeoutId);
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
@@ -107,7 +129,8 @@ async function clientFetch<T>(
 }
 
 /**
- * Modern API client - returns T directly
+ * API client — returns T directly (no wrapper)
+ * URLs auto-prefixed: api.get('/setting/users') → /api/setting/users
  */
 export const api = {
   get: <T>(url: string, opts?: FetchOptions): Promise<T> =>
@@ -126,87 +149,48 @@ export const api = {
     clientFetch<T>(url, { ...opts, method: 'DELETE' }),
 };
 
-/**
- * Legacy wrapper - returns { data: T }
- * @deprecated Use api.get/post/put/patch/delete instead
- */
-export const fetchClient = {
-  get: async <T>(url: string, opts?: FetchOptions): Promise<{ data: T }> => {
-    const data = await clientFetch<T>(url, { ...opts, method: 'GET' });
-    return { data };
-  },
-  post: async <T>(url: string, body?: unknown, opts?: FetchOptions): Promise<{ data: T }> => {
-    const data = await clientFetch<T>(url, { ...opts, method: 'POST', body });
-    return { data };
-  },
-  put: async <T>(url: string, body?: unknown, opts?: FetchOptions): Promise<{ data: T }> => {
-    const data = await clientFetch<T>(url, { ...opts, method: 'PUT', body });
-    return { data };
-  },
-  patch: async <T>(url: string, body?: unknown, opts?: FetchOptions): Promise<{ data: T }> => {
-    const data = await clientFetch<T>(url, { ...opts, method: 'PATCH', body });
-    return { data };
-  },
-  delete: async <T>(url: string, opts?: FetchOptions): Promise<{ data: T }> => {
-    const data = await clientFetch<T>(url, { ...opts, method: 'DELETE' });
-    return { data };
-  },
-};
-
 export default api;
 ```
 
-## Server-Side Fetch
+## Server-Side Fetch (`lib/fetch/server.ts`)
 
 ```tsx
-// lib/fetch/server.ts
 "use server";
 
-import { cookies, headers } from 'next/headers';
+import { getAccessToken } from '@/lib/auth/server-auth';
+import { getBackendURL } from '@/lib/auth/auth-cookies';
 import { ApiError, extractErrorMessage } from './errors';
 import type { FetchOptions, FetchRequestOptions } from './types';
 
 const DEFAULT_TIMEOUT = 30000;
 
 /**
- * Get cookie header for server-to-server requests
+ * Fetch CSRF token from backend for server-side mutations
  */
-async function getCookieHeader(): Promise<string> {
-  try {
-    const cookieStore = await cookies();
-    return cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
-  } catch {
-    return '';
-  }
+async function getServerCsrfToken(accessToken: string): Promise<string> {
+  const backendUrl = getBackendURL();
+  const response = await fetch(`${backendUrl}/auth/csrf-token`, {
+    headers: { 'Authorization': `Bearer ${accessToken}` },
+  });
+  const data = await response.json();
+  return data.csrf_token;
 }
 
 /**
- * Get base URL for internal API calls
+ * Direct backend fetch — server actions call FastAPI directly (1 hop)
+ * URLs use /backend/ prefix: /backend/setting/users
  */
-async function getBaseUrl(): Promise<string> {
-  if (process.env.NEXT_PUBLIC_SITE_URL) {
-    return process.env.NEXT_PUBLIC_SITE_URL;
-  }
-
-  try {
-    const headersList = await headers();
-    const host = headersList.get('host');
-    const protocol = headersList.get('x-forwarded-proto') || 'http';
-    if (host) return `${protocol}://${host}`;
-  } catch {}
-
-  return 'http://localhost:3000';
-}
-
-/**
- * Server fetch for calling Next.js API routes from server actions
- */
-export async function serverFetch<T>(
+async function directBackendFetch<T>(
   url: string,
   options: FetchRequestOptions = {}
 ): Promise<T> {
-  const baseUrl = await getBaseUrl();
-  const fullUrl = `${baseUrl}${url}`;
+  const accessToken = await getAccessToken();
+  if (!accessToken) throw new ApiError('Not authenticated', 401);
+
+  const backendUrl = getBackendURL();
+  // Strip /backend prefix to get the actual endpoint
+  const endpoint = url.startsWith('/backend') ? url.replace('/backend', '') : url;
+  const fullUrl = `${backendUrl}${endpoint}`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(
@@ -214,15 +198,18 @@ export async function serverFetch<T>(
     options.timeout || DEFAULT_TIMEOUT
   );
 
-  const cookieHeader = await getCookieHeader();
+  // Fetch CSRF token for mutations
+  const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(options.method || 'GET');
+  const csrfToken = isMutation ? await getServerCsrfToken(accessToken) : null;
 
   try {
     const response = await fetch(fullUrl, {
       method: options.method || 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
         'X-Request-ID': crypto.randomUUID(),
-        ...(cookieHeader && { Cookie: cookieHeader }),
+        ...(csrfToken && { 'X-CSRF-Token': csrfToken }),
         ...options.headers,
       },
       body: options.body ? JSON.stringify(options.body) : undefined,
@@ -255,16 +242,48 @@ export async function serverFetch<T>(
   }
 }
 
+// Convenience methods for server actions — use /backend/ URLs
+export async function serverGet<T>(url: string, opts?: FetchOptions): Promise<T> {
+  return directBackendFetch<T>(url, { ...opts, method: 'GET' });
+}
+
+export async function serverPost<T>(url: string, body: unknown, opts?: FetchOptions): Promise<T> {
+  return directBackendFetch<T>(url, { ...opts, method: 'POST', body });
+}
+
+export async function serverPut<T>(url: string, body: unknown, opts?: FetchOptions): Promise<T> {
+  return directBackendFetch<T>(url, { ...opts, method: 'PUT', body });
+}
+
+export async function serverPatch<T>(url: string, body: unknown, opts?: FetchOptions): Promise<T> {
+  return directBackendFetch<T>(url, { ...opts, method: 'PATCH', body });
+}
+
+export async function serverDelete<T>(url: string, opts?: FetchOptions): Promise<T> {
+  return directBackendFetch<T>(url, { ...opts, method: 'DELETE' });
+}
+```
+
+## Backend Fetch (`lib/fetch/backend.ts`)
+
+```tsx
+// Used by API routes ONLY — NOT by server actions
+import { ApiError, extractErrorMessage } from './errors';
+import type { FetchRequestOptions } from './types';
+
+const DEFAULT_TIMEOUT = 30000;
+
 /**
- * Backend fetch for API routes calling FastAPI
+ * Fetch from FastAPI backend — used in API route handlers
+ * Prepends backend URL to endpoint
  */
 export async function backendFetch<T>(
-  url: string,
+  endpoint: string,
   accessToken: string,
   options: FetchRequestOptions = {}
 ): Promise<T> {
-  const baseUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
-  const fullUrl = `${baseUrl}${url}`;
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+  const fullUrl = `${backendUrl}${endpoint}`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(
@@ -285,6 +304,8 @@ export async function backendFetch<T>(
       signal: controller.signal,
     });
 
+    if (response.status === 204) return undefined as T;
+
     let data: unknown;
     try {
       data = await response.json();
@@ -309,27 +330,6 @@ export async function backendFetch<T>(
   } finally {
     clearTimeout(timeoutId);
   }
-}
-
-// Convenience methods for server actions
-export async function serverGet<T>(url: string, opts?: FetchOptions): Promise<T> {
-  return serverFetch<T>(url, { ...opts, method: 'GET' });
-}
-
-export async function serverPost<T>(url: string, body: unknown, opts?: FetchOptions): Promise<T> {
-  return serverFetch<T>(url, { ...opts, method: 'POST', body });
-}
-
-export async function serverPut<T>(url: string, body: unknown, opts?: FetchOptions): Promise<T> {
-  return serverFetch<T>(url, { ...opts, method: 'PUT', body });
-}
-
-export async function serverPatch<T>(url: string, body: unknown, opts?: FetchOptions): Promise<T> {
-  return serverFetch<T>(url, { ...opts, method: 'PATCH', body });
-}
-
-export async function serverDelete<T>(url: string, opts?: FetchOptions): Promise<T> {
-  return serverFetch<T>(url, { ...opts, method: 'DELETE' });
 }
 ```
 
@@ -380,42 +380,68 @@ export interface FetchRequestOptions extends FetchOptions {
 ### Client Component
 ```tsx
 "use client";
-import { fetchClient } from "@/lib/fetch/client";
+import api from "@/lib/fetch/client";
 
-// In SWR fetcher
-const fetcher = (url: string) => fetchClient.get(url).then(r => r.data);
-
-// In action handler
+// api auto-prefixes /api/ — pass path without prefix
 const handleUpdate = async () => {
   try {
-    const { data } = await fetchClient.put<Item>(`/api/items/${id}`, payload);
+    const result = await api.put<Item>(`/setting/items/${id}`, payload);
     toast.success("Updated");
   } catch (error) {
     toast.error(error.message);
   }
 };
+
+// Fetching data
+const items = await api.get<ItemsResponse>('/setting/items?limit=50&skip=0');
 ```
 
 ### Server Action
 ```tsx
-// lib/actions/items.actions.ts
+// lib/actions/setting/items.actions.ts
 "use server";
 import { serverGet, serverPost } from "@/lib/fetch/server";
 
+// Server actions use /backend/ URLs (direct to FastAPI, 1 hop)
 export async function getItems(limit: number, skip: number) {
-  return serverGet<ItemsResponse>(`/api/setting/items?limit=${limit}&skip=${skip}`);
+  return serverGet<ItemsResponse>(`/backend/setting/items?limit=${limit}&skip=${skip}`);
 }
 
 export async function createItem(data: ItemCreate) {
-  return serverPost<Item>("/api/setting/items", data);
+  return serverPost<Item>("/backend/setting/items", data);
+}
+```
+
+### API Route
+```tsx
+// app/api/setting/items/route.ts
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
+
+// GET uses (token) only
+export async function GET(request: Request) {
+  const params = new URL(request.url).searchParams.toString();
+  return withAuth((token) =>
+    backendFetch(`/setting/items?${params}`, token)
+  );
+}
+
+// POST uses (token, headers) for CSRF forwarding
+export async function POST(request: Request) {
+  const body = await request.json();
+  return withAuth((token, headers) =>
+    backendFetch('/setting/items', token, { method: 'POST', body, headers })
+  );
 }
 ```
 
 ## Key Points
 
-1. **Client uses fetchClient** - Wraps with { data: T }
-2. **Server uses serverGet/Post** - For server actions
-3. **API routes use backendFetch** - For FastAPI calls
-4. **Auto token refresh** - On 401, tries refresh once
-5. **Retry on rate limit** - 429/503 with exponential backoff
-6. **Consistent error handling** - ApiError class throughout
+1. **Client uses `api` object** — Returns `T` directly (no `{ data: T }` wrapper)
+2. **`api` auto-prefixes URLs** — `api.get('/setting/users')` → `/api/setting/users`
+3. **Server actions use `/backend/` URLs** — Direct to FastAPI (1 hop, no API routes)
+4. **API routes use `backendFetch`** — From `@/lib/fetch/backend` (separate file)
+5. **GET handlers**: `(token)` callback — no headers needed
+6. **Mutation handlers**: `(token, headers)` callback — forwards CSRF token
+7. **Auto token refresh** — On 401, tries refresh once
+8. **CSRF on both paths** — Server: `getServerCsrfToken()`, Client: `csrfManager.getToken()`

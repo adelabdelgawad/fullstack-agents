@@ -11,6 +11,7 @@ Validate that an entity follows the established architecture patterns.
 
 ```
 /validate [entity-name]
+/validate fetch [scope]
 ```
 
 ## Examples
@@ -24,6 +25,18 @@ Validate that an entity follows the established architecture patterns.
 
 # Validate all entities
 /validate
+
+# Full fetch architecture audit (loads fetch-validate skill)
+/validate fetch
+
+# Validate only server actions
+/validate fetch server-actions
+
+# Validate only API routes
+/validate fetch api-routes
+
+# Validate only client components
+/validate fetch client
 ```
 
 ## What Gets Validated
@@ -47,6 +60,19 @@ Validate that an entity follows the established architecture patterns.
 | Server Response | Updates use server response, not optimistic |
 | URL State | Filters/pagination in URL via nuqs |
 | Context Pattern | CRUD actions via context |
+
+### Fetch Architecture
+
+> **Note:** When `fetch` is specified, loads the `fetch-validate` skill for detailed checks.
+
+| Check | Description |
+|-------|-------------|
+| Server action URLs | Use `/backend/` prefix, not `/api/` |
+| API route imports | `backendFetch` from `@/lib/fetch/backend` |
+| API route mutations | Use `(token, headers)` with CSRF forwarding |
+| Client API usage | `api` object, not deprecated `fetchClient` |
+| CSRF compliance | All three layers have CSRF wired |
+| No SWR | Strategy A only unless justified |
 
 ## Validation Output
 
@@ -89,6 +115,20 @@ For quick pattern check:
 
 # Check backend only
 /validate product --backend
+```
+
+## Fetch Validation
+
+`/validate fetch` loads the `fetch-validate` skill to perform a full fetch architecture audit across all three layers (server actions, API routes, client components).
+
+```bash
+# Full audit across all layers
+/validate fetch
+
+# Scope to a single layer
+/validate fetch server-actions
+/validate fetch api-routes
+/validate fetch client
 ```
 
 ## Continuous Validation

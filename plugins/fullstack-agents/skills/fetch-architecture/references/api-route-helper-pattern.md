@@ -1,133 +1,175 @@
 # API Route Helper Pattern Reference
 
-Wrappers for Next.js API routes that proxy to FastAPI backend with authentication.
+Wrappers for Next.js API routes that proxy client requests to FastAPI backend with authentication, CSRF forwarding, and token refresh.
 
 ## withAuth Helper
 
 ```typescript
 // lib/fetch/api-route-helper.ts
 import { NextResponse } from 'next/server';
+import { headers, cookies } from 'next/headers';
 import { auth } from '@/lib/auth/server-auth';
-import { backendFetch } from './server';
 import { ApiError } from './errors';
-import type { FetchOptions } from './types';
+import { setAuthCookies, clearAuthCookies, refreshTokenOnce } from '@/lib/auth/auth-cookies';
+
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+    if (!payload?.exp) return true;
+    return payload.exp * 1000 < Date.now() + 30_000; // 30s buffer
+  } catch { return true; }
+}
+
+async function tryRefreshToken(): Promise<{
+  success: boolean;
+  accessToken: string | null;
+  setCookies: (response: NextResponse) => void;
+}> {
+  const cookieStore = await cookies();
+  const refreshToken = cookieStore.get('refresh_token')?.value;
+  if (!refreshToken) return { success: false, accessToken: null, setCookies: () => {} };
+
+  const data = await refreshTokenOnce(refreshToken);
+  if (!data) return { success: false, accessToken: null, setCookies: () => {} };
+
+  return {
+    success: true,
+    accessToken: data.accessToken,
+    setCookies: (response: NextResponse) => setAuthCookies(response, data),
+  };
+}
 
 /**
- * Wrap API route with authentication and error handling
- * Extracts token from session and passes to handler
+ * Wrap API route with authentication, CSRF forwarding, token refresh, and error handling.
+ *
+ * - Pre-checks token expiry (30s buffer) and refreshes proactively
+ * - Forwards X-CSRF-Token header from client to backend
+ * - Retries on 401 with double-refresh safety (prevents family revocation)
+ * - Handles 204 No Content responses
+ * - Sets refreshed auth cookies on response
  */
 export async function withAuth<T>(
-  handler: (token: string) => Promise<T>
+  handler: (token: string, forwardHeaders: Record<string, string>) => Promise<T>
 ): Promise<NextResponse> {
+  let accessToken: string | null = null;
+  let refreshResult: RefreshResult | null = null;
+
   try {
-    // Check authentication
     const session = await auth();
     if (!session?.accessToken) {
-      return NextResponse.json(
-        { detail: 'Unauthorized' }, 
-        { status: 401 }
-      );
+      return NextResponse.json({ detail: 'Unauthorized' }, { status: 401 });
     }
 
-    // Execute handler with token
-    const data = await handler(session.accessToken);
-    return NextResponse.json(data);
-    
+    accessToken = session.accessToken;
+
+    // Pre-emptive token refresh (30s buffer)
+    if (isTokenExpired(accessToken)) {
+      refreshResult = await tryRefreshToken();
+      if (!refreshResult.success || !refreshResult.accessToken) {
+        const response = NextResponse.json({ detail: 'Session expired' }, { status: 401 });
+        clearAuthCookies(response);
+        return response;
+      }
+      accessToken = refreshResult.accessToken;
+    }
+
+    // Forward CSRF header from client request to backend
+    const forwardHeaders: Record<string, string> = {};
+    const requestHeaders = await headers();
+    const csrfToken = requestHeaders.get('X-CSRF-Token');
+    if (csrfToken) {
+      forwardHeaders['X-CSRF-Token'] = csrfToken;
+    }
+
+    const data = await handler(accessToken, forwardHeaders);
+
+    // Handle 204 No Content
+    if (data === undefined) {
+      const response = new NextResponse(null, { status: 204 });
+      if (refreshResult) refreshResult.setCookies(response);
+      return response;
+    }
+
+    const response = NextResponse.json(data);
+    if (refreshResult) refreshResult.setCookies(response);
+    return response;
+
   } catch (error) {
-    // Handle API errors
     if (error instanceof ApiError) {
+      // 401 retry — but only if pre-check refresh didn't already happen
+      // A second refresh with a stale cookie triggers backend reuse detection → family revocation
+      if (error.status === 401 && !refreshResult) {
+        const retryRefresh = await tryRefreshToken();
+        if (retryRefresh.success && retryRefresh.accessToken) {
+          try {
+            const fh: Record<string, string> = {};
+            const rh = await headers();
+            const csrf = rh.get('X-CSRF-Token');
+            if (csrf) fh['X-CSRF-Token'] = csrf;
+
+            const data = await handler(retryRefresh.accessToken, fh);
+            if (data === undefined) {
+              const response = new NextResponse(null, { status: 204 });
+              retryRefresh.setCookies(response);
+              return response;
+            }
+            const response = NextResponse.json(data);
+            retryRefresh.setCookies(response);
+            return response;
+          } catch (retryError) {
+            if (retryError instanceof ApiError) {
+              return NextResponse.json(
+                { detail: retryError.message, ...(retryError.data && typeof retryError.data === 'object' ? retryError.data : {}) },
+                { status: retryError.status }
+              );
+            }
+            throw retryError;
+          }
+        }
+        const response = NextResponse.json({ detail: error.message }, { status: 401 });
+        clearAuthCookies(response);
+        return response;
+      }
+
       return NextResponse.json(
-        { 
-          detail: error.message, 
-          ...(error.data && typeof error.data === 'object' ? error.data : {}) 
-        },
+        { detail: error.message, ...(error.data && typeof error.data === 'object' ? error.data : {}) },
         { status: error.status }
       );
     }
-    
-    // Log and return generic error
     console.error('API route error:', error);
-    return NextResponse.json(
-      { detail: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ detail: 'Internal server error' }, { status: 500 });
   }
 }
-
-/**
- * Backend helper functions for common HTTP methods
- */
-export function backendGet<T>(
-  url: string, 
-  token: string, 
-  opts?: FetchOptions
-): Promise<T> {
-  return backendFetch<T>(url, token, { ...opts, method: 'GET' });
-}
-
-export function backendPost<T>(
-  url: string, 
-  token: string, 
-  body: unknown, 
-  opts?: FetchOptions
-): Promise<T> {
-  return backendFetch<T>(url, token, { ...opts, method: 'POST', body });
-}
-
-export function backendPut<T>(
-  url: string, 
-  token: string, 
-  body: unknown, 
-  opts?: FetchOptions
-): Promise<T> {
-  return backendFetch<T>(url, token, { ...opts, method: 'PUT', body });
-}
-
-export function backendPatch<T>(
-  url: string, 
-  token: string, 
-  body: unknown, 
-  opts?: FetchOptions
-): Promise<T> {
-  return backendFetch<T>(url, token, { ...opts, method: 'PATCH', body });
-}
-
-export function backendDelete<T>(
-  url: string, 
-  token: string, 
-  opts?: FetchOptions
-): Promise<T> {
-  return backendFetch<T>(url, token, { ...opts, method: 'DELETE' });
-}
 ```
+
+**Note:** There are no `backendGet/Post/Put/Delete` helper functions. API routes call `backendFetch()` directly.
 
 ## Basic API Route Pattern
 
 ```typescript
 // app/api/setting/users/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendGet, backendPost } from "@/lib/fetch/api-route-helper";
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
 /**
  * GET /api/setting/users
- * List users with pagination and filtering
+ * List users — GET doesn't need CSRF, so headers param is unused
  */
-export async function GET(request: NextRequest) {
-  // Forward query parameters to backend
-  const params = request.nextUrl.searchParams.toString();
-  return withAuth(token => 
-    backendGet(`/setting/users/?${params}`, token)
+export async function GET(request: Request) {
+  const params = new URL(request.url).searchParams.toString();
+  return withAuth((token) =>
+    backendFetch(`/setting/users?${params}`, token)
   );
 }
 
 /**
  * POST /api/setting/users
- * Create a new user
+ * Create a new user — forwards CSRF header via forwardHeaders
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   const body = await request.json();
-  return withAuth(token => 
-    backendPost('/setting/users/', token, body)
+  return withAuth((token, headers) =>
+    backendFetch('/setting/users', token, { method: 'POST', body, headers })
   );
 }
 ```
@@ -136,8 +178,8 @@ export async function POST(request: NextRequest) {
 
 ```typescript
 // app/api/setting/users/[userId]/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendGet, backendPut, backendDelete } from "@/lib/fetch/api-route-helper";
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
 interface RouteParams {
   params: Promise<{ userId: string }>;
@@ -146,55 +188,51 @@ interface RouteParams {
 /**
  * GET /api/setting/users/:userId
  */
-export async function GET(request: NextRequest, { params }: RouteParams) {
-  const { userId } = await params;  // Next.js 15+ requires await
-  return withAuth(token => 
-    backendGet(`/setting/users/${userId}`, token)
+export async function GET(request: Request, { params }: RouteParams) {
+  const { userId } = await params;
+  return withAuth((token) =>
+    backendFetch(`/setting/users/${userId}`, token)
   );
 }
 
 /**
  * PUT /api/setting/users/:userId
  */
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: Request, { params }: RouteParams) {
   const { userId } = await params;
   const body = await request.json();
-  return withAuth(token => 
-    backendPut(`/setting/users/${userId}`, token, body)
+  return withAuth((token, headers) =>
+    backendFetch(`/setting/users/${userId}`, token, { method: 'PUT', body, headers })
   );
 }
 
 /**
  * DELETE /api/setting/users/:userId
  */
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: Request, { params }: RouteParams) {
   const { userId } = await params;
-  return withAuth(token => 
-    backendDelete(`/setting/users/${userId}`, token)
+  return withAuth((token, headers) =>
+    backendFetch(`/setting/users/${userId}`, token, { method: 'DELETE', headers })
   );
 }
 ```
 
-## Nested Dynamic Route
+## Status Toggle Route
 
 ```typescript
 // app/api/setting/users/[userId]/status/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendPut } from "@/lib/fetch/api-route-helper";
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
 interface RouteParams {
   params: Promise<{ userId: string }>;
 }
 
-/**
- * PUT /api/setting/users/:userId/status
- * Toggle user active status
- */
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: Request, { params }: RouteParams) {
   const { userId } = await params;
   const body = await request.json();
-  return withAuth(token => 
-    backendPut(`/setting/users/${userId}/status`, token, body)
+  return withAuth((token, headers) =>
+    backendFetch(`/setting/users/${userId}/status`, token, { method: 'PUT', body, headers })
   );
 }
 ```
@@ -203,18 +241,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 ```typescript
 // app/api/setting/users/status/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendPut } from "@/lib/fetch/api-route-helper";
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
-/**
- * PUT /api/setting/users/status
- * Bulk update user status
- * Body: { ids: string[], is_active: boolean }
- */
-export async function PUT(request: NextRequest) {
+export async function PUT(request: Request) {
   const body = await request.json();
-  return withAuth(token => 
-    backendPut('/setting/users/status', token, body)
+  return withAuth((token, headers) =>
+    backendFetch('/setting/users/status', token, { method: 'PUT', body, headers })
   );
 }
 ```
@@ -227,46 +260,6 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   return NextResponse.json({ status: "healthy" });
-}
-```
-
-## Custom Error Handling
-
-```typescript
-// app/api/setting/users/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth/server-auth";
-import { backendGet } from "@/lib/fetch/api-route-helper";
-import { ApiError } from "@/lib/fetch/errors";
-
-export async function GET(request: NextRequest) {
-  try {
-    const session = await auth();
-    if (!session?.accessToken) {
-      return NextResponse.json({ detail: 'Unauthorized' }, { status: 401 });
-    }
-
-    const params = request.nextUrl.searchParams.toString();
-    const data = await backendGet(`/setting/users/?${params}`, session.accessToken);
-    
-    // Custom transformation
-    return NextResponse.json({
-      ...data,
-      fetchedAt: new Date().toISOString(),
-    });
-    
-  } catch (error) {
-    if (error instanceof ApiError) {
-      // Custom error response
-      return NextResponse.json({
-        error: error.message,
-        code: error.status,
-        timestamp: new Date().toISOString(),
-      }, { status: error.status });
-    }
-    
-    return NextResponse.json({ detail: 'Internal error' }, { status: 500 });
-  }
 }
 ```
 
@@ -295,9 +288,12 @@ app/api/
 
 ## Key Patterns
 
-1. **withAuth wrapper** - Always use for authenticated routes
-2. **await params** - Required in Next.js 15+
-3. **Forward query params** - Pass through to backend
-4. **Consistent errors** - `{ detail: "message" }` format
-5. **Type-safe** - Use generics with backend helpers
-6. **RESTful** - Follow REST conventions
+1. **withAuth wrapper** — Always use for authenticated routes
+2. **`(token)` for GETs** — No CSRF needed, ignore forwardHeaders
+3. **`(token, headers)` for mutations** — Forward CSRF token to backend
+4. **`backendFetch()` directly** — No helper wrappers (no backendGet/Post/Put/Delete)
+5. **Import from `@/lib/fetch/backend`** — Not from `./server`
+6. **`await params`** — Required in Next.js 15+
+7. **Pre-emptive refresh** — Token checked before handler runs (30s buffer)
+8. **Double-refresh safety** — Won't retry refresh if pre-check already refreshed
+9. **204 handling** — Returns `new NextResponse(null, { status: 204 })`

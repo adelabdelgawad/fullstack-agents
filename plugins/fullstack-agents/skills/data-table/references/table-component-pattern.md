@@ -28,7 +28,7 @@ import type { [Entity]ListResponse, [Entity]Response } from "@/lib/types/api/[en
 import { StatusPanel } from "../sidebar/status-panel";
 import [Entity]TableBody from "./[entity]-table-body";
 import LoadingSkeleton from "@/components/loading-skeleton";
-import { fetchClient } from "@/lib/fetch/client";
+import { api } from "@/lib/fetch/client";
 import { [Entity]ActionsProvider } from "../../context/[entity]-actions-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Pagination } from "@/components/data-table/table/pagination";
@@ -70,8 +70,8 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetchClient.get<[Entity]ListResponse>(apiUrl);
-      setData(response.data);
+      const response = await api.get<[Entity]ListResponse>(apiUrl);
+      setData(response);
     } catch (err) {
       setError(err as Error);
     } finally {
@@ -121,7 +121,7 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
   const actions = useMemo(() => ({
     onToggleStatus: async (id: string, isActive: boolean) => {
       try {
-        const { data: updated } = await fetchClient.put<[Entity]Response>(
+        const updated = await api.put<[Entity]Response>(
           `/[section]/[entity]/${id}/status`,
           { entity_id: id, is_active: isActive }
         );
@@ -135,7 +135,7 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
 
     onUpdate: async (id: string, payload: Record<string, unknown>) => {
       try {
-        const { data: updated } = await fetchClient.put<[Entity]Response>(
+        const updated = await api.put<[Entity]Response>(
           `/[section]/[entity]/${id}`,
           payload
         );
@@ -149,7 +149,7 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
 
     onBulkUpdateStatus: async (ids: string[], isActive: boolean) => {
       try {
-        const { data: result } = await fetchClient.put<{ updatedItems: [Entity]Response[] }>(
+        const result = await api.put<{ updatedItems: [Entity]Response[] }>(
           `/[section]/[entity]/status`,
           { entity_ids: ids, is_active: isActive }
         );
@@ -165,7 +165,7 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
 
     onFetchEntity: async (id: string) => {
       try {
-        const { data } = await fetchClient.get<[Entity]Response>(
+        const data = await api.get<[Entity]Response>(
           `/[section]/[entity]/${id}`
         );
         return { success: true, data };
@@ -221,7 +221,7 @@ import type { [Entity]ListResponse, [Entity]Response } from "@/lib/types/api/[en
 import { StatusPanel } from "../sidebar/status-panel";
 import [Entity]TableBody from "./[entity]-table-body";
 import LoadingSkeleton from "@/components/loading-skeleton";
-import { fetchClient } from "@/lib/fetch/client";
+import { api } from "@/lib/fetch/client";
 import { [Entity]ActionsProvider } from "../../context/[entity]-actions-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Pagination } from "@/components/data-table/table/pagination";
@@ -231,8 +231,7 @@ interface [Entity]TableProps {
 }
 
 const fetcher = async (url: string) => {
-  const response = await fetchClient.get(url);
-  return response.data;
+  return api.get(url);
 };
 
 function [Entity]Table({ initialData }: [Entity]TableProps) {
@@ -334,7 +333,7 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
   const actions = {
     onToggleStatus: async (id: string, isActive: boolean) => {
       try {
-        const { data: updated } = await fetchClient.put<[Entity]Response>(
+        const updated = await api.put<[Entity]Response>(
           `/[section]/[entity]/${id}/status`,
           { entity_id: id, is_active: isActive }
         );
@@ -355,7 +354,7 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
 
     onUpdate: async (id: string, payload: Record<string, unknown>) => {
       try {
-        const { data: updated } = await fetchClient.put<[Entity]Response>(
+        const updated = await api.put<[Entity]Response>(
           `/[section]/[entity]/${id}`,
           payload
         );
@@ -376,7 +375,7 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
 
     onBulkUpdateStatus: async (ids: string[], isActive: boolean) => {
       try {
-        const { data: result } = await fetchClient.put<{
+        const result = await api.put<{
           updatedItems: [Entity]Response[];
         }>(`/[section]/[entity]/status`, {
           entity_ids: ids,
@@ -403,7 +402,7 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
 
     onFetchEntity: async (id: string) => {
       try {
-        const { data } = await fetchClient.get<[Entity]Response>(
+        const data = await api.get<[Entity]Response>(
           `/[section]/[entity]/${id}`
         );
         return { success: true, data };

@@ -37,7 +37,7 @@ table.tsx (Client Component)
 import { useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQueryState, parseAsInteger } from "nuqs";
-import { fetchClient } from "@/lib/fetch/client";
+import api from "@/lib/fetch/client";
 import { DataTable } from "@/components/data-table";
 import { ItemsActionsProvider } from "../../context/items-actions-context";
 import { ItemsTableBody } from "./items-table-body";
@@ -83,7 +83,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const { data: fresh } = await fetchClient.get<ItemsResponse>(apiUrl);
+      const fresh = await api.get<ItemsResponse>(apiUrl);
       setData(fresh);
     } catch (err) {
       setError(err as Error);
@@ -157,7 +157,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
     async (id: string, isActive: boolean): Promise<ActionResult> => {
       setUpdatingIds(prev => new Set(prev).add(id));
       try {
-        const { data: updated } = await fetchClient.put<Item>(
+        const updated = await api.put<Item>(
           `/api/setting/items/${id}/status`,
           { is_active: isActive }
         );
@@ -187,7 +187,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
     async (id: string, payload: Partial<Item>): Promise<ActionResult> => {
       setUpdatingIds(prev => new Set(prev).add(id));
       try {
-        const { data: updated } = await fetchClient.put<Item>(
+        const updated = await api.put<Item>(
           `/api/setting/items/${id}`,
           payload
         );
@@ -213,7 +213,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
   const onCreate = useCallback(
     async (payload: CreateItemData): Promise<ActionResult> => {
       try {
-        const { data: created } = await fetchClient.post<Item>(
+        const created = await api.post<Item>(
           `/api/setting/items`,
           payload
         );
@@ -234,7 +234,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
     async (id: string): Promise<ActionResult> => {
       setUpdatingIds(prev => new Set(prev).add(id));
       try {
-        await fetchClient.delete(`/api/setting/items/${id}`);
+        await api.delete(`/api/setting/items/${id}`);
         removeItem(id);
         return { success: true };
       } catch (error) {
@@ -258,7 +258,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
     async (ids: string[], isActive: boolean): Promise<ActionResult> => {
       ids.forEach(id => setUpdatingIds(prev => new Set(prev).add(id)));
       try {
-        const { data: updated } = await fetchClient.post<Item[]>(
+        const updated = await api.post<Item[]>(
           `/api/setting/items/status`,
           { ids, is_active: isActive }
         );
@@ -380,9 +380,7 @@ export function useItemsActions() {
 
 ```tsx
 // page.tsx
-import { auth } from "@/lib/auth/server-auth";
 import { getItems } from "@/lib/actions/items.actions";
-import { redirect } from "next/navigation";
 import ItemsTable from "./_components/table/items-table";
 
 export default async function ItemsPage({
@@ -395,9 +393,6 @@ export default async function ItemsPage({
     limit?: string;
   }>;
 }) {
-  const session = await auth();
-  if (!session?.accessToken) redirect("/login");
-
   const params = await searchParams;
   const pageNumber = Number(params.page) || 1;
   const limitNumber = Number(params.limit) || 10;

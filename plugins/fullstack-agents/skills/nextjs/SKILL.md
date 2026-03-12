@@ -39,7 +39,7 @@ Use this skill when asked to:
 │  API Routes (app/api/...)                                    │
 │  • withAuth() wrapper                                        │
 │  • Proxy to FastAPI backend                                  │
-│  • backendGet/Post/Put/Delete helpers                        │
+│  • backendFetch() direct calls to FastAPI backend             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -75,9 +75,10 @@ lib/
 ├── actions/
 │   └── {entity}.actions.ts     # Server actions
 └── fetch/
-    ├── client.ts               # Client-side fetch
-    ├── server.ts               # Server-side fetch
-    └── api-route-helper.ts     # API route helpers
+    ├── client.ts               # Client-side fetch (api.get/post/put/delete)
+    ├── server.ts               # Server action fetch (serverGet/Post/Put/Delete)
+    ├── backend.ts              # backendFetch() for API routes
+    └── api-route-helper.ts     # withAuth() wrapper for API routes
 
 lib/
 ├── types/
@@ -122,7 +123,7 @@ export default async function ItemsPage({
 "use client";
 
 import { useState } from "react";
-import { fetchClient } from "@/lib/fetch/client";
+import { api } from "@/lib/fetch/client";
 
 function ItemsTable({ initialData }) {
   const [data, setData] = useState(initialData);
@@ -147,9 +148,9 @@ See [references/simple-fetching-pattern.md](references/simple-fetching-pattern.m
 "use client";
 
 import useSWR from "swr";
-import { fetchClient } from "@/lib/fetch/client";
+import { api } from "@/lib/fetch/client";
 
-const fetcher = (url: string) => fetchClient.get(url).then(r => r.data);
+const fetcher = (url: string) => api.get(url);
 
 function ItemsTable({ initialData }) {
   const searchParams = useSearchParams();
@@ -196,7 +197,7 @@ const updateItems = async (serverResponse: Item[]) => {
 };
 
 // In action handler:
-const { data: updatedItem } = await fetchClient.put(`/api/items/${id}`, payload);
+const updatedItem = await api.put<Item>(`/setting/items/${id}`, payload);
 await updateItems([updatedItem]);  // Use server response!
 ```
 
@@ -246,16 +247,19 @@ export function useTableActions() {
 ```tsx
 // app/api/setting/items/route.ts
 import { NextRequest } from "next/server";
-import { withAuth, backendGet, backendPost } from "@/lib/fetch/api-route-helper";
+import { withAuth } from "@/lib/fetch/api-route-helper";
+import { backendFetch } from "@/lib/fetch/backend";
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams.toString();
-  return withAuth(token => backendGet(`/setting/items/?${params}`, token));
+  return withAuth((token) => backendFetch(`/setting/items/?${params}`, token));
 }
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  return withAuth(token => backendPost('/setting/items/', token, body));
+  return withAuth((token, headers) =>
+    backendFetch('/setting/items/', token, { method: 'POST', body, headers })
+  );
 }
 ```
 
@@ -283,9 +287,10 @@ When creating a new entity page, generate files in this order:
 - `revalidateOnFocus: false` - Set true only if justified
 
 ### Key Files
-- `lib/fetch/client.ts` - Client-side API calls
-- `lib/fetch/server.ts` - Server action API calls
-- `lib/fetch/api-route-helper.ts` - API route wrappers
+- `lib/fetch/client.ts` - Client-side API calls (`api.get/post/put/delete`, auto-prefixes `/api/`)
+- `lib/fetch/server.ts` - Server action fetch (`serverGet/Post/Put/Delete` with `/backend/...` URLs)
+- `lib/fetch/backend.ts` - `backendFetch()` for API route handlers
+- `lib/fetch/api-route-helper.ts` - `withAuth()` wrapper for API routes
 
 ## References
 

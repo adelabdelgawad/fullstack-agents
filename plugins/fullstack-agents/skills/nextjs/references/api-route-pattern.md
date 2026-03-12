@@ -1,64 +1,42 @@
 # API Route Pattern Reference
 
-Next.js API routes that proxy requests to FastAPI backend with authentication.
-
-## RECOMMENDED: Route Factory Pattern
-
-Use route factories to eliminate boilerplate:
-
-```typescript
-// app/api/setting/items/route.ts
-import { createCollectionRoutes } from "@/lib/fetch/route-factory";
-export const { GET, POST } = createCollectionRoutes('/setting/items/');
-
-// app/api/setting/items/[itemId]/route.ts
-import { createResourceRoutes } from "@/lib/fetch/route-factory";
-export const { GET, PUT, DELETE } = createResourceRoutes('/setting/items/', 'itemId');
-
-// app/api/setting/items/[itemId]/status/route.ts
-import { createStatusRoute } from "@/lib/fetch/route-factory";
-export const { PUT } = createStatusRoute('/setting/items/', 'itemId');
-```
-
----
-
-## Manual Pattern (Legacy)
-
-Use only when route factories don't cover your use case.
+Next.js API routes that proxy client requests to FastAPI backend with authentication and CSRF forwarding.
 
 ## Key Principles
 
-1. **withAuth wrapper** - Handle authentication and errors
-2. **Backend helpers** - backendGet/Post/Put/Delete
-3. **Pass query params** - Forward search params to backend
-4. **JSON responses** - Consistent error format
+1. **withAuth wrapper** — Handle authentication, token refresh, and errors
+2. **backendFetch directly** — No helper wrappers (no backendGet/Post/Put/Delete)
+3. **Import from `@/lib/fetch/backend`** — Not from `./server`
+4. **`(token)` for GETs** — No CSRF header needed
+5. **`(token, headers)` for mutations** — Forwards X-CSRF-Token to backend
+6. **Forward query params** — Pass search params to backend
 
 ## Basic Route Structure
 
 ```tsx
 // app/api/setting/items/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendGet, backendPost } from "@/lib/fetch/api-route-helper";
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
 /**
  * GET /api/setting/items
  * List items with pagination and filtering
  */
-export async function GET(request: NextRequest) {
-  const params = request.nextUrl.searchParams.toString();
-  return withAuth(token => 
-    backendGet(`/setting/items/?${params}`, token)
+export async function GET(request: Request) {
+  const params = new URL(request.url).searchParams.toString();
+  return withAuth((token) =>
+    backendFetch(`/setting/items?${params}`, token)
   );
 }
 
 /**
  * POST /api/setting/items
- * Create a new item
+ * Create a new item — forwards CSRF header
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   const body = await request.json();
-  return withAuth(token => 
-    backendPost('/setting/items/', token, body)
+  return withAuth((token, headers) =>
+    backendFetch('/setting/items', token, { method: 'POST', body, headers })
   );
 }
 ```
@@ -67,8 +45,8 @@ export async function POST(request: NextRequest) {
 
 ```tsx
 // app/api/setting/items/[itemId]/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendGet, backendPut, backendDelete } from "@/lib/fetch/api-route-helper";
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
 interface RouteParams {
   params: Promise<{ itemId: string }>;
@@ -76,35 +54,32 @@ interface RouteParams {
 
 /**
  * GET /api/setting/items/:itemId
- * Get single item by ID
  */
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: Request, { params }: RouteParams) {
   const { itemId } = await params;
-  return withAuth(token => 
-    backendGet(`/setting/items/${itemId}`, token)
+  return withAuth((token) =>
+    backendFetch(`/setting/items/${itemId}`, token)
   );
 }
 
 /**
  * PUT /api/setting/items/:itemId
- * Update item
  */
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: Request, { params }: RouteParams) {
   const { itemId } = await params;
   const body = await request.json();
-  return withAuth(token => 
-    backendPut(`/setting/items/${itemId}`, token, body)
+  return withAuth((token, headers) =>
+    backendFetch(`/setting/items/${itemId}`, token, { method: 'PUT', body, headers })
   );
 }
 
 /**
  * DELETE /api/setting/items/:itemId
- * Delete item
  */
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: Request, { params }: RouteParams) {
   const { itemId } = await params;
-  return withAuth(token => 
-    backendDelete(`/setting/items/${itemId}`, token)
+  return withAuth((token, headers) =>
+    backendFetch(`/setting/items/${itemId}`, token, { method: 'DELETE', headers })
   );
 }
 ```
@@ -113,22 +88,18 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
 ```tsx
 // app/api/setting/items/[itemId]/status/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendPut } from "@/lib/fetch/api-route-helper";
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
 interface RouteParams {
   params: Promise<{ itemId: string }>;
 }
 
-/**
- * PUT /api/setting/items/:itemId/status
- * Toggle item active status
- */
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: Request, { params }: RouteParams) {
   const { itemId } = await params;
   const body = await request.json();
-  return withAuth(token => 
-    backendPut(`/setting/items/${itemId}/status`, token, body)
+  return withAuth((token, headers) =>
+    backendFetch(`/setting/items/${itemId}/status`, token, { method: 'PUT', body, headers })
   );
 }
 ```
@@ -137,18 +108,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 ```tsx
 // app/api/setting/items/status/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendPut } from "@/lib/fetch/api-route-helper";
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
-/**
- * PUT /api/setting/items/status
- * Bulk update item status
- * Body: { ids: string[], is_active: boolean }
- */
-export async function PUT(request: NextRequest) {
+export async function PUT(request: Request) {
   const body = await request.json();
-  return withAuth(token => 
-    backendPut('/setting/items/status', token, body)
+  return withAuth((token, headers) =>
+    backendFetch('/setting/items/status', token, { method: 'PUT', body, headers })
   );
 }
 ```
@@ -158,141 +124,55 @@ export async function PUT(request: NextRequest) {
 ```tsx
 // lib/fetch/api-route-helper.ts
 import { NextResponse } from 'next/server';
+import { headers, cookies } from 'next/headers';
 import { auth } from '@/lib/auth/server-auth';
-import { backendFetch } from './server';
 import { ApiError } from './errors';
+import { setAuthCookies, clearAuthCookies, refreshTokenOnce } from '@/lib/auth/auth-cookies';
 
 /**
- * Wrap API route with authentication and error handling
+ * Features:
+ * - Pre-emptive token refresh (30s buffer before expiry)
+ * - CSRF header forwarding from client → backend
+ * - 401 retry with double-refresh safety
+ * - 204 No Content handling
+ * - Auth cookie refresh on response
  */
 export async function withAuth<T>(
-  handler: (token: string) => Promise<T>
+  handler: (token: string, forwardHeaders: Record<string, string>) => Promise<T>
 ): Promise<NextResponse> {
-  try {
-    // Check authentication
-    const session = await auth();
-    if (!session?.accessToken) {
-      return NextResponse.json(
-        { detail: 'Unauthorized' }, 
-        { status: 401 }
-      );
-    }
-
-    // Execute handler with token
-    const data = await handler(session.accessToken);
-    return NextResponse.json(data);
-    
-  } catch (error) {
-    // Handle API errors
-    if (error instanceof ApiError) {
-      return NextResponse.json(
-        { 
-          detail: error.message, 
-          ...(error.data && typeof error.data === 'object' ? error.data : {}) 
-        },
-        { status: error.status }
-      );
-    }
-    
-    // Log and return generic error
-    console.error('API route error:', error);
-    return NextResponse.json(
-      { detail: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
-```
-
-## Backend Helper Functions
-
-```tsx
-// lib/fetch/api-route-helper.ts (continued)
-import { backendFetch } from './server';
-import type { FetchOptions } from './types';
-
-/**
- * GET request to backend
- */
-export function backendGet<T>(
-  url: string, 
-  token: string, 
-  opts?: FetchOptions
-): Promise<T> {
-  return backendFetch<T>(url, token, { ...opts, method: 'GET' });
-}
-
-/**
- * POST request to backend
- */
-export function backendPost<T>(
-  url: string, 
-  token: string, 
-  body: unknown, 
-  opts?: FetchOptions
-): Promise<T> {
-  return backendFetch<T>(url, token, { ...opts, method: 'POST', body });
-}
-
-/**
- * PUT request to backend
- */
-export function backendPut<T>(
-  url: string, 
-  token: string, 
-  body: unknown, 
-  opts?: FetchOptions
-): Promise<T> {
-  return backendFetch<T>(url, token, { ...opts, method: 'PUT', body });
-}
-
-/**
- * PATCH request to backend
- */
-export function backendPatch<T>(
-  url: string, 
-  token: string, 
-  body: unknown, 
-  opts?: FetchOptions
-): Promise<T> {
-  return backendFetch<T>(url, token, { ...opts, method: 'PATCH', body });
-}
-
-/**
- * DELETE request to backend
- */
-export function backendDelete<T>(
-  url: string, 
-  token: string, 
-  opts?: FetchOptions
-): Promise<T> {
-  return backendFetch<T>(url, token, { ...opts, method: 'DELETE' });
+  // ... see fetch-architecture/references/api-route-helper-pattern.md for full implementation
 }
 ```
 
 ## Nested Dynamic Routes
 
 ```tsx
-// app/api/network/switch/[switchId]/interfaces/[interfaceName]/vlan/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendPut } from "@/lib/fetch/api-route-helper";
+// app/api/dialer/campaigns/[campaignId]/batches/[batchId]/route.ts
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
 interface RouteParams {
-  params: Promise<{ 
-    switchId: string; 
-    interfaceName: string; 
+  params: Promise<{
+    campaignId: string;
+    batchId: string;
   }>;
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const { switchId, interfaceName } = await params;
+export async function GET(request: Request, { params }: RouteParams) {
+  const { campaignId, batchId } = await params;
+  return withAuth((token) =>
+    backendFetch(`/dialer/campaigns/${campaignId}/batches/${batchId}`, token)
+  );
+}
+
+export async function PUT(request: Request, { params }: RouteParams) {
+  const { campaignId, batchId } = await params;
   const body = await request.json();
-  
-  return withAuth(token => 
-    backendPut(
-      `/network/switch/${switchId}/interfaces/${interfaceName}/vlan`, 
-      token, 
-      body
+  return withAuth((token, headers) =>
+    backendFetch(
+      `/dialer/campaigns/${campaignId}/batches/${batchId}`,
+      token,
+      { method: 'PUT', body, headers }
     )
   );
 }
@@ -302,20 +182,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 ```tsx
 // app/api/setting/items/search/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendGet } from "@/lib/fetch/api-route-helper";
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
-export async function GET(request: NextRequest) {
-  // Forward all query parameters
-  const params = request.nextUrl.searchParams.toString();
-  
-  // Or extract specific params
-  const searchParams = request.nextUrl.searchParams;
-  const query = searchParams.get('q') || '';
-  const limit = searchParams.get('limit') || '10';
-  
-  return withAuth(token => 
-    backendGet(`/setting/items/search?q=${query}&limit=${limit}`, token)
+export async function GET(request: Request) {
+  const params = new URL(request.url).searchParams.toString();
+  return withAuth((token) =>
+    backendFetch(`/setting/items/search?${params}`, token)
   );
 }
 ```
@@ -337,9 +210,10 @@ app/api/setting/items/
 
 ## Key Points
 
-1. **withAuth wrapper** - Always use for authenticated routes
-2. **await params** - Next.js 15+ requires awaiting route params
-3. **Forward query params** - Pass through to backend
-4. **Consistent error format** - `{ detail: "message" }`
-5. **Type-safe responses** - Use generics with backend helpers
-6. **RESTful structure** - Follow REST conventions
+1. **withAuth wrapper** — Always use for authenticated routes
+2. **`(token)` for GET** — No CSRF forwarding needed
+3. **`(token, headers)` for POST/PUT/PATCH/DELETE** — Forward CSRF token
+4. **`backendFetch()` directly** — Import from `@/lib/fetch/backend`
+5. **`await params`** — Next.js 15+ requires awaiting route params
+6. **Forward query params** — Pass through to backend
+7. **Consistent error format** — `{ detail: "message" }`

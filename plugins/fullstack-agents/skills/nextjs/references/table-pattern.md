@@ -17,7 +17,7 @@ Client-side table component with SWR data management and server-response updates
 
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
-import { fetchClient } from "@/lib/fetch/client";
+import { api } from "@/lib/fetch/client";
 import { ItemsActionsProvider } from "../../context/items-actions-context";
 import ItemsTableBody from "./items-table-body";
 import { StatusPanel } from "../sidebar/status-panel";
@@ -30,8 +30,7 @@ interface ItemsTableProps {
 
 // SWR fetcher
 const fetcher = async (url: string) => {
-  const response = await fetchClient.get(url);
-  return response.data;
+  return api.get(url);
 };
 
 export default function ItemsTable({ initialData }: ItemsTableProps) {
@@ -107,8 +106,8 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
   const actions = {
     onToggleStatus: async (id: string, isActive: boolean) => {
       try {
-        const { data: updated } = await fetchClient.put<Item>(
-          `/api/setting/items/${id}/status`,
+        const updated = await api.put<Item>(
+          `/setting/items/${id}/status`,
           { is_active: isActive }
         );
         await updateItems([updated]);
@@ -120,8 +119,8 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
 
     onUpdate: async (id: string, updateData: Partial<Item>) => {
       try {
-        const { data: updated } = await fetchClient.put<Item>(
-          `/api/setting/items/${id}`,
+        const updated = await api.put<Item>(
+          `/setting/items/${id}`,
           updateData
         );
         await updateItems([updated]);
@@ -133,8 +132,8 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
 
     onBulkUpdateStatus: async (ids: string[], isActive: boolean) => {
       try {
-        const { data: result } = await fetchClient.put<{ updatedItems: Item[] }>(
-          `/api/setting/items/status`,
+        const result = await api.put<{ updatedItems: Item[] }>(
+          `/setting/items/status`,
           { ids, is_active: isActive }
         );
         if (result.updatedItems?.length > 0) {
@@ -269,8 +268,8 @@ const updateItems = async (serverResponse: Item[]) => {
 // Usage in action:
 const handleUpdate = async (id: string, data: UpdateData) => {
   // Call API and get server response
-  const { data: updated } = await fetchClient.put<Item>(`/api/items/${id}`, data);
-  
+  const updated = await api.put<Item>(`/items/${id}`, data);
+
   // Update cache with server response
   await updateItems([updated]);
 };
@@ -281,8 +280,8 @@ const handleUpdate = async (id: string, data: UpdateData) => {
 ```tsx
 const addItem = async (newItem: ItemCreate) => {
   try {
-    const { data: created } = await fetchClient.post<Item>(
-      '/api/setting/items',
+    const created = await api.post<Item>(
+      '/setting/items',
       newItem
     );
 
@@ -317,7 +316,7 @@ const addItem = async (newItem: ItemCreate) => {
 ```tsx
 const deleteItem = async (id: string) => {
   try {
-    await fetchClient.delete(`/api/setting/items/${id}`);
+    await api.delete(`/setting/items/${id}`);
 
     // Remove from cache
     const currentData = data;

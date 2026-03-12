@@ -308,7 +308,7 @@ See [references/edit-sheet-pattern.md](references/edit-sheet-pattern.md) for:
 
 ```tsx
 // ✅ CORRECT: Use server response
-const { data: updated } = await fetchClient.put(`/api/entity/${id}`, body);
+const updated = await api.put<EntityResponse>(`/entity/${id}`, body);
 updateItems([updated]); // Update local state with server data
 
 // ❌ WRONG: Optimistic update

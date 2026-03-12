@@ -39,6 +39,9 @@ When you detect the user's intent, route to the correct skill:
 | "analyze codebase", "architecture review" | `fullstack-agents:analyze` |
 | "scaffold project", "new project", "bootstrap" | `fullstack-agents:scaffold` |
 | "validate entity", "check entity compliance" | `fullstack-agents:validate` |
+| "validate fetch", "check fetch patterns", "fetch audit" | `fullstack-agents:fetch-validate` |
+| "plan fetch", "fetch layers for X" | `fullstack-agents:fetch-plan` |
+| "scaffold fetch", "generate fetch boilerplate" | `fullstack-agents:fetch-implement` |
 
 ## Hard Gate — 4-Step Check Before ANY Code Generation
 

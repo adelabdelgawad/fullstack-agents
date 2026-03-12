@@ -2,53 +2,14 @@
 
 Real-world examples for Next.js fetch utilities.
 
-## Example 1: Client Component with SWR
-
-```typescript
-// app/(pages)/dashboard/_components/user-stats.tsx
-"use client";
-
-import useSWR from "swr";
-import { fetchClient } from "@/lib/fetch/client";
-import { Skeleton } from "@/components/ui/skeleton";
-
-interface UserStats {
-  totalUsers: number;
-  activeUsers: number;
-  newToday: number;
-}
-
-const fetcher = (url: string) => 
-  fetchClient.get<UserStats>(url).then(r => r.data);
-
-export function UserStats() {
-  const { data, error, isLoading } = useSWR('/api/stats/users', fetcher, {
-    refreshInterval: 30000,  // Refresh every 30 seconds
-    revalidateOnFocus: true,
-  });
-
-  if (isLoading) return <Skeleton className="h-24 w-full" />;
-  if (error) return <div className="text-red-500">Failed to load stats</div>;
-
-  return (
-    <div className="grid grid-cols-3 gap-4">
-      <StatCard title="Total Users" value={data?.totalUsers} />
-      <StatCard title="Active" value={data?.activeUsers} />
-      <StatCard title="New Today" value={data?.newToday} />
-    </div>
-  );
-}
-```
-
-## Example 2: Server Action for Data Mutation
+## Example 1: Server Action for Data Mutation
 
 ```typescript
 // lib/actions/users.actions.ts
 "use server";
 
 import { serverPost, serverPut, serverDelete } from "@/lib/fetch/server";
-import { revalidatePath } from "next/cache";
-import type { User, UserCreate, UserUpdate } from "@/types/users";
+import type { User, UserCreate, UserUpdate } from "@/lib/types/api/users";
 
 export async function createUser(data: UserCreate): Promise<{
   success: boolean;
@@ -56,29 +17,29 @@ export async function createUser(data: UserCreate): Promise<{
   error?: string;
 }> {
   try {
-    const user = await serverPost<User>("/api/setting/users", data);
-    revalidatePath("/setting/users");
+    // /backend/ prefix — direct backend call (single hop)
+    // CSRF token automatically included by directBackendFetch for POST
+    const user = await serverPost<User>("/backend/setting/users", data);
     return { success: true, data: user };
   } catch (error) {
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : "Failed to create user" 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to create user"
     };
   }
 }
 
 export async function updateUser(
-  userId: string, 
+  userId: string,
   data: UserUpdate
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await serverPut(`/api/setting/users/${userId}`, data);
-    revalidatePath("/setting/users");
+    await serverPut(`/backend/setting/users/${userId}`, data);
     return { success: true };
   } catch (error) {
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : "Failed to update user" 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to update user"
     };
   }
 }
@@ -87,19 +48,18 @@ export async function deleteUser(
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await serverDelete(`/api/setting/users/${userId}`);
-    revalidatePath("/setting/users");
+    await serverDelete(`/backend/setting/users/${userId}`);
     return { success: true };
   } catch (error) {
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : "Failed to delete user" 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to delete user"
     };
   }
 }
 ```
 
-## Example 3: Form with Server Action
+## Example 2: Form with Server Action
 
 ```typescript
 // app/(pages)/setting/users/_components/create-user-form.tsx
@@ -123,10 +83,10 @@ export function CreateUserForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     startTransition(async () => {
       const result = await createUser(formData);
-      
+
       if (result.success) {
         toast.success("User created successfully");
         router.push("/setting/users");
@@ -159,14 +119,12 @@ export function CreateUserForm() {
 }
 ```
 
-## Example 4: Server Component with SSR Data
+## Example 3: Server Component with SSR Data
 
 ```typescript
 // app/(pages)/setting/users/page.tsx
-import { auth } from "@/lib/auth/server-auth";
-import { redirect } from "next/navigation";
-import { serverGet } from "@/lib/fetch/server";
-import UsersTable from "./_components/users-table";
+import { getUsers } from "@/lib/actions/users.actions";
+import UsersTable from "./_components/table/users-table";
 
 interface UsersResponse {
   items: User[];
@@ -180,31 +138,27 @@ export default async function UsersPage({
 }: {
   searchParams: Promise<{ page?: string; limit?: string; search?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.accessToken) redirect("/login");
-
+  // No auth check needed — layout handles it
   const params = await searchParams;
   const page = Number(params.page) || 1;
   const limit = Number(params.limit) || 10;
   const search = params.search || "";
 
-  // Server-side data fetching
   const queryParams = new URLSearchParams({
     limit: limit.toString(),
     skip: ((page - 1) * limit).toString(),
     ...(search && { search }),
   });
 
-  const users = await serverGet<UsersResponse>(
-    `/api/setting/users?${queryParams.toString()}`
-  );
+  // Server action calls directBackendFetch internally
+  const users = await getUsers(limit, (page - 1) * limit, { search });
 
   return (
     <div className="container py-6">
       <h1 className="text-2xl font-bold mb-6">Users</h1>
-      <UsersTable 
-        initialData={users} 
-        page={page} 
+      <UsersTable
+        initialData={users}
+        page={page}
         limit={limit}
         search={search}
       />
@@ -213,115 +167,167 @@ export default async function UsersPage({
 }
 ```
 
-## Example 5: API Route with Multiple Operations
+## Example 4: Parallel SSR Data Fetching
+
+```typescript
+// app/(pages)/management/campaigns/page.tsx
+import { getCampaigns } from "@/lib/actions/management/campaigns.actions";
+import { getAgentGroups } from "@/lib/actions/management/agent-groups.actions";
+import CampaignsTable from "./_components/table/campaigns-table";
+
+export default async function CampaignsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; limit?: string }>;
+}) {
+  const params = await searchParams;
+  const page = Number(params.page) || 1;
+  const limit = Number(params.limit) || 10;
+
+  // Both calls go directly to backend in parallel
+  const [campaigns, agentGroups] = await Promise.all([
+    getCampaigns(limit, (page - 1) * limit),
+    getAgentGroups(),
+  ]);
+
+  return (
+    <CampaignsTable
+      initialData={campaigns}
+      agentGroups={agentGroups}
+    />
+  );
+}
+```
+
+## Example 5: API Route with CSRF Forwarding
 
 ```typescript
 // app/api/setting/users/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendGet, backendPost } from "@/lib/fetch/api-route-helper";
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
-export async function GET(request: NextRequest) {
-  const params = request.nextUrl.searchParams.toString();
-  return withAuth(token => 
-    backendGet(`/setting/users/?${params}`, token)
+// GET — no CSRF needed, use (token) only
+export async function GET(request: Request) {
+  const params = new URL(request.url).searchParams.toString();
+  return withAuth((token) =>
+    backendFetch(`/setting/users?${params}`, token)
   );
 }
 
-export async function POST(request: NextRequest) {
+// POST — forward CSRF header via (token, headers)
+export async function POST(request: Request) {
   const body = await request.json();
-  return withAuth(token => 
-    backendPost('/setting/users/', token, body)
+  return withAuth((token, headers) =>
+    backendFetch('/setting/users', token, { method: 'POST', body, headers })
   );
 }
 ```
 
 ```typescript
 // app/api/setting/users/[userId]/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendGet, backendPut, backendDelete } from "@/lib/fetch/api-route-helper";
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
 interface RouteParams {
   params: Promise<{ userId: string }>;
 }
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: Request, { params }: RouteParams) {
   const { userId } = await params;
-  return withAuth(token => 
-    backendGet(`/setting/users/${userId}`, token)
+  return withAuth((token) =>
+    backendFetch(`/setting/users/${userId}`, token)
   );
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: Request, { params }: RouteParams) {
   const { userId } = await params;
   const body = await request.json();
-  return withAuth(token => 
-    backendPut(`/setting/users/${userId}`, token, body)
+  return withAuth((token, headers) =>
+    backendFetch(`/setting/users/${userId}`, token, { method: 'PUT', body, headers })
   );
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: Request, { params }: RouteParams) {
   const { userId } = await params;
-  return withAuth(token => 
-    backendDelete(`/setting/users/${userId}`, token)
+  return withAuth((token, headers) =>
+    backendFetch(`/setting/users/${userId}`, token, { method: 'DELETE', headers })
   );
 }
 ```
 
-## Example 6: Optimistic Updates with SWR
+## Example 6: Client Component with State Management
 
 ```typescript
-// app/(pages)/setting/users/_components/user-row.tsx
+// app/(pages)/setting/users/_components/table/users-table.tsx
 "use client";
 
-import { useSWRConfig } from "swr";
-import { fetchClient } from "@/lib/fetch/client";
-import { Switch } from "@/components/ui/switch";
+import { useState, useCallback } from "react";
+import api from "@/lib/fetch/client";
+import { ApiError } from "@/lib/fetch/errors";
 import { toast } from "sonner";
+import type { User, UsersResponse } from "@/lib/types/api/users";
 
-export function UserRow({ user }: { user: User }) {
-  const { mutate } = useSWRConfig();
+export default function UsersTable({ initialData }: { initialData: UsersResponse }) {
+  const [data, setData] = useState(initialData);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleToggleActive = async () => {
-    // Optimistic update
-    mutate(
-      '/api/setting/users',
-      (current: any) => ({
-        ...current,
-        items: current.items.map((u: User) =>
-          u.id === user.id ? { ...u, is_active: !u.is_active } : u
-        ),
-      }),
-      false  // Don't revalidate yet
-    );
-
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
     try {
-      await fetchClient.put(`/api/setting/users/${user.id}/status`, {
-        is_active: !user.is_active,
-      });
-      
-      // Revalidate to get server state
-      mutate('/api/setting/users');
-      toast.success(`User ${!user.is_active ? 'activated' : 'deactivated'}`);
-      
+      // api returns T directly — no { data } unwrapping
+      const fresh = await api.get<UsersResponse>('/api/setting/users');
+      setData(fresh);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const updateItems = useCallback((updated: User[]) => {
+    setData(current => {
+      if (!current) return current;
+      const map = new Map(updated.map(u => [u.id, u]));
+      return {
+        ...current,
+        items: current.items.map(item => map.get(item.id) ?? item),
+      };
+    });
+  }, []);
+
+  const handleToggleStatus = async (userId: string, isActive: boolean) => {
+    try {
+      // CSRF token automatically included by client fetch for PUT
+      const updated = await api.put<User>(
+        `/api/setting/users/${userId}/status`,
+        { is_active: isActive }
+      );
+      updateItems([updated]);
+      toast.success(`User ${isActive ? 'activated' : 'deactivated'}`);
     } catch (error) {
-      // Revert on error
-      mutate('/api/setting/users');
-      toast.error("Failed to update user status");
+      if (error instanceof ApiError) {
+        toast.error(error.message);
+      }
     }
   };
 
-  return (
-    <tr>
-      <td>{user.name}</td>
-      <td>{user.email}</td>
-      <td>
-        <Switch 
-          checked={user.is_active} 
-          onCheckedChange={handleToggleActive} 
-        />
-      </td>
-    </tr>
-  );
+  const handleCreate = async (userData: Partial<User>) => {
+    const created = await api.post<User>('/api/setting/users', userData);
+    setData(current => ({
+      ...current!,
+      items: [created, ...current!.items],
+      total: current!.total + 1,
+    }));
+  };
+
+  const handleDelete = async (userId: string) => {
+    await api.delete(`/api/setting/users/${userId}`);
+    setData(current => ({
+      ...current!,
+      items: current!.items.filter(u => u.id !== userId),
+      total: current!.total - 1,
+    }));
+  };
+
+  // ... render table
 }
 ```
 
@@ -396,9 +402,9 @@ export default function Error({
 
 | Pattern | Use Case | Function |
 |---------|----------|----------|
-| Client GET | Fetch data in client component | `fetchClient.get()` |
-| Client POST | Submit form in client component | `fetchClient.post()` |
-| Server GET | SSR data fetching | `serverGet()` |
-| Server POST | Server action mutation | `serverPost()` |
-| API Route | Proxy to backend | `withAuth()` + `backendGet/Post()` |
-| SWR | Client-side caching | `useSWR()` + `fetchClient` |
+| Client GET | Fetch data in client component | `api.get()` |
+| Client POST | Submit form in client component | `api.post()` |
+| Server GET | SSR data fetching (direct to backend) | `serverGet('/backend/...')` |
+| Server POST | Server action mutation (direct to backend) | `serverPost('/backend/...')` |
+| API Route GET | Proxy client GET to backend | `withAuth((token) => backendFetch(...))` |
+| API Route Mutation | Proxy client mutation with CSRF | `withAuth((token, headers) => backendFetch(..., { headers }))` |

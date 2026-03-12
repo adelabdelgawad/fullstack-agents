@@ -99,8 +99,8 @@ function ItemsTable({ initialData }) {
   const actions = {
     onToggleStatus: async (id: string, isActive: boolean) => {
       try {
-        const { data: updated } = await fetchClient.put<Item>(
-          `/api/setting/items/${id}/status`,
+        const updated = await api.put<Item>(
+          `/setting/items/${id}/status`,
           { is_active: isActive }
         );
         await updateItems([updated]);
@@ -113,8 +113,8 @@ function ItemsTable({ initialData }) {
 
     onUpdate: async (id: string, updateData: Partial<Item>) => {
       try {
-        const { data: updated } = await fetchClient.put<Item>(
-          `/api/setting/items/${id}`,
+        const updated = await api.put<Item>(
+          `/setting/items/${id}`,
           updateData
         );
         await updateItems([updated]);
@@ -127,8 +127,8 @@ function ItemsTable({ initialData }) {
 
     onBulkUpdateStatus: async (ids: string[], isActive: boolean) => {
       try {
-        const { data: result } = await fetchClient.put<{ updatedItems: Item[] }>(
-          `/api/setting/items/status`,
+        const result = await api.put<{ updatedItems: Item[] }>(
+          `/setting/items/status`,
           { ids, is_active: isActive }
         );
         if (result.updatedItems?.length > 0) {

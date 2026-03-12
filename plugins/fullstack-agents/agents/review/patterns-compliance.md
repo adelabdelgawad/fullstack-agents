@@ -150,6 +150,70 @@ grep -n "useQueryState\|parseAsInteger\|parseAsString" app/\(pages\)/setting/{en
 - Context wraps table component
 - Actions accessible from deeply nested components
 
+### Fetch Architecture Patterns
+
+#### 5. Server Action URLs
+
+**Required Pattern:**
+- Server actions use `/backend/` prefix for all URLs
+- Never route through `/api/` (that adds an unnecessary hop)
+- Import from `@/lib/fetch/server`, not `@/lib/fetch/backend`
+
+**Validation:**
+```bash
+# Server actions should NOT use /api/ prefix
+grep -rn "serverGet\|serverPost\|serverPut\|serverDelete" lib/actions/ | grep "'/api/\|\"\/api/"
+# Should return ZERO results
+
+# Server actions should NOT import backendFetch
+grep -rn "from.*fetch/backend" lib/actions/
+# Should return ZERO results
+```
+
+#### 6. API Route Imports
+
+**Required Pattern:**
+- Import `backendFetch` from `@/lib/fetch/backend` (NOT from `./server`)
+- No `backendGet/Post/Put/Delete` helper functions
+- Call `backendFetch()` directly
+
+**Validation:**
+```bash
+# Should NOT import from server.ts
+grep -rn "backendFetch.*from.*server" app/api/
+# Should return ZERO results
+
+# Should NOT use helpers
+grep -rn "backendGet\|backendPost\|backendPut\|backendDelete" app/api/
+# Should return ZERO results
+```
+
+#### 7. API Route CSRF Forwarding
+
+**Required Pattern:**
+- GET handlers use `(token)` callback
+- Mutation handlers (POST/PUT/PATCH/DELETE) use `(token, headers)` callback
+- Pass `{ headers }` to `backendFetch` for mutations
+
+**Validation:**
+```bash
+# Check mutation routes have headers parameter
+grep -rn "withAuth" app/api/ -A2 | grep -E "POST|PUT|DELETE" | grep -v "headers"
+# Review any matches
+```
+
+#### 8. Client API Object
+
+**Required Pattern:**
+- Use `api` from `@/lib/fetch/client` (returns T directly)
+- No `fetchClient` (deprecated, returns { data: T })
+
+**Validation:**
+```bash
+grep -rn "fetchClient" app/ components/ --include="*.tsx" --include="*.ts"
+# Should return ZERO results
+```
+
 ## Output Format
 
 ```markdown
@@ -169,6 +233,10 @@ grep -n "useQueryState\|parseAsInteger\|parseAsString" app/\(pages\)/setting/{en
 | SSR + Simplified pattern | PASS | Correct pattern |
 | Server response updates | WARN | Missing in delete action |
 | URL state | PASS | Using nuqs |
+| Server action URLs | PASS/FAIL | /backend/ prefix check |
+| API route imports | PASS/FAIL | backendFetch from backend.ts |
+| API route CSRF | PASS/FAIL | (token, headers) for mutations |
+| Client API usage | PASS/FAIL | api not fetchClient |
 
 ### Failed Checks
 
@@ -250,4 +318,12 @@ echo "useState with initialData (simplified pattern):"
 grep -c "useState.*initialData" app/\(pages\)/setting/{entity}/_components/table/*.tsx 2>/dev/null || echo "0"
 echo "SWR usage (optional, needs justification):"
 grep -c "useSWR" app/\(pages\)/setting/{entity}/_components/table/*.tsx 2>/dev/null || echo "0"
+echo ""
+echo "=== Fetch Patterns ==="
+echo "Server actions using /api/ (should be 0):"
+grep -rn "serverGet\|serverPost\|serverPut\|serverDelete" lib/actions/ 2>/dev/null | grep -c "'/api/" || echo "0"
+echo "API routes importing from server.ts (should be 0):"
+grep -rc "backendFetch.*from.*server" app/api/ 2>/dev/null || echo "0"
+echo "fetchClient usage (should be 0):"
+grep -rc "fetchClient" app/ components/ 2>/dev/null || echo "0"
 ```

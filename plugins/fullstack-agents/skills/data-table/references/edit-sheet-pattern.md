@@ -30,7 +30,7 @@ The row actions component handles the fetch-then-open logic.
 "use client";
 
 import { useState, useTransition } from "react";
-import { fetchClient } from "@/lib/fetch/client";
+import { api } from "@/lib/fetch/client";
 import { Edit[Entity]Sheet } from "../modal/edit-[entity]-sheet";
 import { use[Entity]Actions } from "../../context/[entity]-actions-context";
 import { Button } from "@/components/ui/button";
@@ -51,8 +51,8 @@ export function [Entity]RowActions({ entityId }: [Entity]RowActionsProps) {
   const handleEditClick = () => {
     startTransition(async () => {
       try {
-        const { data } = await fetchClient.get<[Entity]Response>(
-          `/api/[section]/[entity]/${entityId}`
+        const data = await api.get<[Entity]Response>(
+          `/[section]/[entity]/${entityId}`
         );
         setEditingData(data);
       } catch (error: unknown) {
@@ -120,7 +120,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { [Entity]Form } from "./[entity]-form";
-import { fetchClient } from "@/lib/fetch/client";
+import { api } from "@/lib/fetch/client";
 import { toast } from "@/components/ui/custom-toast";
 import type { [Entity]Response, Update[Entity]Payload } from "@/types/[entity]";
 
@@ -142,8 +142,8 @@ export function Edit[Entity]Sheet({
   const handleSubmit = (payload: Update[Entity]Payload) => {
     startTransition(async () => {
       try {
-        const { data: updated } = await fetchClient.put<[Entity]Response>(
-          `/api/[section]/[entity]/${item.id}`,
+        const updated = await api.put<[Entity]Response>(
+          `/[section]/[entity]/${item.id}`,
           payload
         );
         toast.success("Updated successfully");
@@ -294,7 +294,7 @@ If you prefer to centralize the fetch logic in context:
 // In table-component (actions object)
 onFetchEntity: async (id: string) => {
   try {
-    const { data } = await fetchClient.get<[Entity]Response>(
+    const data = await api.get<[Entity]Response>(
       `/[section]/[entity]/${id}`
     );
     return { success: true, data };

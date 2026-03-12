@@ -2,7 +2,7 @@
   "name": "fullstack-agents",
   "title": "Fullstack Agents",
   "description": "Unified fullstack development plugin with 28 specialized AI agents for code generation, review, analysis, scaffolding, debugging, and optimization. Auto-triggers via SessionStart hook on FastAPI/Next.js projects. Supports FastAPI, Next.js, Docker, Celery, and APScheduler with interactive dialogue and smart pattern detection.",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "license": "MIT",
   "homepage": "https://github.com/adelabdelgawad/fullstack-agents",
   "author": {
@@ -80,13 +80,13 @@
   "commands": [
     {
       "name": "analyze",
-      "description": "Analyze codebase, architecture, dependencies, or patterns",
-      "usage": "/analyze [target] - Options: codebase, architecture, dependencies, patterns"
+      "description": "Analyze codebase, architecture, dependencies, patterns, or run codebase scanning",
+      "usage": "/analyze [target] - Options: codebase, architecture, dependencies, patterns, scanning"
     },
     {
       "name": "generate",
-      "description": "Generate entities, pages, or components with interactive dialogue",
-      "usage": "/generate [type] [name] - Options: entity, page, data-table, api-route, task, job, docker-service, fullstack"
+      "description": "Generate entities, pages, components, fetch layers, or WebSocket features with interactive dialogue",
+      "usage": "/generate [type] [name] - Options: entity, page, data-table, api-route, task, job, docker-service, fetch, websocket, fullstack"
     },
     {
       "name": "scaffold",
@@ -100,8 +100,8 @@
     },
     {
       "name": "debug",
-      "description": "Debug errors, analyze logs, or profile performance",
-      "usage": "/debug [type] - Options: error, logs, performance, api"
+      "description": "Debug errors, analyze logs, profile performance, or resolve batch issues",
+      "usage": "/debug [type] - Options: error, logs, performance, api, batch"
     },
     {
       "name": "optimize",
@@ -110,8 +110,8 @@
     },
     {
       "name": "validate",
-      "description": "Validate entity follows architecture patterns",
-      "usage": "/validate [entity-name]"
+      "description": "Validate entity architecture patterns or fetch layer compliance",
+      "usage": "/validate [entity-name|fetch] - Options: entity name, fetch"
     },
     {
       "name": "status",
@@ -131,7 +131,10 @@
     "docker",
     "websocket",
     "batch-error-resolution",
-    "debug"
+    "debug",
+    "fetch-validate",
+    "fetch-plan",
+    "fetch-implement"
   ],
   "dependencies": [],
   "compatibility": {

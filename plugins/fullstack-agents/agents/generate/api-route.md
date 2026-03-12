@@ -1,12 +1,12 @@
 ---
 name: generate-api-route
-description: Generate Next.js API routes that proxy to FastAPI backend using route factories. Use when user needs API routes for frontend-backend communication.
+description: Generate Next.js API routes that proxy to FastAPI backend using direct backendFetch pattern. Use when user needs API routes for frontend-backend communication.
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
 # API Route Generation Agent
 
-Generate Next.js API routes that proxy requests to FastAPI backend using route factory functions for minimal boilerplate.
+Generate Next.js API routes that proxy requests to FastAPI backend using the direct `backendFetch` pattern with `withAuth`.
 
 ## When This Agent Activates
 
@@ -28,9 +28,6 @@ cat package.json 2>/dev/null | grep '"next"'
 ls -d app/api/ 2>/dev/null
 ls -d app/api/setting/ 2>/dev/null
 
-# Check for route factory
-ls lib/fetch/route-factory.ts 2>/dev/null
-
 # Check for fetch utilities
 ls lib/fetch/*.ts 2>/dev/null
 
@@ -44,11 +41,11 @@ grep -rl "/{entity}" ../backend/api/routers/setting/ 2>/dev/null
 IF no Next.js project:
     → Suggest: /scaffold nextjs
 
-IF no route factory (lib/fetch/route-factory.ts):
-    → "Route factory not found. Would you like me to create it first?"
-
-IF route factory exists:
+IF fetch utilities exist (lib/fetch/api-route-helper.ts, lib/fetch/backend.ts):
     → Proceed to dialogue
+
+IF no fetch utilities:
+    → "Fetch utilities not found. Ensure lib/fetch/api-route-helper.ts and lib/fetch/backend.ts exist."
 ```
 
 ### Phase 2: Interactive Dialogue
@@ -56,7 +53,7 @@ IF route factory exists:
 ```markdown
 ## API Route Configuration
 
-I'll create Next.js API routes for **{entity}** using the route factory pattern.
+I'll create Next.js API routes for **{entity}** using the direct `backendFetch` pattern.
 
 ### Backend Endpoint
 
@@ -95,71 +92,96 @@ Which routes do you need?
 ```markdown
 ## Generation Plan
 
-### Route Factory Pattern
+### Direct backendFetch Pattern
 
-This project uses route factory functions that eliminate boilerplate. Each route file is ~3-5 lines instead of 24+.
+This project uses `withAuth` and `backendFetch` from the fetch utilities to proxy requests to the FastAPI backend. Each route file exports individual HTTP method handlers.
 
-**Available factories (from `lib/fetch/route-factory.ts`):**
-- `createCollectionRoutes(path)` - GET list + POST create
-- `createResourceRoutes(path, paramName)` - GET single + PUT update + DELETE
-- `createStatusRoute(path, paramName)` - PUT status toggle
-- `createCountsRoute(path)` - GET counts/statistics
-- `createCollectionRoutesWithBulkUpdate(path)` - GET + POST + PUT bulk
+**Utilities used:**
+- `withAuth(callback)` - Extracts auth token and calls callback (`lib/fetch/api-route-helper.ts`)
+- `backendFetch(path, token, options?)` - Proxies request to FastAPI backend (`lib/fetch/backend.ts`)
 
 ### Files to Create
 
-| File | Factory | Methods | Backend Proxy |
-|------|---------|---------|---------------|
-| `app/api/setting/{entities}/route.ts` | `createCollectionRoutes` | GET, POST | `/setting/{entities}/` |
-| `app/api/setting/{entities}/[id]/route.ts` | `createResourceRoutes` | GET, PUT, DELETE | `/setting/{entities}/{id}` |
-| `app/api/setting/{entities}/[id]/status/route.ts` | `createStatusRoute` | PUT | `/setting/{entities}/{id}/status` |
+| File | Methods | Backend Proxy |
+|------|---------|---------------|
+| `app/api/setting/{entities}/route.ts` | GET, POST | `/setting/{entities}` |
+| `app/api/setting/{entities}/[id]/route.ts` | GET, PUT, DELETE | `/setting/{entities}/{id}` |
+| `app/api/setting/{entities}/[id]/status/route.ts` | PUT | `/setting/{entities}/{id}/status` |
 
 ### Code Preview
 
 ```typescript
-// app/api/setting/{entities}/route.ts (3 lines!)
-import { createCollectionRoutes } from "@/lib/fetch/route-factory";
+// app/api/setting/{entities}/route.ts
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
-export const { GET, POST } = createCollectionRoutes('/setting/{entities}/');
-```
-
-```typescript
-// app/api/setting/{entities}/[id]/route.ts (3 lines!)
-import { createResourceRoutes } from "@/lib/fetch/route-factory";
-
-export const { GET, PUT, DELETE } = createResourceRoutes('/setting/{entities}/', 'id');
-```
-
-```typescript
-// app/api/setting/{entities}/[id]/status/route.ts (3 lines!)
-import { createStatusRoute } from "@/lib/fetch/route-factory";
-
-export const { PUT } = createStatusRoute('/setting/{entities}/', 'id');
-```
-
-### Comparison: Factory vs Manual
-
-**Before (manual, 24+ lines per file):**
-```typescript
-import { NextRequest } from "next/server";
-import { withAuth, backendGet, backendPost } from "@/lib/fetch/api-route-helper";
-
-export async function GET(request: NextRequest) {
-  const params = request.nextUrl.searchParams.toString();
-  return withAuth(token => backendGet(`/setting/{entities}/?${params}`, token));
+export async function GET(request: Request) {
+  const params = new URL(request.url).searchParams.toString();
+  return withAuth((token) =>
+    backendFetch(`/setting/{entities}?${params}`, token)
+  );
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   const body = await request.json();
-  return withAuth(token => backendPost('/setting/{entities}/', token, body));
+  return withAuth((token, headers) =>
+    backendFetch('/setting/{entities}', token, { method: 'POST', body, headers })
+  );
 }
 ```
 
-**After (factory, 3 lines, 87% reduction):**
 ```typescript
-import { createCollectionRoutes } from "@/lib/fetch/route-factory";
+// app/api/setting/{entities}/[id]/route.ts
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
-export const { GET, POST } = createCollectionRoutes('/setting/{entities}/');
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  return withAuth((token) =>
+    backendFetch(`/setting/{entities}/${id}`, token)
+  );
+}
+
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const body = await request.json();
+  return withAuth((token, headers) =>
+    backendFetch(`/setting/{entities}/${id}`, token, { method: 'PUT', body, headers })
+  );
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  return withAuth((token, headers) =>
+    backendFetch(`/setting/{entities}/${id}`, token, { method: 'DELETE', headers })
+  );
+}
+```
+
+```typescript
+// app/api/setting/{entities}/[id]/status/route.ts
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
+
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const body = await request.json();
+  return withAuth((token, headers) =>
+    backendFetch(`/setting/{entities}/${id}/status`, token, { method: 'PUT', body, headers })
+  );
+}
 ```
 
 **Confirm?** Reply "yes" to generate.
@@ -170,14 +192,13 @@ export const { GET, POST } = createCollectionRoutes('/setting/{entities}/');
 **Read skill references:**
 
 1. Read `skills/fetch-architecture/references/api-route-helper-pattern.md`
-2. Read `lib/fetch/route-factory.ts` for available factory functions
+2. Read `skills/fetch-implement/SKILL.md` for generation templates
 
-**Generate routes using factories:**
+**Generate routes using direct backendFetch pattern:**
 
-- Use `createCollectionRoutes` for list + create endpoints
-- Use `createResourceRoutes` for single item CRUD endpoints
-- Use `createStatusRoute` for status toggle endpoints
-- Use `createCollectionRoutesWithBulkUpdate` if bulk operations needed
+- Use `withAuth` + `backendFetch` for all route handlers
+- For GET requests: `withAuth((token) => backendFetch(path, token))`
+- For mutating requests (POST/PUT/DELETE): `withAuth((token, headers) => backendFetch(path, token, { method, body, headers }))`
 
 **Generation order:**
 
@@ -186,29 +207,72 @@ export const { GET, POST } = createCollectionRoutes('/setting/{entities}/');
 3. Status route (`app/api/setting/{entities}/[id]/status/route.ts`) - if requested
 4. Bulk status route (`app/api/setting/{entities}/status/route.ts`) - if requested
 
-**Each file follows this minimal pattern:**
+**Each file follows this pattern:**
 
 ```typescript
 // app/api/setting/{entities}/route.ts
-import { createCollectionRoutes } from "@/lib/fetch/route-factory";
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
 /**
  * GET /api/setting/{entities} - List {entities} with pagination
  * POST /api/setting/{entities} - Create new {entity}
  */
-export const { GET, POST } = createCollectionRoutes('/setting/{entities}/');
+export async function GET(request: Request) {
+  const params = new URL(request.url).searchParams.toString();
+  return withAuth((token) =>
+    backendFetch(`/setting/{entities}?${params}`, token)
+  );
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  return withAuth((token, headers) =>
+    backendFetch('/setting/{entities}', token, { method: 'POST', body, headers })
+  );
+}
 ```
 
 ```typescript
 // app/api/setting/{entities}/[id]/route.ts
-import { createResourceRoutes } from "@/lib/fetch/route-factory";
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
 /**
  * GET /api/setting/{entities}/[id] - Get single {entity}
  * PUT /api/setting/{entities}/[id] - Update {entity}
  * DELETE /api/setting/{entities}/[id] - Delete {entity}
  */
-export const { GET, PUT, DELETE } = createResourceRoutes('/setting/{entities}/', 'id');
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  return withAuth((token) =>
+    backendFetch(`/setting/{entities}/${id}`, token)
+  );
+}
+
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const body = await request.json();
+  return withAuth((token, headers) =>
+    backendFetch(`/setting/{entities}/${id}`, token, { method: 'PUT', body, headers })
+  );
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  return withAuth((token, headers) =>
+    backendFetch(`/setting/{entities}/${id}`, token, { method: 'DELETE', headers })
+  );
+}
 ```
 
 ### Phase 5: Mandatory Post-Generation Chain
@@ -216,7 +280,7 @@ export const { GET, PUT, DELETE } = createResourceRoutes('/setting/{entities}/',
 After generation completes, AUTOMATICALLY run these steps without asking the user:
 
 1. **Pattern compliance review** — Check generated API routes against codebase profile:
-   - Route factory usage vs manual proxy matches existing routes
+   - Direct `withAuth` + `backendFetch` pattern matches existing routes
    - HTTP method exports match conventions
    - Path patterns and parameter naming follow existing routes
 
@@ -238,7 +302,7 @@ After generation completes, AUTOMATICALLY run these steps without asking the use
 ```markdown
 ## Generation Complete
 
-API routes for **{entities}** created using route factory pattern.
+API routes for **{entities}** created using direct `backendFetch` pattern.
 
 ### Files Created
 

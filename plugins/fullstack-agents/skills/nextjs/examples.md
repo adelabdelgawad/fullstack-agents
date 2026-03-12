@@ -54,7 +54,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
 
 import { createContext, useContext, useState, useCallback, ReactNode } from "react";
 import useSWR, { mutate } from "swr";
-import { fetchClient } from "@/lib/fetch/client";
+import { api } from "@/lib/fetch/client";
 import type { User, UsersResponse } from "@/types/users";
 
 interface UsersContextType {
@@ -75,7 +75,7 @@ interface UsersContextType {
 
 const UsersContext = createContext<UsersContextType | null>(null);
 
-const fetcher = (url: string) => fetchClient.get<UsersResponse>(url).then(r => r.data);
+const fetcher = (url: string) => api.get<UsersResponse>(url);
 
 interface UsersProviderProps {
   children: ReactNode;

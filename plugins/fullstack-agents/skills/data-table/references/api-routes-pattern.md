@@ -2,53 +2,6 @@
 
 Next.js API routes act as a proxy layer between frontend and backend, handling authentication.
 
-## RECOMMENDED: Route Factory Pattern
-
-Use route factories to eliminate boilerplate (10 lines instead of 24+):
-
-```typescript
-// app/api/setting/[entity]/route.ts
-import { createCollectionRoutes } from "@/lib/fetch/route-factory";
-
-/**
- * GET /api/setting/[entity] - List with pagination
- * POST /api/setting/[entity] - Create new
- */
-export const { GET, POST } = createCollectionRoutes('/setting/[entity]/');
-```
-
-```typescript
-// app/api/setting/[entity]/[entityId]/route.ts
-import { createResourceRoutes } from "@/lib/fetch/route-factory";
-
-/**
- * GET /api/setting/[entity]/:id - Get single
- * PUT /api/setting/[entity]/:id - Update
- * DELETE /api/setting/[entity]/:id - Delete
- */
-export const { GET, PUT, DELETE } = createResourceRoutes('/setting/[entity]/', 'entityId');
-```
-
-```typescript
-// app/api/setting/[entity]/[entityId]/status/route.ts
-import { createStatusRoute } from "@/lib/fetch/route-factory";
-
-export const { PUT } = createStatusRoute('/setting/[entity]/', 'entityId');
-```
-
-**Available factories:**
-- `createCollectionRoutes(path)` - GET list, POST create
-- `createResourceRoutes(path, paramName)` - GET single, PUT update, DELETE
-- `createStatusRoute(path, paramName)` - PUT status toggle
-- `createCountsRoute(path)` - GET counts/statistics
-- `createCollectionRoutesWithBulkUpdate(path)` - GET, POST, PUT bulk
-
----
-
-## Manual Pattern (Legacy)
-
-Use only when route factories don't cover your use case.
-
 ## Directory Structure
 
 ```
@@ -68,8 +21,9 @@ app/api/[section]/[entity]/
 
 ```typescript
 // app/api/[section]/[entity]/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendGet, backendPost } from "@/lib/fetch/api-route-helper";
+import { NextRequest } from 'next/server';
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
 /**
  * GET /api/[section]/[entity]
@@ -77,8 +31,8 @@ import { withAuth, backendGet, backendPost } from "@/lib/fetch/api-route-helper"
  */
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams.toString();
-  return withAuth(token =>
-    backendGet(`/[section]/[entity]/?${params}`, token)
+  return withAuth((token) =>
+    backendFetch(`/[section]/[entity]/?${params}`, token)
   );
 }
 
@@ -88,18 +42,19 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  return withAuth(token =>
-    backendPost('/[section]/[entity]/', token, body)
+  return withAuth((token, headers) =>
+    backendFetch('/[section]/[entity]/', token, { method: 'POST', body, headers })
   );
 }
 ```
 
-## Individual Entity Route (PUT)
+## Individual Entity Route (GET + PUT + DELETE)
 
 ```typescript
 // app/api/[section]/[entity]/[entityId]/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendGet, backendPut, backendDelete } from "@/lib/fetch/api-route-helper";
+import { NextRequest } from 'next/server';
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
 /**
  * GET /api/[section]/[entity]/[entityId]
@@ -110,8 +65,8 @@ export async function GET(
   { params }: { params: Promise<{ entityId: string }> }
 ) {
   const { entityId } = await params;
-  return withAuth(token =>
-    backendGet(`/[section]/[entity]/${entityId}`, token)
+  return withAuth((token) =>
+    backendFetch(`/[section]/[entity]/${entityId}`, token)
   );
 }
 
@@ -125,8 +80,8 @@ export async function PUT(
 ) {
   const { entityId } = await params;
   const body = await request.json();
-  return withAuth(token =>
-    backendPut(`/[section]/[entity]/${entityId}`, token, body)
+  return withAuth((token, headers) =>
+    backendFetch(`/[section]/[entity]/${entityId}`, token, { method: 'PUT', body, headers })
   );
 }
 
@@ -139,8 +94,8 @@ export async function DELETE(
   { params }: { params: Promise<{ entityId: string }> }
 ) {
   const { entityId } = await params;
-  return withAuth(token =>
-    backendDelete(`/[section]/[entity]/${entityId}`, token)
+  return withAuth((token, headers) =>
+    backendFetch(`/[section]/[entity]/${entityId}`, token, { method: 'DELETE', headers })
   );
 }
 ```
@@ -149,8 +104,9 @@ export async function DELETE(
 
 ```typescript
 // app/api/[section]/[entity]/[entityId]/status/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendPut } from "@/lib/fetch/api-route-helper";
+import { NextRequest } from 'next/server';
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
 /**
  * PUT /api/[section]/[entity]/[entityId]/status
@@ -162,8 +118,8 @@ export async function PUT(
 ) {
   const { entityId } = await params;
   const body = await request.json();
-  return withAuth(token =>
-    backendPut(`/[section]/[entity]/${entityId}/status`, token, body)
+  return withAuth((token, headers) =>
+    backendFetch(`/[section]/[entity]/${entityId}/status`, token, { method: 'PUT', body, headers })
   );
 }
 ```
@@ -172,8 +128,9 @@ export async function PUT(
 
 ```typescript
 // app/api/[section]/[entity]/status/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendPost } from "@/lib/fetch/api-route-helper";
+import { NextRequest } from 'next/server';
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
 /**
  * POST /api/[section]/[entity]/status
@@ -181,8 +138,8 @@ import { withAuth, backendPost } from "@/lib/fetch/api-route-helper";
  */
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  return withAuth(token =>
-    backendPost('/[section]/[entity]/status', token, body)
+  return withAuth((token, headers) =>
+    backendFetch('/[section]/[entity]/status', token, { method: 'POST', body, headers })
   );
 }
 ```
@@ -191,90 +148,29 @@ export async function POST(request: NextRequest) {
 
 ```typescript
 // app/api/[section]/[entity]/counts/route.ts
-import { NextRequest } from "next/server";
-import { withAuth, backendGet } from "@/lib/fetch/api-route-helper";
+import { NextRequest } from 'next/server';
+import { withAuth } from '@/lib/fetch/api-route-helper';
+import { backendFetch } from '@/lib/fetch/backend';
 
 /**
  * GET /api/[section]/[entity]/counts
  * Gets total counts (unaffected by filters)
  */
 export async function GET(request: NextRequest) {
-  return withAuth(token =>
-    backendGet('/[section]/[entity]/counts', token)
+  return withAuth((token) =>
+    backendFetch('/[section]/[entity]/counts', token)
   );
 }
 ```
 
-## API Route Helper Pattern
+## Backend Fetch
 
-The helper functions (`withAuth`, `backendGet`, etc.) should exist in `@/lib/fetch/api-route-helper.ts`:
+API routes call `backendFetch()` directly — no helper wrappers. Import from `@/lib/fetch/backend`.
 
-```typescript
-import { auth } from "@/lib/auth/server-auth";
-import { NextResponse } from "next/server";
-
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000/api";
-
-export async function withAuth<T>(
-  fn: (token: string) => Promise<T>
-): Promise<NextResponse> {
-  try {
-    const session = await auth();
-    if (!session?.accessToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const result = await fn(session.accessToken);
-    return NextResponse.json(result);
-  } catch (error: any) {
-    const status = error.status || 500;
-    const message = error.message || "Internal server error";
-    return NextResponse.json({ error: message }, { status });
-  }
-}
-
-export async function backendGet(path: string, token: string) {
-  const res = await fetch(`${BACKEND_URL}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw { status: res.status, message: await res.text() };
-  return res.json();
-}
-
-export async function backendPost(path: string, token: string, body: any) {
-  const res = await fetch(`${BACKEND_URL}${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw { status: res.status, message: await res.text() };
-  return res.json();
-}
-
-export async function backendPut(path: string, token: string, body: any) {
-  const res = await fetch(`${BACKEND_URL}${path}`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw { status: res.status, message: await res.text() };
-  return res.json();
-}
-
-export async function backendDelete(path: string, token: string) {
-  const res = await fetch(`${BACKEND_URL}${path}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw { status: res.status, message: await res.text() };
-  return res.json();
-}
-```
+- `withAuth` lives in `@/lib/fetch/api-route-helper` and handles session extraction + error responses.
+- `backendFetch` lives in `@/lib/fetch/backend` and handles the actual HTTP call to the FastAPI backend.
+- For GET requests, the callback signature is `(token) => ...`.
+- For POST/PUT/PATCH/DELETE requests, the callback signature is `(token, headers) => ...` so CSRF and other forwarded headers are passed through.
 
 ## Key Points
 

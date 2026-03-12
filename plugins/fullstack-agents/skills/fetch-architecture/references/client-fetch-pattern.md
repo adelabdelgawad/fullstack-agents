@@ -9,6 +9,9 @@ Browser-side fetch utilities for Next.js client components.
 "use client";
 
 import { AuthService } from '@/lib/auth/auth-service';
+import { authLogger } from '@/lib/auth/auth-logger';
+import { redirectGuard } from '@/lib/auth/redirect-guard';
+import { csrfManager } from '@/lib/auth/csrf-manager';
 import { ApiError, extractErrorMessage } from './errors';
 import type { FetchOptions, FetchRequestOptions } from './types';
 
@@ -18,10 +21,12 @@ const RETRY_DELAY = 1000;
 
 /**
  * Core client fetch function with:
+ * - URL auto-prefix (/setting/roles → /api/setting/roles)
+ * - CSRF token for mutations via csrfManager
  * - Timeout handling
  * - Auto retry on 429/503
- * - Token refresh on 401
- * - Redirect to login on auth failure
+ * - Token refresh on 401 with auth logging
+ * - Redirect guard (loop detection)
  */
 async function clientFetch<T>(
   url: string,
@@ -29,6 +34,9 @@ async function clientFetch<T>(
   attempt = 1,
   isRetryAfterRefresh = false
 ): Promise<T> {
+  // Auto-prefix: /setting/roles → /api/setting/roles
+  const fullUrl = url.startsWith('/api') ? url : `/api${url}`;
+
   const controller = new AbortController();
   const timeoutId = setTimeout(
     () => controller.abort(),
@@ -36,24 +44,35 @@ async function clientFetch<T>(
   );
 
   try {
-    const response = await fetch(url, {
-      method: options.method || 'GET',
+    const method = options.method || 'GET';
+
+    // Include CSRF token for state-changing requests
+    const csrfHeaders: Record<string, string> = {};
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      try {
+        const csrfToken = await csrfManager.getToken();
+        csrfHeaders['X-CSRF-Token'] = csrfToken;
+      } catch {
+        // Continue without CSRF token - backend will reject if required
+      }
+    }
+
+    const response = await fetch(fullUrl, {
+      method,
       headers: {
         'Content-Type': 'application/json',
-        'X-Request-ID': crypto.randomUUID(),
+        'X-Request-ID': globalThis.crypto?.randomUUID?.()
+          ?? Math.random().toString(36).slice(2) + Date.now().toString(36),
+        ...csrfHeaders,
         ...options.headers,
       },
       body: options.body ? JSON.stringify(options.body) : undefined,
       signal: controller.signal,
-      credentials: 'include',  // IMPORTANT: Include cookies
+      credentials: 'include',  // Send cookies to API routes
     });
 
     let data: unknown;
-    try {
-      data = await response.json();
-    } catch {
-      data = {};
-    }
+    try { data = await response.json(); } catch { data = {}; }
 
     if (!response.ok) {
       // ==========================================
@@ -61,18 +80,32 @@ async function clientFetch<T>(
       // ==========================================
       if (response.status === 401 && !isRetryAfterRefresh) {
         clearTimeout(timeoutId);
+
+        authLogger.logTokenExpiry({ url: fullUrl });
+
         try {
           const newToken = await AuthService.refreshAccessToken();
           if (newToken) {
-            // Retry with new token
+            authLogger.logRefreshAttempt(true);
             return clientFetch<T>(url, options, attempt, true);
           }
-        } catch {
-          // Refresh failed
+        } catch (error) {
+          authLogger.logRefreshAttempt(
+            false,
+            error instanceof Error ? error.message : 'Unknown error'
+          );
         }
-        // Redirect to login
+
         if (typeof window !== 'undefined') {
-          window.location.href = '/login';
+          // Check redirect guard before redirecting
+          if (!redirectGuard.canRedirect()) {
+            redirectGuard.showLoopError();
+            throw new ApiError('Session expired - redirect loop detected', 401);
+          }
+
+          authLogger.logRedirect('Session expired', window.location.href);
+          redirectGuard.recordRedirect();
+          window.location.href = '/login?auth_error=session_expired';
         }
         throw new ApiError('Session expired', 401);
       }
@@ -82,18 +115,17 @@ async function clientFetch<T>(
       // ==========================================
       if ((response.status === 429 || response.status === 503) && attempt < MAX_RETRIES) {
         clearTimeout(timeoutId);
-        // Exponential backoff
-        await new Promise(resolve => 
+        await new Promise(resolve =>
           setTimeout(resolve, RETRY_DELAY * attempt)
         );
         return clientFetch<T>(url, options, attempt + 1, isRetryAfterRefresh);
       }
 
-      throw new ApiError(extractErrorMessage(data), response.status, data);
+      throw new ApiError(extractErrorMessage(data, response.status), response.status, data);
     }
 
     return data as T;
-    
+
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       throw new ApiError('Request timeout', 408);
@@ -109,7 +141,7 @@ async function clientFetch<T>(
 }
 
 /**
- * Modern API client - returns T directly
+ * Client API — returns T directly (no wrapping)
  */
 export const api = {
   get: <T>(url: string, opts?: FetchOptions): Promise<T> =>
@@ -128,76 +160,24 @@ export const api = {
     clientFetch<T>(url, { ...opts, method: 'DELETE' }),
 };
 
-/**
- * Legacy wrapper - returns { data: T }
- * @deprecated Use api.get/post/put/patch/delete instead
- */
-export const fetchClient = {
-  get: async <T>(url: string, opts?: FetchOptions): Promise<{ data: T }> => {
-    const data = await clientFetch<T>(url, { ...opts, method: 'GET' });
-    return { data };
-  },
-  post: async <T>(url: string, body?: unknown, opts?: FetchOptions): Promise<{ data: T }> => {
-    const data = await clientFetch<T>(url, { ...opts, method: 'POST', body });
-    return { data };
-  },
-  put: async <T>(url: string, body?: unknown, opts?: FetchOptions): Promise<{ data: T }> => {
-    const data = await clientFetch<T>(url, { ...opts, method: 'PUT', body });
-    return { data };
-  },
-  patch: async <T>(url: string, body?: unknown, opts?: FetchOptions): Promise<{ data: T }> => {
-    const data = await clientFetch<T>(url, { ...opts, method: 'PATCH', body });
-    return { data };
-  },
-  delete: async <T>(url: string, opts?: FetchOptions): Promise<{ data: T }> => {
-    const data = await clientFetch<T>(url, { ...opts, method: 'DELETE' });
-    return { data };
-  },
-};
-
 export default api;
 ```
 
 ## Usage in Components
 
-### With SWR
+### Direct API Calls (Standard Pattern)
 
 ```typescript
 "use client";
 
-import useSWR from 'swr';
-import { fetchClient } from '@/lib/fetch/client';
-
-// SWR fetcher
-const fetcher = (url: string) => fetchClient.get(url).then(r => r.data);
-
-function MyComponent() {
-  const { data, error, isLoading, mutate } = useSWR(
-    '/api/items',
-    fetcher,
-    {
-      fallbackData: initialData,
-      keepPreviousData: true,
-      revalidateOnMount: false,
-      revalidateOnFocus: false,
-    }
-  );
-  
-  // ...
-}
-```
-
-### Direct API Calls
-
-```typescript
-"use client";
-
-import { fetchClient } from '@/lib/fetch/client';
+import api from '@/lib/fetch/client';
+import { ApiError } from '@/lib/fetch/errors';
 import { toast } from 'sonner';
 
 async function handleUpdate(id: string, data: UpdateData) {
   try {
-    const { data: updated } = await fetchClient.put<Item>(
+    // Returns T directly — no { data } unwrapping needed
+    const updated = await api.put<Item>(
       `/api/items/${id}`,
       data
     );
@@ -212,20 +192,30 @@ async function handleUpdate(id: string, data: UpdateData) {
 }
 ```
 
+### URL Auto-Prefix
+
+```typescript
+// Both are equivalent — auto-prefix adds /api
+const roles = await api.get<Role[]>('/setting/roles');
+const roles = await api.get<Role[]>('/api/setting/roles');
+
+// Use whichever is more readable in context
+```
+
 ### With Error Handling
 
 ```typescript
 "use client";
 
-import { fetchClient, ApiError } from '@/lib/fetch/client';
+import api from '@/lib/fetch/client';
+import { ApiError } from '@/lib/fetch/errors';
 
 async function createItem(data: CreateData) {
   try {
-    const { data: created } = await fetchClient.post<Item>('/api/items', data);
+    const created = await api.post<Item>('/api/items', data);
     return { success: true, data: created };
   } catch (error) {
     if (error instanceof ApiError) {
-      // Handle specific status codes
       if (error.status === 400) {
         return { success: false, error: 'Invalid data', details: error.data };
       }
@@ -236,6 +226,53 @@ async function createItem(data: CreateData) {
     }
     return { success: false, error: 'Network error' };
   }
+}
+```
+
+### State Management (Strategy A)
+
+```typescript
+"use client";
+
+import { useState, useCallback } from "react";
+import api from "@/lib/fetch/client";
+import type { ItemsResponse, Item } from "@/lib/types/api/items";
+
+function ItemsTable({ initialData }: { initialData: ItemsResponse }) {
+  const [data, setData] = useState(initialData);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const fresh = await api.get<ItemsResponse>(apiUrl);
+      setData(fresh);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [apiUrl]);
+
+  // Update from mutation response
+  const updateItems = useCallback((serverResponse: Item[]) => {
+    setData(current => {
+      if (!current) return current;
+      const responseMap = new Map(serverResponse.map(i => [i.id, i]));
+      return {
+        ...current,
+        items: current.items.map(item =>
+          responseMap.has(item.id) ? responseMap.get(item.id)! : item
+        ),
+      };
+    });
+  }, []);
+
+  const onToggleStatus = async (id: string, isActive: boolean) => {
+    const updated = await api.put<Item>(
+      `/api/setting/items/${id}/status`,
+      { is_active: isActive }
+    );
+    updateItems([updated]);
+  };
 }
 ```
 
@@ -250,18 +287,18 @@ export class AuthService {
         method: 'POST',
         credentials: 'include',
       });
-      
+
       if (!response.ok) {
         return null;
       }
-      
+
       const data = await response.json();
       return data.accessToken;
     } catch {
       return null;
     }
   }
-  
+
   static async logout(): Promise<void> {
     await fetch('/api/auth/logout', {
       method: 'POST',
@@ -276,9 +313,14 @@ export class AuthService {
 
 | Feature | Implementation |
 |---------|---------------|
+| API object | `api.get/post/put/patch/delete` — returns `T` directly |
+| URL prefix | Auto-adds `/api` if missing |
+| CSRF | `csrfManager.getToken()` for POST/PUT/PATCH/DELETE |
 | Cookies | `credentials: 'include'` |
 | Timeout | AbortController with setTimeout |
 | Retry | Exponential backoff on 429/503 |
-| Auth Refresh | Auto-refresh on 401, redirect on failure |
+| Auth Refresh | Auto-refresh on 401 via `AuthService` |
+| Redirect Guard | `redirectGuard.canRedirect()` prevents loops |
+| Auth Logger | `authLogger` logs token expiry, refresh attempts, redirects |
 | Request ID | `X-Request-ID` header for tracing |
 | Type Safety | Generic return types |

@@ -63,7 +63,7 @@ export function EditFooDialog({ open, onOpenChange, item }: EditFooDialogProps) 
   });
 
   const handleSave = form.handleSubmit(async (data) => {
-    await fetchClient.put(`/api/setting/foo/${item.id}`, data);
+    await api.put(`/setting/foo/${item.id}`, data);
     onOpenChange(false);
   });
 

@@ -21,6 +21,7 @@ Analyze various aspects of your codebase.
 | `architecture` | analyze/architecture | System architecture, component relationships, data flow |
 | `dependencies` | analyze/dependencies | Dependencies, versions, vulnerabilities |
 | `patterns` | analyze/patterns | Coding patterns, conventions, styles |
+| `scanning` | codebase-scanning | Auto-detect project patterns and coding style |
 
 ## Examples
 
@@ -36,7 +37,14 @@ Analyze various aspects of your codebase.
 
 # Document coding patterns
 /analyze patterns
+
+# Scan codebase for patterns before generation
+/analyze scanning
 ```
+
+## Notes
+
+The `scanning` type loads the `codebase-scanning` skill which detects project structure, naming conventions, and existing patterns. This is automatically triggered before the first code generation in any session, but can be run manually.
 
 ## Default Behavior
 

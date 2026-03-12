@@ -1,5 +1,7 @@
 # SWR Fetching Pattern (Strategy B)
 
+> **Note:** This application does NOT use SWR. This document is kept as a reference only for cases where SWR might be considered in the future. The app uses `useState(initialData)` with server actions for data fetching (see table-pattern.md).
+
 Data fetching pattern using SWR with automatic revalidation. **Requires documented justification.**
 
 ## When to Use
@@ -167,12 +169,12 @@ import { useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQueryState, parseAsInteger } from "nuqs";
 import useSWR from "swr";
-import { fetchClient } from "@/lib/fetch/client";
+import { api } from "@/lib/fetch/client";
 import { DashboardActionsProvider } from "../../context/dashboard-actions-context";
 import { DashboardTableBody } from "./dashboard-table-body";
 import type { DashboardResponse, DashboardItem } from "@/types/dashboard";
 
-const fetcher = (url: string) => fetchClient.get<DashboardResponse>(url).then(r => r.data);
+const fetcher = (url: string) => api.get<DashboardResponse>(url);
 
 interface DashboardTableProps {
   initialData: DashboardResponse | null;
@@ -238,8 +240,8 @@ export default function DashboardTable({ initialData }: DashboardTableProps) {
     () => ({
       onUpdate: async (id: string, payload: Partial<DashboardItem>) => {
         try {
-          const { data: updated } = await fetchClient.put<DashboardItem>(
-            `/api/dashboard/items/${id}`,
+          const updated = await api.put<DashboardItem>(
+            `/dashboard/items/${id}`,
             payload
           );
           await updateItems([updated]);
@@ -299,7 +301,7 @@ Even with SWR, always use server response for cache updates:
 ```tsx
 // CORRECT: Use server response
 const onUpdate = async (id: string, payload: Partial<Item>) => {
-  const { data: updated } = await fetchClient.put(`/api/items/${id}`, payload);
+  const updated = await api.put(`/items/${id}`, payload);
   await updateItems([updated]); // Server response updates cache
 };
 
@@ -310,7 +312,7 @@ const onUpdate = async (id: string, payload: Partial<Item>) => {
     { ...data, items: data.items.map(i => i.id === id ? { ...i, ...payload } : i) },
     { revalidate: false }
   );
-  await fetchClient.put(`/api/items/${id}`, payload);
+  await api.put(`/items/${id}`, payload);
 };
 ```
 

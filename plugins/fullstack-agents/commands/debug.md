@@ -5,6 +5,8 @@ allowed-tools: Read, Glob, Grep, Bash
 
 # Debug Command
 
+> **Note:** All debug subcommands load the `debug` skill (`skills/debug/SKILL.md`) which enforces root-cause-first discipline: **REPRODUCE → INVESTIGATE → FIX → VERIFY**. No fixes without understanding the root cause.
+
 Debug various issues in your application.
 
 ## Usage
@@ -21,6 +23,7 @@ Debug various issues in your application.
 | `logs` | debug/log-analysis | Analyze application logs |
 | `performance` | debug/performance-profiling | Profile performance bottlenecks |
 | `api` | debug/api-debugging | Debug API requests/responses |
+| `batch` | batch-error-resolution | Resolve multiple errors systematically |
 
 ## Examples
 
@@ -37,6 +40,9 @@ Debug various issues in your application.
 
 # Debug API issues
 /debug api
+
+# Resolve multiple errors systematically
+/debug batch
 ```
 
 ## Debug Process
