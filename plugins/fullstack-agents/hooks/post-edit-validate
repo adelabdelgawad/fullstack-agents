@@ -76,6 +76,13 @@ case "$file_path" in
             exit 2
         fi
         ;;
+    *.rs)
+        # Auto-format (never block here); fmt --check + clippy run in the
+        # Stop hook over session-modified files.
+        if command -v rustfmt >/dev/null 2>&1; then
+            rustfmt --edition 2021 --emit files "$file_path" 2>/dev/null || true
+        fi
+        ;;
 esac
 
 exit 0

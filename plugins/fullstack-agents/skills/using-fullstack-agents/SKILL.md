@@ -17,6 +17,40 @@ IF A FULLSTACK-AGENTS SKILL APPLIES TO YOUR TASK, YOU DO NOT HAVE A CHOICE. YOU 
 
 **Before writing ANY backend or frontend code, check if a fullstack-agents skill covers it.** Even a 1% chance means invoke the skill. If it turns out to be wrong for the situation, you don't need to follow it — but you MUST check first.
 
+## Language Separation — Python vs Rust (HARD RULE)
+
+This plugin serves polyglot microservices: Python (FastAPI) and Rust (Axum)
+backends behind ONE Next.js frontend. Skills are language-scoped and MUST NOT
+cross:
+
+```
+LANGUAGE LANE DETECTION (before any routing):
+  Cargo.toml / *.rs / migrations next to a Cargo workspace  → RUST lane
+  pyproject.toml / requirements.txt / *.py                  → PYTHON lane
+  package.json + next / *.ts / *.tsx                        → FRONTEND lane
+  Both Cargo.toml and pyproject.toml in the repo            → route PER FILE/SERVICE,
+                                                              never blend idioms
+```
+
+- RUST lane skills: `rust-clean-architecture`, `rust-axum-api`, `rust-sqlx`,
+  `rust-correctness`, `rust-testing`, `rust-quality-gates`, `rust-nextjs-contract`.
+- PYTHON lane skills: `fastapi` (existing simplified pattern),
+  `python-clean-architecture` (new DDD microservices), `celery`,
+  `tasks-management`. Within Python: codebase-scanning decides — existing
+  simplified-pattern services stay on `fastapi`; NEW microservices use
+  `python-clean-architecture`.
+- NEVER transplant idioms across lanes: no Pydantic/CamelModel concepts in Rust
+  code, no thiserror/ownership patterns in Python, no SQLAlchemy patterns in
+  SQLx code or vice versa. The CONCEPTS align (same clean-architecture layers,
+  same four-stage error model, same wire contract) — the idioms never do.
+- ANY Rust endpoint consumed by Next.js must follow `rust-nextjs-contract` so
+  Rust and FastAPI services are interchangeable behind the same frontend.
+
+**When to choose which language (new services):** Rust for performance-critical,
+high-throughput, or long-lived always-on services; Python for ML/data-heavy
+work, rapid iteration, and extending the existing FastAPI estate. If the user
+hasn't specified, ask — never guess the lane for a NEW service.
+
 ## Routing Table
 
 When you detect the user's intent, route to the correct skill or agent. Two kinds of targets:
@@ -49,6 +83,17 @@ When you detect the user's intent, route to the correct skill or agent. Two kind
 | "scaffold fetch", "generate fetch boilerplate" | Skill `fullstack-agents:fetch-implement` |
 | "refactor", "clean up", "reduce duplication", "extract shared logic" | Skill `fullstack-agents:senior-engineer` (agent: `optimize-refactoring`, `/optimize`) |
 | ANY implementation work (standing discipline, see gate step 3) | Skill `fullstack-agents:senior-engineer` |
+| **RUST LANE** (Cargo.toml / *.rs detected) | |
+| "rust service", "rust microservice", "structure rust", "rust entity", "where does this go (rust)" | Skill `fullstack-agents:rust-clean-architecture` (agent: `generate-rust-entity`) |
+| "axum handler", "rust endpoint", "rust route", "rust middleware", "rust websocket" | Skill `fullstack-agents:rust-axum-api` |
+| "sqlx", "rust query", "rust migration", "rust repository" | Skill `fullstack-agents:rust-sqlx` |
+| borrow checker / lifetime / Send/Sync / E0382-E0599 errors | Skill `fullstack-agents:rust-correctness` |
+| "rust test", cargo test failures | Skill `fullstack-agents:rust-testing` |
+| "validate rust", "gate rust", post-Rust-generation verify | Skill `fullstack-agents:rust-quality-gates` |
+| Rust endpoint that Next.js will consume | Skill `fullstack-agents:rust-nextjs-contract` (ALWAYS, with the generating skill) |
+| **PYTHON LANE** (pyproject.toml / *.py detected) | |
+| "new python microservice", "python DDD", "python clean architecture" | Skill `fullstack-agents:python-clean-architecture` |
+| existing simplified-pattern FastAPI work | Skill `fullstack-agents:fastapi` (codebase-scanning decides) |
 
 ## Hard Gate — 5-Step Check Before ANY Code Generation
 
@@ -117,6 +162,8 @@ These thoughts mean STOP — you're rationalizing skipping the skill:
 | "It's faster to copy that existing function" | Copying forks the logic forever. Reuse or extract — never duplicate. |
 | "I'll extract the duplication later" | Later never comes. Extract NOW, while both copies are in context. |
 | "A small private helper here won't hurt" | Three private helpers in three files IS the duplication problem. Search first. |
+| "Rust and Python are similar enough here" | Same concepts, different idioms. Wrong-lane patterns are bugs (e.g. `:id` routes, Pydantic-style DTOs in Rust). |
+| "The frontend will adapt to my response shape" | The frontend adapts to NOTHING. Match the FastAPI wire contract exactly (rust-nextjs-contract). |
 
 ## Automatic Chaining Rules
 
@@ -133,13 +180,16 @@ Specifically:
 3. **Fix violations** — if any violations found, fix them immediately
 4. **Validate** — run type check + lint verification from the DETECTED project roots
    (repo root for flat layouts; `src/backend/` / `src/frontend/` for nested layouts —
-   use whatever codebase-scanning detected, never assume the nested layout):
-   - Backend: `uv run mypy . && uv run ruff check .`
+   use whatever codebase-scanning detected, never assume the nested layout),
+   matched to the LANGUAGE LANE of the generated code:
+   - Python backend: `uv run mypy . && uv run ruff check .`
+   - Rust backend: `cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace` (full chain: rust-quality-gates)
    - Frontend: `npx tsc --noEmit && npm run lint`
 
-   A PostToolUse hook also runs `ruff` on every edited Python file and a Stop hook
-   re-validates session-modified files — if a hook reports violations, fix them
-   immediately; they are the same gate enforced by the harness.
+   A PostToolUse hook also runs `ruff` on edited Python files and `rustfmt` on
+   edited Rust files, and a Stop hook re-validates session-modified files (ruff /
+   cargo fmt+clippy / tsc) — if a hook reports violations, fix them immediately;
+   they are the same gate enforced by the harness.
 5. **Present next steps** — only THEN show the user what was created and suggest follow-up actions
 
 **Do NOT ask the user's permission between steps 1-4. They are mandatory.**

@@ -100,6 +100,45 @@ ls -la docker-compose.yml docker-compose.yaml Dockerfile 2>/dev/null
 grep -E "postgres|redis|nginx|celery" docker-compose.yml 2>/dev/null
 ```
 
+### Rust Service (Clean Architecture)
+
+```python
+RUST_INDICATORS = {
+    "required": [
+        exists("Cargo.toml") or glob("*/Cargo.toml"),
+    ],
+    "structure": {
+        "minimal": exists("src/main.rs"),
+        "workspace": exists("crates/") and exists("apps/"),
+        "clean_architecture": exists("crates/domain/") and exists("crates/application/")
+                              and exists("crates/infrastructure/") and exists("crates/shared/"),
+    },
+    "features": {
+        "axum": grep("axum", "Cargo.toml") or grep("axum", "**/Cargo.toml"),
+        "sqlx": grep("sqlx", "**/Cargo.toml"),
+        "worker": exists("apps/worker/"),
+        "sqlx_offline": exists(".sqlx/"),
+        "toolchain_pinned": exists("rust-toolchain.toml"),
+    }
+}
+```
+
+**Detection Commands:**
+
+```bash
+# Check for Rust workspace / service
+ls Cargo.toml rust-toolchain.toml 2>/dev/null
+ls -d crates/domain/ crates/application/ crates/infrastructure/ crates/shared/ 2>/dev/null
+ls -d apps/api/ apps/worker/ 2>/dev/null
+
+# Stack detection
+grep -E "axum|sqlx|tokio" Cargo.toml */Cargo.toml crates/*/Cargo.toml 2>/dev/null | head -5
+```
+
+**Lane rule:** Rust indicators route to rust-* skills ONLY (rust-clean-architecture,
+rust-axum-api, rust-sqlx, ...). FastAPI indicators route to Python skills ONLY.
+A repo with both is polyglot — classify each service separately, never blend.
+
 ### Celery Worker
 
 ```python

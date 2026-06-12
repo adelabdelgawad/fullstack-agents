@@ -1,6 +1,6 @@
 # Fullstack Agents
 
-Unified fullstack development plugin with **28 specialized AI agents** and **16 skill domains** for intelligent code generation, review, analysis, scaffolding, debugging, and optimization. **Auto-triggers** on FastAPI/Next.js projects via SessionStart hook, with **enforced validation gates** via PostToolUse and Stop hooks.
+Unified fullstack development plugin with **29 specialized AI agents** and **24 skill domains** for intelligent code generation, review, analysis, scaffolding, debugging, and optimization across **Python (FastAPI) and Rust (Axum) microservices** behind one Next.js frontend. **Auto-triggers** on FastAPI/Rust/Next.js projects via SessionStart hook, with **enforced validation gates** via PostToolUse and Stop hooks and **strict language-lane separation** between Python and Rust skills.
 
 ## Features
 
@@ -11,6 +11,9 @@ Unified fullstack development plugin with **28 specialized AI agents** and **16 
 - **Mandatory Post-Generation Review** - After every generation, pattern compliance review + type check + lint runs automatically. No manual step needed.
 - **Enforced Validation Gates** - Not just prompts: a PostToolUse hook runs `ruff` on every edited Python file, and a Stop hook re-validates all session-modified files (`ruff` + `tsc` + 800-line file-size limit) before the session can end. Violations are fed back and must be fixed.
 - **Senior Engineer Discipline** - The `senior-engineer` skill enforces search-before-implement, duplication prevention, SOLID layer boundaries, and complexity limits on ALL implementation work — wired into the hard gate (step 3: REUSE), the agent lifecycle (Phase 3 reuse search), and the Stop hook (file-size limit).
+- **Rust Microservices (Clean Architecture + DDD)** - Seven Rust skills (`rust-clean-architecture`, `rust-axum-api`, `rust-sqlx`, `rust-correctness`, `rust-testing`, `rust-quality-gates`, `rust-nextjs-contract`) codify a workspace-per-layer architecture (domain/application/infrastructure/shared + apps/api/worker), Axum 0.8 + SQLx patterns, and exact wire-contract parity with FastAPI so Rust and Python services are interchangeable behind the same Next.js frontend. No Leptos — Rust serves JSON only.
+- **Python Clean Architecture + DDD** - `python-clean-architecture` mirrors the same layer rules for new FastAPI microservices (ports as Protocols, use-case-owned transactions, four-stage error model), while the existing `fastapi` skill keeps serving simplified-pattern services.
+- **Language-Lane Separation** - Rust and Python skills never cross: lane detection (Cargo.toml vs pyproject.toml) routes per file/service, hooks validate per language (ruff vs rustfmt/clippy), and idiom transplants are explicitly forbidden.
 - **Multi-Agent Orchestration** - Chain agents together for fullstack feature generation (backend + frontend + docker).
 - **Pattern Detection** - Automatically detects your coding style, naming conventions, and architectural patterns.
 
@@ -18,7 +21,8 @@ Unified fullstack development plugin with **28 specialized AI agents** and **16 
 
 | Category | Technologies |
 |----------|-------------|
-| Backend | FastAPI, SQLAlchemy 2.0, Pydantic, Celery, APScheduler |
+| Backend (Python) | FastAPI, SQLAlchemy 2.0, Pydantic, Celery, APScheduler |
+| Backend (Rust) | Axum 0.8, SQLx, Tokio, thiserror, Argon2/JWT |
 | Frontend | Next.js 15+, React, TanStack Table, SWR |
 | Infrastructure | Docker, Docker Compose, Nginx, PostgreSQL, Redis |
 

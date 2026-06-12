@@ -67,6 +67,50 @@ ${output}
     fi
 fi
 
+# --- Rust: fmt --check + clippy when session touched .rs files ---
+# Walk up from the first modified .rs file to the nearest Cargo.toml.
+find_cargo_root() {
+    local dir
+    dir=$(dirname "$1")
+    while [ -n "$dir" ] && [ "$dir" != "/" ] && [ "$dir" != "." ]; do
+        if [ -f "$dir/Cargo.toml" ]; then
+            printf '%s' "$dir"
+            return 0
+        fi
+        dir=$(dirname "$dir")
+    done
+    [ -f "Cargo.toml" ] && printf '.'
+}
+
+rs_files=$(changed_files '*.rs')
+if [ -n "$rs_files" ] && command -v cargo >/dev/null 2>&1; then
+    first_rs=$(printf '%s\n' "$rs_files" | head -1)
+    cargo_root=$(find_cargo_root "$first_rs")
+    if [ -n "$cargo_root" ]; then
+        if ! output=$(cd "$cargo_root" && cargo fmt --all --check 2>&1); then
+            errors="${errors}[cargo fmt] unformatted Rust code (run 'cargo fmt --all'):
+${output}
+
+"
+        fi
+        # clippy with deny-warnings (workspace lint policy); fall back to
+        # cargo check when clippy is not installed.
+        if cargo clippy --version >/dev/null 2>&1; then
+            if ! output=$(cd "$cargo_root" && cargo clippy --workspace --all-targets --quiet -- -D warnings 2>&1); then
+                errors="${errors}[cargo clippy] warnings/errors after session changes:
+$(printf '%s\n' "$output" | tail -40)
+
+"
+            fi
+        elif ! output=$(cd "$cargo_root" && cargo check --workspace --quiet 2>&1); then
+            errors="${errors}[cargo check] compile errors after session changes:
+$(printf '%s\n' "$output" | tail -40)
+
+"
+        fi
+    fi
+fi
+
 # --- TypeScript: whole-project tsc when session touched .ts/.tsx files ---
 ts_files=$(changed_files '*.ts' '*.tsx')
 if [ -n "$ts_files" ]; then
@@ -86,7 +130,7 @@ fi
 
 # --- File size: senior-engineer 800-line limit on modified code files ---
 MAX_FILE_LINES=800
-code_files=$(changed_files '*.py' '*.ts' '*.tsx')
+code_files=$(changed_files '*.py' '*.ts' '*.tsx' '*.rs')
 if [ -n "$code_files" ]; then
     oversized=""
     while IFS= read -r f; do

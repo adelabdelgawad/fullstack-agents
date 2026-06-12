@@ -38,6 +38,16 @@ elif [ -f "src/backend/pyproject.toml" ] && grep -qi "fastapi" src/backend/pypro
     project_info="${project_info}FastAPI backend detected (src/backend/). "
 fi
 
+# Rust detection (root or one level down, e.g. services/<name>/Cargo.toml)
+if [ -f "Cargo.toml" ]; then
+    project_info="${project_info}Rust workspace detected (Cargo.toml). "
+else
+    rust_manifest=$(find . -maxdepth 2 -name Cargo.toml -not -path "./target/*" 2>/dev/null | head -1)
+    if [ -n "$rust_manifest" ]; then
+        project_info="${project_info}Rust service detected (${rust_manifest#./}). "
+    fi
+fi
+
 # Next.js detection
 if [ -f "package.json" ] && grep -q '"next"' package.json 2>/dev/null; then
     project_info="${project_info}Next.js frontend detected (package.json). "
@@ -93,7 +103,7 @@ project_info_escaped=$(escape_for_json "$project_info")
 if [ "$session_source" = "compact" ] || [ "$session_source" = "resume" ]; then
     # Short reminder — the full guide was injected at startup and survives in
     # the conversation summary; re-injecting it would burn context every compact.
-    session_context="<EXTREMELY_IMPORTANT>\nYou have fullstack-agents.\n\n**Project Detection:** ${project_info_escaped}\n\nThe 'fullstack-agents:using-fullstack-agents' skill governs ALL FastAPI/Next.js code generation: before writing ANY backend or frontend code, run the 5-step gate (DETECT intent -> MATCH against the routing table -> REUSE: search for existing implementations, never duplicate -> INVOKE the matching skill -> ensure codebase-scanning ran this session), and after generation the chain GENERATE -> REVIEW PATTERNS -> FIX -> VALIDATE is mandatory. The 'fullstack-agents:senior-engineer' discipline (search-before-implement, no duplication, functions < 50 lines, files < 800 lines) applies to ALL implementation work. If the routing table is no longer in context, invoke 'fullstack-agents:using-fullstack-agents' via the Skill tool to reload it.\n</EXTREMELY_IMPORTANT>"
+    session_context="<EXTREMELY_IMPORTANT>\nYou have fullstack-agents.\n\n**Project Detection:** ${project_info_escaped}\n\nThe 'fullstack-agents:using-fullstack-agents' skill governs ALL FastAPI/Next.js code generation: before writing ANY backend or frontend code, run the 5-step gate (DETECT intent -> MATCH against the routing table -> REUSE: search for existing implementations, never duplicate -> INVOKE the matching skill -> ensure codebase-scanning ran this session), and after generation the chain GENERATE -> REVIEW PATTERNS -> FIX -> VALIDATE is mandatory. The 'fullstack-agents:senior-engineer' discipline (search-before-implement, no duplication, functions < 50 lines, files < 800 lines) applies to ALL implementation work. LANGUAGE LANES are strict: Rust files use rust-* skills only, Python files use fastapi/python-clean-architecture only — never blend idioms; Rust endpoints consumed by Next.js must follow rust-nextjs-contract. If the routing table is no longer in context, invoke 'fullstack-agents:using-fullstack-agents' via the Skill tool to reload it.\n</EXTREMELY_IMPORTANT>"
 else
     # --- Read bootstrapping skill ---
     using_skill_content=$(cat "${PLUGIN_ROOT}/skills/using-fullstack-agents/SKILL.md" 2>&1 || echo "Error reading using-fullstack-agents skill")
