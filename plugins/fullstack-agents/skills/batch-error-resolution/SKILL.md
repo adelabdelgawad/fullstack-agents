@@ -1,3 +1,8 @@
+---
+name: batch-error-resolution
+description: Resolve multiple build, compile, test, lint, or type-check errors as one batch operation — fix all errors first, then verify once. Use when a build, test suite, linter, or type checker reports several failures at the same time. Do not use for a single isolated error that can be fixed and verified immediately.
+---
+
 # Batch Error Resolution Skill
 
 Resolve runtime and compile-time errors as a batch operation, not iteratively.

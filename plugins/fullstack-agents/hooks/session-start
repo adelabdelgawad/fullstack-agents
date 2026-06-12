@@ -7,6 +7,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+# --- Read hook input (may be empty when invoked outside Claude Code) ---
+hook_input=""
+if [ ! -t 0 ]; then
+    hook_input=$(cat || true)
+fi
+
+# Extract the SessionStart source (startup|resume|clear|compact). On
+# resume/compact the prior context (or its summary) already carries the
+# full guide, so we inject only a short reminder to save context.
+session_source="startup"
+case "$hook_input" in
+    *'"source"'*)
+        session_source=$(printf '%s' "$hook_input" \
+            | sed -n 's/.*"source"[[:space:]]*:[[:space:]]*"\([a-z]*\)".*/\1/p')
+        [ -n "$session_source" ] || session_source="startup"
+        ;;
+esac
+
 # --- Project Detection ---
 # Lightweight checks for FastAPI + Next.js project markers
 project_info=""
@@ -37,24 +55,51 @@ if [ -z "$project_info" ]; then
     project_info="No FastAPI/Next.js project detected. Fullstack-agents skills are available if needed."
 fi
 
-# --- Read bootstrapping skill ---
-using_skill_content=$(cat "${PLUGIN_ROOT}/skills/using-fullstack-agents/SKILL.md" 2>&1 || echo "Error reading using-fullstack-agents skill")
-
 # --- Escape for JSON ---
+# Prefer a real JSON encoder; the manual fallback covers the common escapes
+# but cannot handle every control character.
+# Execution-test the interpreter: on Windows, a Microsoft Store stub named
+# python3.exe can sit on PATH and fail when actually run.
+find_python() {
+    local cand
+    for cand in python3 python; do
+        if command -v "$cand" >/dev/null 2>&1 && "$cand" -c 'pass' >/dev/null 2>&1; then
+            printf '%s' "$cand"
+            return 0
+        fi
+    done
+    return 1
+}
+PYTHON_BIN=$(find_python || true)
+
 escape_for_json() {
     local s="$1"
-    s="${s//\\/\\\\}"
-    s="${s//\"/\\\"}"
-    s="${s//$'\n'/\\n}"
-    s="${s//$'\r'/\\r}"
-    s="${s//$'\t'/\\t}"
-    printf '%s' "$s"
+    if [ -n "$PYTHON_BIN" ]; then
+        printf '%s' "$s" | "$PYTHON_BIN" -c 'import json,sys; print(json.dumps(sys.stdin.read())[1:-1])'
+    elif command -v jq >/dev/null 2>&1; then
+        printf '%s' "$s" | jq -Rs '.' | sed 's/^"//; s/"$//'
+    else
+        s="${s//\\/\\\\}"
+        s="${s//\"/\\\"}"
+        s="${s//$'\n'/\\n}"
+        s="${s//$'\r'/\\r}"
+        s="${s//$'\t'/\\t}"
+        printf '%s' "$s"
+    fi
 }
 
-using_skill_escaped=$(escape_for_json "$using_skill_content")
 project_info_escaped=$(escape_for_json "$project_info")
 
-session_context="<EXTREMELY_IMPORTANT>\nYou have fullstack-agents.\n\n**Project Detection:** ${project_info_escaped}\n\n**Below is the full content of your 'fullstack-agents:using-fullstack-agents' skill — your guide to auto-triggering code generation skills. For all other skills, use the 'Skill' tool:**\n\n---\n\n${using_skill_escaped}\n\n</EXTREMELY_IMPORTANT>"
+if [ "$session_source" = "compact" ] || [ "$session_source" = "resume" ]; then
+    # Short reminder — the full guide was injected at startup and survives in
+    # the conversation summary; re-injecting it would burn context every compact.
+    session_context="<EXTREMELY_IMPORTANT>\nYou have fullstack-agents.\n\n**Project Detection:** ${project_info_escaped}\n\nThe 'fullstack-agents:using-fullstack-agents' skill governs ALL FastAPI/Next.js code generation: before writing ANY backend or frontend code, run the 5-step gate (DETECT intent -> MATCH against the routing table -> REUSE: search for existing implementations, never duplicate -> INVOKE the matching skill -> ensure codebase-scanning ran this session), and after generation the chain GENERATE -> REVIEW PATTERNS -> FIX -> VALIDATE is mandatory. The 'fullstack-agents:senior-engineer' discipline (search-before-implement, no duplication, functions < 50 lines, files < 800 lines) applies to ALL implementation work. If the routing table is no longer in context, invoke 'fullstack-agents:using-fullstack-agents' via the Skill tool to reload it.\n</EXTREMELY_IMPORTANT>"
+else
+    # --- Read bootstrapping skill ---
+    using_skill_content=$(cat "${PLUGIN_ROOT}/skills/using-fullstack-agents/SKILL.md" 2>&1 || echo "Error reading using-fullstack-agents skill")
+    using_skill_escaped=$(escape_for_json "$using_skill_content")
+    session_context="<EXTREMELY_IMPORTANT>\nYou have fullstack-agents.\n\n**Project Detection:** ${project_info_escaped}\n\n**Below is the full content of your 'fullstack-agents:using-fullstack-agents' skill — your guide to auto-triggering code generation skills. For all other skills, use the 'Skill' tool:**\n\n---\n\n${using_skill_escaped}\n\n</EXTREMELY_IMPORTANT>"
+fi
 
 # Output context injection as JSON.
 # Keep both shapes for compatibility:

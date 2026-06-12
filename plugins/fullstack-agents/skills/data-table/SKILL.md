@@ -1,6 +1,6 @@
 ---
-name: nextjs-data-table-page
-description: Create Next.js data table pages with SSR initial load, simplified state management, and server-response-based UI updates. Use when asked to create a new data table page, entity management page, CRUD table, or admin list view. Generates page.tsx (SSR), table components, columns, context, actions, and API routes following a proven architecture with centralized reusable data-table component.
+name: data-table
+description: Create Next.js data table pages with SSR initial load, simplified state management, and server-response-based UI updates. Use when asked to create a new data table page, entity management page, CRUD table, or admin list view. Generates page.tsx (SSR), table components, columns, context, actions, and API routes following a proven architecture with centralized reusable data-table component. Do not use for non-table pages (use nextjs) or backend code (use fastapi).
 ---
 
 # Next.js Data Table Page Generator

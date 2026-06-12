@@ -1,3 +1,8 @@
+---
+name: docker
+description: Production-ready Docker infrastructure for fullstack apps — multi-service Docker Compose, nginx reverse proxy, SSL termination, and service wiring for FastAPI + Next.js stacks. Use when setting up Docker infrastructure, adding containers or services, or configuring nginx, monitoring, or SSL. Do not use for application code changes inside the containers.
+---
+
 # Docker Infrastructure Skill
 
 Production-ready Docker infrastructure for full-stack applications with FastAPI backend, Next.js frontend, and supporting services.

@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# PostToolUse hook (Write|Edit): fast per-file validation of edited Python files.
+#
+# Exit 0  = pass, skip, or tooling unavailable (never break the session).
+# Exit 2  = lint violations found; stderr is fed back to Claude as blocking
+#           feedback so the violation is fixed immediately (this is the
+#           harness-enforced half of the generate→review→validate chain).
+#
+# TypeScript files are intentionally NOT checked here: tsc has no fast
+# single-file mode, so whole-project tsc runs in the Stop hook instead.
+
+set -uo pipefail
+
+input=$(cat)
+
+# Extract tool_input.file_path from the hook JSON. Prefer real JSON parsers;
+# the sed fallback is last-resort and unescapes Windows path backslashes.
+# Execution-test the interpreter: on Windows, a Microsoft Store stub named
+# python3.exe can sit on PATH and fail when actually run.
+find_python() {
+    local cand
+    for cand in python3 python; do
+        if command -v "$cand" >/dev/null 2>&1 && "$cand" -c 'pass' >/dev/null 2>&1; then
+            printf '%s' "$cand"
+            return 0
+        fi
+    done
+    return 1
+}
+PYTHON_BIN=$(find_python || true)
+
+extract_file_path() {
+    local data="$1"
+    if [ -n "$PYTHON_BIN" ]; then
+        printf '%s' "$data" | "$PYTHON_BIN" -c 'import json,sys
+try:
+    print(json.load(sys.stdin).get("tool_input", {}).get("file_path", ""))
+except Exception:
+    pass'
+    elif command -v jq >/dev/null 2>&1; then
+        printf '%s' "$data" | jq -r '.tool_input.file_path // empty' 2>/dev/null
+    else
+        printf '%s' "$data" \
+            | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+            | sed 's/\\\\/\\/g'
+    fi
+}
+
+# Resolve a ruff invocation: PATH first, then the project venv via uv,
+# then standalone via uvx (still reads the project's [tool.ruff] config).
+resolve_ruff() {
+    if command -v ruff >/dev/null 2>&1; then
+        printf 'ruff'
+    elif command -v uv >/dev/null 2>&1; then
+        if uv run --quiet ruff --version >/dev/null 2>&1; then
+            printf 'uv run --quiet ruff'
+        elif uvx ruff --version >/dev/null 2>&1; then
+            printf 'uvx ruff'
+        fi
+    fi
+}
+
+file_path=$(extract_file_path "$input")
+[ -n "$file_path" ] || exit 0
+[ -f "$file_path" ] || exit 0
+
+case "$file_path" in
+    *.py)
+        ruff_cmd=$(resolve_ruff)
+        [ -n "$ruff_cmd" ] || exit 0
+        if ! output=$($ruff_cmd check "$file_path" 2>&1); then
+            {
+                echo "[fullstack-agents] ruff violations in edited file — fix before continuing:"
+                printf '%s\n' "$output"
+            } >&2
+            exit 2
+        fi
+        ;;
+esac
+
+exit 0

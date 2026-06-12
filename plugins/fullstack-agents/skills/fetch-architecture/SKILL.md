@@ -1,3 +1,8 @@
+---
+name: fetch-architecture
+description: Client and server-side fetch utilities for Next.js — direct backend calls from server code and API route proxying with auth refresh for client code. Use when setting up fetch utilities, configuring client-side API calls, or implementing server-side data fetching. Do not use to scaffold per-entity fetch code (use fetch-plan then fetch-implement).
+---
+
 # Fetch Architecture Skill
 
 Client and server-side fetch utilities for Next.js applications with two distinct data paths: direct backend calls (server) and API route proxying (client).

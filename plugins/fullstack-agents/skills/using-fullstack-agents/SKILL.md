@@ -17,33 +17,40 @@ IF A FULLSTACK-AGENTS SKILL APPLIES TO YOUR TASK, YOU DO NOT HAVE A CHOICE. YOU 
 
 **Before writing ANY backend or frontend code, check if a fullstack-agents skill covers it.** Even a 1% chance means invoke the skill. If it turns out to be wrong for the situation, you don't need to follow it — but you MUST check first.
 
-## Skill Routing Table
+## Routing Table
 
-When you detect the user's intent, route to the correct skill:
+When you detect the user's intent, route to the correct skill or agent. Two kinds of targets:
 
-| User Intent Pattern | Skill to Invoke |
+- **Skill** — invoke with the `Skill` tool using the exact name shown (e.g. `fullstack-agents:fastapi`).
+- **Agent** — launch as a subagent using the exact agent name shown (the user-facing equivalent is the slash command in parentheses).
+
+| User Intent Pattern | Target |
 |---|---|
-| "create entity", "add model", "CRUD", "backend API for X" | `fullstack-agents:generate entity` |
-| "data table", "management page", "list page with CRUD" | `fullstack-agents:generate data-table` |
-| "create page", "new page", "frontend page" | `fullstack-agents:generate page` |
-| "API route", "proxy route", "Next.js API" | `fullstack-agents:generate api-route` |
-| "celery task", "background task", "async task" | `fullstack-agents:generate task` |
-| "scheduled job", "cron job", "periodic task" | `fullstack-agents:generate job` |
-| "docker service", "add container" | `fullstack-agents:generate docker-service` |
-| "fullstack feature", "create X end-to-end" | `fullstack-agents:generate fullstack` |
-| "debug", "error", "fix", "broken", "not working" | `fullstack-agents:debug` |
-| "review", "check quality", "audit" | `fullstack-agents:review quality` |
-| "security review", "security audit" | `fullstack-agents:review security` |
-| "performance review", "slow", "optimize" | `fullstack-agents:review performance` or `fullstack-agents:optimize` |
-| "check patterns", "validate patterns" | `fullstack-agents:review patterns` |
-| "analyze codebase", "architecture review" | `fullstack-agents:analyze` |
-| "scaffold project", "new project", "bootstrap" | `fullstack-agents:scaffold` |
-| "validate entity", "check entity compliance" | `fullstack-agents:validate` |
-| "validate fetch", "check fetch patterns", "fetch audit" | `fullstack-agents:fetch-validate` |
-| "plan fetch", "fetch layers for X" | `fullstack-agents:fetch-plan` |
-| "scaffold fetch", "generate fetch boilerplate" | `fullstack-agents:fetch-implement` |
+| "create entity", "add model", "CRUD", "backend API for X" | Skill `fullstack-agents:fastapi` (agent: `generate-fastapi-entity`, `/generate entity`) |
+| "data table", "management page", "list page with CRUD" | Skill `fullstack-agents:data-table` (agent: `generate-nextjs-data-table`, `/generate data-table`) |
+| "create page", "new page", "frontend page" | Skill `fullstack-agents:nextjs` (agent: `generate-nextjs-page`, `/generate page`) |
+| "API route", "proxy route", "Next.js API" | Skill `fullstack-agents:fetch-architecture` (agent: `generate-api-route`, `/generate api-route`) |
+| "celery task", "background task", "async task" | Skill `fullstack-agents:celery` (agent: `generate-celery-task`, `/generate task`) |
+| "scheduled job", "cron job", "periodic task" | Skill `fullstack-agents:tasks-management` (agent: `generate-scheduled-job`, `/generate job`) |
+| "docker service", "add container", "compose setup" | Skill `fullstack-agents:docker` (agent: `generate-docker-service`, `/generate docker-service`) |
+| "websocket", "real-time", "live updates" | Skill `fullstack-agents:websocket` |
+| "fullstack feature", "create X end-to-end" | `/generate fullstack` orchestration (fastapi → fetch → data-table skills in sequence) |
+| "debug", "error", "fix", "broken", "not working" | Skill `fullstack-agents:debug` |
+| build/tests/lint failing with MULTIPLE errors | Skill `fullstack-agents:batch-error-resolution` |
+| "review", "check quality", "audit" | Agent `review-code-quality` (`/review quality`) |
+| "security review", "security audit" | Agent `review-security` (`/review security`) |
+| "performance review", "slow", "optimize" | Agent `review-performance` or `optimize-performance` (`/review performance`, `/optimize`) |
+| "check patterns", "validate patterns" | Agent `review-patterns-compliance` (`/review patterns`) |
+| "analyze codebase", "architecture review" | Agent `analyze-codebase` or `analyze-architecture` (`/analyze`) |
+| "scaffold project", "new project", "bootstrap" | Agent `scaffold-project-fastapi` / `scaffold-project-nextjs` (`/scaffold`) |
+| "validate entity", "check entity compliance" | `/validate` command |
+| "validate fetch", "check fetch patterns", "fetch audit" | Skill `fullstack-agents:fetch-validate` |
+| "plan fetch", "fetch layers for X" | Skill `fullstack-agents:fetch-plan` |
+| "scaffold fetch", "generate fetch boilerplate" | Skill `fullstack-agents:fetch-implement` |
+| "refactor", "clean up", "reduce duplication", "extract shared logic" | Skill `fullstack-agents:senior-engineer` (agent: `optimize-refactoring`, `/optimize`) |
+| ANY implementation work (standing discipline, see gate step 3) | Skill `fullstack-agents:senior-engineer` |
 
-## Hard Gate — 4-Step Check Before ANY Code Generation
+## Hard Gate — 5-Step Check Before ANY Code Generation
 
 Before writing ANY code that touches FastAPI or Next.js, run this mental gate:
 
@@ -54,15 +61,40 @@ Before writing ANY code that touches FastAPI or Next.js, run this mental gate:
 2. MATCH   → Does a fullstack-agents skill cover this?
              (Check the routing table above)
 
-3. INVOKE  → If YES: invoke the skill BEFORE writing any code
-             If NO: proceed normally but still respect codebase patterns
+3. REUSE   → Does this functionality (or something close) already exist?
+             Search the codebase for existing implementations, helpers,
+             utilities, hooks, and components BEFORE writing new code.
+             Never knowingly duplicate business logic — reuse, extend, or
+             extract a shared abstraction instead.
+             (Discipline: fullstack-agents:senior-engineer)
 
-4. SCAN    → Has codebase-scanning run this session?
+4. INVOKE  → If a skill matched: invoke it BEFORE writing any code
+             If NO match: proceed normally but still respect codebase
+             patterns and the senior-engineer discipline
+
+5. SCAN    → Has codebase-scanning run this session?
              If NO: invoke fullstack-agents:codebase-scanning first
              If YES: use the detected style profile
 ```
 
-**Do NOT skip to step 3.** Detection and matching must happen first.
+**Do NOT skip to step 4.** Detection, matching, and the reuse search must happen first.
+
+## Senior Engineer Standard (always on)
+
+The `fullstack-agents:senior-engineer` skill governs ALL implementation work —
+generation, modification, and bug fixes alike. Its non-negotiables:
+
+- **Search before implement** — find existing implementations before writing new ones.
+- **No knowing duplication** — reuse, extend, or extract; never fork business logic.
+- **Hard limits** — functions < 50 lines, files < 800 lines, nesting <= 4 levels
+  (the Stop hook blocks sessions that grow files past 800 lines).
+- **Right layer** — presentation, business logic, domain, and data access stay
+  separated; dependencies point inward.
+- **Leave it cleaner** — when touching existing code, improve naming, control flow,
+  and boundaries in the code you touch.
+
+For the full workflow, search recipe, and definition of done, invoke
+`fullstack-agents:senior-engineer` via the Skill tool.
 
 ## Rationalization Prevention
 
@@ -82,6 +114,9 @@ These thoughts mean STOP — you're rationalizing skipping the skill:
 | "I remember the patterns from earlier" | Patterns evolve. Skills have the current reference. Re-read. |
 | "Let me just scaffold this by hand" | The generate agents handle scaffolding WITH pattern compliance. |
 | "It's just a type definition" | Types must match CamelModel conventions and API contracts. |
+| "It's faster to copy that existing function" | Copying forks the logic forever. Reuse or extract — never duplicate. |
+| "I'll extract the duplication later" | Later never comes. Extract NOW, while both copies are in context. |
+| "A small private helper here won't hurt" | Three private helpers in three files IS the duplication problem. Search first. |
 
 ## Automatic Chaining Rules
 
@@ -96,9 +131,15 @@ Specifically:
 1. **Generate** — the agent produces code
 2. **Review patterns** — automatically run pattern compliance review on generated code (equivalent to `/review patterns {entity}`)
 3. **Fix violations** — if any violations found, fix them immediately
-4. **Validate** — run type check + lint verification:
-   - Backend: `uv run mypy . && uv run ruff check .` (from src/backend/)
-   - Frontend: `npx tsc --noEmit && npm run lint` (from src/frontend/)
+4. **Validate** — run type check + lint verification from the DETECTED project roots
+   (repo root for flat layouts; `src/backend/` / `src/frontend/` for nested layouts —
+   use whatever codebase-scanning detected, never assume the nested layout):
+   - Backend: `uv run mypy . && uv run ruff check .`
+   - Frontend: `npx tsc --noEmit && npm run lint`
+
+   A PostToolUse hook also runs `ruff` on every edited Python file and a Stop hook
+   re-validates session-modified files — if a hook reports violations, fix them
+   immediately; they are the same gate enforced by the harness.
 5. **Present next steps** — only THEN show the user what was created and suggest follow-up actions
 
 **Do NOT ask the user's permission between steps 1-4. They are mandatory.**

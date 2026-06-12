@@ -1,6 +1,6 @@
 # Fullstack Agents
 
-Unified fullstack development plugin with **28 specialized AI agents** and **11 skill domains** for intelligent code generation, review, analysis, scaffolding, debugging, and optimization. **Auto-triggers** on FastAPI/Next.js projects via SessionStart hook.
+Unified fullstack development plugin with **28 specialized AI agents** and **16 skill domains** for intelligent code generation, review, analysis, scaffolding, debugging, and optimization. **Auto-triggers** on FastAPI/Next.js projects via SessionStart hook, with **enforced validation gates** via PostToolUse and Stop hooks.
 
 ## Features
 
@@ -9,6 +9,8 @@ Unified fullstack development plugin with **28 specialized AI agents** and **11 
 - **Codebase Scanning** - Before first generation, scans your project to build a style profile (session patterns, schema bases, naming conventions, etc.) ensuring generated code matches exactly.
 - **Interactive Dialogue** - Agents detect your codebase patterns, ask about relationships and edge cases, confirm before generating, and suggest next steps.
 - **Mandatory Post-Generation Review** - After every generation, pattern compliance review + type check + lint runs automatically. No manual step needed.
+- **Enforced Validation Gates** - Not just prompts: a PostToolUse hook runs `ruff` on every edited Python file, and a Stop hook re-validates all session-modified files (`ruff` + `tsc` + 800-line file-size limit) before the session can end. Violations are fed back and must be fixed.
+- **Senior Engineer Discipline** - The `senior-engineer` skill enforces search-before-implement, duplication prevention, SOLID layer boundaries, and complexity limits on ALL implementation work — wired into the hard gate (step 3: REUSE), the agent lifecycle (Phase 3 reuse search), and the Stop hook (file-size limit).
 - **Multi-Agent Orchestration** - Chain agents together for fullstack feature generation (backend + frontend + docker).
 - **Pattern Detection** - Automatically detects your coding style, naming conventions, and architectural patterns.
 
@@ -125,6 +127,19 @@ When installed, the plugin automatically:
 No manual `/generate entity` commands needed — just say "create a Product entity" and the plugin activates.
 
 Manual commands (`/generate entity`, `/review patterns`, etc.) still work exactly as before for explicit invocation.
+
+On `resume`/`compact` the hook injects only a short reminder instead of the full guide, keeping context lean across long sessions.
+
+## Enforced Validation Gates (PostToolUse + Stop Hooks)
+
+The generate → review → validate chain is enforced by the harness, not just by prompt instructions:
+
+| Hook | Trigger | What it does |
+|------|---------|--------------|
+| `post-edit-validate` | Every `Write`/`Edit` | Runs `ruff check` on edited Python files; violations block and are fed back to Claude for an immediate fix |
+| `stop-validate` | Session stop | Runs `ruff` on session-modified `.py` files, `tsc --noEmit` when `.ts`/`.tsx` files changed, and blocks if any modified code file exceeds 800 lines; failures block the stop until fixed |
+
+Both hooks degrade gracefully: they scope checks to files modified in the current session (per git), skip silently when tooling is unavailable (`ruff` is resolved from PATH → `uv run` → `uvx`), and a loop guard prevents repeated Stop blocking.
 
 ## Agent Lifecycle
 

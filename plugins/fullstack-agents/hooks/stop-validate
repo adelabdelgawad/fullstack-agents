@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# Stop hook: final validation gate over files modified THIS session (per git),
+# so pre-existing violations elsewhere in the repo never block a stop.
+#
+# Exit 0  = pass, nothing to check, or tooling unavailable.
+# Exit 2  = validation failed; stderr is fed back to Claude, which must fix
+#           the failures before the session can end.
+
+set -uo pipefail
+
+input=$(cat)
+
+# Loop guard: Claude Code sets stop_hook_active when a Stop hook already
+# blocked once this cycle — letting it through prevents infinite fix loops.
+case "$input" in
+    *'"stop_hook_active":true'* | *'"stop_hook_active": true'*) exit 0 ;;
+esac
+
+# Outside a git repo we cannot scope checks to session changes — skip rather
+# than lint the whole tree.
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
+
+changed_files() {
+    {
+        git diff --name-only --diff-filter=ACMR HEAD -- "$@" 2>/dev/null
+        git ls-files --others --exclude-standard -- "$@" 2>/dev/null
+    } | sort -u
+}
+
+# PATH first, then the project venv via uv, then standalone via uvx
+# (still reads the project's [tool.ruff] config).
+resolve_ruff() {
+    if command -v ruff >/dev/null 2>&1; then
+        printf 'ruff'
+    elif command -v uv >/dev/null 2>&1; then
+        if uv run --quiet ruff --version >/dev/null 2>&1; then
+            printf 'uv run --quiet ruff'
+        elif uvx ruff --version >/dev/null 2>&1; then
+            printf 'uvx ruff'
+        fi
+    fi
+}
+
+# Frontend root for whole-project tsc, matching session-start detection.
+detect_frontend_root() {
+    if [ -f "package.json" ] && grep -q '"next"' package.json 2>/dev/null; then
+        printf '.'
+    elif [ -f "src/frontend/package.json" ] && grep -q '"next"' src/frontend/package.json 2>/dev/null; then
+        printf 'src/frontend'
+    fi
+}
+
+errors=""
+
+# --- Python: ruff over modified .py files ---
+py_files=$(changed_files '*.py')
+if [ -n "$py_files" ]; then
+    ruff_cmd=$(resolve_ruff)
+    if [ -n "$ruff_cmd" ]; then
+        # shellcheck disable=SC2086
+        if ! output=$(printf '%s\n' "$py_files" | tr '\n' '\0' | xargs -0 $ruff_cmd check 2>&1); then
+            errors="${errors}[ruff] violations in session-modified Python files:
+${output}
+
+"
+        fi
+    fi
+fi
+
+# --- TypeScript: whole-project tsc when session touched .ts/.tsx files ---
+ts_files=$(changed_files '*.ts' '*.tsx')
+if [ -n "$ts_files" ]; then
+    frontend_root=$(detect_frontend_root)
+    if [ -n "$frontend_root" ] \
+        && [ -f "$frontend_root/tsconfig.json" ] \
+        && [ -d "$frontend_root/node_modules" ] \
+        && command -v npx >/dev/null 2>&1; then
+        if ! output=$(cd "$frontend_root" && npx --no-install tsc --noEmit 2>&1); then
+            errors="${errors}[tsc] type errors after session changes:
+${output}
+
+"
+        fi
+    fi
+fi
+
+# --- File size: senior-engineer 800-line limit on modified code files ---
+MAX_FILE_LINES=800
+code_files=$(changed_files '*.py' '*.ts' '*.tsx')
+if [ -n "$code_files" ]; then
+    oversized=""
+    while IFS= read -r f; do
+        [ -f "$f" ] || continue
+        lines=$(wc -l < "$f" 2>/dev/null || echo 0)
+        if [ "$lines" -gt "$MAX_FILE_LINES" ]; then
+            oversized="${oversized}  ${f}: ${lines} lines
+"
+        fi
+    done <<< "$code_files"
+    if [ -n "$oversized" ]; then
+        errors="${errors}[file-size] session-modified files exceed ${MAX_FILE_LINES} lines — split into focused modules (senior-engineer discipline):
+${oversized}
+"
+    fi
+fi
+
+if [ -n "$errors" ]; then
+    {
+        echo "[fullstack-agents] Stop blocked — validation failed on session-modified files. Fix these before finishing:"
+        printf '%s' "$errors"
+    } >&2
+    exit 2
+fi
+
+exit 0

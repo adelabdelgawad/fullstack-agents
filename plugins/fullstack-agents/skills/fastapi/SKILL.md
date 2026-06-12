@@ -1,3 +1,8 @@
+---
+name: fastapi
+description: Generate production-ready FastAPI CRUD modules — SQLAlchemy model, Pydantic schemas, CRUD helpers, and routers following the simplified architecture. Use when creating or extending backend entities, models, or REST endpoints with SQLAlchemy and Pydantic. Do not use for Next.js frontend code (use nextjs or data-table).
+---
+
 # FastAPI Template Skill
 
 Generate production-ready FastAPI CRUD modules following a simplified architecture with CRUD helpers.

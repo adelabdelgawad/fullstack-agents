@@ -2,6 +2,11 @@
 
 All agents in this plugin follow these core patterns for consistent behavior.
 
+All agents also operate under the `fullstack-agents:senior-engineer` discipline:
+search before implement, never knowingly duplicate business logic, keep functions
+< 50 lines / files < 800 lines / nesting <= 4 levels, respect layer boundaries,
+and leave touched code cleaner than found.
+
 ## Agent Lifecycle
 
 Every agent must follow this 7-phase lifecycle:
@@ -175,6 +180,23 @@ patterns_detected = {
 }
 ```
 
+### Reuse & Duplication Search (mandatory)
+
+Before planning ANY new code, search for what already exists
+(`fullstack-agents:senior-engineer` workflow, steps 1–5):
+
+1. **Search** for existing implementations of the requested functionality —
+   helpers, services, hooks, utilities, components — by name AND by concept.
+2. **Reuse** an existing implementation when it fits; **extend** it (e.g. add a
+   parameter) when it almost fits; **extract** a shared abstraction when the
+   logic exists in multiple places — and migrate all consumers.
+3. **Place** genuinely new functionality in the architecturally correct module
+   (shared concerns go in the project's shared locations, not next to the caller).
+4. Record reuse decisions in the Generation Plan (Phase 4) so the user sees
+   what is being reused vs created.
+
+Never knowingly generate duplicated business logic.
+
 ## Phase 4: Confirmation
 
 ### Confirmation Format Template
@@ -230,6 +252,10 @@ Reply **"yes"** to generate, or specify changes needed.
 2. **Generate in correct order** - Dependencies first (model before schema)
 3. **Use skill references** - Read from skills/ directory for pattern details
 4. **Validate as you go** - Check generated code matches patterns
+5. **No duplication** - Import or extend existing helpers found in Phase 3;
+   if duplication is discovered mid-generation, extract the shared piece NOW
+6. **Respect limits** - Functions < 50 lines, files < 800 lines, nesting <= 4;
+   split before exceeding, never after
 
 ### Generation Order (FastAPI)
 

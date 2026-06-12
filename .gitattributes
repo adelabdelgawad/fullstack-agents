@@ -1,0 +1,6 @@
+# Bash hook scripts must keep LF line endings — CRLF breaks bash
+# ($'\r': command not found) on machines with core.autocrlf=true.
+plugins/fullstack-agents/hooks/* text eol=lf
+# Windows batch files need CRLF.
+plugins/fullstack-agents/hooks/run-hook.cmd text eol=crlf
+*.sh text eol=lf

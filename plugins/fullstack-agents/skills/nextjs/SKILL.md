@@ -1,3 +1,8 @@
+---
+name: nextjs
+description: Generate production-ready Next.js pages with SSR initial load, client-side data management, and server-response-based updates. Use when creating Next.js pages, admin or settings pages, or adding CRUD functionality to the frontend. Do not use for backend FastAPI code (use fastapi); for full entity data-table pages prefer data-table.
+---
+
 # Next.js Template Skill
 
 Generate production-ready Next.js pages with SSR initial load, flexible client-side data management, and server-response-based updates.
