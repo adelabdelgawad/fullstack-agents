@@ -6,7 +6,7 @@ This document provides a complete reference for all 28 agents in the fullstack-a
 
 | Category | Count | Purpose |
 |----------|-------|---------|
-| Generate | 7 | Smart code generation with interactive dialogue |
+| Generate | 8 | Smart code generation with interactive dialogue |
 | Review | 4 | Code quality, security, performance analysis |
 | Analyze | 4 | Codebase, architecture, dependency analysis |
 | Scaffold | 5 | Project and module scaffolding |
@@ -149,6 +149,30 @@ All agents follow a consistent 6-phase lifecycle:
 **Modified Files**:
 - `docker-compose.yml`
 - `docker-compose.prod.yml` (if exists)
+
+---
+
+### generate/rust-entity
+
+**Purpose**: Generate a complete entity across all clean-architecture layers of a Rust service (Rust lane only — Cargo.toml detected).
+
+**Dialogue Questions**:
+- Entity name and fields
+- Bilingual fields (name_en/name_ar), soft delete, audit timestamps
+- Relationships
+- Frontend exposure (yes → rust-nextjs-contract wire rules apply)
+
+**Generated Files**:
+- `crates/domain/src/{entity}.rs` - Entity, value objects, newtype ID, unit tests
+- `crates/application/src/{entity}/ports.rs` - Repository trait
+- `crates/application/src/{entity}/use_cases.rs` - Transaction-owning CRUD
+- `crates/application/src/{entity}/dto_map.rs` - Entity → DTO mapping
+- `crates/shared/src/{entity}.rs` - camelCase wire DTOs
+- `crates/infrastructure/src/persistence/{entity}_repo.rs` - SQLx adapter
+- `migrations/*_{entity}.sql` - Idempotent DDL
+- `apps/api/src/routes/{entity}.rs` - Axum handlers + state wiring
+
+**Post-generation**: `cargo fmt` → `clippy -D warnings` → `cargo test` automatically.
 
 ---
 

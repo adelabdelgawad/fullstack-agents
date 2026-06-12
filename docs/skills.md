@@ -4,17 +4,50 @@ This document provides a complete reference for all 9 skill domains in the fulls
 
 ## Skills Overview
 
+**Python lane**
+
 | Skill | Purpose |
 |-------|---------|
-| FastAPI | Backend API patterns and architecture |
+| FastAPI | Simplified backend pattern: model, schema, CRUD helpers, router |
+| Python Clean Architecture | DDD for new microservices: pure domain, ports as Protocols, tx-owning use cases |
+| Celery | Background task patterns |
+| Tasks Management | APScheduler job patterns |
+
+**Rust lane**
+
+| Skill | Purpose |
+|-------|---------|
+| Rust Clean Architecture | Workspace-per-layer DDD: domain/application/infrastructure/shared + apps/api/worker |
+| Rust Axum API | Axum 0.8 handlers, extractors, middleware, JWT auth, WebSocket |
+| Rust SQLx | Compile-time-verified queries, migrations, offline cache, SQLSTATE mapping |
+| Rust Correctness | Ownership, lifetimes, async Send/Sync hazards, panic-vs-Result |
+| Rust Testing | Layer-mapped test pyramid: fakes, #[sqlx::test], tower oneshot |
+| Rust Quality Gates | fmt / clippy-deny / audit / no-allow verification chain |
+| Rust ↔ Next.js Contract | Wire parity with FastAPI — interchangeable backends |
+
+**Frontend lane**
+
+| Skill | Purpose |
+|-------|---------|
 | Next.js | Frontend patterns with React 19 |
 | Data Table | TanStack Table with CRUD operations |
 | Fetch Architecture | Client/server fetch utilities |
-| Celery | Background task patterns |
-| Tasks Management | APScheduler job patterns |
+
+**Cross-cutting**
+
+| Skill | Purpose |
+|-------|---------|
+| Using Fullstack Agents | Routing gate, language lanes, hard 5-step gate (auto-injected) |
+| Codebase Scanning | Constitution + style profile detection before generation |
+| Constitution | Per-project normative principles file (spec-kit compatible) |
+| Senior Engineer | Architecture, modularity, duplication prevention on all work |
 | Docker | Container infrastructure patterns |
 | WebSocket | Real-time connection patterns |
 | Batch Error Resolution | Disciplined batch error handling |
+| Debug | Root-cause-first debugging discipline |
+
+**Language lanes are strict:** Rust skills never apply to Python files and vice
+versa. Lane detection (Cargo.toml vs pyproject.toml) routes per file/service.
 
 ---
 
@@ -503,3 +536,71 @@ CMD ["node", "server.js"]
 - `skills/docker/SKILL.md` - Complete skill overview
 - `skills/docker/examples.md` - Usage examples
 - `skills/docker/references/` - Service configurations
+
+---
+
+## Rust Lane Skills
+
+Rust services follow clean architecture + DDD with crates as compiler-enforced
+layers. No Leptos — Rust serves JSON APIs consumed by Next.js or other services.
+
+```
+crates/domain          entities, value objects, invariants — framework-free
+crates/application     use cases (own transactions), repository ports, AppError
+crates/infrastructure  SQLx adapters, config, JWT/Argon2, telemetry
+crates/shared          wire DTOs (camelCase serde), pagination, wire errors
+apps/api               Axum host: routers, middleware, composition root
+apps/worker            advisory-lock singleton background jobs
+```
+
+Key rules: the four-stage error model (DomainError → RepoError → AppError →
+wire error, internals never exposed), Axum 0.8 `{id}` path syntax (`:id`
+panics at runtime), `#[allow(...)]` forbidden, warnings are errors, and every
+frontend-exposed endpoint matches the FastAPI wire contract (camelCase JSON,
+`limit`/`skip` pagination, `total` in list envelopes).
+
+- `skills/rust-clean-architecture/SKILL.md` — layers, DDD building blocks, entity checklist
+- `skills/rust-axum-api/SKILL.md` — handlers, extractors, middleware, auth
+- `skills/rust-sqlx/SKILL.md` — queries, migrations, offline cache
+- `skills/rust-correctness/SKILL.md` — language-level forbidden patterns
+- `skills/rust-testing/SKILL.md` — test pyramid per layer
+- `skills/rust-quality-gates/SKILL.md` — verification chain
+- `skills/rust-nextjs-contract/SKILL.md` — wire-contract parity
+
+---
+
+## Python Clean Architecture Skill
+
+DDD for NEW Python microservices, mirroring the Rust layer rules in Python
+idiom: pure-dataclass domain (no Pydantic/SQLAlchemy imports), ports as
+`Protocol`s, use cases owning `session.begin()`, four-stage errors mapped to
+HTTP via exception handlers, CamelModel wire schemas. Existing
+simplified-pattern services stay on the FastAPI skill — codebase-scanning
+decides which applies.
+
+- `skills/python-clean-architecture/SKILL.md` — complete skill
+
+---
+
+## Senior Engineer Skill
+
+Cross-cutting discipline on ALL implementation work: search-before-implement
+(with a concrete search recipe), never knowingly duplicate business logic,
+functions < 50 lines / files < 800 lines / nesting ≤ 4 (hook-enforced),
+dependencies point inward, leave touched code cleaner than found. Wired into
+the hard gate (step 3: REUSE), the agent lifecycle, and the Stop hook.
+
+- `skills/senior-engineer/SKILL.md` — complete skill
+
+---
+
+## Constitution Skill
+
+Creates and maintains a versioned, per-project principles file — NORMATIVE
+intent, where codebase-scanning's profile is DESCRIPTIVE reality. Searched at
+`.specify/memory/constitution.md` (spec-kit standard), repo root, then
+`.claude/`. Precedence: constitution > codebase patterns > skill defaults.
+Its machine-readable `## Limits` section overrides hook thresholds (e.g.
+`max-file-lines: 500`).
+
+- `skills/constitution/SKILL.md` — authoring guide + template
