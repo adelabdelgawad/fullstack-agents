@@ -11,40 +11,9 @@
 
 set -uo pipefail
 
+source "$(dirname "$0")/lib.sh"
+
 input=$(cat)
-
-# Extract tool_input.file_path from the hook JSON. Prefer real JSON parsers;
-# the sed fallback is last-resort and unescapes Windows path backslashes.
-# Execution-test the interpreter: on Windows, a Microsoft Store stub named
-# python3.exe can sit on PATH and fail when actually run.
-find_python() {
-    local cand
-    for cand in python3 python; do
-        if command -v "$cand" >/dev/null 2>&1 && "$cand" -c 'pass' >/dev/null 2>&1; then
-            printf '%s' "$cand"
-            return 0
-        fi
-    done
-    return 1
-}
-PYTHON_BIN=$(find_python || true)
-
-extract_file_path() {
-    local data="$1"
-    if [ -n "$PYTHON_BIN" ]; then
-        printf '%s' "$data" | "$PYTHON_BIN" -c 'import json,sys
-try:
-    print(json.load(sys.stdin).get("tool_input", {}).get("file_path", ""))
-except Exception:
-    pass'
-    elif command -v jq >/dev/null 2>&1; then
-        printf '%s' "$data" | jq -r '.tool_input.file_path // empty' 2>/dev/null
-    else
-        printf '%s' "$data" \
-            | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-            | sed 's/\\\\/\\/g'
-    fi
-}
 
 # Resolve a ruff invocation: PATH first, then the project venv via uv,
 # then standalone via uvx (still reads the project's [tool.ruff] config).
@@ -60,7 +29,7 @@ resolve_ruff() {
     fi
 }
 
-file_path=$(extract_file_path "$input")
+file_path=$(json_get_field "tool_input.file_path" "$input")
 [ -n "$file_path" ] || exit 0
 [ -f "$file_path" ] || exit 0
 

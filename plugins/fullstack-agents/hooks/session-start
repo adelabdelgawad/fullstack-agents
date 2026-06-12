@@ -7,6 +7,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+source "${SCRIPT_DIR}/lib.sh"
+
 # --- Read hook input (may be empty when invoked outside Claude Code) ---
 hook_input=""
 if [ ! -t 0 ]; then
@@ -68,18 +70,6 @@ fi
 # --- Escape for JSON ---
 # Prefer a real JSON encoder; the manual fallback covers the common escapes
 # but cannot handle every control character.
-# Execution-test the interpreter: on Windows, a Microsoft Store stub named
-# python3.exe can sit on PATH and fail when actually run.
-find_python() {
-    local cand
-    for cand in python3 python; do
-        if command -v "$cand" >/dev/null 2>&1 && "$cand" -c 'pass' >/dev/null 2>&1; then
-            printf '%s' "$cand"
-            return 0
-        fi
-    done
-    return 1
-}
 PYTHON_BIN=$(find_python || true)
 
 escape_for_json() {

@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# pre-edit-gate — PreToolUse hook for fullstack-agents.
+# BLOCKS edits to code files until codebase-scanning and a lane-relevant
+# skill have been invoked this session. This is the hard guarantee: skills
+# are consulted BEFORE code is written, not promised after.
+#
+# Escape hatch: FSA_SKIP_GATE=1 disables the gate (e.g. for emergency fixes).
+set -uo pipefail
+
+source "$(dirname "$0")/lib.sh"
+
+[ "${FSA_SKIP_GATE:-0}" = "1" ] && exit 0
+
+HOOK_INPUT="$(cat)"
+file_path="$(json_get_field "tool_input.file_path" "$HOOK_INPUT")"
+transcript_path="$(json_get_field "transcript_path" "$HOOK_INPUT")"
+
+# Nothing to gate without a file path; fail OPEN without a transcript
+# (cannot verify -> never break the session).
+[ -n "$file_path" ] || exit 0
+[ -n "$transcript_path" ] && [ -f "$transcript_path" ] || exit 0
+
+# Only gate source code in the languages this plugin governs.
+case "$file_path" in
+    *.py)          lane="python" ;;
+    *.rs)          lane="rust" ;;
+    *.ts | *.tsx)  lane="frontend" ;;
+    *)             exit 0 ;;
+esac
+
+# Only gate inside a governed project — editing scripts in unrelated repos
+# (including this plugin's own source) must not be blocked.
+is_fullstack_project || exit 0
+
+# Requirement 1: the codebase scan ran this session.
+scan_ok=false
+transcript_has_skill "$transcript_path" "codebase-scanning" && scan_ok=true
+
+# Requirement 2: a lane-relevant skill was consulted.
+case "$lane" in
+    rust)     lane_skills="rust-clean-architecture rust-axum-api rust-sqlx rust-correctness rust-testing rust-quality-gates rust-nextjs-contract debug batch-error-resolution" ;;
+    python)   lane_skills="fastapi python-clean-architecture celery tasks-management debug batch-error-resolution" ;;
+    frontend) lane_skills="nextjs data-table fetch-architecture fetch-plan fetch-implement fetch-validate debug batch-error-resolution" ;;
+esac
+
+lane_ok=false
+for skill in $lane_skills; do
+    if transcript_has_skill "$transcript_path" "$skill"; then
+        lane_ok=true
+        break
+    fi
+done
+
+[ "$scan_ok" = "true" ] && [ "$lane_ok" = "true" ] && exit 0
+
+# Build the remediation message for exactly what is missing.
+missing=""
+[ "$scan_ok" = "true" ] || missing="${missing}  1. Skill: fullstack-agents:codebase-scanning  (cache the project style profile)
+"
+if [ "$lane_ok" != "true" ]; then
+    case "$lane" in
+        rust)     hint="rust-clean-architecture / rust-axum-api / rust-sqlx (or debug for bug fixes)" ;;
+        python)   hint="fastapi or python-clean-architecture (or debug for bug fixes)" ;;
+        frontend) hint="nextjs / data-table / fetch-* (or debug for bug fixes)" ;;
+    esac
+    missing="${missing}  2. A ${lane}-lane skill: ${hint}
+"
+fi
+
+cat >&2 <<BLOCK
+[fullstack-agents] BLOCKED: editing ${file_path} (${lane} lane) requires consulting skills first:
+${missing}Invoke via the Skill tool, then retry the edit. This prevents pattern drift
+and wrong-lane idioms. (Override for emergencies: FSA_SKIP_GATE=1)
+BLOCK
+
+exit 2

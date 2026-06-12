@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# prompt-scan — UserPromptSubmit hook for fullstack-agents.
+# Re-arms the routing gate on EVERY prompt that touches the stack, so the
+# doctrine survives long sessions and context compaction.
+set -uo pipefail
+
+source "$(dirname "$0")/lib.sh"
+
+HOOK_INPUT="$(cat)"
+prompt="$(json_get_field "prompt" "$HOOK_INPUT")"
+[ -n "$prompt" ] || exit 0
+
+prompt_lower="$(printf '%s' "$prompt" | tr '[:upper:]' '[:lower:]')"
+
+# Fire only on stack-related prompts — this runs every message, so the
+# keyword list is domain-specific, not generic verbs.
+if ! printf '%s' "$prompt_lower" | grep -qE \
+    'fastapi|pydantic|sqlalchemy|celery|alembic|uvicorn|endpoint|router|entity|crud|schema|migration|microservice|rust|cargo|axum|sqlx|tokio|clippy|borrow|lifetime|ownership|next\.?js|react|component|data.?table|frontend|backend|websocket|docker|\bapi\b|\bpage\b|\bmodel\b|\.py\b|\.rs\b|\.tsx?\b'; then
+    exit 0
+fi
+
+# Lane detection from the prompt (project detection refines it later).
+lane="stack"
+if printf '%s' "$prompt_lower" | grep -qE 'rust|cargo|axum|sqlx|clippy|borrow|lifetime|ownership|tokio|\.rs\b'; then
+    lane="rust"
+elif printf '%s' "$prompt_lower" | grep -qE 'fastapi|pydantic|sqlalchemy|celery|alembic|python|\.py\b'; then
+    lane="python"
+elif printf '%s' "$prompt_lower" | grep -qE 'next\.?js|react|component|tsx|frontend|data.?table|\bpage\b'; then
+    lane="frontend"
+fi
+
+# Intent classification.
+intent="general"
+if printf '%s' "$prompt_lower" | grep -qE 'create|add|scaffold|implement|generate|build|make|new'; then
+    intent="generate"
+elif printf '%s' "$prompt_lower" | grep -qE 'review|audit|check|inspect|lint|verify'; then
+    intent="review"
+elif printf '%s' "$prompt_lower" | grep -qE "error|broken|fix|debug|fail|crash|not working"; then
+    intent="debug"
+fi
+
+cat <<CONTEXT
+[fullstack-agents] STACK TOPIC DETECTED (lane: ${lane}, intent: ${intent}) — mandatory routing:
+  1. Run the 5-step gate from using-fullstack-agents: DETECT -> MATCH -> REUSE -> INVOKE -> SCAN.
+  2. Skill: fullstack-agents:codebase-scanning (invoke NOW if not yet this session).
+  3. Invoke the matching domain skill BEFORE writing code — LANGUAGE LANES are strict:
+     rust lane -> rust-* skills only; python lane -> fastapi / python-clean-architecture;
+     frontend lane -> nextjs / data-table / fetch-* skills. Never blend idioms.
+  4. Rust endpoints consumed by Next.js also require fullstack-agents:rust-nextjs-contract.
+  5. After code lands: REVIEW PATTERNS -> FIX -> VALIDATE (language-matched chain).
+
+A PreToolUse hook BLOCKS code-file edits until codebase-scanning and a
+lane-relevant skill have been invoked. Do not write code before routing.
+CONTEXT
+
+exit 0

@@ -140,8 +140,10 @@ The generate → review → validate chain is enforced by the harness, not just 
 
 | Hook | Trigger | What it does |
 |------|---------|--------------|
-| `post-edit-validate` | Every `Write`/`Edit` | Runs `ruff check` on edited Python files; violations block and are fed back to Claude for an immediate fix |
-| `stop-validate` | Session stop | Runs `ruff` on session-modified `.py` files, `tsc --noEmit` when `.ts`/`.tsx` files changed, and blocks if any modified code file exceeds 800 lines; failures block the stop until fixed |
+| `prompt-scan` | Every user prompt | Detects stack-related prompts (Python/Rust/Next.js keywords), classifies lane + intent, and re-injects the routing mandate — the gate is re-armed on EVERY message, surviving long sessions and compaction |
+| `pre-edit-gate` | Before every `Write`/`Edit` to `.py`/`.rs`/`.ts`/`.tsx` | BLOCKS the edit (in governed projects) until `codebase-scanning` AND a lane-relevant skill have actually been invoked this session — verified against the transcript, not promised. Override: `FSA_SKIP_GATE=1` |
+| `post-edit-validate` | After every `Write`/`Edit` | Runs `ruff check` on edited Python files (violations block and feed back); auto-formats edited Rust files with `rustfmt` |
+| `stop-validate` | Session stop | Runs `ruff` on session-modified `.py` files, `cargo fmt --check` + `clippy -D warnings` when `.rs` files changed, `tsc --noEmit` when `.ts`/`.tsx` changed, and blocks if any modified code file exceeds 800 lines |
 
 Both hooks degrade gracefully: they scope checks to files modified in the current session (per git), skip silently when tooling is unavailable (`ruff` is resolved from PATH → `uv run` → `uvx`), and a loop guard prevents repeated Stop blocking.
 
