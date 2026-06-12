@@ -51,6 +51,12 @@ high-throughput, or long-lived always-on services; Python for ML/data-heavy
 work, rapid iteration, and extending the existing FastAPI estate. If the user
 hasn't specified, ask — never guess the lane for a NEW service.
 
+**Coexistence with generic rule systems (e.g. ECC's ~/.claude/rules):** generic
+language rules fill gaps; they never override stack-specific guidance. The
+order is: project constitution > fullstack-agents skills > generic rules. If a
+generic rule conflicts with the wire contract, the layer rules, or the lane
+discipline, the fullstack-agents skill wins — note the conflict to the user.
+
 ## Routing Table
 
 When you detect the user's intent, route to the correct skill or agent. Two kinds of targets:
@@ -126,6 +132,14 @@ Before writing ANY code that touches FastAPI or Next.js, run this mental gate:
 ```
 
 **Do NOT skip to step 4.** Detection, matching, and the reuse search must happen first.
+
+**The gate applies to ADVISORY questions too, not just code generation.**
+Planning and design questions about the stack — "what pages does this app
+need", "how should the frontend fetch this", "what endpoints are missing",
+"how should this service be structured" — route through the same gate: invoke
+the lane's skills (e.g. nextjs + data-table + fetch-architecture for a page
+inventory) BEFORE answering, so the answer reflects the project's actual
+patterns instead of generic knowledge.
 
 ## Senior Engineer Standard (always on)
 
