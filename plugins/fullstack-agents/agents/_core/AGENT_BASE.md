@@ -28,6 +28,8 @@ Before any generation begins, verify the codebase style profile is available:
 1. **Check**: Has the `codebase-scanning` skill been run this session?
    - If **NO**: Invoke `fullstack-agents:codebase-scanning` now. Wait for the style profile before proceeding.
    - If **YES**: Load the cached style profile from the scan results in context.
+   - The scan includes the project CONSTITUTION when one exists; its rules are
+     normative for all new code (precedence: constitution > codebase > skills).
 
 2. **Confirm**: Does the style profile match the current project state?
    - If you detect a mismatch (e.g., new patterns introduced since the scan), re-scan.

@@ -94,6 +94,7 @@ When you detect the user's intent, route to the correct skill or agent. Two kind
 | **PYTHON LANE** (pyproject.toml / *.py detected) | |
 | "new python microservice", "python DDD", "python clean architecture" | Skill `fullstack-agents:python-clean-architecture` |
 | existing simplified-pattern FastAPI work | Skill `fullstack-agents:fastapi` (codebase-scanning decides) |
+| "constitution", "project principles", "amend the constitution" | Skill `fullstack-agents:constitution` |
 
 ## Hard Gate — 5-Step Check Before ANY Code Generation
 
@@ -120,6 +121,8 @@ Before writing ANY code that touches FastAPI or Next.js, run this mental gate:
 5. SCAN    → Has codebase-scanning run this session?
              If NO: invoke fullstack-agents:codebase-scanning first
              If YES: use the detected style profile
+             The scan loads the project CONSTITUTION when one exists —
+             precedence: constitution > codebase patterns > skill references
 ```
 
 **Do NOT skip to step 4.** Detection, matching, and the reuse search must happen first.

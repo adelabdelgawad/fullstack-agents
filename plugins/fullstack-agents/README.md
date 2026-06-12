@@ -1,6 +1,6 @@
 # Fullstack Agents
 
-Unified fullstack development plugin with **29 specialized AI agents** and **24 skill domains** for intelligent code generation, review, analysis, scaffolding, debugging, and optimization across **Python (FastAPI) and Rust (Axum) microservices** behind one Next.js frontend. **Auto-triggers** on FastAPI/Rust/Next.js projects via SessionStart hook, with **enforced validation gates** via PostToolUse and Stop hooks and **strict language-lane separation** between Python and Rust skills.
+Unified fullstack development plugin with **29 specialized AI agents** and **25 skill domains** for intelligent code generation, review, analysis, scaffolding, debugging, and optimization across **Python (FastAPI) and Rust (Axum) microservices** behind one Next.js frontend. **Auto-triggers** on FastAPI/Rust/Next.js projects via SessionStart hook, with **enforced validation gates** via PostToolUse and Stop hooks and **strict language-lane separation** between Python and Rust skills.
 
 ## Features
 
@@ -14,6 +14,7 @@ Unified fullstack development plugin with **29 specialized AI agents** and **24 
 - **Rust Microservices (Clean Architecture + DDD)** - Seven Rust skills (`rust-clean-architecture`, `rust-axum-api`, `rust-sqlx`, `rust-correctness`, `rust-testing`, `rust-quality-gates`, `rust-nextjs-contract`) codify a workspace-per-layer architecture (domain/application/infrastructure/shared + apps/api/worker), Axum 0.8 + SQLx patterns, and exact wire-contract parity with FastAPI so Rust and Python services are interchangeable behind the same Next.js frontend. No Leptos — Rust serves JSON only.
 - **Python Clean Architecture + DDD** - `python-clean-architecture` mirrors the same layer rules for new FastAPI microservices (ports as Protocols, use-case-owned transactions, four-stage error model), while the existing `fastapi` skill keeps serving simplified-pattern services.
 - **Language-Lane Separation** - Rust and Python skills never cross: lane detection (Cargo.toml vs pyproject.toml) routes per file/service, hooks validate per language (ruff vs rustfmt/clippy), and idiom transplants are explicitly forbidden.
+- **Project Constitution (spec-kit compatible)** - The `constitution` skill creates a versioned, per-project principles file (searched at `.specify/memory/constitution.md`, repo root, or `.claude/`). Codebase-scanning loads it with precedence constitution > codebase patterns > skill defaults; every hook surfaces it; and its machine-readable `## Limits` section overrides gate thresholds (e.g. `max-file-lines`). Closes the enforcement gap spec-kit leaves open: spec-kit plans, these hooks police.
 - **Multi-Agent Orchestration** - Chain agents together for fullstack feature generation (backend + frontend + docker).
 - **Pattern Detection** - Automatically detects your coding style, naming conventions, and architectural patterns.
 

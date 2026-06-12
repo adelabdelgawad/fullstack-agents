@@ -13,6 +13,26 @@ Detect project structure, conventions, and coding patterns to ensure generated c
 
 If you have already scanned this session and the results are still in context, skip re-scanning and use the cached profile.
 
+## Phase 0: Constitution Load (~2 seconds)
+
+Check for a project constitution (NORMATIVE principles, vs this scan's
+DESCRIPTIVE profile), in search order:
+
+```
+1. .specify/memory/constitution.md    (spec-kit standard)
+2. constitution.md / CONSTITUTION.md  (repo root)
+3. .claude/constitution.md
+```
+
+If found: read it fully and carry its rules into the style profile —
+architecture style, language lanes, wire contract source of truth, quality
+limits, and non-negotiables. If a spec-kit feature is in flight, also load the
+active `specs/*/plan.md` for the feature being worked on.
+
+If absent in a governed project: proceed with the scan, and suggest creating
+one via the `fullstack-agents:constitution` skill in the final report (do not
+block on it).
+
 ## Phase 1: Structure Detection (~5 seconds)
 
 Quickly identify the project layout:
@@ -109,20 +129,23 @@ After extraction, build this profile and keep it in your working context:
 
 ## Priority Rule
 
-**Codebase patterns ALWAYS override skill reference patterns.**
+**Constitution > codebase patterns > skill reference patterns.**
 
-If the actual project uses a different pattern than what's described in skill references:
-- Follow the **actual project** pattern
-- Note the divergence for the user
-- Do NOT "correct" the project to match the skill reference
-
-The skill references are starting points. The real codebase is the source of truth.
+- The constitution is normative intent: for NEW code it wins over everything.
+- Codebase patterns override skill references: if the actual project uses a
+  different pattern than a skill describes, follow the **actual project**
+  pattern and note the divergence — do NOT "correct" the project to match
+  the skill reference.
+- When the constitution and the existing codebase disagree: follow the
+  constitution for new code, flag the divergence to the user, and never
+  silently rewrite old code to match (that refactor needs user approval).
 
 ## Output
 
 After scanning, briefly report:
-1. Detected project structure (1-2 lines)
-2. Key patterns found (the style profile table)
-3. Any divergences from skill references (if any)
+1. Constitution status (loaded + version, or "none — consider /constitution")
+2. Detected project structure (1-2 lines)
+3. Key patterns found (the style profile table)
+4. Any divergences — constitution vs codebase, or codebase vs skill references
 
 Then proceed with the generation task that triggered this scan.

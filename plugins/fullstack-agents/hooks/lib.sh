@@ -60,6 +60,35 @@ transcript_has_skill() {
     return 1
 }
 
+# find_constitution
+#   Echo the path of the project constitution, searching the standard
+#   locations (spec-kit first). Returns 1 when none exists.
+find_constitution() {
+    local cand
+    for cand in ".specify/memory/constitution.md" "constitution.md" \
+                "CONSTITUTION.md" ".claude/constitution.md"; do
+        if [ -f "$cand" ]; then
+            printf '%s' "$cand"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# constitution_limit KEY DEFAULT
+#   Read a machine-readable `key: value` line from the constitution's Limits
+#   section (e.g. "max-file-lines: 600"). Echoes DEFAULT when absent/invalid.
+constitution_limit() {
+    local key="${1:-}" default="${2:-}" file value
+    file=$(find_constitution) || { printf '%s' "$default"; return 0; }
+    value=$(grep -E "^${key}:[[:space:]]*[0-9]+" "$file" 2>/dev/null \
+        | head -1 | sed "s/^${key}:[[:space:]]*//" | tr -d '[:space:]')
+    case "$value" in
+        ''|*[!0-9]*) printf '%s' "$default" ;;
+        *)           printf '%s' "$value" ;;
+    esac
+}
+
 # is_fullstack_project
 #   Returns 0 when the cwd looks like a project this plugin governs
 #   (FastAPI, Rust workspace, or Next.js).

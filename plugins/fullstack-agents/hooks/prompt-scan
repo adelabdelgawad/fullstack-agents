@@ -39,9 +39,17 @@ elif printf '%s' "$prompt_lower" | grep -qE "error|broken|fix|debug|fail|crash|n
     intent="debug"
 fi
 
+# Constitution line (only when one exists — keep the injection lean).
+constitution_line=""
+constitution_path=$(find_constitution || true)
+if [ -n "$constitution_path" ]; then
+    constitution_line="  0. CONSTITUTION: ${constitution_path} is NORMATIVE — its rules override codebase patterns and skill defaults for new code.
+"
+fi
+
 cat <<CONTEXT
 [fullstack-agents] STACK TOPIC DETECTED (lane: ${lane}, intent: ${intent}) — mandatory routing:
-  1. Run the 5-step gate from using-fullstack-agents: DETECT -> MATCH -> REUSE -> INVOKE -> SCAN.
+${constitution_line}  1. Run the 5-step gate from using-fullstack-agents: DETECT -> MATCH -> REUSE -> INVOKE -> SCAN.
   2. Skill: fullstack-agents:codebase-scanning (invoke NOW if not yet this session).
   3. Invoke the matching domain skill BEFORE writing code — LANGUAGE LANES are strict:
      rust lane -> rust-* skills only; python lane -> fastapi / python-clean-architecture;

@@ -67,9 +67,14 @@ if [ "$lane_ok" != "true" ]; then
 "
 fi
 
+constitution_note=""
+constitution_path=$(find_constitution || true)
+[ -n "$constitution_path" ] && constitution_note="The project constitution (${constitution_path}) is loaded by the scan — its rules are normative.
+"
+
 cat >&2 <<BLOCK
 [fullstack-agents] BLOCKED: editing ${file_path} (${lane} lane) requires consulting skills first:
-${missing}Invoke via the Skill tool, then retry the edit. This prevents pattern drift
+${missing}${constitution_note}Invoke via the Skill tool, then retry the edit. This prevents pattern drift
 and wrong-lane idioms. (Override for emergencies: FSA_SKIP_GATE=1)
 BLOCK
 

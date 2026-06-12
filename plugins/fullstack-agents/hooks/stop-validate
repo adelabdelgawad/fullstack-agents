@@ -8,6 +8,8 @@
 
 set -uo pipefail
 
+source "$(dirname "$0")/lib.sh"
+
 input=$(cat)
 
 # Loop guard: Claude Code sets stop_hook_active when a Stop hook already
@@ -128,8 +130,9 @@ ${output}
     fi
 fi
 
-# --- File size: senior-engineer 800-line limit on modified code files ---
-MAX_FILE_LINES=800
+# --- File size: senior-engineer limit on modified code files ---
+# The project constitution may override the default via its Limits section.
+MAX_FILE_LINES=$(constitution_limit "max-file-lines" 800)
 code_files=$(changed_files '*.py' '*.ts' '*.tsx' '*.rs')
 if [ -n "$code_files" ]; then
     oversized=""
