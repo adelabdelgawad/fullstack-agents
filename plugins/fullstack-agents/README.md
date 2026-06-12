@@ -133,7 +133,7 @@ No manual `/generate entity` commands needed — just say "create a Product enti
 
 Manual commands (`/generate entity`, `/review patterns`, etc.) still work exactly as before for explicit invocation.
 
-On `resume`/`compact` the hook injects only a short reminder instead of the full guide, keeping context lean across long sessions.
+On `resume`/`compact` the hook injects only a short reminder instead of the full guide, and projects with no FastAPI/Rust/Next.js markers get a 2-line notice instead of the full doctrine — token-efficient by design, with the quality floor (dialogue, confirmation, pattern review, validation, tests) never cut. The `using-fullstack-agents` skill carries an explicit Token Discipline section (scan once, skills load once, batch error fixes, parallel tool calls, targeted reads).
 
 ## Enforced Validation Gates (PostToolUse + Stop Hooks)
 
@@ -141,7 +141,7 @@ The generate → review → validate chain is enforced by the harness, not just 
 
 | Hook | Trigger | What it does |
 |------|---------|--------------|
-| `prompt-scan` | Every user prompt | Detects stack-related prompts (Python/Rust/Next.js keywords), classifies lane + intent, and re-injects the routing mandate — the gate is re-armed on EVERY message, surviving long sessions and compaction |
+| `prompt-scan` | Every user prompt | Detects stack-related prompts (Python/Rust/Next.js keywords), classifies lane + intent, and re-arms the routing mandate — full block once per session, one-line reminder afterward (token-efficient; the pre-edit gate enforces deterministically regardless) |
 | `pre-edit-gate` | Before every `Write`/`Edit` to `.py`/`.rs`/`.ts`/`.tsx` | BLOCKS the edit (in governed projects) until `codebase-scanning` AND a lane-relevant skill have actually been invoked this session — verified against the transcript, not promised. Override: `FSA_SKIP_GATE=1` |
 | `post-edit-validate` | After every `Write`/`Edit` | Runs `ruff check` on edited Python files (violations block and feed back); auto-formats edited Rust files with `rustfmt` |
 | `stop-validate` | Session stop | Runs `ruff` on session-modified `.py` files, `cargo fmt --check` + `clippy -D warnings` when `.rs` files changed, `tsc --noEmit` when `.ts`/`.tsx` changed, and blocks if any modified code file exceeds 800 lines |

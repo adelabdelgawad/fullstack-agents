@@ -89,6 +89,16 @@ constitution_limit() {
     esac
 }
 
+# state_dir
+#   Echo the per-plugin state directory (for session-scoped flags) and ensure
+#   it exists. Prunes stale flags older than a day.
+state_dir() {
+    local dir="${TMPDIR:-/tmp}/fullstack-agents-state"
+    mkdir -p "$dir" 2>/dev/null
+    find "$dir" -type f -mtime +1 -delete 2>/dev/null
+    printf '%s' "$dir"
+}
+
 # is_fullstack_project
 #   Returns 0 when the cwd looks like a project this plugin governs
 #   (FastAPI, Rust workspace, or Next.js).

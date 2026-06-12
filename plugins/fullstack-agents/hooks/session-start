@@ -98,7 +98,11 @@ escape_for_json() {
 
 project_info_escaped=$(escape_for_json "$project_info")
 
-if [ "$session_source" = "compact" ] || [ "$session_source" = "resume" ]; then
+if [ "$project_info" = "No FastAPI/Next.js project detected. Fullstack-agents skills are available if needed." ]; then
+    # Token economy: ungoverned project — a 2-line notice instead of the full
+    # ~3.6k-token doctrine. The skills remain invocable on demand.
+    session_context="fullstack-agents installed but no FastAPI/Rust/Next.js project detected here. If stack work comes up, invoke 'fullstack-agents:using-fullstack-agents' via the Skill tool for the routing gate."
+elif [ "$session_source" = "compact" ] || [ "$session_source" = "resume" ]; then
     # Short reminder — the full guide was injected at startup and survives in
     # the conversation summary; re-injecting it would burn context every compact.
     session_context="<EXTREMELY_IMPORTANT>\nYou have fullstack-agents.\n\n**Project Detection:** ${project_info_escaped}\n\nThe 'fullstack-agents:using-fullstack-agents' skill governs ALL FastAPI/Next.js code generation: before writing ANY backend or frontend code, run the 5-step gate (DETECT intent -> MATCH against the routing table -> REUSE: search for existing implementations, never duplicate -> INVOKE the matching skill -> ensure codebase-scanning ran this session), and after generation the chain GENERATE -> REVIEW PATTERNS -> FIX -> VALIDATE is mandatory. The 'fullstack-agents:senior-engineer' discipline (search-before-implement, no duplication, functions < 50 lines, files < 800 lines) applies to ALL implementation work. LANGUAGE LANES are strict: Rust files use rust-* skills only, Python files use fastapi/python-clean-architecture only — never blend idioms; Rust endpoints consumed by Next.js must follow rust-nextjs-contract. If the routing table is no longer in context, invoke 'fullstack-agents:using-fullstack-agents' via the Skill tool to reload it.\n</EXTREMELY_IMPORTANT>"

@@ -39,6 +39,19 @@ elif printf '%s' "$prompt_lower" | grep -qE "error|broken|fix|debug|fail|crash|n
     intent="debug"
 fi
 
+# Token economy: the full routing block goes in ONCE per session; subsequent
+# stack prompts get a one-line reminder (the doctrine is already in context
+# and the pre-edit gate enforces deterministically regardless).
+session_id="$(json_get_field "session_id" "$HOOK_INPUT")"
+armed_flag=""
+[ -n "$session_id" ] && armed_flag="$(state_dir)/armed-${session_id}"
+
+if [ -n "$armed_flag" ] && [ -f "$armed_flag" ]; then
+    printf '[fullstack-agents] lane: %s, intent: %s — 5-step gate and language lanes apply (doctrine already in context; pre-edit gate enforces).\n' "$lane" "$intent"
+    exit 0
+fi
+[ -n "$armed_flag" ] && touch "$armed_flag"
+
 # Constitution line (only when one exists — keep the injection lean).
 constitution_line=""
 constitution_path=$(find_constitution || true)

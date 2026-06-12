@@ -214,6 +214,28 @@ When both `superpowers` and `fullstack-agents` apply:
 
 They complement each other. Use superpowers for the workflow, fullstack-agents for the code.
 
+## Token Discipline (efficiency without quality loss)
+
+Quality steps are never skipped to save tokens — waste is eliminated instead:
+
+- **Scan once.** The codebase-scanning profile (and constitution) is cached in
+  context for the whole session — NEVER re-scan or re-read the constitution
+  unless the project structure visibly changed.
+- **Skills load once.** After a skill's content is in context, follow it from
+  memory — do not re-invoke the same skill or Read its file again.
+- **Batch, don't loop.** Multiple compiler/lint/test errors are fixed as ONE
+  batch then verified ONCE (batch-error-resolution) — never fix-one-rebuild-one.
+- **Parallelize.** Independent reads, greps, and checks go in one message as
+  parallel tool calls, not sequential round-trips.
+- **Targeted reads.** Read the specific lines or one representative example
+  (one router, one entity), not whole directories; the scan profile already
+  summarizes the rest.
+- **Delegate bulk work.** Sweeping multi-file searches go to a subagent that
+  returns conclusions, not file dumps.
+
+What is NEVER cut: dialogue questions, the confirmation plan, pattern review,
+validation runs, and tests. Those are the quality floor.
+
 ## How to Access Skills
 
 Use the `Skill` tool to invoke any fullstack-agents skill. When you invoke a skill, its content is loaded and presented to you — follow it directly. Never use the Read tool on skill files.
