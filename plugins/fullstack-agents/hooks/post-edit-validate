@@ -31,6 +31,11 @@ resolve_ruff() {
 
 file_path=$(json_get_field "tool_input.file_path" "$input")
 [ -n "$file_path" ] || exit 0
+
+# Record the edit so the Stop hook can scope validation to this session's own
+# changes. Done before the existence check so even transient edits are tracked.
+record_touched_file "$(json_get_field "session_id" "$input")" "$file_path"
+
 [ -f "$file_path" ] || exit 0
 
 case "$file_path" in
