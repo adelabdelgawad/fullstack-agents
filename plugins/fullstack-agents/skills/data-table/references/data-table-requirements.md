@@ -10,6 +10,7 @@ The skill assumes a centralized `@/components/data-table` component exists. This
 // Core table
 export { DataTable } from './table/data-table';
 export { DynamicTableBar } from './table/data-table-bar';
+export { DataTableController } from './table/data-table-controller'; // collapsible filter pane
 export { Pagination } from './table/pagination';
 
 // Controls
@@ -135,3 +136,57 @@ The data-table components use URL state via `nuqs`. When search or pagination ch
 // Internally uses:
 // const [page, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
 ```
+
+## DataTableController Props (filter pane)
+
+```typescript
+interface DataTableControllerProps {
+  left?: ReactNode;
+  right?: ReactNode | ((toggle: ReactNode) => ReactNode);
+  filters?: ReactNode;            // grid of faceted filters (one per dimension)
+  activeFilterCount?: number;     // drives the badge on the toggle
+  defaultOpen?: boolean;
+  hasSelection?: boolean;
+  selectionInfo?: ReactNode;
+  selectionActions?: ReactNode;   // bulk-action row shown when rows are selected
+  onReset?: () => void;           // clear-all
+  i18n: { toggle: string; showFilters: string; hideFilters: string; reset?: string };
+}
+```
+
+Full source + wiring: [filter-pane.md](filter-pane.md).
+
+## Faceted Filter (per-option counts, single/multi)
+
+`components/ui/faceted.tsx` — compound component (`Faceted`, `FacetedTrigger`,
+`FacetedContent`, `FacetedInput`, `FacetedList`, `FacetedEmpty`, `FacetedGroup`,
+`FacetedItem`, `FacetedBadgeList`) + `sortFacetedOptions` helper. `multiple` prop
+switches single↔multi. Full source + usage: [faceted-filters.md](faceted-filters.md).
+
+## useUrlFilterCount hook
+
+```typescript
+function useUrlFilterCount(keys: readonly string[]): {
+  activeFilterCount: number;   // count of URL keys with a non-empty value
+  handleReset: () => void;     // delete all keys + page from the URL
+};
+```
+
+## List-envelope facet-count convention
+
+The list response carries **server-computed counts** alongside the rows, so filter
+options and the status bar can show accurate counts under pagination:
+
+```typescript
+interface EntityListResponse {
+  items: Entity[];
+  total: number;          // rows matching current filters → pagination
+  activeCount: number;    // is_active dimension
+  inactiveCount: number;
+  // one field per faceted option for each additional dimension, e.g.:
+  // availableCount, busyCount, offlineCount, ...
+}
+```
+
+Counts are computed server-side over the full filtered set — never derived
+client-side from the current page.

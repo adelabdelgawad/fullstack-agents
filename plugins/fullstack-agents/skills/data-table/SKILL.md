@@ -26,6 +26,7 @@ components/data-table/
 ├── table/
 │   ├── data-table.tsx        # Core TanStack Table wrapper (generic <TData>)
 │   ├── data-table-bar.tsx    # Flexible 3-section toolbar (left/middle/right)
+│   ├── data-table-controller.tsx # Collapsible filter pane: toggle + active-count badge + clear-all
 │   └── pagination.tsx        # Server-side pagination synced to URL params
 ├── controls/
 │   ├── search-input.tsx      # Debounced URL-synced search (default 2000ms)
@@ -36,6 +37,8 @@ components/data-table/
 ├── filters/
 │   ├── status-filter-bar.tsx # Tab-style status filters (All/Active/Inactive)
 │   └── status-badge-filter.tsx # Badge-style status filters (inline mode available)
+│   # Faceted single/multi filters with per-option counts: components/ui/faceted.tsx
+│   # Active-filter count + clear-all: hooks/use-url-filter-count.ts
 ├── actions/
 │   ├── selection-display.tsx # Selected count with clear button
 │   ├── export-button.tsx     # CSV export of visible columns
@@ -128,6 +131,49 @@ import { StatusBadgeFilter, StatusFilterBar } from "@/components/data-table";
 ```
 
 Both filter on `is_active` URL param and reset pagination to page 1 on change.
+
+#### Faceted Filters & Collapsible Filter Pane
+
+For any dimension beyond binary `is_active` — status, group, disposition, etc. —
+use **faceted filters**: a `Faceted` dropdown (single OR multi select) where each
+option shows a **server-provided count** (`Available 12`). Several faceted filters
+side by side are the multi-dimension "levels" of filtering (combined with AND).
+
+When a table has 2+ filter dimensions, wrap them in the **filter pane**
+(`DataTableController`): a collapsible panel with a filters toggle that carries an
+**active-filter-count badge** and an inline **clear-all (×)**, plus an optional
+selection-actions row. The active count and reset come from the `useUrlFilterCount`
+hook over a fixed `FILTER_PARAM_KEYS` list.
+
+```tsx
+import { DataTableController } from "@/components/data-table";
+import { useUrlFilterCount } from "@/hooks/use-url-filter-count";
+
+const FILTER_PARAM_KEYS = ["is_active", "role", "search"] as const;
+const { activeFilterCount, handleReset } = useUrlFilterCount(FILTER_PARAM_KEYS);
+
+<DataTableController
+  hasSelection={selectedIds.length > 0}
+  activeFilterCount={activeFilterCount}
+  onReset={handleReset}
+  i18n={{ toggle: "Filters", showFilters: "Show filters", hideFilters: "Hide filters" }}
+  left={<SearchInput urlParam="search" debounceMs={300} />}
+  filters={
+    <div className="grid grid-cols-3 gap-3">
+      <StatusDropdownFilter activeCount={activeCount} inactiveCount={inactiveCount} />
+      <RoleDropdownFilter roleOptions={roleOptions} />
+    </div>
+  }
+  right={(toggle) => (<>{toggle}<RefreshButton onRefresh={onRefresh} /><ColumnToggleButton table={tableInstance} /></>)}
+/>
+```
+
+Counts are computed **server-side** and returned in the list envelope (one field per
+facet option, e.g. `availableCount`, `busyCount`), so they stay correct under
+pagination. See [references/faceted-filters.md](references/faceted-filters.md) (the
+`Faceted` component + `sortFacetedOptions` + per-option counts) and
+[references/filter-pane.md](references/filter-pane.md) (the `DataTableController` +
+`useUrlFilterCount` + active-count badge + clear-all).
 
 #### Search and Sort Controls
 
@@ -407,4 +453,6 @@ Ensure project has:
 ## References
 
 - [references/select-in-tables.md](references/select-in-tables.md) - SingleSelect in toolbar filters, MultiSelect in edit sheets
+- [references/faceted-filters.md](references/faceted-filters.md) - Faceted single/multi filters with per-option server counts, `sortFacetedOptions`, active-selection chips
+- [references/filter-pane.md](references/filter-pane.md) - Collapsible `DataTableController` filter pane: active-filter-count badge, clear-all, multi-dimension layout, `useUrlFilterCount`
 - [references/form-sheet-guard.md](references/form-sheet-guard.md) - Unsaved-changes guard for Sheet/Dialog close (X, Escape, overlay click)
