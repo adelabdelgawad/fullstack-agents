@@ -1,7 +1,7 @@
 {
   "name": "fullstack-agents",
-  "description": "Unified fullstack development toolkit with 29 AI agents, 8 commands, and 25 skill domains for FastAPI, Rust/Axum, Next.js, Docker, Celery, WebSocket, and more. Polyglot microservices with strict Python/Rust language-lane separation, clean architecture + DDD in both languages, wire-contract parity behind one Next.js frontend, and spec-kit-compatible project constitutions with constitution-aware gates. Auto-triggers via SessionStart hook with hard enforcement hooks (prompt re-arming, pre-edit blocking, post-edit and stop validation) and a senior-engineer discipline for duplication prevention.",
-  "version": "2.9.3",
+  "description": "Unified fullstack development toolkit with 29 AI agents, 8 commands, and 27 skill domains for FastAPI, Rust/Axum, Next.js, Docker, Celery, WebSocket, and more. Polyglot microservices with strict Python/Rust language-lane separation, clean architecture + DDD in both languages, wire-contract parity behind one Next.js frontend, and spec-kit-compatible project constitutions with constitution-aware gates. Auto-triggers via SessionStart hook with hard enforcement hooks (prompt polishing + re-arming, pre-edit blocking, post-edit validation), always-on prompt refinement, large-task decomposition with opt-in parallel execution and audit, panel reasoning for high-stakes decisions, and a senior-engineer discipline for duplication prevention.",
+  "version": "3.0.0",
   "license": "MIT",
   "author": {
     "name": "Adel Abdelgawad",

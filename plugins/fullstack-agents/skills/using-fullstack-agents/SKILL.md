@@ -89,6 +89,9 @@ When you detect the user's intent, route to the correct skill or agent. Two kind
 | "scaffold fetch", "generate fetch boilerplate" | Skill `fullstack-agents:fetch-implement` |
 | "refactor", "clean up", "reduce duplication", "extract shared logic" | Skill `fullstack-agents:senior-engineer` (agent: `optimize-refactoring`, `/optimize`) |
 | ANY implementation work (standing discipline, see gate step 3) | Skill `fullstack-agents:senior-engineer` |
+| ANY request, before acting (refine intent / scope / success criteria) | Skill `fullstack-agents:prompt-polish` (also auto-injected by the prompt-polish hook) |
+| a change spanning 5+ similar units (pages / entities / files / endpoints) | Decomposition flow — split into tracked tasks, confirm concurrency, audit (orchestration.md) |
+| high-stakes decision (architecture, risky migration, security, stubborn bug) | Skill `fullstack-agents:fusion-panel` |
 | **RUST LANE** (Cargo.toml / *.rs detected) | |
 | "rust service", "rust microservice", "structure rust", "rust entity", "where does this go (rust)" | Skill `fullstack-agents:rust-clean-architecture` (agent: `generate-rust-entity`) |
 | "axum handler", "rust endpoint", "rust route", "rust middleware", "rust websocket" | Skill `fullstack-agents:rust-axum-api` |
@@ -148,8 +151,7 @@ generation, modification, and bug fixes alike. Its non-negotiables:
 
 - **Search before implement** — find existing implementations before writing new ones.
 - **No knowing duplication** — reuse, extend, or extract; never fork business logic.
-- **Hard limits** — functions < 50 lines, files < 800 lines, nesting <= 4 levels
-  (the Stop hook blocks sessions that grow files past 800 lines).
+- **Hard limits** — functions < 50 lines, files < 800 lines, nesting <= 4 levels.
 - **Right layer** — presentation, business logic, domain, and data access stay
   separated; dependencies point inward.
 - **Leave it cleaner** — when touching existing code, improve naming, control flow,
@@ -157,6 +159,28 @@ generation, modification, and bug fixes alike. Its non-negotiables:
 
 For the full workflow, search recipe, and definition of done, invoke
 `fullstack-agents:senior-engineer` via the Skill tool.
+
+## Working Method (always on)
+
+Three capabilities apply to how you handle every request — no command needed:
+
+- **Refine the prompt first** (`fullstack-agents:prompt-polish`). Before acting,
+  turn the raw request into a precise spec: intent, scope (state breadth
+  explicitly), success criteria, constraints, output, and whether action or only
+  advice is wanted. Pass the refined spec — not the raw prompt — to any worker
+  subagents. The `prompt-polish` hook keeps this in the loop on every prompt; ask
+  up to 3 clarifying questions only when a point that changes the outcome is
+  genuinely ambiguous, otherwise state your interpretation and proceed.
+- **Decompose large, repetitive work** (orchestration.md). When a request spans
+  5+ similar units, enumerate them, create one tracked task per unit so progress
+  is visible, **ask the user before running anything in parallel** (sequential is
+  the default), dispatch one worker per unit on opt-in, then audit each unit
+  against its success criteria.
+- **Convene a panel for high-stakes calls** (`fullstack-agents:fusion-panel`).
+  For decisions where being wrong is costly, take several independent passes
+  (blind to each other) and synthesize consensus, contradictions, unique
+  insights, and blind spots into a grounded answer. Reserve it for genuinely
+  high-stakes calls — routine work does not need a panel.
 
 ## Rationalization Prevention
 
@@ -204,9 +228,8 @@ Specifically:
    - Frontend: `npx tsc --noEmit && npm run lint`
 
    A PostToolUse hook also runs `ruff` on edited Python files and `rustfmt` on
-   edited Rust files, and a Stop hook re-validates session-modified files (ruff /
-   cargo fmt+clippy / tsc) — if a hook reports violations, fix them immediately;
-   they are the same gate enforced by the harness.
+   edited Rust files — if it reports violations, fix them immediately; they are
+   the same gate enforced by the harness.
 5. **Present next steps** — only THEN show the user what was created and suggest follow-up actions
 
 **Do NOT ask the user's permission between steps 1-4. They are mandatory.**

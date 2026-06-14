@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# prompt-polish — UserPromptSubmit hook for fullstack-agents.
+# Keeps prompt refinement in the loop on every request: the user's raw
+# instruction is refined into a precise spec (intent / scope / success criteria
+# / constraints / format) before it drives work or is handed to worker subagents.
+# Method lives in the prompt-polish skill; this hook injects the standing
+# directive. Token economy mirrors prompt-scan: full directive once per session,
+# a one-line reminder afterward.
+set -uo pipefail
+
+source "$(dirname "$0")/lib.sh"
+
+HOOK_INPUT="$(cat)"
+prompt="$(json_get_field "prompt" "$HOOK_INPUT")"
+[ -n "$prompt" ] || exit 0
+
+# Skip pure control replies — there is nothing to refine in an affirmation or a
+# bare continuation, and padding them wastes a turn.
+prompt_trimmed="$(printf '%s' "$prompt" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:][:punct:]')"
+case "$prompt_trimmed" in
+    yes|y|ok|okay|yep|yeah|sure|no|n|nope|continue|go|proceed|stop|cancel|thanks|ty) exit 0 ;;
+esac
+
+session_id="$(json_get_field "session_id" "$HOOK_INPUT")"
+polished_flag=""
+[ -n "$session_id" ] && polished_flag="$(state_dir)/polished-${session_id}"
+
+if [ -n "$polished_flag" ] && [ -f "$polished_flag" ]; then
+    printf '[fullstack-agents] Refine the request before acting (prompt-polish): clarify intent, scope, and success criteria; ask up to 3 questions only if genuinely ambiguous; pass the refined spec — not the raw prompt — to any worker subagents.\n'
+    exit 0
+fi
+[ -n "$polished_flag" ] && touch "$polished_flag"
+
+cat <<'CONTEXT'
+[fullstack-agents] PROMPT POLISH — before acting on the request below, refine it
+into a precise internal spec (skill: fullstack-agents:prompt-polish):
+
+  1. Intent — one sentence: the outcome the user wants.
+  2. Scope — exact files / layers / pages / entities in and out of scope. State
+     breadth explicitly; do not silently generalize "this" to "all".
+  3. Success criteria — how correct-and-done is judged (behavior, tests, contract
+     parity, lint/typecheck).
+  4. Constraints — patterns to follow, what not to touch, the constitution if any.
+  5. Output & action — the deliverable's form, and whether to make changes or only
+     advise (use a direct verb when action is wanted).
+
+Scale to the request: pass trivial or already-clear prompts through unchanged;
+fully refine vague or large ones. If a point that changes the outcome is genuinely
+ambiguous, ask up to 3 focused questions first; otherwise state your interpretation
+in one line and proceed. When delegating, give each worker the refined spec for the
+unit it owns. A large, repetitive request (e.g. a change across many pages) should
+go to the orchestration agent to split into tracked sub-tasks, confirm concurrency
+with the user, and audit each unit.
+CONTEXT
+
+exit 0

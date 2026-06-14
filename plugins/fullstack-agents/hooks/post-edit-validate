@@ -7,7 +7,7 @@
 #           harness-enforced half of the generate→review→validate chain).
 #
 # TypeScript files are intentionally NOT checked here: tsc has no fast
-# single-file mode, so whole-project tsc runs in the Stop hook instead.
+# single-file mode. Run whole-project `tsc --noEmit` manually before shipping.
 
 set -uo pipefail
 
@@ -32,10 +32,6 @@ resolve_ruff() {
 file_path=$(json_get_field "tool_input.file_path" "$input")
 [ -n "$file_path" ] || exit 0
 
-# Record the edit so the Stop hook can scope validation to this session's own
-# changes. Done before the existence check so even transient edits are tracked.
-record_touched_file "$(json_get_field "session_id" "$input")" "$file_path"
-
 [ -f "$file_path" ] || exit 0
 
 case "$file_path" in
@@ -51,8 +47,8 @@ case "$file_path" in
         fi
         ;;
     *.rs)
-        # Auto-format (never block here); fmt --check + clippy run in the
-        # Stop hook over session-modified files.
+        # Auto-format edited Rust files (never block here). Run
+        # `cargo fmt --check` + `cargo clippy -D warnings` manually before shipping.
         if command -v rustfmt >/dev/null 2>&1; then
             rustfmt --edition 2021 --emit files "$file_path" 2>/dev/null || true
         fi

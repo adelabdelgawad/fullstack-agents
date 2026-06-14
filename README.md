@@ -13,7 +13,7 @@ A Claude Code plugin that brings intelligent, pattern-aware code generation to p
 
 - **29 specialized agents** across generation, review, analysis, scaffolding, debug, and optimization
 - **8 slash commands** for common workflows (`/generate`, `/review`, `/analyze`, `/scaffold`, `/debug`, `/optimize`, `/validate`, `/status`)
-- **25 skill domains** covering FastAPI, Rust/Axum, Next.js, clean architecture + DDD in both backend languages, TanStack Table, Celery, Docker, WebSocket, debugging discipline, and more
+- **27 skill domains** covering FastAPI, Rust/Axum, Next.js, clean architecture + DDD in both backend languages, TanStack Table, Celery, Docker, WebSocket, debugging discipline, prompt refinement, panel reasoning, and more
 - **Hard enforcement hooks** — the routing gate is re-armed on every prompt, code-file edits are blocked until the right skills were consulted, and every change is validated with real tooling (ruff, rustfmt, clippy, tsc) before the session can end
 - **Language-lane separation** — Rust and Python skills never cross; lane detection routes per file/service, and idiom transplants are forbidden
 - **Wire-contract parity** — Rust and FastAPI services speak the same dialect (camelCase JSON, limit/skip pagination, shared auth), interchangeable behind the same frontend
@@ -45,7 +45,7 @@ Agents follow a structured lifecycle: they detect your project type and existing
 > What relationships should this entity have?
 ```
 
-After generation, the chain `REVIEW PATTERNS → FIX → VALIDATE` runs automatically — and the hooks make it non-optional: edits to `.py`/`.rs`/`.ts` files are blocked until the codebase scan and a lane-relevant skill have actually been invoked, and the session cannot end while session-modified files fail ruff, clippy, tsc, or the file-size limit.
+After generation, the chain `REVIEW PATTERNS → FIX → VALIDATE` runs automatically — and the hooks make it non-optional: edits to `.py`/`.rs`/`.ts` files are blocked until the codebase scan and a lane-relevant skill have actually been invoked, and a PostToolUse hook lints every edited Python file with `ruff` (auto-formatting Rust with `rustfmt`) before you continue.
 
 ## Supported Stack
 
@@ -92,10 +92,10 @@ After generation, the chain `REVIEW PATTERNS → FIX → VALIDATE` runs automati
 | Hook | When | What it enforces |
 |------|------|------------------|
 | `session-start` | Session start | Detects your stack + constitution, injects the routing doctrine |
+| `prompt-polish` | Every prompt | Refine the request into a precise spec before acting / delegating |
 | `prompt-scan` | Every prompt | Re-arms the 5-step gate with lane + intent classification |
 | `pre-edit-gate` | Before code edits | Blocks until codebase-scanning + a lane-relevant skill were invoked |
 | `post-edit-validate` | After code edits | ruff on Python, rustfmt on Rust |
-| `stop-validate` | Session end | ruff / cargo fmt+clippy / tsc on session-modified files, file-size limits (constitution-overridable) |
 
 ## Philosophy
 

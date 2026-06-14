@@ -1,6 +1,6 @@
 # Fullstack Agents
 
-Unified fullstack development plugin with **29 specialized AI agents** and **25 skill domains** for intelligent code generation, review, analysis, scaffolding, debugging, and optimization across **Python (FastAPI) and Rust (Axum) microservices** behind one Next.js frontend. **Auto-triggers** on FastAPI/Rust/Next.js projects via SessionStart hook, with **enforced validation gates** via PostToolUse and Stop hooks and **strict language-lane separation** between Python and Rust skills.
+Unified fullstack development plugin with **29 specialized AI agents** and **27 skill domains** for intelligent code generation, review, analysis, scaffolding, debugging, and optimization across **Python (FastAPI) and Rust (Axum) microservices** behind one Next.js frontend. **Auto-triggers** on FastAPI/Rust/Next.js projects via SessionStart hook, with **enforced validation gates** via a PostToolUse hook and **strict language-lane separation** between Python and Rust skills.
 
 ## Features
 
@@ -9,12 +9,12 @@ Unified fullstack development plugin with **29 specialized AI agents** and **25 
 - **Codebase Scanning** - Before first generation, scans your project to build a style profile (session patterns, schema bases, naming conventions, etc.) ensuring generated code matches exactly.
 - **Interactive Dialogue** - Agents detect your codebase patterns, ask about relationships and edge cases, confirm before generating, and suggest next steps.
 - **Mandatory Post-Generation Review** - After every generation, pattern compliance review + type check + lint runs automatically. No manual step needed.
-- **Enforced Validation Gates** - Not just prompts: a PostToolUse hook runs `ruff` on every edited Python file, and a Stop hook re-validates all session-modified files (`ruff` + `tsc` + 800-line file-size limit) before the session can end. Violations are fed back and must be fixed.
-- **Senior Engineer Discipline** - The `senior-engineer` skill enforces search-before-implement, duplication prevention, SOLID layer boundaries, and complexity limits on ALL implementation work — wired into the hard gate (step 3: REUSE), the agent lifecycle (Phase 3 reuse search), and the Stop hook (file-size limit).
+- **Enforced Validation Gates** - Not just prompts: a PostToolUse hook runs `ruff` on every edited Python file (violations are fed back and must be fixed) and auto-formats edited Rust files with `rustfmt`. Whole-project `clippy`/`tsc` stay your call before shipping.
+- **Senior Engineer Discipline** - The `senior-engineer` skill enforces search-before-implement, duplication prevention, SOLID layer boundaries, and complexity limits on ALL implementation work — wired into the hard gate (step 3: REUSE) and the agent lifecycle (Phase 3 reuse search).
 - **Rust Microservices (Clean Architecture + DDD)** - Seven Rust skills (`rust-clean-architecture`, `rust-axum-api`, `rust-sqlx`, `rust-correctness`, `rust-testing`, `rust-quality-gates`, `rust-nextjs-contract`) codify a workspace-per-layer architecture (domain/application/infrastructure/shared + apps/api/worker), Axum 0.8 + SQLx patterns, and exact wire-contract parity with FastAPI so Rust and Python services are interchangeable behind the same Next.js frontend. No Leptos — Rust serves JSON only.
 - **Python Clean Architecture + DDD** - `python-clean-architecture` mirrors the same layer rules for new FastAPI microservices (ports as Protocols, use-case-owned transactions, four-stage error model), while the existing `fastapi` skill keeps serving simplified-pattern services.
 - **Language-Lane Separation** - Rust and Python skills never cross: lane detection (Cargo.toml vs pyproject.toml) routes per file/service, hooks validate per language (ruff vs rustfmt/clippy), and idiom transplants are explicitly forbidden.
-- **Project Constitution (spec-kit compatible)** - The `constitution` skill creates a versioned, per-project principles file (searched at `.specify/memory/constitution.md`, repo root, or `.claude/`). Codebase-scanning loads it with precedence constitution > codebase patterns > skill defaults; every hook surfaces it; and its machine-readable `## Limits` section overrides gate thresholds (e.g. `max-file-lines`). Closes the enforcement gap spec-kit leaves open: spec-kit plans, these hooks police.
+- **Project Constitution (spec-kit compatible)** - The `constitution` skill creates a versioned, per-project principles file (searched at `.specify/memory/constitution.md`, repo root, or `.claude/`). Codebase-scanning loads it with precedence constitution > codebase patterns > skill defaults; every hook surfaces it. Closes the enforcement gap spec-kit leaves open: spec-kit plans, these hooks police.
 - **Multi-Agent Orchestration** - Chain agents together for fullstack feature generation (backend + frontend + docker).
 - **Pattern Detection** - Automatically detects your coding style, naming conventions, and architectural patterns.
 
@@ -135,18 +135,18 @@ Manual commands (`/generate entity`, `/review patterns`, etc.) still work exactl
 
 On `resume`/`compact` the hook injects only a short reminder instead of the full guide, and projects with no FastAPI/Rust/Next.js markers get a 2-line notice instead of the full doctrine — token-efficient by design, with the quality floor (dialogue, confirmation, pattern review, validation, tests) never cut. The `using-fullstack-agents` skill carries an explicit Token Discipline section (scan once, skills load once, batch error fixes, parallel tool calls, targeted reads).
 
-## Enforced Validation Gates (PostToolUse + Stop Hooks)
+## Enforced Validation Gates (PostToolUse Hook)
 
 The generate → review → validate chain is enforced by the harness, not just by prompt instructions:
 
 | Hook | Trigger | What it does |
 |------|---------|--------------|
+| `prompt-polish` | Every user prompt | Injects a directive to refine the raw request into a precise spec (intent / scope / success criteria / constraints) before acting and before delegating to worker subagents — full directive once per session, one-line reminder afterward; pure control replies (yes/continue) are skipped |
 | `prompt-scan` | Every user prompt | Detects stack-related prompts (Python/Rust/Next.js keywords), classifies lane + intent, and re-arms the routing mandate — full block once per session, one-line reminder afterward (token-efficient; the pre-edit gate enforces deterministically regardless) |
 | `pre-edit-gate` | Before every `Write`/`Edit` to `.py`/`.rs`/`.ts`/`.tsx` | BLOCKS the edit (in governed projects) until `codebase-scanning` AND a lane-relevant skill have actually been invoked this session — verified against the transcript, not promised. Override: `FSA_SKIP_GATE=1` |
 | `post-edit-validate` | After every `Write`/`Edit` | Runs `ruff check` on edited Python files (violations block and feed back); auto-formats edited Rust files with `rustfmt` |
-| `stop-validate` | Session stop | Runs `ruff` on session-modified `.py` files, `cargo fmt --check` + `clippy -D warnings` when `.rs` files changed, `tsc --noEmit` when `.ts`/`.tsx` changed, and blocks if any modified code file exceeds 800 lines |
 
-Both hooks degrade gracefully: they scope checks to files modified in the current session (per git), skip silently when tooling is unavailable (`ruff` is resolved from PATH → `uv run` → `uvx`), and a loop guard prevents repeated Stop blocking.
+These hooks degrade gracefully: they act only on the file just edited, and skip silently when tooling is unavailable (`ruff` is resolved from PATH → `uv run` → `uvx`). Whole-project checks (`cargo fmt --check` + `clippy -D warnings`, `tsc --noEmit`) are left to you to run before shipping.
 
 ## Agent Lifecycle
 

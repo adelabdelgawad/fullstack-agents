@@ -20,6 +20,84 @@ Use orchestration when:
 - Sequential dependencies exist (backend before frontend)
 - User requests a "fullstack" feature
 
+## Large & Repetitive Task Decomposition
+
+A single request often expands into many similar units of work — "apply change X
+across the app" when the app has 20 pages, "add field Y to every entity", "migrate
+all data-tables to the new pattern". Do **not** treat this as one opaque task that
+silently walks unit by unit. Decompose it so progress is visible, work can be
+parallelized on request, and each unit is audited.
+
+### When to decompose
+
+Decompose when the work splits into **5+ independent units** (pages, entities,
+files, endpoints, services) that share a pattern. Below that, do it inline. For a
+genuinely large repetitive change, decomposition is the default.
+
+### Step 1 — Enumerate the units
+
+Discover the concrete list first (glob the pages, list the entities, read the
+diff scope). Report the count and the list. Never assume "all" — enumerate, so
+the breadth is explicit and the user can correct it before any work starts.
+
+### Step 2 — Create one tracked task per unit
+
+Use `TaskCreate` to make **one task per unit** plus a final **audit** task, so the
+user sees real progress instead of a single spinner. Mark each `in_progress` when
+it starts and `completed` the moment it lands.
+
+- For very large N (say > 25), batch the units (e.g. one task per group of 5) and
+  say so — never silently cap or drop units.
+- Give each task a clear subject naming its unit (e.g. "Migrate products page").
+
+### Step 3 — Confirm concurrency with the user (required)
+
+Parallel / concurrent execution is **opt-in**. Before fanning out, ASK the user
+how to run it — do not start parallel workers on your own initiative:
+
+```markdown
+This splits into N independent units. How should I run them?
+
+1. Sequential (default) — one at a time, easiest to follow and review.
+2. Parallel — dispatch M worker subagents at once; faster, more concurrent output
+   to track. (How many at a time?)
+
+Parallel workers each own one unit and must touch disjoint files.
+```
+
+Proceed sequentially if the user doesn't choose. Only run workers in parallel
+after an explicit yes.
+
+### Step 4 — Execute
+
+- **Sequential:** work the task list top to bottom, updating status per unit.
+- **Parallel (after opt-in):** dispatch worker subagents with the Agent tool,
+  one unit per worker, running concurrently. Use **Sonnet** for non-trivial unit
+  work and **Haiku** for small mechanical edits; reserve **Opus** for the audit.
+  Each worker receives the **refined spec** (see the prompt-polish skill) for its
+  unit only: intent, the exact files it owns, success criteria, constraints.
+  Workers must touch **disjoint files**; route any shared-file edit to a single
+  consolidation task to avoid write conflicts.
+
+### Step 5 — Audit the executors
+
+Executor output is not trusted until reviewed. Run an **audit pass** over the
+completed units (an independent reviewer — Opus for substantial changes) that
+checks each unit against the success criteria, the project patterns, and the
+language-matched validation chain (ruff / clippy / tsc). This is the
+draft → review → refine self-correction loop applied across units: fix what the
+audit finds, then mark the audit task complete. Report which units passed, which
+were fixed, and any that need the user's decision.
+
+### Calibration
+
+- Don't fan out trivial work — a handful of one-line edits is faster done directly
+  than delegated.
+- Fan out when units are independent, benefit from isolated context, or the user
+  asked for speed. Spawn the parallel workers in a single turn.
+- Keep progress incremental and the task list honest: status reflects reality, not
+  intention.
+
 ## Orchestration Flows
 
 ### Fullstack Feature Generation

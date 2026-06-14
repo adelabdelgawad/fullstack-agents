@@ -21,6 +21,30 @@ Every agent must follow this 7-phase lifecycle:
 6. NEXT STEPS     -> Suggest related actions, offer to continue
 ```
 
+### Refine the request first
+
+Before Phase 1, refine the user's raw request into a precise spec — intent, scope,
+success criteria, constraints, output — following the `prompt-polish` skill. Pass
+that refined spec (not the raw prompt) to any worker subagents you dispatch. The
+`prompt-polish` UserPromptSubmit hook keeps this in the loop on every request.
+
+### Large or repetitive requests
+
+When detection (Phase 1) shows the request spans **5+ similar units** (pages,
+entities, files, endpoints), switch to the decomposition flow in
+`orchestration.md` instead of walking the units inside one task: enumerate the
+units, create one tracked task per unit, **ask the user before running anything in
+parallel**, then audit each unit.
+
+### High-stakes decisions — panel reasoning
+
+For decisions where being wrong is costly (architecture choice, risky migration,
+security-sensitive change, a stubborn bug, an ambiguous trade-off), use the
+`fusion-panel` skill: take one independent pass per panelist, blind to each other,
+then synthesize consensus, contradictions, unique insights, and blind spots into a
+grounded answer. Reserve it for genuinely high-stakes calls — routine work does not
+need a panel.
+
 ## Phase 0: Bootstrapping
 
 Before any generation begins, verify the codebase style profile is available:

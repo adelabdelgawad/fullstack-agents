@@ -75,20 +75,6 @@ find_constitution() {
     return 1
 }
 
-# constitution_limit KEY DEFAULT
-#   Read a machine-readable `key: value` line from the constitution's Limits
-#   section (e.g. "max-file-lines: 600"). Echoes DEFAULT when absent/invalid.
-constitution_limit() {
-    local key="${1:-}" default="${2:-}" file value
-    file=$(find_constitution) || { printf '%s' "$default"; return 0; }
-    value=$(grep -E "^${key}:[[:space:]]*[0-9]+" "$file" 2>/dev/null \
-        | head -1 | sed "s/^${key}:[[:space:]]*//" | tr -d '[:space:]')
-    case "$value" in
-        ''|*[!0-9]*) printf '%s' "$default" ;;
-        *)           printf '%s' "$value" ;;
-    esac
-}
-
 # state_dir
 #   Echo the per-plugin state directory (for session-scoped flags) and ensure
 #   it exists. Prunes stale flags older than a day.
@@ -97,53 +83,6 @@ state_dir() {
     mkdir -p "$dir" 2>/dev/null
     find "$dir" -type f -mtime +1 -delete 2>/dev/null
     printf '%s' "$dir"
-}
-
-# session_touch_manifest SESSION_ID
-#   Echo the path of the per-session "edited files" manifest. The manifest
-#   records every file the session modified via Write/Edit so the Stop hook can
-#   scope validation to this session's own changes instead of the whole dirty
-#   tree. Returns 1 (and empty output) when SESSION_ID is missing.
-session_touch_manifest() {
-    local sid="${1:-}"
-    [ -n "$sid" ] || { printf ''; return 1; }
-    # Sanitise into a safe filename (session ids are uuids, but be defensive).
-    sid=$(printf '%s' "$sid" | tr -c 'A-Za-z0-9_-' '_')
-    printf '%s/touched-%s.txt' "$(state_dir)" "$sid"
-}
-
-# record_touched_file SESSION_ID FILE
-#   Append FILE to the session manifest. No-op when either argument is empty,
-#   so a missing session id degrades to "nothing recorded" rather than error.
-record_touched_file() {
-    local sid="${1:-}" file="${2:-}"
-    [ -n "$sid" ] && [ -n "$file" ] || return 0
-    # Normalise Windows paths (e.g. D:\a\b) to POSIX so downstream dirname/cd/
-    # test -f work in Git Bash; a no-op on native POSIX systems.
-    if command -v cygpath >/dev/null 2>&1; then
-        file=$(cygpath -u "$file" 2>/dev/null || printf '%s' "$file")
-    fi
-    local manifest
-    manifest=$(session_touch_manifest "$sid") || return 0
-    printf '%s\n' "$file" >> "$manifest" 2>/dev/null || true
-}
-
-# consume_touched_files SESSION_ID
-#   Print the unique, still-existing files this session edited since the last
-#   Stop, then delete the manifest. Consume-once semantics: each Stop validates
-#   only the edits made during that turn cycle, and a turn with no edits
-#   (read-only / clarification / debugging) yields nothing — the Stop hook then
-#   skips all validation.
-consume_touched_files() {
-    local sid="${1:-}"
-    [ -n "$sid" ] || return 0
-    local manifest
-    manifest=$(session_touch_manifest "$sid") || return 0
-    [ -f "$manifest" ] || return 0
-    sort -u "$manifest" 2>/dev/null | while IFS= read -r f; do
-        [ -n "$f" ] && [ -f "$f" ] && printf '%s\n' "$f"
-    done
-    rm -f "$manifest" 2>/dev/null || true
 }
 
 # is_fullstack_project

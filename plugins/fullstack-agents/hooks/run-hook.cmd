@@ -1,12 +1,16 @@
-: << 'CMDBLOCK'
+:; d=$(dirname "$0"); s=$1; shift; exec bash "$d/$s" "$@" # POSIX shells dispatch here and never read the batch below
 @echo off
-REM Cross-platform polyglot wrapper for hook scripts.
-REM On Windows: cmd.exe runs the batch portion, which finds and calls bash.
-REM On Unix: the shell interprets this as a script (: is a no-op in bash).
+REM Cross-platform hook launcher.
 REM
-REM Hook scripts use extensionless filenames (e.g. "session-start" not
-REM "session-start.sh") so Claude Code's Windows auto-detection -- which
-REM prepends "bash" to any command containing .sh -- doesn't interfere.
+REM POSIX shells (Linux/macOS `sh`/`bash`) execute the first line: it execs the
+REM named bash hook and the process is replaced before the batch is ever read.
+REM The trailing `#` comment absorbs the CRLF carriage return, so the dispatch
+REM works even though this file ships with CRLF line endings.
+REM
+REM Windows cmd.exe treats that first line as a label, skips it, and runs this
+REM batch, which locates bash and runs the hook. Hook scripts use extensionless
+REM filenames (e.g. "session-start") so editors and tooling never mistake them
+REM for shell scripts the host shell should reinterpret.
 REM
 REM Usage: run-hook.cmd <script-name> [args...]
 
@@ -37,10 +41,3 @@ if %ERRORLEVEL% equ 0 (
 REM No bash found - exit silently rather than error
 REM (plugin still works, just without SessionStart context injection)
 exit /b 0
-CMDBLOCK
-
-# Unix: run the named script directly
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SCRIPT_NAME="$1"
-shift
-exec bash "${SCRIPT_DIR}/${SCRIPT_NAME}" "$@"

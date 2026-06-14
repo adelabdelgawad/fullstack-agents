@@ -297,17 +297,16 @@ The plugin enforces its workflow with hooks — these behaviors are normal:
   scan and a lane-relevant skill have been invoked in the session. If you see
   a `[fullstack-agents] BLOCKED` message, invoke the listed skills and retry.
   Emergency override: set `FSA_SKIP_GATE=1`.
-- **The session cannot end** while session-modified files fail validation
-  (ruff for Python, cargo fmt + clippy for Rust, tsc for TypeScript, and the
-  file-size limit). Fix the reported violations and the stop proceeds.
+- **After each edit to a `.py`/`.rs` file**, `ruff` lints Python (violations
+  block until fixed) and `rustfmt` auto-formats Rust. Run whole-project
+  `clippy`/`tsc` yourself before shipping.
 
 ## Project Constitution (optional, recommended)
 
 Say "create a constitution" in any project to generate a versioned principles
 file (compatible with [spec-kit](https://github.com/github/spec-kit)'s
 `.specify/memory/constitution.md` location). Its rules take precedence over
-detected codebase patterns for new code, and its `## Limits` section
-(e.g. `max-file-lines: 500`) directly overrides the hook thresholds.
+detected codebase patterns for new code.
 
 ---
 

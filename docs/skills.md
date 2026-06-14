@@ -1,6 +1,6 @@
 # Skills Reference
 
-This document provides a complete reference for all 9 skill domains in the fullstack-agents plugin.
+This document provides a complete reference for all 11 skill domains in the fullstack-agents plugin.
 
 ## Skills Overview
 
@@ -586,9 +586,9 @@ decides which applies.
 
 Cross-cutting discipline on ALL implementation work: search-before-implement
 (with a concrete search recipe), never knowingly duplicate business logic,
-functions < 50 lines / files < 800 lines / nesting ≤ 4 (hook-enforced),
+functions < 50 lines / files < 800 lines / nesting ≤ 4,
 dependencies point inward, leave touched code cleaner than found. Wired into
-the hard gate (step 3: REUSE), the agent lifecycle, and the Stop hook.
+the hard gate (step 3: REUSE) and the agent lifecycle.
 
 - `skills/senior-engineer/SKILL.md` — complete skill
 
@@ -600,7 +600,27 @@ Creates and maintains a versioned, per-project principles file — NORMATIVE
 intent, where codebase-scanning's profile is DESCRIPTIVE reality. Searched at
 `.specify/memory/constitution.md` (spec-kit standard), repo root, then
 `.claude/`. Precedence: constitution > codebase patterns > skill defaults.
-Its machine-readable `## Limits` section overrides hook thresholds (e.g.
-`max-file-lines: 500`).
 
 - `skills/constitution/SKILL.md` — authoring guide + template
+
+## Prompt Polish Skill
+
+Refines a raw user instruction into a precise spec — intent, scope (breadth stated
+explicitly), success criteria, constraints, output, and action-vs-advice — before
+acting on it or delegating it to worker subagents. Grounds the rewrite in Claude
+prompt-engineering best practices and Opus 4.x literal-instruction behavior. Always
+in the loop via the `prompt-polish` UserPromptSubmit hook; scales to the request
+(trivial prompts pass through, large/vague ones get full refinement).
+
+- `skills/prompt-polish/SKILL.md` — refinement procedure + examples
+
+## Fusion Panel Skill
+
+Panel reasoning for high-stakes decisions, inspired by fusion-fable's "independence,
+then synthesis": take several independent passes at the same question (blind to each
+other), then synthesize consensus, contradictions, unique insights, and blind spots
+into one grounded answer. Zero setup — parallel Claude subagents, no external CLIs
+and no slash command. Reserve it for architecture choices, risky migrations,
+security-sensitive changes, and stubborn bugs.
+
+- `skills/fusion-panel/SKILL.md` — when to convene, procedure, synthesis structure

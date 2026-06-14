@@ -123,7 +123,7 @@ profile for the project's actual locations.
 
 ### 9. Control File Size and Cognitive Load
 
-Hard limits (enforced by the plugin's Stop hook for new growth):
+Hard limits (senior-engineer discipline — keep new growth within these):
 
 | Unit | Limit |
 |------|-------|

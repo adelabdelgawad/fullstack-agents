@@ -30,18 +30,6 @@ codebase disagree, follow the constitution for new code, flag the divergence
 to the user, and never silently "correct" old code (that is a refactor the
 user must approve).
 
-## Machine-Readable Limits
-
-The constitution MAY contain a `## Limits` section with `key: value` lines the
-hooks parse directly. Currently honored by stop-validate:
-
-```markdown
-## Limits
-max-file-lines: 800
-```
-
-Omit the section to accept plugin defaults.
-
 ## Template
 
 When creating a constitution, start from this template, fill the placeholders
@@ -80,9 +68,6 @@ Amendments require a version bump and a one-line rationale in History.
 - Warnings are errors (clippy -D warnings / ruff strict). No #[allow] / no
   blanket noqa — fix root causes.
 - No hardcoded secrets; config is fail-fast typed (env validated at startup).
-
-## Limits
-max-file-lines: 800
 
 ## Non-Negotiables
 

@@ -8,8 +8,8 @@
     {
       "name": "fullstack-agents",
       "source": "./plugins/fullstack-agents",
-      "description": "AI-powered polyglot fullstack toolkit: 29 agents, 8 commands, and 25 skill domains for FastAPI and Rust/Axum microservices behind one Next.js frontend. Clean architecture + DDD in both languages, strict language-lane separation, spec-kit-compatible project constitutions, and hard enforcement hooks (prompt re-arming, pre-edit blocking gate, post-edit and stop validation).",
-      "version": "2.9.3",
+      "description": "AI-powered polyglot fullstack toolkit: 29 agents, 8 commands, and 27 skill domains for FastAPI and Rust/Axum microservices behind one Next.js frontend. Clean architecture + DDD in both languages, strict language-lane separation, spec-kit-compatible project constitutions, always-on prompt refinement, large-task decomposition with opt-in parallel execution and audit, panel reasoning for high-stakes decisions, and hard enforcement hooks (prompt polishing + re-arming, pre-edit blocking gate, post-edit validation).",
+      "version": "3.0.0",
       "author": {
         "name": "Adel Abdelgawad"
       }
