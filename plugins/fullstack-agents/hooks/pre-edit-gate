@@ -38,9 +38,9 @@ transcript_has_skill "$transcript_path" "codebase-scanning" && scan_ok=true
 
 # Requirement 2: a lane-relevant skill was consulted.
 case "$lane" in
-    rust)     lane_skills="rust-clean-architecture rust-axum-api rust-sqlx rust-correctness rust-testing rust-quality-gates rust-nextjs-contract debug batch-error-resolution" ;;
-    python)   lane_skills="fastapi python-clean-architecture celery tasks-management debug batch-error-resolution" ;;
-    frontend) lane_skills="nextjs data-table fetch-architecture fetch-plan fetch-implement fetch-validate debug batch-error-resolution" ;;
+    rust)     lane_skills="rust-clean-architecture rust-axum-api rust-sqlx rust-correctness rust-testing rust-quality-gates rust-nextjs-contract backend-migration-from-frontend debug batch-error-resolution" ;;
+    python)   lane_skills="fastapi python-clean-architecture celery tasks-management backend-migration-from-frontend debug batch-error-resolution" ;;
+    frontend) lane_skills="nextjs data-table fetch-architecture fetch-plan fetch-implement fetch-validate frontend-transformation backend-migration-from-frontend debug batch-error-resolution" ;;
 esac
 
 lane_ok=false

@@ -69,6 +69,8 @@ When you detect the user's intent, route to the correct skill or agent. Two kind
 | "create entity", "add model", "CRUD", "backend API for X" | Skill `fullstack-agents:fastapi` (agent: `generate-fastapi-entity`, `/generate entity`) |
 | "data table", "management page", "list page with CRUD" | Skill `fullstack-agents:data-table` (agent: `generate-nextjs-data-table`, `/generate data-table`) |
 | "create page", "new page", "frontend page" | Skill `fullstack-agents:nextjs` (agent: `generate-nextjs-page`, `/generate page`) |
+| "migrate frontend", "port React to Next.js", "convert/transform frontend 1:1" | Skill `fullstack-agents:frontend-transformation` |
+| "migrate backend", "rewrite API in framework X", "reproduce backend behavior from the UI" | Skill `fullstack-agents:backend-migration-from-frontend` |
 | "API route", "proxy route", "Next.js API" | Skill `fullstack-agents:fetch-architecture` (agent: `generate-api-route`, `/generate api-route`) |
 | "celery task", "background task", "async task" | Skill `fullstack-agents:celery` (agent: `generate-celery-task`, `/generate task`) |
 | "scheduled job", "cron job", "periodic task" | Skill `fullstack-agents:tasks-management` (agent: `generate-scheduled-job`, `/generate job`) |

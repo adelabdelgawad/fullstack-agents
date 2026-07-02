@@ -13,7 +13,7 @@ A Claude Code plugin that brings intelligent, pattern-aware code generation to p
 
 - **29 specialized agents** across generation, review, analysis, scaffolding, debug, and optimization
 - **8 slash commands** for common workflows (`/generate`, `/review`, `/analyze`, `/scaffold`, `/debug`, `/optimize`, `/validate`, `/status`)
-- **27 skill domains** covering FastAPI, Rust/Axum, Next.js, clean architecture + DDD in both backend languages, TanStack Table, Celery, Docker, WebSocket, debugging discipline, prompt refinement, panel reasoning, and more
+- **29 skill domains** covering FastAPI, Rust/Axum, Next.js, clean architecture + DDD in both backend languages, TanStack Table, Celery, Docker, WebSocket, framework migration (frontend + backend), debugging discipline, prompt refinement, panel reasoning, and more
 - **Hard enforcement hooks** — the routing gate is re-armed on every prompt, code-file edits are blocked until the right skills were consulted, and every change is validated with real tooling (ruff, rustfmt, clippy, tsc) before the session can end
 - **Language-lane separation** — Rust and Python skills never cross; lane detection routes per file/service, and idiom transplants are forbidden
 - **Wire-contract parity** — Rust and FastAPI services speak the same dialect (camelCase JSON, limit/skip pagination, shared auth), interchangeable behind the same frontend
@@ -77,6 +77,10 @@ After generation, the chain `REVIEW PATTERNS → FIX → VALIDATE` runs automati
 - **Next.js** — pages, server components, server actions, SSR strategy
 - **Data Table** — TanStack Table with filtering, sorting, bulk actions, CRUD
 - **Fetch Architecture** — client/server fetch utilities and API-route-only pattern
+
+**Migration lane**
+- **Frontend Transformation** — 1:1 framework migration of an existing frontend (e.g. React → Next.js) — no redesign, full inventory + verification
+- **Backend Migration from Frontend** — reverse-engineer backend behavior from the UI, then reproduce it in the target lane with behavioral equivalence
 
 **Cross-cutting**
 - **Senior Engineer** — architecture, modularity, and duplication prevention on all work

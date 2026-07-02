@@ -1,6 +1,6 @@
 # Fullstack Agents
 
-Unified fullstack development plugin with **29 specialized AI agents** and **27 skill domains** for intelligent code generation, review, analysis, scaffolding, debugging, and optimization across **Python (FastAPI) and Rust (Axum) microservices** behind one Next.js frontend. **Auto-triggers** on FastAPI/Rust/Next.js projects via SessionStart hook, with **enforced validation gates** via a PostToolUse hook and **strict language-lane separation** between Python and Rust skills.
+Unified fullstack development plugin with **29 specialized AI agents** and **29 skill domains** for intelligent code generation, review, analysis, scaffolding, debugging, and optimization across **Python (FastAPI) and Rust (Axum) microservices** behind one Next.js frontend. **Auto-triggers** on FastAPI/Rust/Next.js projects via SessionStart hook, with **enforced validation gates** via a PostToolUse hook and **strict language-lane separation** between Python and Rust skills.
 
 ## Features
 

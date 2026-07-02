@@ -1,6 +1,6 @@
 # Skills Reference
 
-This document provides a complete reference for all 11 skill domains in the fullstack-agents plugin.
+This document provides a complete reference for all 29 skill domains in the fullstack-agents plugin.
 
 ## Skills Overview
 
@@ -32,6 +32,13 @@ This document provides a complete reference for all 11 skill domains in the full
 | Next.js | Frontend patterns with React 19 |
 | Data Table | TanStack Table with CRUD operations |
 | Fetch Architecture | Client/server fetch utilities |
+
+**Migration lane**
+
+| Skill | Purpose |
+|-------|---------|
+| Frontend Transformation | Port a frontend to a new framework at 1:1 fidelity — no redesign |
+| Backend Migration from Frontend | Reverse-engineer backend behavior from the UI, then reproduce it in the target |
 
 **Cross-cutting**
 
@@ -613,6 +620,35 @@ in the loop via the `prompt-polish` UserPromptSubmit hook; scales to the request
 (trivial prompts pass through, large/vague ones get full refinement).
 
 - `skills/prompt-polish/SKILL.md` — refinement procedure + examples
+
+## Frontend Transformation Skill
+
+1:1 migration of an existing frontend into a target framework (default: Next.js
+App Router). NOT a redesign, modernization, or refactor — the migrated app must
+be visually and functionally indistinguishable from the original. Mandates a
+full source-inventory investigation phase (every page, route, layout, component,
+dialog, style, asset, state) before any code, preserves component hierarchy and
+styling exactly, migrates only framework-specific concerns (routing, forms,
+API-call wiring), and forbids inventing missing components or approximating
+styles. Completion requires a full original-vs-migrated diff with every
+discrepancy resolved or documented.
+
+- `skills/frontend-transformation/SKILL.md` — investigation → preservation → verification
+
+## Backend Migration from Frontend Skill
+
+Backend migration where the frontend is the source of truth. Instead of porting
+endpoint-by-endpoint, it recursively traces every UI request down the full
+execution path (router → controller → middleware → auth → validation → service →
+repository → DB → jobs → events → notifications → logging → caching → response),
+builds a complete behavioral model, then reproduces equivalent behavior in the
+target lane (`fastapi` / `python-clean-architecture` / `rust-*`) while preserving
+the wire contract. Framework translation only — business logic, validation,
+permissions, transactions, side effects, status codes, and response formats must
+match. Complete only when every frontend interaction behaves equivalently to the
+original — behavioral equivalence over framework equivalence.
+
+- `skills/backend-migration-from-frontend/SKILL.md` — investigate → model → translate → verify
 
 ## Fusion Panel Skill
 
