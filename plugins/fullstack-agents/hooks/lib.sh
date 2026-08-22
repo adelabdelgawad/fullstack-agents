@@ -54,9 +54,26 @@ except Exception:
 transcript_has_skill() {
     local transcript="${1:-}" skill_name="${2:-}"
     [ -n "$transcript" ] && [ -f "$transcript" ] || return 1
-    if grep -F '"Skill"' "$transcript" 2>/dev/null | grep -qF "$skill_name"; then
-        return 0
-    fi
+    # Single process, no pipeline: `grep -q` closing the pipe early makes the
+    # upstream grep exit 141, which `set -o pipefail` reports as not-found.
+    awk -v skill="$skill_name" '
+        index($0, "\"Skill\"") && index($0, skill) { found = 1; exit }
+        END { exit !found }
+    ' "$transcript" 2>/dev/null
+}
+
+# session_has_skill TRANSCRIPT_PATH SKILL_NAME
+#   PreToolUse carries no agent identity, so a subagent's edit arrives with the
+#   parent transcript path; its own Skill calls live in <session-dir>/subagents/.
+#   Checks the parent transcript and every subagent transcript of that session.
+session_has_skill() {
+    local transcript="${1:-}" skill_name="${2:-}" sub
+    transcript_has_skill "$transcript" "$skill_name" && return 0
+    [ -n "$transcript" ] || return 1
+    for sub in "${transcript%.jsonl}"/subagents/*.jsonl; do
+        [ -f "$sub" ] || continue
+        transcript_has_skill "$sub" "$skill_name" && return 0
+    done
     return 1
 }
 

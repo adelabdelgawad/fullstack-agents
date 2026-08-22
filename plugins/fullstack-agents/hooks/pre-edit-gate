@@ -34,7 +34,7 @@ is_fullstack_project || exit 0
 
 # Requirement 1: the codebase scan ran this session.
 scan_ok=false
-transcript_has_skill "$transcript_path" "codebase-scanning" && scan_ok=true
+session_has_skill "$transcript_path" "codebase-scanning" && scan_ok=true
 
 # Requirement 2: a lane-relevant skill was consulted.
 case "$lane" in
@@ -45,7 +45,7 @@ esac
 
 lane_ok=false
 for skill in $lane_skills; do
-    if transcript_has_skill "$transcript_path" "$skill"; then
+    if session_has_skill "$transcript_path" "$skill"; then
         lane_ok=true
         break
     fi
