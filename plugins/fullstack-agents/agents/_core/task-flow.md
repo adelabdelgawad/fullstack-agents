@@ -1,0 +1,106 @@
+# Agent task flow
+
+Portable operating flow for a repository where a strong model orchestrates and a cheaper model
+implements. Copy this file into another project and edit **Project bindings** at the bottom; the
+rest is project-independent.
+
+Status: current. Owner: the repository's `CLAUDE.md`, which points here.
+
+## Roles
+
+| Step | Owner | Output |
+|---|---|---|
+| 1. Investigate | Orchestrator | Root cause with `file:line`, the command/event path, minimal fix shape |
+| 2. Plan | Orchestrator | ≤ 40 lines: outcome, files with `file:line`, minimum test set, verification commands, deploy class, risks |
+| 3. Implement | Orchestrator (small) or Implementer (rest) | The diff, nothing else |
+| 4. Audit | Orchestrator | Diff read against the brief, plus the plan's tests re-run |
+| 5. Loop | Orchestrator | Re-brief with raw output; two retries, then hand the failure to the user |
+
+The orchestrator owns every step but the writing of large changes. It never delegates the
+conclusion, the plan, or the verification — a delegated verification is a report, not evidence.
+
+## The size threshold
+
+A round trip to the implementer costs a brief, a dispatch, a wait, and an audit. For a small
+change that is more work than the change. So size decides the route:
+
+- **Direct edit** — the orchestrator edits source itself when the change is within the file
+  budget and touches no risk path. It still runs the tests.
+- **Delegated** — anything over the budget, or touching a risk path, goes to the implementer with
+  a written brief.
+
+Risk paths never qualify for a direct edit regardless of size: vendored upstream forks,
+migrations, and the code owning a worker, lifecycle, recovery, leader election or sweep. Size
+handles volume; the carve-outs handle damage. Scope those keywords to the language and tree that
+actually holds process ownership, or they will match unrelated UI files and tax the common case.
+
+Re-editing a file the current change already opened is free. Only a new path spends budget.
+
+A path an implementer run is *currently* writing belongs to that run — the orchestrator re-briefs
+rather than hand-patching it. That claim expires when the run does; a finished run must not keep
+its paths locked, or the budget never applies to exactly the files under active work.
+
+## Briefs
+
+A brief is the contract and the audit scope. It states: goal; the plan reference; every path the
+implementer may touch; the one document to read; the known-red baseline; the tests that prove the
+fix; forbidden moves. Keep it under 30 lines.
+
+Two rules make the audit possible. Every touched path must be listed up front, so a path changed
+outside the list is scope creep and gets rejected. And the known-red baseline must be stated, so
+a pre-existing failure is never mistaken for a regression.
+
+## Auditing
+
+The implementer's completion report is not evidence. Read the diff restricted to the paths the
+run reports as touched, and re-run the plan's tests yourself.
+
+Auditing is reading and testing. A fix the orchestrator spots goes back as a re-brief, never into
+the file — otherwise the diff under review no longer matches what was delegated.
+
+## Scanning wide
+
+Delegating a sweep is the most expensive read there is, so narrow it before spending a model on
+it. Take the cheapest rung that answers the question:
+
+1. **Grep.** Free, no model, and it turns a thousand files into a handful. Always first.
+2. **Ranged reads.** If the hits fit in a dozen or so files, the orchestrator reads them directly
+   and keeps the conclusion.
+3. **Delegated scan.** Only when the narrowed set is still too wide, or one file is too big.
+
+A delegated scan gets a narrowed file list and an extraction contract: the exact fields to
+report and the shape to report them in. Ask for a table of `file:line` plus values, never prose,
+and never "find out why". Prose blows the result cap and smuggles in a conclusion nobody checked;
+a table is small and inert.
+
+The orchestrator reads the table and decides what it means. That step is never delegated.
+
+## Cost discipline
+
+Read files with ranged reads, never whole-file shell dumps. Filter command output to what proves
+the point: failures, not the passing noise. Pass the failing lines back to the implementer, not
+the whole log. Deny agent reads of dependency, build and archive directories.
+
+Batch test execution at the integration boundary — one run per workspace, never per edit or per
+task. Write the cases as you go; run them once.
+
+## Project bindings
+
+Edit this section per project; nothing above it should need changing.
+
+| Binding | Value |
+|---|---|
+| Orchestrator | `fullstack-agent` as session lead |
+| Implementer | *(command that dispatches one implementation unit)* |
+| Wide read-only scan | *(command or agent; needs a `FILES:` block and a `REPORT:` line)* |
+| Bounded extraction | `bounded-extractor` — narrowed file list, mechanical only |
+| Read guard | *(hook refusing unranged dumps of gated files)* |
+| Scan gate | *(hook refusing a brief without `FILES:` and `REPORT:`)* |
+| Direct-edit budget | *(number of uncommitted source files)* |
+| Gated extensions | *(e.g. `.rs`, `.ts`, `.tsx`)* |
+| Risk carve-outs | *(vendored trees, migrations, process-ownership code)* |
+| Build / test entry points | *(project scripts)* |
+| Tests never to run | *(any test that touches production)* |
+| Enforcement | *(hooks, each with its own test)* |
+| Override | *(env var, and it needs the user's word)* |
+| Source edits | `Write`/`Edit` only — a shell write skips the gate |
