@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# prompt-scan — UserPromptSubmit hook for fullstack-agents.
-# Re-arms the routing gate on EVERY prompt that touches the stack, so the
-# doctrine survives long sessions and context compaction.
+# prompt-scan — UserPromptSubmit hook: routes every prompt by intent and lane to the skills to invoke.
 set -uo pipefail
 
 source "$(dirname "$0")/lib.sh"
@@ -11,48 +9,64 @@ prompt="$(json_get_field "prompt" "$HOOK_INPUT")"
 [ -n "$prompt" ] || exit 0
 
 prompt_lower="$(printf '%s' "$prompt" | tr '[:upper:]' '[:lower:]')"
+has() { printf '%s' "$prompt_lower" | grep -qE "$1"; }
 
-# Fire only on stack-related prompts — this runs every message, so the
-# keyword list is domain-specific, not generic verbs.
-if ! printf '%s' "$prompt_lower" | grep -qE \
-    'fastapi|pydantic|sqlalchemy|celery|alembic|uvicorn|endpoint|router|entit(y|ies)|crud|schema|migration|microservice|rust|cargo|axum|sqlx|tokio|clippy|borrow|lifetime|ownership|next\.?js|react|component|data.?table|frontend|backend|websocket|docker|\bapis?\b|\bpages?\b|\bmodels?\b|\.py\b|\.rs\b|\.tsx?\b'; then
-    exit 0
+# Intent: the first match wins, most specific first; stems tolerate common typos.
+intent=""
+if has 'deploy|release|roll ?out|restart (the )?(backend|frontend|service|container)'; then
+    intent="deploy"
+elif has 'error|broken|bug|crash|fail|not working|doesn.?t work|regression|\bfix'; then
+    intent="debug"
+elif has 'i?n?v[ie]st[ie]?g|root cause|diagnos|look into|find out|\bwhy\b|trace|what happened|analy[sz]|slow|took (so |too )?(long|large)'; then
+    intent="investigate"
+elif has 'review|audit|verify|inspect|double.?check'; then
+    intent="review"
+elif has '\bplan\b|design|approach|propos|architect|strategy'; then
+    intent="plan"
+elif has 'implement|\badd\b|create|build|scaffold|generate|refactor|change|update|rename|remove|delete|migrat|\bmake\b|\bnew\b'; then
+    intent="implement"
 fi
 
-# Lane detection from the prompt (project detection refines it later).
-lane="stack"
-if printf '%s' "$prompt_lower" | grep -qE 'rust|cargo|axum|sqlx|clippy|borrow|lifetime|ownership|tokio|\.rs\b'; then
+lane=""
+if has 'rust|cargo|axum|sqlx|clippy|borrow|lifetime|tokio|\.rs\b'; then
     lane="rust"
-elif printf '%s' "$prompt_lower" | grep -qE 'fastapi|pydantic|sqlalchemy|celery|alembic|python|\.py\b'; then
+elif has 'fastapi|pydantic|sqlalchemy|celery|alembic|python|\.py\b'; then
     lane="python"
-elif printf '%s' "$prompt_lower" | grep -qE 'next\.?js|react|component|tsx|frontend|data.?table|\bpages?\b'; then
+elif has 'next\.?js|react|component|\.tsx?\b|frontend|data.?table|\bpages?\b|\bui\b'; then
     lane="frontend"
 fi
 
-# Intent classification.
-intent="general"
-if printf '%s' "$prompt_lower" | grep -qE 'create|add|scaffold|implement|generate|build|make|new'; then
-    intent="generate"
-elif printf '%s' "$prompt_lower" | grep -qE 'review|audit|check|inspect|lint|verify'; then
-    intent="review"
-elif printf '%s' "$prompt_lower" | grep -qE "error|broken|fix|debug|fail|crash|not working"; then
-    intent="debug"
-fi
+[ -n "$intent" ] || [ -n "$lane" ] || exit 0
 
-# Token economy: the full routing block goes in ONCE per session; subsequent
-# stack prompts get a one-line reminder (the doctrine is already in context
-# and the pre-edit gate enforces deterministically regardless).
+case "$intent" in
+    investigate) skills="task-flow (Investigate + scan ladder), debug" ;;
+    debug)       skills="debug, task-flow" ;;
+    plan)        skills="task-flow (Plan), senior-engineer" ;;
+    implement)   skills="task-flow (size threshold decides direct edit or delegation), codebase-scanning, senior-engineer" ;;
+    review)      skills="task-flow (Audit), review" ;;
+    deploy)      skills="task-flow (deploy class), the project's deploy rules in CLAUDE.md" ;;
+    *)           skills="codebase-scanning" ;;
+esac
+
+case "$lane" in
+    rust)     lane_skills="rust-correctness plus the rust-* skill for the touched layer (axum-api, sqlx, testing, clean-architecture, nextjs-contract, quality-gates)" ;;
+    python)   lane_skills="fastapi or python-clean-architecture" ;;
+    frontend) lane_skills="nextjs, data-table for list pages, fetch-* for the fetch layer" ;;
+    *)        lane_skills="" ;;
+esac
+
+line="[fullstack-agents] intent: ${intent:-general}, lane: ${lane:-any} -> invoke via the Skill tool (fullstack-agents:*): ${skills}"
+[ -n "$lane_skills" ] && line="${line}; lane: ${lane_skills}"
+printf '%s. Take the cheapest rung that answers it; the conclusion, plan and audit stay yours.\n' "$line"
+
+# The full stack doctrine goes in once per session, only when code in a lane is in play.
+[ -n "$lane" ] || exit 0
 session_id="$(json_get_field "session_id" "$HOOK_INPUT")"
 armed_flag=""
 [ -n "$session_id" ] && armed_flag="$(state_dir)/armed-${session_id}"
-
-if [ -n "$armed_flag" ] && [ -f "$armed_flag" ]; then
-    printf '[fullstack-agents] lane: %s, intent: %s — 5-step gate and language lanes apply (doctrine already in context; pre-edit gate enforces).\n' "$lane" "$intent"
-    exit 0
-fi
+[ -n "$armed_flag" ] && [ -f "$armed_flag" ] && exit 0
 [ -n "$armed_flag" ] && touch "$armed_flag"
 
-# Constitution line (only when one exists — keep the injection lean).
 constitution_line=""
 constitution_path=$(find_constitution || true)
 if [ -n "$constitution_path" ]; then
@@ -61,7 +75,7 @@ if [ -n "$constitution_path" ]; then
 fi
 
 cat <<CONTEXT
-[fullstack-agents] STACK TOPIC DETECTED (lane: ${lane}, intent: ${intent}) — mandatory routing:
+[fullstack-agents] STACK TOPIC DETECTED (lane: ${lane}) — mandatory routing:
 ${constitution_line}  1. Run the 5-step gate from using-fullstack-agents: DETECT -> MATCH -> REUSE -> INVOKE -> SCAN.
   2. Skill: fullstack-agents:codebase-scanning (invoke NOW if not yet this session).
   3. Invoke the matching domain skill BEFORE writing code OR answering design/
@@ -70,9 +84,6 @@ ${constitution_line}  1. Run the 5-step gate from using-fullstack-agents: DETECT
      frontend lane -> nextjs / data-table / fetch-* skills. Never blend idioms.
   4. Rust endpoints consumed by Next.js also require fullstack-agents:rust-nextjs-contract.
   5. After code lands: REVIEW PATTERNS -> FIX -> VALIDATE (language-matched chain).
-
-A PreToolUse hook BLOCKS code-file edits until codebase-scanning and a
-lane-relevant skill have been invoked. Do not write code before routing.
 CONTEXT
 
 exit 0

@@ -17,6 +17,19 @@ IF A FULLSTACK-AGENTS SKILL APPLIES TO YOUR TASK, YOU DO NOT HAVE A CHOICE. YOU 
 
 **Before writing ANY backend or frontend code, check if a fullstack-agents skill covers it.** Even a 1% chance means invoke the skill. If it turns out to be wrong for the situation, you don't need to follow it — but you MUST check first.
 
+## You Are the Session Lead (always on)
+
+Every investigation, debug, plan, change, review or deploy runs through
+`fullstack-agents:task-flow`: **invoke it before the first source edit, delegation
+or wide scan of a task.** It sets who does what — you own the root cause, the plan,
+the audit and the conclusion; grep before any model; a direct edit within the file
+budget, otherwise a written brief to the project's implementer; re-run the tests
+yourself. The project's `CLAUDE.md` supplies the bindings (implementer, budget,
+risk paths, test entry points) and outranks this plugin.
+
+The `prompt-scan` hook names the skills for each prompt's intent and lane — treat
+that line as the routing decision unless the request clearly says otherwise.
+
 ## Language Separation — Python vs Rust (HARD RULE)
 
 This plugin serves polyglot microservices: Python (FastAPI) and Rust (Axum)

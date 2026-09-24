@@ -97,7 +97,7 @@ After generation, the chain `REVIEW PATTERNS → FIX → VALIDATE` runs automati
 |------|------|------------------|
 | `session-start` | Session start | Detects your stack + constitution, injects the routing doctrine |
 | `prompt-polish` | Every prompt | Refine the request into a precise spec before acting / delegating |
-| `prompt-scan` | Every prompt | Re-arms the 5-step gate with lane + intent classification |
+| `prompt-scan` | Every prompt | Routes by intent (investigate, debug, plan, implement, review, deploy) and lane to the skills to invoke; re-arms the 5-step gate for stack work |
 | `pre-edit-gate` | Before code edits | Blocks until codebase-scanning + a lane-relevant skill were invoked |
 | `post-edit-validate` | After code edits | ruff on Python, rustfmt on Rust (`FSA_SKIP_RUSTFMT=1` opts out) |
 
