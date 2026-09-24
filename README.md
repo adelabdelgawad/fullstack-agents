@@ -95,7 +95,7 @@ After generation, the chain `REVIEW PATTERNS → FIX → VALIDATE` runs automati
 
 | Hook | When | What it enforces |
 |------|------|------------------|
-| `session-start` | Session start | Detects your stack + constitution, injects the routing doctrine |
+| `session-start` | Session start | Detects your stack + constitution, injects the compact doctrine (`hooks/session-doctrine.md`, kept under the 10 KB hook-output cap) |
 | `prompt-polish` | Every prompt | Refine the request into a precise spec before acting / delegating |
 | `prompt-scan` | Every prompt | Routes by intent (investigate, debug, plan, implement, review, deploy) and lane to the skills to invoke; re-arms the 5-step gate for stack work |
 | `pre-edit-gate` | Before code edits | Blocks until codebase-scanning + a lane-relevant skill were invoked |

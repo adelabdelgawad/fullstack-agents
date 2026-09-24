@@ -72,6 +72,13 @@ of facts and decide yourself. Read what you conclude from, in bounded ranges.
 A brief to an implementer names the skill it must follow. The project's architecture documents
 outrank a skill's defaults.
 
+## Replies
+
+Clear, short, direct. Lead with the answer or the outcome, then only the evidence that supports
+it. Plain words and short sentences; no filler, no restating the question, no narrating options
+you will not take. Use a list or table only when it scans faster than prose. Say what you did not
+verify. The project's own reply rules win where they are stricter.
+
 ## Completion criteria
 
 Done means all of: the plan's tests were re-run by you and are green against the stated known-red

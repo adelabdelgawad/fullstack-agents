@@ -44,7 +44,7 @@ fi
 if [ -f "Cargo.toml" ]; then
     project_info="${project_info}Rust workspace detected (Cargo.toml). "
 else
-    rust_manifest=$(find . -maxdepth 2 -name Cargo.toml -not -path "./target/*" 2>/dev/null | head -1)
+    rust_manifest=$(find . -maxdepth 3 -name Cargo.toml -not -path "*/target/*" -not -path "*/node_modules/*" 2>/dev/null | head -1)
     if [ -n "$rust_manifest" ]; then
         project_info="${project_info}Rust service detected (${rust_manifest#./}). "
     fi
@@ -102,15 +102,10 @@ if [ "$project_info" = "No FastAPI/Next.js project detected. Fullstack-agents sk
     # Token economy: ungoverned project — a 2-line notice instead of the full
     # ~3.6k-token doctrine. The skills remain invocable on demand.
     session_context="fullstack-agents installed but no FastAPI/Rust/Next.js project detected here. If stack work comes up, invoke 'fullstack-agents:using-fullstack-agents' via the Skill tool for the routing gate. For any investigation, plan or change, invoke 'fullstack-agents:task-flow' first."
-elif [ "$session_source" = "compact" ] || [ "$session_source" = "resume" ]; then
-    # Short reminder — the full guide was injected at startup and survives in
-    # the conversation summary; re-injecting it would burn context every compact.
-    session_context="<EXTREMELY_IMPORTANT>\nYou have fullstack-agents.\n\n**Project Detection:** ${project_info_escaped}\n\nYou are the session lead: invoke 'fullstack-agents:task-flow' before the first source edit, delegation or wide scan of any task; the conclusion, plan and audit stay yours.\n\nThe 'fullstack-agents:using-fullstack-agents' skill governs ALL FastAPI/Next.js code generation: before writing ANY backend or frontend code, run the 5-step gate (DETECT intent -> MATCH against the routing table -> REUSE: search for existing implementations, never duplicate -> INVOKE the matching skill -> ensure codebase-scanning ran this session), and after generation the chain GENERATE -> REVIEW PATTERNS -> FIX -> VALIDATE is mandatory. The 'fullstack-agents:senior-engineer' discipline (search-before-implement, no duplication, YAGNI: build only what is asked with no speculative abstractions or options, functions < 50 lines, files < 800 lines) applies to ALL implementation work. LANGUAGE LANES are strict: Rust files use rust-* skills only, Python files use fastapi/python-clean-architecture only — never blend idioms; Rust endpoints consumed by Next.js must follow rust-nextjs-contract. If the routing table is no longer in context, invoke 'fullstack-agents:using-fullstack-agents' via the Skill tool to reload it.\n</EXTREMELY_IMPORTANT>"
 else
-    # --- Read bootstrapping skill ---
-    using_skill_content=$(cat "${PLUGIN_ROOT}/skills/using-fullstack-agents/SKILL.md" 2>&1 || echo "Error reading using-fullstack-agents skill")
-    using_skill_escaped=$(escape_for_json "$using_skill_content")
-    session_context="<EXTREMELY_IMPORTANT>\nYou have fullstack-agents.\n\n**Project Detection:** ${project_info_escaped}\n\n**Below is the full content of your 'fullstack-agents:using-fullstack-agents' skill — your guide to auto-triggering code generation skills. For all other skills, use the 'Skill' tool:**\n\n---\n\n${using_skill_escaped}\n\n</EXTREMELY_IMPORTANT>"
+    # Stays under the 10 KB hook-output cap; anything larger reaches the model only as a 2 KB preview.
+    doctrine_escaped=$(escape_for_json "$(cat "${PLUGIN_ROOT}/hooks/session-doctrine.md")")
+    session_context="<EXTREMELY_IMPORTANT>\n**Project Detection:** ${project_info_escaped}\n\n${doctrine_escaped}\n</EXTREMELY_IMPORTANT>"
 fi
 
 # Output context injection as JSON.
