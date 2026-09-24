@@ -1,0 +1,37 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "files",
+    "tests",
+    "open_risks"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "maxLength": 12000
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 40
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 10
+    },
+    "open_risks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 5
+    }
+  }
+}

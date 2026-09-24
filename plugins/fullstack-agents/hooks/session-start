@@ -107,6 +107,8 @@ else
     doctrine_escaped=$(escape_for_json "$(cat "${PLUGIN_ROOT}/hooks/session-doctrine.md")")
     session_context="<EXTREMELY_IMPORTANT>\n**Project Detection:** ${project_info_escaped}\n\n${doctrine_escaped}\n</EXTREMELY_IMPORTANT>"
 fi
+scripts_escaped=$(escape_for_json "${PLUGIN_ROOT}/scripts")
+session_context="${session_context}\n\n**Plugin scripts:** \`${scripts_escaped}\` — \`codex-task.sh\` (Codex dispatch, \`--herdr\` for a visible pane) and \`herdr-watch.sh\` (live view of a background worker's transcript)."
 
 # Output context injection as JSON.
 # Keep both shapes for compatibility:

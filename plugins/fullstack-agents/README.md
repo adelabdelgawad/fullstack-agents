@@ -171,6 +171,21 @@ cd your-project
 claude plugin add fullstack-agents
 ```
 
+## Scripts
+
+The plugin ships its worker tooling in `scripts/`; the SessionStart hook prints their installed
+path, so they work on any host with the plugin installed. Requires `git` and `jq`; herdr modes also
+need a Herdr-managed pane (`HERDR_ENV=1`).
+
+| Script | Purpose |
+|---|---|
+| `codex-task.sh [--herdr] investigate\|plan\|implement <brief>` | Dispatch one Codex unit; validates the brief (`PLAN:`/`ALLOWED_PATHS:` or `FILES:`/`REPORT:`), prefixes the lane's skill files, snapshots touched paths, prints a manifest. `--herdr` runs it in a visible grid pane. |
+| `herdr-watch.sh <transcript> [label]` | Read-only live view of a background worker's transcript in a grid pane; no model reads it. |
+
+Optional environment: `FSA_CODEX_ROOT` (repository root, default the current git toplevel),
+`FSA_CODEX_RUNS_DIR` (default `~/.codex/fsa-runs`), `FSA_CODEX_MODEL_INVESTIGATE|PLAN|IMPLEMENT`.
+A project may keep a thin wrapper that sets these and `exec`s the plugin script.
+
 ## License
 
 MIT

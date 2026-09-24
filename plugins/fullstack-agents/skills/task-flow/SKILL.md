@@ -65,11 +65,12 @@ first with `herdr --skill`.
 - **Layout.** The first worker splits the lead's pane `down`; every later worker splits the
   rightmost worker pane `right`, so the lead stays on top with one row of workers under it. Always
   `--no-focus`, with the worker's repository root as `--cwd`.
-- **Implementer.** Use the project's dispatch command in its herdr mode when it has one; the brief,
-  touched-path snapshot and result file stay exactly as for a headless run.
-- **Claude workers.** Split a pane, `herdr agent start <name> --kind claude --pane <id>`, then
-  `herdr agent prompt <name> "<brief>" --wait` and read the result with
-  `herdr agent read <name> --source recent-unwrapped`. Brief and scan rules are unchanged.
+- **Implementer.** Dispatch with `--herdr` (the plugin's `scripts/codex-task.sh`, or the project's
+  wrapper around it); the brief, touched-path snapshot and result file stay exactly as headless.
+- **Claude workers.** Launch them as ordinary background subagents, then open a read-only viewer on
+  each one's transcript with `scripts/herdr-watch.sh <output_file> <name>`. The worker, its cost and
+  its result are identical to a headless run; the pane only renders the transcript for the user and
+  never enters the lead's context.
 - **Hygiene.** Close each worker's pane after its audit. A worker blocked on an approval dialog is
   shown to the user; never answer it on their behalf.
 
@@ -115,7 +116,7 @@ A binding the project leaves unset means that route is unavailable, not that a d
 | Binding | Value |
 |---|---|
 | Orchestrator | `fullstack-agents:fullstack-agent` as session lead (activated by the plugin) |
-| Implementer | *(command that dispatches one implementation unit)* |
+| Implementer | *(command that dispatches one implementation unit; the plugin ships `scripts/codex-task.sh` for Codex)* |
 | Wide read-only scan | *(command or agent; needs a `FILES:` block and a `REPORT:` line)* |
 | Bounded extraction | `fullstack-agents:bounded-extractor` — narrowed file list, mechanical only |
 | Read guard | *(hook refusing unranged dumps of gated files)* |
