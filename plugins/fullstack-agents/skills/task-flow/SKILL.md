@@ -52,6 +52,10 @@ Two rules make the audit possible. Every touched path must be listed up front, s
 outside the list is scope creep and gets rejected. And the known-red baseline must be stated, so
 a pre-existing failure is never mistaken for a regression.
 
+An external implementer does not load this plugin's skills. Its brief must name the domain skill
+files for the lane it touches (the `SKILL.md` paths of, e.g., `rust-sqlx` or `nextjs`), either in
+the brief itself or injected by the project's dispatch command.
+
 ## Auditing
 
 The implementer's completion report is not evidence. Read the diff restricted to the paths the
