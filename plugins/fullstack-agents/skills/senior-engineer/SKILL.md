@@ -1,6 +1,6 @@
 ---
 name: senior-engineer
-description: Senior-engineer discipline for architecture, modularity, and duplication prevention — search-before-implement, composition over monoliths, SOLID boundaries, aggressive complexity reduction, and leave-it-cleaner refactoring. Use before writing, modifying, or refactoring ANY application code, and when asked to refactor, clean up, reduce duplication, or extract shared logic. Do not use for docs-only, config-only, or dependency-bump changes.
+description: Senior-engineer discipline for architecture, modularity, and duplication prevention with YAGNI — search-before-implement, build only what is asked, composition over monoliths, SOLID boundaries, aggressive complexity reduction, and leave-it-cleaner refactoring. Use before writing, modifying, or refactoring ANY application code, and when asked to refactor, clean up, reduce duplication, or extract shared logic. Do not use for docs-only, config-only, or dependency-bump changes.
 ---
 
 # Senior Engineer: Architecture, Modularity, and Duplication Prevention
@@ -20,7 +20,7 @@ Continuously improve code structure, maintainability, and long-term scalability 
 4. PLACE        -> Decide whether the functionality belongs in an existing module
 5. DESIGN       -> Choose the smallest maintainable solution
 6. IMPLEMENT    -> Use existing patterns; compose, don't accumulate
-7. REFACTOR     -> If duplication was discovered, extract it NOW, not later
+7. REFACTOR     -> If the task's own code duplicates existing logic, extract it NOW; report wider duplication
 8. VERIFY       -> Behavior unchanged unless change was explicitly requested
 ```
 
@@ -72,7 +72,8 @@ searching beats two hours of refactoring duplicated logic later.**
   - Domain layer (models, schemas)
   - Data access/infrastructure layer (CRUD helpers, fetch utilities)
 - Dependencies always point inward toward business logic.
-- Use interfaces and abstractions where they improve flexibility and testability.
+- Introduce an interface or abstraction only when a second real implementation or a test
+  double needs it today — never for hypothetical flexibility.
 - Prevent framework, transport, or storage concerns from leaking into domain logic.
 
 ### 4. Reduce Complexity Aggressively
@@ -91,11 +92,22 @@ Before implementing any new functionality:
 2. Identify reusable utilities, services, helpers, hooks, libraries, or components.
 3. Reuse existing functionality whenever practical.
 4. If similar logic exists in multiple locations:
-   - Extract the common behavior.
-   - Create a shared abstraction.
-   - Refactor all consumers to use the shared implementation.
+   - Extract the common behavior into the smallest shared function that serves them.
+   - Migrate the consumers the task touches; list the rest rather than widening the diff.
 
 **Never knowingly introduce duplicated business logic.**
+
+### 5a. YAGNI — Build Only What Is Asked
+
+- Implement the requested behavior and nothing speculative: no unused parameters,
+  options, config flags, feature toggles, plugin points, generic type parameters or
+  "for later" branches.
+- One use is not a pattern. Abstract on the second real use, found by search, not
+  an imagined one.
+- Delete, don't preserve: no commented-out code, no dead fallbacks, no compatibility
+  shims nobody calls.
+- Scope is the request. An improvement the task does not need goes in the report as
+  a suggestion, not into the diff.
 
 ### 6. Centralize Shared Functionality
 
@@ -139,13 +151,11 @@ Hard limits (senior-engineer discipline — keep new growth within these):
 
 When touching existing code:
 
-- Look for opportunities to reduce duplication.
-- Extract reusable functionality.
-- Improve naming.
-- Simplify control flow.
-- Strengthen architectural boundaries.
+- Reuse what exists instead of adding a parallel version.
+- Improve naming and control flow in the lines you are already changing.
 - **Leave the codebase cleaner than it was found** — scoped to the code you touch;
-  do not turn a one-line fix into an unrequested rewrite.
+  do not turn a one-line fix into an unrequested rewrite. Wider cleanups are reported,
+  not done.
 
 ## Rationalization Prevention
 
@@ -159,7 +169,10 @@ These thoughts mean STOP — you're rationalizing skipping the discipline:
 | "This file is already huge, one more function won't matter" | Growth in a god file compounds. Place it where it belongs or split. |
 | "An abstraction would be overkill for two uses" | Maybe — then reuse without abstracting. But you can't know until you've found the other use. Search first. |
 | "The existing helper almost fits but not quite" | Extend the helper with a parameter before writing a parallel one. |
-| "Refactoring the consumers is out of scope" | If you created the shared abstraction, migrating consumers IS the scope. |
+| "Refactoring the consumers is out of scope" | If you created the shared abstraction, migrating the touched consumers IS the scope; list the rest. |
+| "We'll probably need this option later" | Then add it later, when the need is real. Unused options are code to maintain and test now. |
+| "Let me make this generic while I'm here" | Generic for one caller is speculation. Write the concrete version. |
+| "I'll clean up this nearby code too" | Not asked, not in the diff. Report it. |
 | "This is a prototype, structure doesn't matter" | Prototypes ship. Apply at least limits and placement. |
 
 ## Definition of Done (per change)
@@ -169,7 +182,9 @@ These thoughts mean STOP — you're rationalizing skipping the discipline:
 - [ ] New code placed in the architecturally correct layer/module
 - [ ] Functions < 50 lines, files < 800 lines, nesting <= 4 levels
 - [ ] No framework/transport/storage concerns inside domain logic
-- [ ] Discovered duplication extracted and consumers migrated
+- [ ] Discovered duplication extracted and the touched consumers migrated
+- [ ] Nothing speculative: no unused parameter, option, flag, abstraction or branch
+- [ ] Diff limited to what the task needs; wider improvements reported, not made
 - [ ] Touched code left cleaner than found (naming, control flow, boundaries)
 - [ ] Behavior unchanged unless the change was explicitly requested
 

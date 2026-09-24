@@ -47,7 +47,7 @@ This document provides a complete reference for all 30 skill domains in the full
 | Using Fullstack Agents | Routing gate, language lanes, hard 5-step gate (auto-injected) |
 | Codebase Scanning | Constitution + style profile detection before generation |
 | Constitution | Per-project normative principles file (spec-kit compatible) |
-| Senior Engineer | Architecture, modularity, duplication prevention on all work |
+| Senior Engineer | Architecture, modularity, DRY and YAGNI on all work |
 | Docker | Container infrastructure patterns |
 | WebSocket | Real-time connection patterns |
 | Batch Error Resolution | Disciplined batch error handling |

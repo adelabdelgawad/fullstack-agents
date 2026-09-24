@@ -166,11 +166,15 @@ generation, modification, and bug fixes alike. Its non-negotiables:
 
 - **Search before implement** — find existing implementations before writing new ones.
 - **No knowing duplication** — reuse, extend, or extract; never fork business logic.
+- **YAGNI** — build only what the task asks for. No speculative abstractions, options,
+  config flags, extension points or "future" parameters. Abstract on the second real
+  use, not the first imagined one. DRY applies to logic that exists; YAGNI stops you
+  inventing logic that does not.
 - **Hard limits** — functions < 50 lines, files < 800 lines, nesting <= 4 levels.
 - **Right layer** — presentation, business logic, domain, and data access stay
   separated; dependencies point inward.
-- **Leave it cleaner** — when touching existing code, improve naming, control flow,
-  and boundaries in the code you touch.
+- **Leave it cleaner** — within the lines the task already touches; never widen the
+  diff to refactor code the task does not need.
 
 For the full workflow, search recipe, and definition of done, invoke
 `fullstack-agents:senior-engineer` via the Skill tool.
