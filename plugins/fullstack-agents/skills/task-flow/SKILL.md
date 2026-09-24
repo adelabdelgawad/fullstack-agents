@@ -56,6 +56,23 @@ An external implementer does not load this plugin's skills. Its brief must name 
 files for the lane it touches (the `SKILL.md` paths of, e.g., `rust-sqlx` or `nextjs`), either in
 the brief itself or injected by the project's dispatch command.
 
+## Visible workers (only when the user says "use herdr")
+
+Workers stay headless unless the user explicitly asks to use herdr and `HERDR_ENV=1`. Then each
+worker runs in its own herdr pane so the user can watch the whole session. Load herdr's own skill
+first with `herdr --skill`.
+
+- **Layout.** The first worker splits the lead's pane `down`; every later worker splits the
+  rightmost worker pane `right`, so the lead stays on top with one row of workers under it. Always
+  `--no-focus`, with the worker's repository root as `--cwd`.
+- **Implementer.** Use the project's dispatch command in its herdr mode when it has one; the brief,
+  touched-path snapshot and result file stay exactly as for a headless run.
+- **Claude workers.** Split a pane, `herdr agent start <name> --kind claude --pane <id>`, then
+  `herdr agent prompt <name> "<brief>" --wait` and read the result with
+  `herdr agent read <name> --source recent-unwrapped`. Brief and scan rules are unchanged.
+- **Hygiene.** Close each worker's pane after its audit. A worker blocked on an approval dialog is
+  shown to the user; never answer it on their behalf.
+
 ## Auditing
 
 The implementer's completion report is not evidence. Read the diff restricted to the paths the
