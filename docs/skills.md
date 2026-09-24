@@ -1,6 +1,6 @@
 # Skills Reference
 
-This document provides a complete reference for all 29 skill domains in the fullstack-agents plugin.
+This document provides a complete reference for all 30 skill domains in the fullstack-agents plugin.
 
 ## Skills Overview
 
@@ -52,6 +52,7 @@ This document provides a complete reference for all 29 skill domains in the full
 | WebSocket | Real-time connection patterns |
 | Batch Error Resolution | Disciplined batch error handling |
 | Debug | Root-cause-first debugging discipline |
+| Task Flow | Session-lead operating flow: investigate, plan, direct edit or delegate, audit, loop (preloaded by `fullstack-agent`) |
 
 **Language lanes are strict:** Rust skills never apply to Python files and vice
 versa. Lane detection (Cargo.toml vs pyproject.toml) routes per file/service.

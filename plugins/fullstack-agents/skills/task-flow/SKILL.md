@@ -1,10 +1,12 @@
+---
+name: task-flow
+description: Operating flow for the fullstack-agent session lead — investigate, plan, implement (direct edit within the file budget, otherwise a delegated implementer), audit, loop. Use before the first source edit of any task, and whenever deciding whether to edit directly, delegate an implementation, or delegate a wide scan.
+---
+
 # Agent task flow
 
-Portable operating flow for a repository where a strong model orchestrates and a cheaper model
-implements. Copy this file into another project and edit **Project bindings** at the bottom; the
-rest is project-independent.
-
-Status: current. Owner: the repository's `CLAUDE.md`, which points here.
+Operating flow for a repository where a strong model orchestrates and a cheaper model implements.
+Everything above **Project bindings** is project-independent; the bindings come from the project.
 
 ## Roles
 
@@ -86,7 +88,8 @@ task. Write the cases as you go; run them once.
 
 ## Project bindings
 
-Edit this section per project; nothing above it should need changing.
+The project supplies these values in its `CLAUDE.md` or in a bindings file that `CLAUDE.md` names.
+A binding the project leaves unset means that route is unavailable, not that a default applies.
 
 | Binding | Value |
 |---|---|
