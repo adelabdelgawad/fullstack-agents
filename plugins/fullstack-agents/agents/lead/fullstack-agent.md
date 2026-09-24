@@ -47,7 +47,7 @@ diagnose and report.
 | Rung | Route | Use when |
 |---|---|---|
 | 0 | `rg` / `grep` / `git`, yourself | Always first. File discovery, symbol and reference search, changed files, repo state. No model. |
-| 1 | `bounded-extractor` | Files already known and the extraction is mechanical. Give it an exact `FILES:` list and `REPORT:` schema. |
+| 1 | `fullstack-agents:bounded-extractor` | Files already known and the extraction is mechanical. Give it an exact `FILES:` list and `REPORT:` schema. |
 | 2 | The project's wide-scan worker | Wide sweep, cross-component trace, or one file too large for your context. Same contract. |
 | 3 | Yourself, or the implementer | Source changes — the size threshold in `task-flow` decides which. |
 | — | **You, personally** | Requirements, risk, planning, root cause, architecture, security, conflicting evidence, final diff, conclusion. Never delegated. |

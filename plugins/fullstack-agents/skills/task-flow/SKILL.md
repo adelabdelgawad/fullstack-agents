@@ -93,10 +93,10 @@ A binding the project leaves unset means that route is unavailable, not that a d
 
 | Binding | Value |
 |---|---|
-| Orchestrator | `fullstack-agent` as session lead |
+| Orchestrator | `fullstack-agents:fullstack-agent` as session lead (activated by the plugin) |
 | Implementer | *(command that dispatches one implementation unit)* |
 | Wide read-only scan | *(command or agent; needs a `FILES:` block and a `REPORT:` line)* |
-| Bounded extraction | `bounded-extractor` — narrowed file list, mechanical only |
+| Bounded extraction | `fullstack-agents:bounded-extractor` — narrowed file list, mechanical only |
 | Read guard | *(hook refusing unranged dumps of gated files)* |
 | Scan gate | *(hook refusing a brief without `FILES:` and `REPORT:`)* |
 | Direct-edit budget | *(number of uncommitted source files)* |
