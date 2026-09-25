@@ -1,6 +1,6 @@
 ---
 name: debug
-description: Use when encountering any bug, error, or unexpected behavior in a fullstack project — enforces root-cause-first debugging discipline before any fix attempts
+description: Use when encountering any bug, error, unexpected behavior, slow page, long loading skeleton or latency complaint in a fullstack project — enforces root-cause-first debugging discipline before any fix attempts
 ---
 
 # Debugging Discipline

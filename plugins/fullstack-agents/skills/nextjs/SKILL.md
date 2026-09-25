@@ -1,6 +1,6 @@
 ---
 name: nextjs
-description: Generate production-ready Next.js pages with SSR initial load, client-side data management, and server-response-based updates. Use when creating Next.js pages, admin or settings pages, or adding CRUD functionality to the frontend. Do not use for backend FastAPI code (use fastapi); for full entity data-table pages prefer data-table.
+description: Generate production-ready Next.js pages with SSR initial load, client-side data management, and server-response-based updates. Use when creating, changing, reviewing or diagnosing Next.js pages — admin or settings pages, CRUD, layouts, router navigation, `<Link>` prefetch, `router.refresh()`, and slow navigation, long loading skeletons or frozen pages (read references/client-performance.md). Do not use for backend FastAPI code (use fastapi); for full entity data-table pages prefer data-table.
 ---
 
 # Next.js Template Skill
@@ -309,3 +309,4 @@ See the `references/` directory for detailed patterns:
 - `api-route-pattern.md` - API routes
 - `fetch-pattern.md` - Fetch utilities
 - `select-components.md` - SingleSelect and MultiSelect component source and usage
+- `client-performance.md` - Slow navigation / long skeleton diagnosis, `<Link>` prefetch in rows, `router.refresh()` storms — read before diagnosing latency or adding live refresh

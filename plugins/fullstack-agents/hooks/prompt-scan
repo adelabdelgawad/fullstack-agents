@@ -15,6 +15,8 @@ has() { printf '%s' "$prompt_lower" | grep -qE "$1"; }
 intent=""
 if has 'deploy|release|roll ?out|restart (the )?(backend|frontend|service|container)'; then
     intent="deploy"
+elif has '\bslow|\blag(s|gy|ging)?\b|latenc|\bperf(orm|\b)|skele?ton|spinner|\bloading\b|\bfreez|\bhang(s|ing)?\b|\bstuck\b|\bjank|re-?render|prefetch|takes? (around |about |almost )?[0-9]+ ?(s\b|sec|ms)|[0-9]+ ?seconds'; then
+    intent="performance"
 elif has 'error|broken|bug|crash|fail|not working|doesn.?t work|regression|\bfix'; then
     intent="debug"
 elif has 'i?n?v[ie]st[ie]?g|root cause|diagnos|look into|find out|\bwhy\b|trace|what happened|analy[sz]|slow|took (so |too )?(long|large)'; then
@@ -32,13 +34,16 @@ if has 'rust|cargo|axum|sqlx|clippy|borrow|lifetime|tokio|\.rs\b'; then
     lane="rust"
 elif has 'fastapi|pydantic|sqlalchemy|celery|alembic|python|\.py\b'; then
     lane="python"
-elif has 'next\.?js|react|component|\.tsx?\b|frontend|data.?table|\bpages?\b|\bui\b'; then
+elif has 'next\.?js|react|component|\.tsx?\b|frontend|data.?table|\bpages?\b|\bui\b|nav ?bar|sidebar|skele?ton|browser|\bclick'; then
     lane="frontend"
+elif has 'docker|compose|nginx|\bssl\b|container'; then
+    lane="infra"
 fi
 
 [ -n "$intent" ] || [ -n "$lane" ] || exit 0
 
 case "$intent" in
+    performance) skills="task-flow (Investigate: measure server time vs browser time before any hypothesis), debug" ;;
     investigate) skills="task-flow (Investigate + scan ladder), debug" ;;
     debug)       skills="debug, task-flow" ;;
     plan)        skills="task-flow (Plan), senior-engineer" ;;
@@ -50,13 +55,16 @@ esac
 
 case "$lane" in
     rust)     lane_skills="rust-correctness plus the rust-* skill for the touched layer (axum-api, sqlx, testing, clean-architecture, nextjs-contract, quality-gates)" ;;
-    python)   lane_skills="fastapi or python-clean-architecture" ;;
+    python)   lane_skills="fastapi or python-clean-architecture; websocket, celery or tasks-management when named" ;;
+    infra)    lane_skills="docker" ;;
     frontend) lane_skills="nextjs, data-table for list pages, fetch-* for the fetch layer" ;;
     *)        lane_skills="" ;;
 esac
+[ "$intent" = "performance" ] && [ "$lane" != "rust" ] && [ "$lane" != "python" ] && [ "$lane" != "infra" ] \
+    && lane_skills="nextjs (read references/client-performance.md), data-table for list pages"
 
 line="[fullstack-agents] intent: ${intent:-general}, lane: ${lane:-any} -> invoke via the Skill tool (fullstack-agents:*): ${skills}"
-[ -n "$lane_skills" ] && line="${line}; lane: ${lane_skills}"
+[ -n "$lane_skills" ] && line="${line}; lane: ${lane_skills} — load these NOW, before the root cause, the plan or any code"
 printf '%s. Take the cheapest rung that answers it; the conclusion, plan and audit stay yours.\n' "$line"
 
 # The full stack doctrine goes in once per session, only when code in a lane is in play.
@@ -78,8 +86,8 @@ cat <<CONTEXT
 [fullstack-agents] STACK TOPIC DETECTED (lane: ${lane}) — mandatory routing:
 ${constitution_line}  1. Run the 5-step gate from using-fullstack-agents: DETECT -> MATCH -> REUSE -> INVOKE -> SCAN.
   2. Skill: fullstack-agents:codebase-scanning (invoke NOW if not yet this session).
-  3. Invoke the matching domain skill BEFORE writing code OR answering design/
-     planning questions about the stack — LANGUAGE LANES are strict:
+  3. Invoke the matching domain skill as soon as the lane is known — BEFORE any root
+     cause, design answer, plan or code — LANGUAGE LANES are strict:
      rust lane -> rust-* skills only; python lane -> fastapi / python-clean-architecture;
      frontend lane -> nextjs / data-table / fetch-* skills. Never blend idioms.
   4. Rust endpoints consumed by Next.js also require fullstack-agents:rust-nextjs-contract.

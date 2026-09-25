@@ -12,7 +12,7 @@ Everything above **Project bindings** is project-independent; the bindings come 
 
 | Step | Owner | Output |
 |---|---|---|
-| 1. Investigate | Orchestrator | Root cause with `file:line`, the command/event path, minimal fix shape |
+| 1. Investigate | Orchestrator | Lane skill loaded first; for latency, server vs client time measured first. Then root cause with `file:line`, the command/event path, minimal fix shape |
 | 2. Plan | Orchestrator | ≤ 40 lines: outcome, files with `file:line`, minimum test set, verification commands, deploy class, risks |
 | 3. Implement | Orchestrator (small) or Implementer (rest) | The diff, nothing else |
 | 4. Audit | Orchestrator | Diff read against the brief, plus the plan's tests re-run |

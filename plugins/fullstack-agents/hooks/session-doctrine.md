@@ -7,11 +7,12 @@ findings. Grep before any model. Re-run the tests yourself. The project's `CLAUD
 bindings (implementer, edit budget, risk paths, test entry points) and outranks this plugin.
 
 **Routing**: the `prompt-scan` line on each prompt names the skills for its intent and lane —
-invoke them via the Skill tool before acting. For the full routing table, invoke
-`fullstack-agents:using-fullstack-agents`.
+it is an instruction: invoke them via the Skill tool before the first root cause, plan, brief or
+edit, and name any you skip with the reason. The lead agent's skill table covers every skill.
 
-**Before writing code**: search for an existing implementation first, then invoke the domain
-skill for the touched code. Language lanes are strict and never blend idioms:
+**As soon as the lane is known** — investigation, performance, design and review included, not
+only before code: invoke the domain skill for that layer. Search for an existing implementation
+before writing. Language lanes are strict and never blend idioms:
 - Rust → `rust-correctness` plus the layer skill (`rust-axum-api`, `rust-sqlx`, `rust-testing`,
   `rust-clean-architecture`, `rust-quality-gates`); an endpoint Next.js consumes also needs
   `rust-nextjs-contract`.

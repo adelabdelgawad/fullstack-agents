@@ -55,22 +55,46 @@ diagnose and report.
 Never put a model in front of a question `grep` answers. Never ask a worker "why" — ask for a table
 of facts and decide yourself. Read what you conclude from, in bounded ranges.
 
-## Domain skills — load the one the touched code needs, before writing it
+## Skills — load at intake, for every task type
 
-| Touched code | Skill |
+A skill is loaded when the task's **lane is known**, not when code is about to be written. An
+investigation, a performance complaint, a design question or a review of stack code needs the
+lane's skill exactly as much as an edit does: the skill holds the failure modes you are about to
+diagnose, and a root cause reached without it is a guess.
+
+1. **The `prompt-scan` routing line is an instruction, not a hint.** Invoke every skill it names
+   before your first root cause, plan, brief or edit. If you judge one irrelevant, say so in one
+   line with the reason; never skip it silently.
+2. **Re-route when the lane surfaces later.** A task that starts as "the page is slow" and turns
+   out to be a Next.js router, a SQLx query or a Celery queue loads that skill the moment the
+   evidence names the layer, before you state the cause.
+3. **Match by the table below**, not by tool names. More than one row may apply; load each.
+
+| Task touches (read, diagnose, design or change) | Skill |
 |---|---|
-| Next.js page, server action, fetch layer | `fullstack-agents:nextjs` |
-| List page with a data table | `fullstack-agents:data-table` |
-| Rust Axum handler, router, middleware | `fullstack-agents:rust-axum-api` |
-| Rust SQLx query, transaction, migration | `fullstack-agents:rust-sqlx` |
-| Rust tests | `fullstack-agents:rust-testing` |
-| Rust ownership, async, error handling | `fullstack-agents:rust-correctness` |
-| Rust module layout, domain boundaries | `fullstack-agents:rust-clean-architecture` |
-| Rust ↔ Next.js wire contract, OpenAPI | `fullstack-agents:rust-nextjs-contract` |
-| Rust lint, format, clippy gates | `fullstack-agents:rust-quality-gates` |
+| Any bug, error, unexpected behaviour, slow page or latency | `debug` (+ the lane skill) |
+| Next.js page, layout, router, prefetch, render/latency, server action | `nextjs` |
+| List page with a data table, table columns, cell links | `data-table` |
+| Fetch layer: server actions, API routes, client calls | `fetch-architecture` / `fetch-plan` / `fetch-implement` / `fetch-validate` |
+| Porting a frontend or a backend | `frontend-transformation` / `backend-migration-from-frontend` |
+| FastAPI entity, router, SQLAlchemy | `fastapi` (new service with DDD: `python-clean-architecture`) |
+| Python WebSocket | `websocket` |
+| Celery worker / background task; scheduled job | `celery`; `tasks-management` |
+| Docker, compose, nginx, SSL | `docker` |
+| Rust Axum handler, router, middleware | `rust-axum-api` |
+| Rust SQLx query, transaction, migration | `rust-sqlx` |
+| Rust tests | `rust-testing` |
+| Rust ownership, async, error handling | `rust-correctness` |
+| Rust module layout, domain boundaries | `rust-clean-architecture` |
+| Rust ↔ Next.js wire contract, OpenAPI | `rust-nextjs-contract` |
+| Rust lint, format, clippy gates | `rust-quality-gates` |
+| Several build/test/lint errors at once | `batch-error-resolution` |
+| Any code generation or refactor | `codebase-scanning`, `senior-engineer` |
+| Project principles | `constitution` |
+| High-stakes decision with real trade-offs | `fusion-panel` |
 
-A brief to an implementer names the skill it must follow. The project's architecture documents
-outrank a skill's defaults.
+All names carry the `fullstack-agents:` prefix. A brief to an implementer names the skill files it
+must follow. The project's architecture documents outrank a skill's defaults.
 
 ## Replies
 
