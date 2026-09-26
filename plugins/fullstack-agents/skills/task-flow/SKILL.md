@@ -51,6 +51,12 @@ A brief is the contract and the audit scope. It states: goal; the plan reference
 implementer may touch; the one document to read; the known-red baseline; the tests that prove the
 fix; forbidden moves. Keep it under 30 lines.
 
+The orchestrator already located every change site with grep while planning, so the brief hands
+those locations over: each site as `file:line` (or a line range) with what changes there — for a
+SQL site, the placeholder numbers already taken and the free one to use. The implementer then
+reads windows around those lines instead of whole files, which is where most of its tokens go. A
+brief that only names files makes the implementer rediscover what the plan already knew.
+
 Two rules make the audit possible. Every touched path must be listed up front, so a path changed
 outside the list is scope creep and gets rejected. And the known-red baseline must be stated, so
 a pre-existing failure is never mistaken for a regression.
@@ -63,7 +69,9 @@ the brief itself or injected by the project's dispatch command.
 
 A change too large for one brief is split into units whose `ALLOWED_PATHS` do not overlap —
 typically by directory or layer — and the units are dispatched concurrently, one implementer run
-each. A unit whose build or tests would race another (a shared compile target, a shared database)
+each. Keep a unit to roughly 10–20 files: every implementer step re-sends the whole conversation, so
+one long run over a hundred files costs far more than several short ones. A unit whose build or
+tests would race another (a shared compile target, a shared database)
 waits instead; the project binding caps how many heavy runs share a host. Each unit is audited on
 its own diff before the next depends on it; units only start together when neither needs the
 other's output.
@@ -105,7 +113,10 @@ it. Take the cheapest rung that answers the question:
 1. **Grep.** Free, no model, and it turns a thousand files into a handful. Always first.
 2. **Ranged reads.** If the hits fit in a dozen or so files, the orchestrator reads them directly
    and keeps the conclusion.
-3. **Delegated scan.** Only when the narrowed set is still too wide, or one file is too big.
+3. **Delegated scan.** Only when the narrowed set is still too wide, or one file is too big —
+   `fullstack-agents:bounded-extractor` (Haiku) by default. The Grok implementer's read-only
+   `investigate` mode is opt-in (`FSA_GROK_INVESTIGATE=1`) for sweeps that need its larger context;
+   reading is cheap on Haiku and expensive on the implementer.
 
 A delegated scan gets a narrowed file list and an extraction contract: the exact fields to
 report and the shape to report them in. Ask for a table of `file:line` plus values, never prose,
@@ -132,7 +143,7 @@ A binding the project leaves unset means that route is unavailable, not that a d
 |---|---|
 | Orchestrator | `fullstack-agents:fullstack-agent` as session lead (activated by the plugin) |
 | Implementer | *(command that dispatches one implementation unit; the plugin ships `scripts/codex-task.sh`, which runs Grok through opencode by default and Codex with `FSA_IMPLEMENTER=codex`)* |
-| Wide read-only scan | *(command or agent; needs a `FILES:` block and a `REPORT:` line)* |
+| Wide read-only scan | *(default `fullstack-agents:bounded-extractor`; `codex-task.sh investigate` only with `FSA_GROK_INVESTIGATE=1`; needs a `FILES:` block and a `REPORT:` line)* |
 | Bounded extraction | `fullstack-agents:bounded-extractor` — narrowed file list, mechanical only |
 | Read guard | *(hook refusing unranged dumps of gated files)* |
 | Scan gate | *(hook refusing a brief without `FILES:` and `REPORT:`)* |

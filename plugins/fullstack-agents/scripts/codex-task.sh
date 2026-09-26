@@ -15,7 +15,8 @@ case "$engine:$mode" in
   codex:investigate) model=${FSA_CODEX_MODEL_INVESTIGATE:-gpt-5.6-luna}; sandbox=read-only ;;
   codex:plan)        model=${FSA_CODEX_MODEL_PLAN:-gpt-5.6-sol};         sandbox=read-only ;;
   codex:implement)   model=${FSA_CODEX_MODEL_IMPLEMENT:-gpt-5.6-sol};    sandbox=workspace-write ;;
-  grok:investigate)  model=${FSA_GROK_MODEL_INVESTIGATE:-xai/grok-4.7}; sandbox=read-only ;;
+  grok:investigate)  [ "${FSA_GROK_INVESTIGATE:-0}" = 1 ] || { echo "wide scans default to grep, ranged reads, then the bounded-extractor (Haiku); set FSA_GROK_INVESTIGATE=1 to spend Grok on one" >&2; exit 2; }
+                     model=${FSA_GROK_MODEL_INVESTIGATE:-xai/grok-4.7}; sandbox=read-only ;;
   grok:plan)         echo "plan runs belong to Claude, the orchestrator; Grok only investigates or implements" >&2; exit 2 ;;
   grok:implement)    model=${FSA_GROK_MODEL_IMPLEMENT:-xai/grok-4.7};   sandbox=workspace-write ;;
   *) echo "FSA_IMPLEMENTER must be grok|codex and mode investigate|plan|implement" >&2; exit 2 ;;
@@ -99,7 +100,8 @@ snapshot > "$runs/$id.pre.txt"
 conventions_preamble() {
   [ "$engine" = "grok" ] || return 0
   printf 'ROLE: you are the implementer; Claude planned this brief and will review your git diff and re-run the tests.\n'
-  printf 'CONVENTIONS: before editing, read and obey the repository manuals that apply to the paths you touch: CLAUDE.md, AGENTS.md (root and nested) and .claude/rules/ inside this repository. Never read or write outside the repository root; a denied tool call is final, so do not retry it. The brief wins on scope.\n\n'
+  printf 'CONVENTIONS: before editing, read and obey the repository manuals that apply to the paths you touch: CLAUDE.md, AGENTS.md (root and nested) and .claude/rules/ inside this repository. Never read or write outside the repository root; a denied tool call is final, so do not retry it. The brief wins on scope.\n'
+  printf 'READING: locate with grep, then read only the line ranges you need (start at the file:line sites the brief names); never read a whole large file to change one spot, and do not re-read a range you already have.\n\n'
 }
 
 # opencode has no output schema, so the Grok engine is told to end with the schema's JSON and it is extracted after the run.
