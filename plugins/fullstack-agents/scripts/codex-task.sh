@@ -49,8 +49,8 @@ if [ "$mode" = "implement" ]; then
   printf '%s\n' "$allow" > "$runs/$id.allow"
 fi
 
-# Codex never loads Claude plugin skills, so an implement brief names the lane's skill files itself.
-skills_preamble() {
+# The implementer never loads Claude plugin skills, so an implement brief carries the lane's skill files.
+skill_files() {
   [ "$mode" = "implement" ] || return 0
   grep -q '^SKILLS' "$brief" && return 0
   local dir="$here/../skills" names=()
@@ -62,9 +62,19 @@ skills_preamble() {
   grep -q '\.py$' <<<"$allow" && names+=(fastapi)
   [ ${#names[@]} -gt 0 ] || return 0
   names+=(senior-engineer)
-  printf 'SKILLS (read before editing; binding, but the project manuals and the brief win on conflict):\n'
-  local n; for n in "${names[@]}"; do [ -f "$dir/$n/SKILL.md" ] && printf -- '- %s/SKILL.md\n' "$(cd "$dir/$n" && pwd)"; done
-  printf '\n'
+  local n; for n in "${names[@]}"; do [ -f "$dir/$n/SKILL.md" ] && printf '%s/SKILL.md\n' "$(cd "$dir/$n" && pwd)"; done
+}
+
+# Codex reads the skill paths itself; Grok receives them as opencode attachments because reads outside the repo are denied.
+skills_preamble() {
+  local files; files=$(skill_files); [ -n "$files" ] || return 0
+  if [ "$engine" = "grok" ]; then
+    printf 'SKILLS: the attached SKILL.md files are binding lane rules; the project manuals and the brief win on conflict.\n\n'
+  else
+    printf 'SKILLS (read before editing; binding, but the project manuals and the brief win on conflict):\n'
+    printf -- '- %s\n' $files
+    printf '\n'
+  fi
 }
 
 # An investigate brief is context relief, never the conclusion: files to read and a table shape.
@@ -106,9 +116,10 @@ if [ "$engine" = "grok" ]; then
   cfg="$runs/$id.opencode.json"
   if [ "$sandbox" = "read-only" ]; then perms='{"edit":"deny","bash":"deny","webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'; else perms='{"edit":"allow","bash":"allow","webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'; fi
   printf '{"$schema":"https://opencode.ai/config.json","permission":%s}\n' "$perms" > "$cfg"
+  attach=""; while IFS= read -r f; do [ -n "$f" ] && attach+=" -f '$f'"; done <<<"$(skill_files)"
   cat > "$runner" <<EOF
 set -o pipefail
-cd '$root' && OPENCODE_CONFIG='$cfg' '$opencode_bin' run -m '$model' "\$(cat '$prompt')" 2>&1 | tee '$log'
+cd '$root' && OPENCODE_CONFIG='$cfg' '$opencode_bin' run -m '$model'$attach -- "\$(cat '$prompt')" 2>&1 | tee '$log'
 rc=\${PIPESTATUS[0]}
 python3 '$here/lib/extract-result.py' '$log' '$last' || rc=1
 exit \$rc
