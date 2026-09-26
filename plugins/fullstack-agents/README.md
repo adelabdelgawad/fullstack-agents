@@ -184,7 +184,7 @@ need a Herdr-managed pane (`HERDR_ENV=1`).
 
 Optional environment: `FSA_CODEX_ROOT` (repository root, default the current git toplevel),
 `FSA_CODEX_RUNS_DIR` (default `~/.codex/fsa-runs`), `FSA_IMPLEMENTER` (`grok`, the default, or `codex`),
-`FSA_GROK_MODEL_INVESTIGATE|IMPLEMENT` (opencode `provider/model`, default `xai/grok-4.6`; Grok has no plan mode because Claude plans) and
+`FSA_GROK_MODEL_INVESTIGATE|IMPLEMENT` (opencode `provider/model`, default `xai/grok-4.7`; Grok has no plan mode because Claude plans) and
 `FSA_CODEX_MODEL_INVESTIGATE|PLAN|IMPLEMENT`. The Grok engine needs the `opencode` CLI and `XAI_API_KEY`;
 investigate/plan runs deny opencode edits and shell, implement runs allow both, and the final answer's
 fenced JSON is extracted into the same result file Codex writes.

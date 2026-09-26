@@ -15,9 +15,9 @@ case "$engine:$mode" in
   codex:investigate) model=${FSA_CODEX_MODEL_INVESTIGATE:-gpt-5.6-luna}; sandbox=read-only ;;
   codex:plan)        model=${FSA_CODEX_MODEL_PLAN:-gpt-5.6-sol};         sandbox=read-only ;;
   codex:implement)   model=${FSA_CODEX_MODEL_IMPLEMENT:-gpt-5.6-sol};    sandbox=workspace-write ;;
-  grok:investigate)  model=${FSA_GROK_MODEL_INVESTIGATE:-xai/grok-4.6}; sandbox=read-only ;;
+  grok:investigate)  model=${FSA_GROK_MODEL_INVESTIGATE:-xai/grok-4.7}; sandbox=read-only ;;
   grok:plan)         echo "plan runs belong to Claude, the orchestrator; Grok only investigates or implements" >&2; exit 2 ;;
-  grok:implement)    model=${FSA_GROK_MODEL_IMPLEMENT:-xai/grok-4.6};   sandbox=workspace-write ;;
+  grok:implement)    model=${FSA_GROK_MODEL_IMPLEMENT:-xai/grok-4.7};   sandbox=workspace-write ;;
   *) echo "FSA_IMPLEMENTER must be grok|codex and mode investigate|plan|implement" >&2; exit 2 ;;
 esac
 case "$engine" in
