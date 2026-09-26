@@ -22,7 +22,8 @@ Everything above **Project bindings** is project-independent; the bindings come 
 | 5. Loop | Orchestrator | Re-brief with raw output; two retries, then hand the failure to the user |
 
 The orchestrator owns every step but the writing of large changes. It never delegates the
-conclusion, the plan, or the verification — a delegated verification is a report, not evidence.
+conclusion, the plan, or the verification. Test execution goes to the Sonnet `fullstack-agents:test-runner`, which saves full logs;
+those logs are the evidence the orchestrator reads — the runner's summary is only an index into them.
 
 ## The size threshold
 
@@ -49,7 +50,8 @@ its paths locked, or the budget never applies to exactly the files under active 
 
 A brief is the contract and the audit scope. It states: goal; the plan reference; every path the
 implementer may touch; the one document to read; the known-red baseline; the tests that prove the
-fix; forbidden moves. Keep it under 30 lines.
+fix; a `BUILD:` line (one compile or type-check command the implementer runs once at the end); forbidden moves. Keep it under 30
+lines. The tests that prove the fix are listed for the orchestrator's audit, not for the implementer to run.
 
 The orchestrator already located every change site with grep while planning, so the brief hands
 those locations over: each site as `file:line` (or a line range) with what changes there — for a
@@ -104,8 +106,10 @@ first with `herdr --skill`.
 The implementer's completion report is not evidence. Read the git diff restricted to the paths the
 run reports as touched and review it for conformity: the brief's scope, the project's architecture
 documents and language lanes, the wire contract, and — on UI diffs — accessibility (labels, roles,
-keyboard reach, focus, contrast). Then re-run the plan's tests yourself; a targeted run that skips a
-surface the diff touched is not a green result.
+keyboard reach, focus, contrast). Then have `fullstack-agents:test-runner` (Sonnet) run the plan's test commands, and read the
+logs it names yourself — grep the result and failure lines, never trust the table alone. A targeted run that skips a surface the
+diff touched is not a green result. The implementer does not run test suites (they are denied to Grok); it runs only the brief's
+`BUILD:` compile or type check, so test output never inflates its context.
 
 Auditing is reading and testing. A fix the orchestrator spots goes back as a re-brief, never into
 the file — otherwise the diff under review no longer matches what was delegated.

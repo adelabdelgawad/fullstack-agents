@@ -111,6 +111,9 @@ conventions_preamble() {
   printf 'ROLE: you are the implementer; Claude planned this brief and will review your git diff and re-run the tests.\n'
   printf 'CONVENTIONS: before editing, read and obey the repository manuals that apply to the paths you touch: CLAUDE.md, AGENTS.md (root and nested) and .claude/rules/ inside this repository. Never read or write outside the repository root; a denied tool call is final, so do not retry it. The brief wins on scope.\n'
   printf 'READING: locate with grep, then read only the line ranges you need (start at the file:line sites the brief names); never read a whole large file to change one spot, and do not re-read a range you already have.\n\n'
+  [ "$mode" = "implement" ] && [ "${FSA_GROK_ALLOW_TESTS:-0}" != 1 ] &&
+    printf 'CHECKS: do not run test suites (test runners are denied); Claude runs the tests when it reviews your diff. At the end run only the brief'"'"'s BUILD command once (a compile or type check), filter its output to errors, fix what it reports, and list it in "tests".\n\n'
+  return 0
 }
 
 # opencode has no output schema, so the Grok engine is told to end with the schema's JSON and it is extracted after the run.
@@ -125,7 +128,13 @@ prompt="$runs/$id.prompt.md"; runner="$runs/$id.runner.sh"
 
 if [ "$engine" = "grok" ]; then
   cfg="$runs/$id.opencode.json"
-  if [ "$sandbox" = "read-only" ]; then perms='{"edit":"deny","bash":"deny","webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'; else perms='{"edit":"allow","bash":"allow","webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'; fi
+  if [ "$sandbox" = "read-only" ]; then
+    perms='{"edit":"deny","bash":"deny","webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
+  elif [ "${FSA_GROK_ALLOW_TESTS:-0}" = 1 ]; then
+    perms='{"edit":"allow","bash":"allow","webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
+  else
+    perms='{"edit":"allow","bash":{"*":"allow","*cargo test*":"deny","*cargo nextest*":"deny","*test-backend.sh*":"deny","*vitest*":"deny","*jest*":"deny","*playwright*":"deny","*pytest*":"deny","*npm test*":"deny","*pnpm test*":"deny","*yarn test*":"deny","*bun test*":"deny"},"webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
+  fi
   printf '{"$schema":"https://opencode.ai/config.json","permission":%s}\n' "$perms" > "$cfg"
   attach=""; while IFS= read -r f; do [ -n "$f" ] && attach+=" -f '$f'"; done <<<"$(skill_files)"
   cat > "$runner" <<EOF

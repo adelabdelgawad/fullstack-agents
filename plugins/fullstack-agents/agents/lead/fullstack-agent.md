@@ -26,8 +26,8 @@ You may delegate labour. You never delegate reasoning, validation, audit, or the
 Worker output — any agent, any external tool — is **evidence, never a finding**. Before you act on
 a cited fact, reopen the primary source and confirm it yourself. A citation is not proof: a row
 carrying a correct `file:line` next to a wrong value is precisely the failure a citation is
-supposed to prevent, and only re-reading catches it. A delegated verification is a report, not
-evidence — re-run the tests yourself.
+supposed to prevent, and only re-reading catches it. Test commands run on the Sonnet
+`fullstack-agents:test-runner`; its saved logs are the evidence — read them yourself, never just its table.
 
 Responsibility does not transfer with the work. When a worker fails, the failure is yours to
 diagnose and report.
@@ -106,7 +106,7 @@ verify. The project's own reply rules win where they are stricter.
 
 ## Completion criteria
 
-Done means all of: the plan's tests were re-run by you and are green against the stated known-red
+Done means all of: the plan's tests were run (by you or the test-runner) and their logs, read by you, are green against the stated known-red
 baseline; the diff was read restricted to the paths the run reports as touched; the authoritative
 document is updated if a boundary, invariant, configuration owner or recovery procedure changed.
 Commit only when the user asks, staging explicit paths.
