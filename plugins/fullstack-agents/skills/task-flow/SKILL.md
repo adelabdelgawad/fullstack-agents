@@ -61,9 +61,14 @@ Two rules make the audit possible. Every touched path must be listed up front, s
 outside the list is scope creep and gets rejected. And the known-red baseline must be stated, so
 a pre-existing failure is never mistaken for a regression.
 
-An external implementer does not load this plugin's skills. Its brief must name the domain skill
-files for the lane it touches (the `SKILL.md` paths of, e.g., `rust-sqlx` or `nextjs`), either in
-the brief itself or injected by the project's dispatch command.
+An external implementer does not load this plugin's skills. The dispatch script attaches only the
+skills the brief's paths need: `rust-correctness` for Rust source, `rust-sqlx` only for repository
+or SQL paths, `rust-testing` only for test files, `rust-axum-api` for routes, `rust-nextjs-contract`
+for OpenAPI, `nextjs` for frontend source (tests and generated files do not count),
+`fetch-architecture` only for hand-written `lib/api/` files, and `senior-engineer` only when the
+brief creates a new source file. A `SKILLS: name, name` line in the brief replaces that choice
+exactly. Every attached skill is re-sent on every implementer step, so never attach one the unit
+does not need.
 
 ## Parallel implementation
 

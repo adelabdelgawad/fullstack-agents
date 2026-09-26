@@ -50,19 +50,28 @@ if [ "$mode" = "implement" ]; then
   printf '%s\n' "$allow" > "$runs/$id.allow"
 fi
 
-# The implementer never loads Claude plugin skills, so an implement brief carries the lane's skill files.
+# The implementer never loads Claude plugin skills, so an implement brief carries only the lane skills its paths need.
 skill_files() {
   [ "$mode" = "implement" ] || return 0
-  grep -q '^SKILLS' "$brief" && return 0
-  local dir="$here/../skills" names=()
-  grep -q '\.rs$' <<<"$allow" && names+=(rust-correctness rust-sqlx rust-testing)
-  grep -qE '(/routes/|router\.rs$)' <<<"$allow" && names+=(rust-axum-api)
-  grep -qE 'openapi\.(ya?ml|json)$' <<<"$allow" && names+=(rust-nextjs-contract)
-  grep -qE '\.tsx?$' <<<"$allow" && names+=(nextjs)
-  grep -qE '/lib/api/.*\.tsx?$' <<<"$allow" && names+=(fetch-architecture)
-  grep -q '\.py$' <<<"$allow" && names+=(fastapi)
-  [ ${#names[@]} -gt 0 ] || return 0
-  names+=(senior-engineer)
+  local dir="$here/../skills" names=() explicit
+  explicit=$(sed -nE 's/^SKILLS:[[:space:]]*//p' "$brief" | head -1)
+  if [ -n "$explicit" ]; then
+    read -ra names <<<"${explicit//,/ }"
+  else
+    local tests='(^|/)tests?/|_tests?\.rs$|\.test\.tsx?$|\.spec\.tsx?$|(^|/)test_[^/]*\.py$'
+    local src; src=$(grep -vE "$tests" <<<"$allow" | grep -v '/generated/' || true)
+    grep -q '\.rs$' <<<"$src" && names+=(rust-correctness)
+    grep -qE '(/repos?/|persistence|_repo\.rs$|sql[^/]*\.rs$|\.sql$)' <<<"$allow" && names+=(rust-sqlx)
+    grep -E "$tests" <<<"$allow" | grep -q '\.rs$' && names+=(rust-testing)
+    grep -qE '(/routes/|router\.rs$)' <<<"$src" && names+=(rust-axum-api)
+    grep -qE 'openapi\.(ya?ml|json)$' <<<"$allow" && names+=(rust-nextjs-contract)
+    grep -qE '\.tsx?$' <<<"$src" && grep -E '\.tsx?$' <<<"$src" | grep -qv '/lib/api/' && names+=(nextjs)
+    grep -qE '/lib/api/[^/]*\.tsx?$' <<<"$src" && names+=(fetch-architecture)
+    grep -q '\.py$' <<<"$src" && names+=(fastapi)
+    local p; while IFS= read -r p; do
+      [ -n "$p" ] && [ ! -e "$root/$p" ] && grep -qE '\.(rs|tsx?|py)$' <<<"$p" && { names+=(senior-engineer); break; }
+    done <<<"$src"
+  fi
   local n; for n in "${names[@]}"; do [ -f "$dir/$n/SKILL.md" ] && printf '%s/SKILL.md\n' "$(cd "$dir/$n" && pwd)"; done
 }
 
