@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dispatch one Codex unit; prints only the run manifest, never the transcript.
+# Dispatch one implementer unit (Grok via opencode by default, Codex on FSA_IMPLEMENTER=codex); prints only the manifest.
 set -euo pipefail
 
 herdr_mode=0
@@ -10,11 +10,23 @@ if [ "$herdr_mode" = 1 ]; then
   [ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_PANE_ID:-}" ] || { echo "--herdr needs a Herdr-managed pane (HERDR_ENV=1)" >&2; exit 2; }
 fi
 
-case "$mode" in
-  investigate) model=${FSA_CODEX_MODEL_INVESTIGATE:-gpt-5.6-luna}; sandbox=read-only ;;
-  plan)        model=${FSA_CODEX_MODEL_PLAN:-gpt-5.6-sol};         sandbox=read-only ;;
-  implement)   model=${FSA_CODEX_MODEL_IMPLEMENT:-gpt-5.6-sol};    sandbox=workspace-write ;;
-  *) echo "mode must be investigate|plan|implement" >&2; exit 2 ;;
+engine=${FSA_IMPLEMENTER:-grok}
+case "$engine:$mode" in
+  codex:investigate) model=${FSA_CODEX_MODEL_INVESTIGATE:-gpt-5.6-luna}; sandbox=read-only ;;
+  codex:plan)        model=${FSA_CODEX_MODEL_PLAN:-gpt-5.6-sol};         sandbox=read-only ;;
+  codex:implement)   model=${FSA_CODEX_MODEL_IMPLEMENT:-gpt-5.6-sol};    sandbox=workspace-write ;;
+  grok:investigate)  model=${FSA_GROK_MODEL_INVESTIGATE:-xai/grok-4.6}; sandbox=read-only ;;
+  grok:plan)         echo "plan runs belong to Claude, the orchestrator; Grok only investigates or implements" >&2; exit 2 ;;
+  grok:implement)    model=${FSA_GROK_MODEL_IMPLEMENT:-xai/grok-4.6};   sandbox=workspace-write ;;
+  *) echo "FSA_IMPLEMENTER must be grok|codex and mode investigate|plan|implement" >&2; exit 2 ;;
+esac
+case "$engine" in
+  codex) command -v codex > /dev/null || { echo "codex CLI not found" >&2; exit 2; } ;;
+  grok)  opencode_bin=${FSA_OPENCODE_BIN:-$(command -v opencode || echo "$HOME/.opencode/bin/opencode")}
+         [ -x "$opencode_bin" ] || { echo "opencode CLI not found (the Grok engine runs through opencode)" >&2; exit 2; }
+         oc_auth=${XDG_DATA_HOME:-$HOME/.local/share}/opencode/auth.json
+         [ -n "${XAI_API_KEY:-}" ] || jq -e 'has("xai")' "$oc_auth" > /dev/null 2>&1 ||
+           { echo "no xAI credential: run 'opencode auth login' (xAI) or export XAI_API_KEY" >&2; exit 2; } ;;
 esac
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -74,18 +86,47 @@ snapshot > "$runs/$id.pre.txt"
 
 . "$here/lib/herdr-grid.sh"
 
-herdr_pane=""
-run_in_herdr_pane() {
-  local prompt="$runs/$id.prompt.md" runner="$runs/$id.herdr.sh" status="$runs/$id.exit"
-  { skills_preamble; cat "$brief"; } > "$prompt"
+conventions_preamble() {
+  [ "$engine" = "grok" ] || return 0
+  printf 'ROLE: you are the implementer; Claude planned this brief and will review your git diff and re-run the tests.\n'
+  printf 'CONVENTIONS: before editing, read and obey the repository manuals that apply to the paths you touch: CLAUDE.md, AGENTS.md (root and nested) and .claude/rules/ inside this repository. Never read or write outside the repository root; a denied tool call is final, so do not retry it. The brief wins on scope.\n\n'
+}
+
+# opencode has no output schema, so the Grok engine is told to end with the schema's JSON and it is extracted after the run.
+result_contract() {
+  [ "$engine" = "grok" ] || return 0
+  printf '\n\nFINAL ANSWER CONTRACT: end your final message with exactly one fenced ```json block holding one object that validates against this JSON Schema, and write no fenced block after it:\n'
+  cat "$schema"
+}
+
+prompt="$runs/$id.prompt.md"; runner="$runs/$id.runner.sh"
+{ conventions_preamble; skills_preamble; cat "$brief"; result_contract; } > "$prompt"
+
+if [ "$engine" = "grok" ]; then
+  cfg="$runs/$id.opencode.json"
+  if [ "$sandbox" = "read-only" ]; then perms='{"edit":"deny","bash":"deny","webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'; else perms='{"edit":"allow","bash":"allow","webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'; fi
+  printf '{"$schema":"https://opencode.ai/config.json","permission":%s}\n' "$perms" > "$cfg"
+  cat > "$runner" <<EOF
+set -o pipefail
+cd '$root' && OPENCODE_CONFIG='$cfg' '$opencode_bin' run -m '$model' "\$(cat '$prompt')" 2>&1 | tee '$log'
+rc=\${PIPESTATUS[0]}
+python3 '$here/lib/extract-result.py' '$log' '$last' || rc=1
+exit \$rc
+EOF
+else
   cat > "$runner" <<EOF
 set -o pipefail
 codex exec --cd '$root' -m '$model' -s '$sandbox' --output-schema '$schema' -o '$last' - < '$prompt' 2>&1 | tee '$log'
-echo \${PIPESTATUS[0]} > '$status'
+exit \${PIPESTATUS[0]}
 EOF
+fi
+
+herdr_pane=""
+run_in_herdr_pane() {
+  local status="$runs/$id.exit"
   herdr_pane=$(herdr_worker_pane "$root") || return 2
-  herdr pane rename "$herdr_pane" "codex $(basename "$brief" .md)" > /dev/null
-  herdr pane run "$herdr_pane" "bash '$runner'" > /dev/null || return 2
+  herdr pane rename "$herdr_pane" "$engine $(basename "$brief" .md)" > /dev/null
+  herdr pane run "$herdr_pane" "bash '$runner'; echo \$? > '$status'" > /dev/null || return 2
   until [ -f "$status" ]; do sleep 5; done
   return "$(cat "$status")"
 }
@@ -94,8 +135,7 @@ set +e
 if [ "$herdr_mode" = 1 ]; then
   run_in_herdr_pane
 else
-  { skills_preamble; cat "$brief"; } | codex exec --cd "$root" -m "$model" -s "$sandbox" \
-    --output-schema "$schema" -o "$last" - > "$log" 2>&1
+  bash "$runner" > /dev/null
 fi
 codex_exit=$?
 set -e
@@ -103,13 +143,13 @@ set -e
 snapshot > "$runs/$id.post.txt"
 touched=$( { comm -13 "$runs/$id.pre.txt" "$runs/$id.post.txt"; comm -23 "$runs/$id.pre.txt" "$runs/$id.post.txt"; } | cut -d' ' -f2- | sort -u )
 
-printf 'run=%s\ncodex_exit=%s\nbase=%s\nlast_message=%s\nlog=%s\ntouched_by_this_run:\n%s\n' \
-  "$id" "$codex_exit" "$base" "$last" "$log" "${touched:-(none)}"
+printf 'run=%s\nengine=%s\nmodel=%s\ncodex_exit=%s\nbase=%s\nlast_message=%s\nlog=%s\ntouched_by_this_run:\n%s\n' \
+  "$id" "$engine" "$model" "$codex_exit" "$base" "$last" "$log" "${touched:-(none)}"
 [ "$mode" = "implement" ] && printf 'allowed_paths=%s\n' "$runs/$id.allow"
 [ -n "$herdr_pane" ] && printf 'herdr_pane=%s (close it after the audit: herdr pane close %s)\n' "$herdr_pane" "$herdr_pane"
 
 # A truncated or empty result is a red result: re-brief once, then hand the user the failure.
-summary_len=$(jq -r '(.summary // "") | length' < "$last" 2>/dev/null || echo 0)
+summary_len=$(jq -r '(.summary // "") | length' 2>/dev/null < "$last" || echo 0)
 [ "$codex_exit" -eq 0 ] && [ -s "$last" ] || echo "STATUS=FAILED (read the log tail before auditing)"
 [ "${summary_len:-0}" -ge 11500 ] && echo "STATUS=TRUNCATED (summary hit the schema cap; re-brief asking for a narrower scope)"
 exit 0

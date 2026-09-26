@@ -179,11 +179,15 @@ need a Herdr-managed pane (`HERDR_ENV=1`).
 
 | Script | Purpose |
 |---|---|
-| `codex-task.sh [--herdr] investigate\|plan\|implement <brief>` | Dispatch one Codex unit; validates the brief (`PLAN:`/`ALLOWED_PATHS:` or `FILES:`/`REPORT:`), prefixes the lane's skill files, snapshots touched paths, prints a manifest. `--herdr` runs it in a visible grid pane. |
+| `codex-task.sh [--herdr] investigate\|plan\|implement <brief>` | Dispatch one implementer unit (Grok through `opencode` by default, Codex with `FSA_IMPLEMENTER=codex`); validates the brief (`PLAN:`/`ALLOWED_PATHS:` or `FILES:`/`REPORT:`), prefixes the lane's skill files, snapshots touched paths, prints a manifest. `--herdr` runs it in a visible grid pane. |
 | `herdr-watch.sh <transcript> [label]` | Read-only live view of a background worker's transcript in a grid pane; no model reads it. |
 
 Optional environment: `FSA_CODEX_ROOT` (repository root, default the current git toplevel),
-`FSA_CODEX_RUNS_DIR` (default `~/.codex/fsa-runs`), `FSA_CODEX_MODEL_INVESTIGATE|PLAN|IMPLEMENT`.
+`FSA_CODEX_RUNS_DIR` (default `~/.codex/fsa-runs`), `FSA_IMPLEMENTER` (`grok`, the default, or `codex`),
+`FSA_GROK_MODEL_INVESTIGATE|IMPLEMENT` (opencode `provider/model`, default `xai/grok-4.6`; Grok has no plan mode because Claude plans) and
+`FSA_CODEX_MODEL_INVESTIGATE|PLAN|IMPLEMENT`. The Grok engine needs the `opencode` CLI and `XAI_API_KEY`;
+investigate/plan runs deny opencode edits and shell, implement runs allow both, and the final answer's
+fenced JSON is extracted into the same result file Codex writes.
 A project may keep a thin wrapper that sets these and `exec`s the plugin script.
 
 ## License

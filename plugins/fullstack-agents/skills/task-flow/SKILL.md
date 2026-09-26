@@ -5,7 +5,10 @@ description: Operating flow for the fullstack-agent session lead — investigate
 
 # Agent task flow
 
-Operating flow for a repository where a strong model orchestrates and a cheaper model implements.
+Operating flow for a repository where Claude (the lead, pinned to Opus 5.5) orchestrates — it plans and reviews — and Grok
+implements through opencode (the plugin's `scripts/codex-task.sh`; `FSA_IMPLEMENTER=codex` swaps the
+engine back). Grok reads the same `CLAUDE.md`, `AGENTS.md` and `.claude/rules/`, so both sides work
+to one set of project conventions.
 Everything above **Project bindings** is project-independent; the bindings come from the project.
 
 ## Roles
@@ -13,9 +16,9 @@ Everything above **Project bindings** is project-independent; the bindings come 
 | Step | Owner | Output |
 |---|---|---|
 | 1. Investigate | Orchestrator | Lane skill loaded first; for latency, server vs client time measured first. Then root cause with `file:line`, the command/event path, minimal fix shape |
-| 2. Plan | Orchestrator | ≤ 40 lines: outcome, files with `file:line`, minimum test set, verification commands, deploy class, risks |
-| 3. Implement | Orchestrator (small) or Implementer (rest) | The diff, nothing else |
-| 4. Audit | Orchestrator | Diff read against the brief, plus the plan's tests re-run |
+| 2. Plan | Orchestrator (Claude, plan mode first; never delegated to Grok) | ≤ 40 lines: outcome, files with `file:line`, minimum test set, verification commands, deploy class, risks |
+| 3. Implement | Orchestrator (small) or Implementer — Grok (rest) | The diff, nothing else |
+| 4. Audit | Orchestrator (Claude) | Grok's git diff reviewed for conformity with the brief and the architecture docs (and accessibility on UI diffs), plus the plan's tests re-run |
 | 5. Loop | Orchestrator | Re-brief with raw output; two retries, then hand the failure to the user |
 
 The orchestrator owns every step but the writing of large changes. It never delegates the
@@ -56,6 +59,15 @@ An external implementer does not load this plugin's skills. Its brief must name 
 files for the lane it touches (the `SKILL.md` paths of, e.g., `rust-sqlx` or `nextjs`), either in
 the brief itself or injected by the project's dispatch command.
 
+## Parallel implementation
+
+A change too large for one brief is split into units whose `ALLOWED_PATHS` do not overlap —
+typically by directory or layer — and the units are dispatched concurrently, one implementer run
+each. A unit whose build or tests would race another (a shared compile target, a shared database)
+waits instead; the project binding caps how many heavy runs share a host. Each unit is audited on
+its own diff before the next depends on it; units only start together when neither needs the
+other's output.
+
 ## Visible workers (only when the user says "use herdr")
 
 Workers stay headless unless the user explicitly asks to use herdr and `HERDR_ENV=1`. Then each
@@ -76,8 +88,11 @@ first with `herdr --skill`.
 
 ## Auditing
 
-The implementer's completion report is not evidence. Read the diff restricted to the paths the
-run reports as touched, and re-run the plan's tests yourself.
+The implementer's completion report is not evidence. Read the git diff restricted to the paths the
+run reports as touched and review it for conformity: the brief's scope, the project's architecture
+documents and language lanes, the wire contract, and — on UI diffs — accessibility (labels, roles,
+keyboard reach, focus, contrast). Then re-run the plan's tests yourself; a targeted run that skips a
+surface the diff touched is not a green result.
 
 Auditing is reading and testing. A fix the orchestrator spots goes back as a re-brief, never into
 the file — otherwise the diff under review no longer matches what was delegated.
@@ -116,7 +131,7 @@ A binding the project leaves unset means that route is unavailable, not that a d
 | Binding | Value |
 |---|---|
 | Orchestrator | `fullstack-agents:fullstack-agent` as session lead (activated by the plugin) |
-| Implementer | *(command that dispatches one implementation unit; the plugin ships `scripts/codex-task.sh` for Codex)* |
+| Implementer | *(command that dispatches one implementation unit; the plugin ships `scripts/codex-task.sh`, which runs Grok through opencode by default and Codex with `FSA_IMPLEMENTER=codex`)* |
 | Wide read-only scan | *(command or agent; needs a `FILES:` block and a `REPORT:` line)* |
 | Bounded extraction | `fullstack-agents:bounded-extractor` — narrowed file list, mechanical only |
 | Read guard | *(hook refusing unranged dumps of gated files)* |
