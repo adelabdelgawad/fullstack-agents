@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dispatch one implementer unit (Grok via opencode by default, Codex on FSA_IMPLEMENTER=codex); prints only the manifest.
+# Dispatch one implementer unit (headless Claude Sonnet by default; FSA_IMPLEMENTER=grok|codex swaps the engine); prints only the manifest.
 set -euo pipefail
 
 herdr_mode=0
@@ -10,7 +10,9 @@ if [ "$herdr_mode" = 1 ]; then
   [ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_PANE_ID:-}" ] || { echo "--herdr needs a Herdr-managed pane (HERDR_ENV=1)" >&2; exit 2; }
 fi
 
-engine=${FSA_IMPLEMENTER:-grok}
+# Engine precedence: the brief's IMPLEMENTER: line (per task), then FSA_IMPLEMENTER (per session), then claude.
+engine=$(sed -nE 's/^IMPLEMENTER:[[:space:]]*([a-z]+).*/\1/p' "$brief" | head -1)
+engine=${engine:-${FSA_IMPLEMENTER:-claude}}
 case "$engine:$mode" in
   codex:investigate) model=${FSA_CODEX_MODEL_INVESTIGATE:-gpt-5.6-luna}; sandbox=read-only ;;
   codex:plan)        model=${FSA_CODEX_MODEL_PLAN:-gpt-5.6-sol};         sandbox=read-only ;;
@@ -19,10 +21,14 @@ case "$engine:$mode" in
                      model=${FSA_GROK_MODEL_INVESTIGATE:-xai/grok-4.7}; sandbox=read-only ;;
   grok:plan)         echo "plan runs belong to Claude, the orchestrator; Grok only investigates or implements" >&2; exit 2 ;;
   grok:implement)    model=${FSA_GROK_MODEL_IMPLEMENT:-xai/grok-4.7};   sandbox=workspace-write ;;
-  *) echo "FSA_IMPLEMENTER must be grok|codex and mode investigate|plan|implement" >&2; exit 2 ;;
+  claude:implement)  model=${FSA_CLAUDE_MODEL_IMPLEMENT:-claude-sonnet-5}; sandbox=workspace-write ;;
+  claude:investigate|claude:plan)
+                     echo "the Claude engine only implements: plans are the lead's, wide scans go to the bounded-extractor (FSA_IMPLEMENTER=grok|codex for $mode runs)" >&2; exit 2 ;;
+  *) echo "FSA_IMPLEMENTER must be claude|grok|codex and mode investigate|plan|implement" >&2; exit 2 ;;
 esac
 case "$engine" in
   codex) command -v codex > /dev/null || { echo "codex CLI not found" >&2; exit 2; } ;;
+  claude) command -v claude > /dev/null || { echo "claude CLI not found" >&2; exit 2; } ;;
   grok)  opencode_bin=${FSA_OPENCODE_BIN:-$(command -v opencode || echo "$HOME/.opencode/bin/opencode")}
          [ -x "$opencode_bin" ] || { echo "opencode CLI not found (the Grok engine runs through opencode)" >&2; exit 2; }
          oc_auth=${XDG_DATA_HOME:-$HOME/.local/share}/opencode/auth.json
@@ -108,14 +114,18 @@ snapshot > "$runs/$id.pre.txt"
 
 . "$here/lib/herdr-grid.sh"
 
+allow_tests=${FSA_IMPLEMENTER_ALLOW_TESTS:-${FSA_GROK_ALLOW_TESTS:-0}}
+
 conventions_preamble() {
-  [ "$engine" = "grok" ] || return 0
+  [ "$engine" = "codex" ] && return 0
   printf 'ROLE: you are the implementer; Claude planned this brief and will review your git diff and re-run the tests.\n'
+  [ "$engine" = "claude" ] &&
+    printf 'You are not the session lead or orchestrator: ignore manual text about planning, delegating, dispatching implementers or edit budgets, and never call scripts/codex-task.sh. Edit the files yourself.\n'
   printf 'CONVENTIONS: before editing, read and obey the repository manuals that apply to the paths you touch: CLAUDE.md, AGENTS.md (root and nested) and .claude/rules/ inside this repository. Never read or write outside the repository root; a denied tool call is final, so do not retry it. The brief wins on scope.\n'
   printf 'READING: locate with grep, then read only the line ranges you need (start at the file:line sites the brief names); never read a whole large file to change one spot, and do not re-read a range you already have.\n\n'
   [ "$mode" = "implement" ] &&
     printf 'SCOPE: the edit and write tools accept only the brief'"'"'s ALLOWED_PATHS; never change a file from bash. If the change needs another path, stop and name it in "open_risks".\n\n'
-  [ "$mode" = "implement" ] && [ "${FSA_GROK_ALLOW_TESTS:-0}" != 1 ] &&
+  [ "$mode" = "implement" ] && [ "$allow_tests" != 1 ] &&
     printf 'CHECKS: do not run test suites (test runners are denied); Claude runs the tests when it reviews your diff. At the end run only the brief'"'"'s BUILD command once (a compile or type check), filter its output to errors, fix what it reports, and list it in "tests".\n\n'
   return 0
 }
@@ -137,7 +147,7 @@ if [ "$engine" = "grok" ]; then
   [ -f "$runs/$id.allow" ] && edit_rules=$(jq -cRn '[inputs | select(length > 0)] | reduce .[] as $p ({"*": "deny"}; . + {($p): "allow"})' < "$runs/$id.allow")
   if [ "$sandbox" = "read-only" ]; then
     perms='{"edit":"deny","bash":"deny","webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
-  elif [ "${FSA_GROK_ALLOW_TESTS:-0}" = 1 ]; then
+  elif [ "$allow_tests" = 1 ]; then
     perms='{"edit":'"$edit_rules"',"bash":"allow","webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
   else
     perms='{"edit":'"$edit_rules"',"bash":{"*":"allow","*cargo test*":"deny","*cargo nextest*":"deny","*test-backend.sh*":"deny","*vitest*":"deny","*jest*":"deny","*playwright*":"deny","*pytest*":"deny","*npm test*":"deny","*pnpm test*":"deny","*yarn test*":"deny","*bun test*":"deny"},"webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
@@ -149,6 +159,30 @@ set -o pipefail
 cd '$root' && OPENCODE_CONFIG='$cfg' '$opencode_bin' run -m '$model'$attach -- "\$(cat '$prompt')" 2>&1 | tee '$log'
 rc=\${PIPESTATUS[0]}
 python3 '$here/lib/extract-result.py' '$log' '$last' || rc=1
+exit \$rc
+EOF
+elif [ "$engine" = "claude" ]; then
+  # Project settings only, so the user-scope plugin lead never loads; Edit/Write rules admit only ALLOWED_PATHS.
+  args=(-p --model "$model" --setting-sources project,local --strict-mcp-config --permission-mode dontAsk
+        --output-format stream-json --verbose --json-schema "$(cat "$schema")"
+        --tools Read Grep Glob Edit Write Bash --allowedTools Read Grep Glob Bash)
+  # Permission paths are gitignore globs, so Next.js segments like [id] must be escaped to match literally.
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    lit=$(sed -E 's/([][*?\\])/\\\1/g' <<<"/$root/$p")
+    args+=("Edit($lit)" "Write($lit)")
+  done < "$runs/$id.allow"
+  args+=(--disallowedTools Agent Task WebFetch WebSearch NotebookEdit "Bash(*codex-task.sh*)")
+  [ "$allow_tests" = 1 ] || args+=("Bash(*cargo test*)" "Bash(*cargo nextest*)" "Bash(*test-backend.sh*)" "Bash(*vitest*)"
+    "Bash(*jest*)" "Bash(*playwright*)" "Bash(*pytest*)" "Bash(*npm test*)" "Bash(*pnpm test*)" "Bash(*yarn test*)" "Bash(*bun test*)")
+  dirs=$(skill_files | xargs -r -n1 dirname | sort -u)
+  [ -n "$dirs" ] && { args+=(--add-dir); while IFS= read -r d; do args+=("$d"); done <<<"$dirs"; }
+  cat > "$runner" <<EOF
+set -o pipefail
+export BASH_DEFAULT_TIMEOUT_MS=\${BASH_DEFAULT_TIMEOUT_MS:-600000} BASH_MAX_TIMEOUT_MS=\${BASH_MAX_TIMEOUT_MS:-1800000}
+cd $(printf %q "$root") && FSA_IMPLEMENTER_RUN=$(printf %q "$id") claude $(printf '%q ' "${args[@]}") < '$prompt' 2>&1 | tee '$log'
+rc=\${PIPESTATUS[0]}
+jq -nRe '[inputs | fromjson? | select(.type == "result")] | last | select(.is_error | not) | .structured_output // empty' '$log' > '$last' || { : > '$last'; rc=1; }
 exit \$rc
 EOF
 else

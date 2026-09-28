@@ -5,9 +5,10 @@ description: Operating flow for the fullstack-agent session lead — investigate
 
 # Agent task flow
 
-Operating flow for a repository where Claude (the lead, pinned to Opus 5.5) orchestrates — it plans and reviews — and Grok
-implements through opencode (the plugin's `scripts/codex-task.sh`; `FSA_IMPLEMENTER=codex` swaps the
-engine back). Grok reads the same `CLAUDE.md`, `AGENTS.md` and `.claude/rules/`, so both sides work
+Operating flow for a repository where Claude (the lead, pinned to Opus 5.5) orchestrates — it plans and reviews — and a
+headless Claude Sonnet implements (the plugin's `scripts/codex-task.sh`; `FSA_IMPLEMENTER=grok` swaps
+the engine to Grok through opencode for a session, `=codex` to Codex, a brief's `IMPLEMENTER: grok`
+line does the same for one task, and `FSA_CLAUDE_MODEL_IMPLEMENT` picks the Sonnet model). Every engine reads the same `CLAUDE.md`, `AGENTS.md` and `.claude/rules/`, so both sides work
 to one set of project conventions.
 Everything above **Project bindings** is project-independent; the bindings come from the project.
 
@@ -16,9 +17,9 @@ Everything above **Project bindings** is project-independent; the bindings come 
 | Step | Owner | Output |
 |---|---|---|
 | 1. Investigate | Orchestrator | Lane skill loaded first; for latency, server vs client time measured first. Then root cause with `file:line`, the command/event path, minimal fix shape |
-| 2. Plan | Orchestrator (Claude, plan mode first; never delegated to Grok) | ≤ 40 lines: outcome, files with `file:line`, minimum test set, verification commands, deploy class, risks |
-| 3. Implement | Orchestrator (small) or Implementer — Grok (rest) | The diff, nothing else |
-| 4. Audit | Orchestrator (Claude) | Grok's git diff reviewed for conformity with the brief and the architecture docs (and accessibility on UI diffs), plus the plan's tests re-run |
+| 2. Plan | Orchestrator (Claude, plan mode first; never delegated to the implementer) | ≤ 40 lines: outcome, files with `file:line`, minimum test set, verification commands, deploy class, risks |
+| 3. Implement | Orchestrator (small) or Implementer (rest) | The diff, nothing else |
+| 4. Audit | Orchestrator (Claude) | The implementer's git diff reviewed for conformity with the brief and the architecture docs (and accessibility on UI diffs), plus the plan's tests re-run |
 | 5. Loop | Orchestrator | Re-brief with raw output; two retries, then hand the failure to the user |
 
 The orchestrator owns every step but the writing of large changes. It never delegates the
@@ -63,8 +64,9 @@ Two rules make the audit possible. Every touched path must be listed up front, s
 outside the list is scope creep and gets rejected. And the known-red baseline must be stated, so
 a pre-existing failure is never mistaken for a regression.
 
-The dispatch script enforces the list. The Grok engine's edit and write tools accept only the
-`ALLOWED_PATHS` entries, and the manifest prints `STATUS=OUT_OF_SCOPE` for any other path that
+The dispatch script enforces the list. The Claude and Grok engines' edit and write tools accept
+only the `ALLOWED_PATHS` entries (the Claude engine exports `FSA_IMPLEMENTER_RUN=<run id>` so a
+project edit gate can admit exactly `<runs>/<id>.allow`), and the manifest prints `STATUS=OUT_OF_SCOPE` for any other path that
 changed during the run (in a shared tree that can be another session, so confirm the author). A
 brief over `FSA_MAX_ALLOWED_PATHS` paths (default 8) is refused. So list every file the change
 breaks, including tests of removed code, and name a `PATTERN:` file for any test the implementer
@@ -116,7 +118,7 @@ run reports as touched and review it for conformity: the brief's scope, the proj
 documents and language lanes, the wire contract, and — on UI diffs — accessibility (labels, roles,
 keyboard reach, focus, contrast). Then have `fullstack-agents:test-runner` (Sonnet) run the plan's test commands, and read the
 logs it names yourself — grep the result and failure lines, never trust the table alone. A targeted run that skips a surface the
-diff touched is not a green result. The implementer does not run test suites (they are denied to Grok); it runs only the brief's
+diff touched is not a green result. The implementer does not run test suites (they are denied to the implementer); it runs only the brief's
 `BUILD:` compile or type check, so test output never inflates its context.
 
 Auditing is reading and testing. A fix the orchestrator spots goes back as a re-brief, never into
@@ -131,8 +133,8 @@ it. Take the cheapest rung that answers the question:
 2. **Ranged reads.** If the hits fit in a dozen or so files, the orchestrator reads them directly
    and keeps the conclusion.
 3. **Delegated scan.** Only when the narrowed set is still too wide, or one file is too big —
-   `fullstack-agents:bounded-extractor` (Haiku) by default. The Grok implementer's read-only
-   `investigate` mode is opt-in (`FSA_GROK_INVESTIGATE=1`) for sweeps that need its larger context;
+   `fullstack-agents:bounded-extractor` (Haiku) by default. Grok's read-only
+   `investigate` mode is opt-in (`FSA_IMPLEMENTER=grok FSA_GROK_INVESTIGATE=1`) for sweeps that need its larger context;
    reading is cheap on Haiku and expensive on the implementer.
 
 A delegated scan gets a narrowed file list and an extraction contract: the exact fields to
@@ -159,8 +161,8 @@ A binding the project leaves unset means that route is unavailable, not that a d
 | Binding | Value |
 |---|---|
 | Orchestrator | `fullstack-agents:fullstack-agent` as session lead (activated by the plugin) |
-| Implementer | *(command that dispatches one implementation unit; the plugin ships `scripts/codex-task.sh`, which runs Grok through opencode by default and Codex with `FSA_IMPLEMENTER=codex`)* |
-| Wide read-only scan | *(default `fullstack-agents:bounded-extractor`; `codex-task.sh investigate` only with `FSA_GROK_INVESTIGATE=1`; needs a `FILES:` block and a `REPORT:` line)* |
+| Implementer | *(command that dispatches one implementation unit; the plugin ships `scripts/codex-task.sh`, which runs headless Claude Sonnet by default, Grok through opencode with `FSA_IMPLEMENTER=grok` and Codex with `FSA_IMPLEMENTER=codex`)* |
+| Wide read-only scan | *(default `fullstack-agents:bounded-extractor`; `codex-task.sh investigate` only with `FSA_IMPLEMENTER=grok FSA_GROK_INVESTIGATE=1`; needs a `FILES:` block and a `REPORT:` line)* |
 | Bounded extraction | `fullstack-agents:bounded-extractor` — narrowed file list, mechanical only |
 | Read guard | *(hook refusing unranged dumps of gated files)* |
 | Scan gate | *(hook refusing a brief without `FILES:` and `REPORT:`)* |

@@ -179,13 +179,17 @@ need a Herdr-managed pane (`HERDR_ENV=1`).
 
 | Script | Purpose |
 |---|---|
-| `codex-task.sh [--herdr] investigate\|plan\|implement <brief>` | Dispatch one implementer unit (Grok through `opencode` by default, Codex with `FSA_IMPLEMENTER=codex`); validates the brief (`PLAN:`/`ALLOWED_PATHS:`, at most `FSA_MAX_ALLOWED_PATHS` paths, default 8; or `FILES:`/`REPORT:`), restricts Grok's edit and write tools to `ALLOWED_PATHS`, flags other changed paths as `STATUS=OUT_OF_SCOPE`, prefixes the lane's skill files, snapshots touched paths, prints a manifest. `--herdr` runs it in a visible grid pane. |
+| `codex-task.sh [--herdr] investigate\|plan\|implement <brief>` | Dispatch one implementer unit (headless Claude Sonnet by default, Grok through `opencode` with `FSA_IMPLEMENTER=grok`, Codex with `FSA_IMPLEMENTER=codex`); validates the brief (`PLAN:`/`ALLOWED_PATHS:`, at most `FSA_MAX_ALLOWED_PATHS` paths, default 8; or `FILES:`/`REPORT:`), restricts the Claude and Grok engines' edit and write tools to `ALLOWED_PATHS`, flags other changed paths as `STATUS=OUT_OF_SCOPE`, prefixes the lane's skill files, snapshots touched paths, prints a manifest. `--herdr` runs it in a visible grid pane. |
 | `herdr-watch.sh <transcript> [label]` | Read-only live view of a background worker's transcript in a grid pane; no model reads it. |
 
 Optional environment: `FSA_CODEX_ROOT` (repository root, default the current git toplevel),
-`FSA_CODEX_RUNS_DIR` (default `~/.codex/fsa-runs`), `FSA_IMPLEMENTER` (`grok`, the default, or `codex`),
+`FSA_CODEX_RUNS_DIR` (default `~/.codex/fsa-runs`), `FSA_IMPLEMENTER` (`claude`, the default, `grok` or `codex`; a brief's `IMPLEMENTER:` line overrides it for that task),
+`FSA_CLAUDE_MODEL_IMPLEMENT` (default `claude-sonnet-5`; the Claude engine only implements),
 `FSA_GROK_MODEL_INVESTIGATE|IMPLEMENT` (opencode `provider/model`, default `xai/grok-4.7`; Grok has no plan mode because Claude plans) and
-`FSA_CODEX_MODEL_INVESTIGATE|PLAN|IMPLEMENT`. The Grok engine needs the `opencode` CLI and `XAI_API_KEY`;
+`FSA_CODEX_MODEL_INVESTIGATE|PLAN|IMPLEMENT`. The Claude engine runs `claude -p` with project settings only (the user-scope plugin lead never
+loads), `dontAsk` permissions with `Edit`/`Write` rules for each `ALLOWED_PATHS` entry, test runners
+denied, and `FSA_IMPLEMENTER_RUN=<run id>` exported for project edit gates; its structured output is
+the result file. The Grok engine needs the `opencode` CLI and `XAI_API_KEY`;
 investigate runs (opt-in with `FSA_GROK_INVESTIGATE=1`; wide scans default to the Haiku bounded-extractor) deny opencode edits and shell, implement runs allow both and are told to read by grep and line range, lane skills are trimmed to what the brief's paths need (a `SKILLS:` line overrides), and the final answer's
 fenced JSON is extracted into the same result file Codex writes.
 A project may keep a thin wrapper that sets these and `exec`s the plugin script.
