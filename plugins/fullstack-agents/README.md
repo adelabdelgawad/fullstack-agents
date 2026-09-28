@@ -179,7 +179,7 @@ need a Herdr-managed pane (`HERDR_ENV=1`).
 
 | Script | Purpose |
 |---|---|
-| `codex-task.sh [--herdr] investigate\|plan\|implement <brief>` | Dispatch one implementer unit (Grok through `opencode` by default, Codex with `FSA_IMPLEMENTER=codex`); validates the brief (`PLAN:`/`ALLOWED_PATHS:` or `FILES:`/`REPORT:`), prefixes the lane's skill files, snapshots touched paths, prints a manifest. `--herdr` runs it in a visible grid pane. |
+| `codex-task.sh [--herdr] investigate\|plan\|implement <brief>` | Dispatch one implementer unit (Grok through `opencode` by default, Codex with `FSA_IMPLEMENTER=codex`); validates the brief (`PLAN:`/`ALLOWED_PATHS:`, at most `FSA_MAX_ALLOWED_PATHS` paths, default 8; or `FILES:`/`REPORT:`), restricts Grok's edit and write tools to `ALLOWED_PATHS`, flags other changed paths as `STATUS=OUT_OF_SCOPE`, prefixes the lane's skill files, snapshots touched paths, prints a manifest. `--herdr` runs it in a visible grid pane. |
 | `herdr-watch.sh <transcript> [label]` | Read-only live view of a background worker's transcript in a grid pane; no model reads it. |
 
 Optional environment: `FSA_CODEX_ROOT` (repository root, default the current git toplevel),

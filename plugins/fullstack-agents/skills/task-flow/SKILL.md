@@ -63,6 +63,13 @@ Two rules make the audit possible. Every touched path must be listed up front, s
 outside the list is scope creep and gets rejected. And the known-red baseline must be stated, so
 a pre-existing failure is never mistaken for a regression.
 
+The dispatch script enforces the list. The Grok engine's edit and write tools accept only the
+`ALLOWED_PATHS` entries, and the manifest prints `STATUS=OUT_OF_SCOPE` for any other path that
+changed during the run (in a shared tree that can be another session, so confirm the author). A
+brief over `FSA_MAX_ALLOWED_PATHS` paths (default 8) is refused. So list every file the change
+breaks, including tests of removed code, and name a `PATTERN:` file for any test the implementer
+must write, so it never browses for one.
+
 An external implementer does not load this plugin's skills. The dispatch script attaches only the
 skills the brief's paths need: `rust-correctness` for Rust source, `rust-sqlx` only for repository
 or SQL paths, `rust-testing` only for test files, `rust-axum-api` for routes, `rust-nextjs-contract`
@@ -76,8 +83,9 @@ does not need.
 
 A change too large for one brief is split into units whose `ALLOWED_PATHS` do not overlap —
 typically by directory or layer — and the units are dispatched concurrently, one implementer run
-each. Keep a unit to roughly 10–20 files: every implementer step re-sends the whole conversation, so
-one long run over a hundred files costs far more than several short ones. A unit whose build or
+each. Keep a unit to at most 8 files (the dispatch limit): every implementer step re-sends the whole
+conversation, so a run's cost grows faster than its step count, and two short runs cost about half
+of one long one. A unit whose build or
 tests would race another (a shared compile target, a shared database)
 waits instead; the project binding caps how many heavy runs share a host. Each unit is audited on
 its own diff before the next depends on it; units only start together when neither needs the

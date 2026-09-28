@@ -47,6 +47,8 @@ if [ "$mode" = "implement" ]; then
   esac
   allow=$(sed -n '/^ALLOWED_PATHS:/,/^$/p' "$brief" | sed '1d' | sed -E 's/^[-*[:space:]]+//' | grep -E '\S' || true)
   [ -n "$allow" ] || { echo "brief needs an 'ALLOWED_PATHS:' block listing every file Codex may touch" >&2; exit 2; }
+  max_paths=${FSA_MAX_ALLOWED_PATHS:-8}; path_count=$(grep -c . <<<"$allow")
+  [ "$path_count" -le "$max_paths" ] || { echo "brief lists $path_count ALLOWED_PATHS, limit $max_paths: split it into sequential units (FSA_MAX_ALLOWED_PATHS overrides)" >&2; exit 2; }
   printf '%s\n' "$allow" > "$runs/$id.allow"
 fi
 
@@ -111,6 +113,8 @@ conventions_preamble() {
   printf 'ROLE: you are the implementer; Claude planned this brief and will review your git diff and re-run the tests.\n'
   printf 'CONVENTIONS: before editing, read and obey the repository manuals that apply to the paths you touch: CLAUDE.md, AGENTS.md (root and nested) and .claude/rules/ inside this repository. Never read or write outside the repository root; a denied tool call is final, so do not retry it. The brief wins on scope.\n'
   printf 'READING: locate with grep, then read only the line ranges you need (start at the file:line sites the brief names); never read a whole large file to change one spot, and do not re-read a range you already have.\n\n'
+  [ "$mode" = "implement" ] &&
+    printf 'SCOPE: the edit and write tools accept only the brief'"'"'s ALLOWED_PATHS; never change a file from bash. If the change needs another path, stop and name it in "open_risks".\n\n'
   [ "$mode" = "implement" ] && [ "${FSA_GROK_ALLOW_TESTS:-0}" != 1 ] &&
     printf 'CHECKS: do not run test suites (test runners are denied); Claude runs the tests when it reviews your diff. At the end run only the brief'"'"'s BUILD command once (a compile or type check), filter its output to errors, fix what it reports, and list it in "tests".\n\n'
   return 0
@@ -128,12 +132,15 @@ prompt="$runs/$id.prompt.md"; runner="$runs/$id.runner.sh"
 
 if [ "$engine" = "grok" ]; then
   cfg="$runs/$id.opencode.json"
+  # The edit and write tools may touch only the brief's ALLOWED_PATHS; opencode refuses every other path.
+  edit_rules='"deny"'
+  [ -f "$runs/$id.allow" ] && edit_rules=$(jq -cRn '[inputs | select(length > 0)] | reduce .[] as $p ({"*": "deny"}; . + {($p): "allow"})' < "$runs/$id.allow")
   if [ "$sandbox" = "read-only" ]; then
     perms='{"edit":"deny","bash":"deny","webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
   elif [ "${FSA_GROK_ALLOW_TESTS:-0}" = 1 ]; then
-    perms='{"edit":"allow","bash":"allow","webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
+    perms='{"edit":'"$edit_rules"',"bash":"allow","webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
   else
-    perms='{"edit":"allow","bash":{"*":"allow","*cargo test*":"deny","*cargo nextest*":"deny","*test-backend.sh*":"deny","*vitest*":"deny","*jest*":"deny","*playwright*":"deny","*pytest*":"deny","*npm test*":"deny","*pnpm test*":"deny","*yarn test*":"deny","*bun test*":"deny"},"webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
+    perms='{"edit":'"$edit_rules"',"bash":{"*":"allow","*cargo test*":"deny","*cargo nextest*":"deny","*test-backend.sh*":"deny","*vitest*":"deny","*jest*":"deny","*playwright*":"deny","*pytest*":"deny","*npm test*":"deny","*pnpm test*":"deny","*yarn test*":"deny","*bun test*":"deny"},"webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
   fi
   printf '{"$schema":"https://opencode.ai/config.json","permission":%s}\n' "$perms" > "$cfg"
   attach=""; while IFS= read -r f; do [ -n "$f" ] && attach+=" -f '$f'"; done <<<"$(skill_files)"
@@ -183,4 +190,9 @@ printf 'run=%s\nengine=%s\nmodel=%s\ncodex_exit=%s\nbase=%s\nlast_message=%s\nlo
 summary_len=$(jq -r '(.summary // "") | length' 2>/dev/null < "$last" || echo 0)
 [ "$codex_exit" -eq 0 ] && [ -s "$last" ] || echo "STATUS=FAILED (read the log tail before auditing)"
 [ "${summary_len:-0}" -ge 11500 ] && echo "STATUS=TRUNCATED (summary hit the schema cap; re-brief asking for a narrower scope)"
+# A shared tree also shows other sessions' edits here, so this flags paths for the audit rather than failing the run.
+if [ "$mode" = "implement" ] && [ -n "$touched" ]; then
+  outside=$(grep -vxF -f "$runs/$id.allow" <<<"$touched" || true)
+  [ -n "$outside" ] && printf 'STATUS=OUT_OF_SCOPE (changed outside ALLOWED_PATHS during the run; confirm the author before auditing):\n%s\n' "$outside"
+fi
 exit 0
