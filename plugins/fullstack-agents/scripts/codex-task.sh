@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dispatch one implementer unit (Grok via opencode by default; FSA_IMPLEMENTER=claude|codex swaps the engine); prints only the manifest.
+# Dispatch one implementer unit (headless Claude Sonnet by default; FSA_IMPLEMENTER=grok|codex swaps the engine); prints only the manifest.
 set -euo pipefail
 
 herdr_mode=0
@@ -10,9 +10,9 @@ if [ "$herdr_mode" = 1 ]; then
   [ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_PANE_ID:-}" ] || { echo "--herdr needs a Herdr-managed pane (HERDR_ENV=1)" >&2; exit 2; }
 fi
 
-# Engine precedence: the brief's IMPLEMENTER: line (per task), then FSA_IMPLEMENTER (per session), then grok.
+# Engine precedence: the brief's IMPLEMENTER: line (per task), then FSA_IMPLEMENTER (per session), then claude.
 engine=$(sed -nE 's/^IMPLEMENTER:[[:space:]]*([a-z]+).*/\1/p' "$brief" | head -1)
-engine=${engine:-${FSA_IMPLEMENTER:-grok}}
+engine=${engine:-${FSA_IMPLEMENTER:-claude}}
 case "$engine:$mode" in
   codex:investigate) model=${FSA_CODEX_MODEL_INVESTIGATE:-gpt-5.6-luna}; sandbox=read-only ;;
   codex:plan)        model=${FSA_CODEX_MODEL_PLAN:-gpt-5.6-sol};         sandbox=read-only ;;

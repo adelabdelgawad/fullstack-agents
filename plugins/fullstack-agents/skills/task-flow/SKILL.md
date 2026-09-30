@@ -5,11 +5,11 @@ description: Operating flow for the fullstack-agent session lead — investigate
 
 # Agent task flow
 
-Operating flow for a repository where Claude (the lead, pinned to Opus 5.5) orchestrates — it plans and reviews — and Grok
-implements through opencode (the plugin's `scripts/codex-task.sh`). A headless Claude Sonnet engine
-(`claude`, model `FSA_CLAUDE_MODEL_IMPLEMENT`) and Codex (`codex`) are the alternatives. When the
-user asks for another engine, for one task or for the rest of the session, put `IMPLEMENTER: claude`
-(or `codex`) in every brief it covers; the brief line wins over `FSA_IMPLEMENTER`, which only a
+Operating flow for a repository where Claude (the lead, pinned to Opus 5.5) orchestrates — it plans and reviews — and a
+headless Claude Sonnet implements (the plugin's `scripts/codex-task.sh`, model
+`FSA_CLAUDE_MODEL_IMPLEMENT`). Grok through opencode (`grok`) and Codex (`codex`) are the
+alternatives. When the user asks for another engine, for one task or for the rest of the session,
+put `IMPLEMENTER: grok` (or `codex`) in every brief it covers; the brief line wins over `FSA_IMPLEMENTER`, which only a
 user's environment sets, because the lead's shell state does not persist between calls. Every engine reads the same `CLAUDE.md`, `AGENTS.md` and `.claude/rules/`, so both sides work
 to one set of project conventions.
 Everything above **Project bindings** is project-independent; the bindings come from the project.
@@ -163,7 +163,7 @@ A binding the project leaves unset means that route is unavailable, not that a d
 | Binding | Value |
 |---|---|
 | Orchestrator | `fullstack-agents:fullstack-agent` as session lead (activated by the plugin) |
-| Implementer | *(command that dispatches one implementation unit; the plugin ships `scripts/codex-task.sh`, which runs Grok through opencode by default; an `IMPLEMENTER: claude|codex` brief line or `FSA_IMPLEMENTER` selects headless Claude Sonnet or Codex)* |
+| Implementer | *(command that dispatches one implementation unit; the plugin ships `scripts/codex-task.sh`, which runs headless Claude Sonnet by default; an `IMPLEMENTER: grok|codex` brief line or `FSA_IMPLEMENTER` selects Grok through opencode or Codex)* |
 | Wide read-only scan | *(default `fullstack-agents:bounded-extractor`; `codex-task.sh investigate` only with `FSA_IMPLEMENTER=grok FSA_GROK_INVESTIGATE=1`; needs a `FILES:` block and a `REPORT:` line)* |
 | Bounded extraction | `fullstack-agents:bounded-extractor` — narrowed file list, mechanical only |
 | Read guard | *(hook refusing unranged dumps of gated files)* |

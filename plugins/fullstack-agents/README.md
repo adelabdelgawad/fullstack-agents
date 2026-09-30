@@ -179,11 +179,11 @@ need a Herdr-managed pane (`HERDR_ENV=1`).
 
 | Script | Purpose |
 |---|---|
-| `codex-task.sh [--herdr] investigate\|plan\|implement <brief>` | Dispatch one implementer unit (Grok through `opencode` by default, headless Claude Sonnet with `FSA_IMPLEMENTER=claude`, Codex with `FSA_IMPLEMENTER=codex`); validates the brief (`PLAN:`/`ALLOWED_PATHS:`, at most `FSA_MAX_ALLOWED_PATHS` paths, default 8; or `FILES:`/`REPORT:`), restricts the Claude and Grok engines' edit and write tools to `ALLOWED_PATHS`, flags other changed paths as `STATUS=OUT_OF_SCOPE`, prefixes the lane's skill files, snapshots touched paths, prints a manifest. `--herdr` runs it in a visible grid pane. |
+| `codex-task.sh [--herdr] investigate\|plan\|implement <brief>` | Dispatch one implementer unit (headless Claude Sonnet by default, Grok through `opencode` with `FSA_IMPLEMENTER=grok`, Codex with `FSA_IMPLEMENTER=codex`); validates the brief (`PLAN:`/`ALLOWED_PATHS:`, at most `FSA_MAX_ALLOWED_PATHS` paths, default 8; or `FILES:`/`REPORT:`), restricts the Claude and Grok engines' edit and write tools to `ALLOWED_PATHS`, flags other changed paths as `STATUS=OUT_OF_SCOPE`, prefixes the lane's skill files, snapshots touched paths, prints a manifest. `--herdr` runs it in a visible grid pane. |
 | `herdr-watch.sh <transcript> [label]` | Read-only live view of a background worker's transcript in a grid pane; no model reads it. |
 
 Optional environment: `FSA_CODEX_ROOT` (repository root, default the current git toplevel),
-`FSA_CODEX_RUNS_DIR` (default `~/.codex/fsa-runs`), `FSA_IMPLEMENTER` (`grok`, the default, `claude` or `codex`; a brief's `IMPLEMENTER:` line overrides it for that task),
+`FSA_CODEX_RUNS_DIR` (default `~/.codex/fsa-runs`), `FSA_IMPLEMENTER` (`claude`, the default, `grok` or `codex`; a brief's `IMPLEMENTER:` line overrides it for that task),
 `FSA_CLAUDE_MODEL_IMPLEMENT` (default `claude-sonnet-5`; the Claude engine only implements),
 `FSA_GROK_MODEL_INVESTIGATE|IMPLEMENT` (opencode `provider/model`, default `xai/grok-4.7`; Grok has no plan mode because Claude plans) and
 `FSA_CODEX_MODEL_INVESTIGATE|PLAN|IMPLEMENT`. The Claude engine runs `claude -p` with project settings only (the user-scope plugin lead never
