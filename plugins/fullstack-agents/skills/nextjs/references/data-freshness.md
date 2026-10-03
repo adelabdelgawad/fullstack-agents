@@ -88,7 +88,8 @@ request, or compare the params) and drop superseded results.
 
 - [ ] Each mutation's update choice (§1) is stated, and local application lists why filter, sort,
       pagination and counts stay correct.
-- [ ] No created row is inserted into the visible page; no count is recomputed from a page slice.
+- [ ] No created row is inserted without a known position and counts; no count is recomputed from
+      a page slice.
 - [ ] Each dataset names one refresh coordinator and its triggers; background refresh is opt-in
       with a reason.
 - [ ] Every `router.refresh()` has a stated server-rendered dependency and a measured fan-out;
