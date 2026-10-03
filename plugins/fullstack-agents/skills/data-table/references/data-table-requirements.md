@@ -123,7 +123,7 @@ The data-table components use URL state via `nuqs`. When search or pagination ch
 <SearchInput
   placeholder="Search users..."
   urlParam="search"  // Updates ?search=... in URL
-  debounceMs={500}
+  debounceMs={300}
 />
 
 // Example: Pagination updates URL param

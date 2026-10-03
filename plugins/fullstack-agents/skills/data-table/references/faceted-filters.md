@@ -383,6 +383,7 @@ export function AgentStatusDropdownFilter({ offlineCount, availableCount, busyCo
     [availableCount, busyCount, offlineCount],
   );
 
+  // Discrete selection: apply immediately, no debounce; the latest URL wins.
   const handleChange = useCallback((value: string[] | undefined) => {
     startTransition(() => {
       const params = new URLSearchParams(searchParams?.toString() || "");

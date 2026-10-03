@@ -210,7 +210,7 @@ export function [Entity]TableController({
             <SearchInput
               placeholder="Search..."
               urlParam="search"
-              debounceMs={500}
+              debounceMs={300}
             />
           </div>
         }

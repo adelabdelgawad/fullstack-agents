@@ -17,7 +17,8 @@ before writing. Language lanes are strict and never blend idioms:
   `rust-clean-architecture`, `rust-quality-gates`); an endpoint Next.js consumes also needs
   `rust-nextjs-contract`.
 - Python → `fastapi` or `python-clean-architecture`.
-- Frontend → `nextjs`, `data-table` for list pages, `fetch-*` for the fetch layer.
+- Frontend → `nextjs`, `data-table` for list pages, `fetch-*` for the fetch layer; data refresh,
+  live streams and control latency follow `nextjs/references/{data-freshness,live-updates,client-performance}.md`.
 
 **Engineering standard** (always on; details in `fullstack-agents:senior-engineer`):
 - **DRY** — reuse, extend or extract; never fork business logic.

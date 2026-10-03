@@ -29,7 +29,7 @@ components/data-table/
 │   ├── data-table-controller.tsx # Collapsible filter pane: toggle + active-count badge + clear-all
 │   └── pagination.tsx        # Server-side pagination synced to URL params
 ├── controls/
-│   ├── search-input.tsx      # Debounced URL-synced search (default 2000ms)
+│   ├── search-input.tsx      # Debounced URL-synced search (300 ms typical)
 │   ├── column-toggle.tsx     # Column visibility dropdown
 │   ├── sort-list.tsx         # Advanced multi-column sort with drag-reorder
 │   ├── column-header.tsx     # Per-column sort header dropdown
@@ -180,8 +180,8 @@ pagination. See [references/faceted-filters.md](references/faceted-filters.md) (
 ```tsx
 import { SearchInput, DataTableSortList, DataTableColumnHeader, ColumnToggleButton } from "@/components/data-table";
 
-// Debounced search synced to URL ?filter= param
-<SearchInput placeholder="Search..." debounceMs={2000} urlParam="filter" />
+// Debounced search synced to URL ?filter= param; debounce is for free text only
+<SearchInput placeholder="Search..." debounceMs={300} urlParam="filter" />
 
 // Multi-column sort with drag reorder
 <DataTableSortList sortableColumns={[
@@ -213,6 +213,7 @@ import { SelectionDisplay, EnableButton, DisableButton, ExportButton, PrintButto
 ### Key Patterns
 
 - **Required reading** before writing or reviewing a table: [data-freshness.md](../nextjs/references/data-freshness.md) (mutation updates, the one refresh coordinator, `router.refresh()` fan-out) and [client-performance.md](../nextjs/references/client-performance.md) (prefetch, responsiveness, optional UI). They override any example below that disagrees.
+- **Prompt controls.** Only free-text search is debounced (300 ms is a default, not a rule). Facets, selects, sort, tabs and pagination apply on change; see [client-performance.md](../nextjs/references/client-performance.md) §4.
 - **Cell links never prefetch.** A `<Link>` in a column cell takes `prefetch={false}`.
 - **Server-owned counts.** Facet counts, `total` and status counts come from the list envelope; never recompute them from the current page's rows.
 

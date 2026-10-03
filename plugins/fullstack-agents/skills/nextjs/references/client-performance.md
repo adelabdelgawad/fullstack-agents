@@ -1,7 +1,8 @@
 # Client performance — slow navigation, long skeletons, frozen pages
 
 Read this before diagnosing any "the page shows a skeleton for N seconds", "navigation is slow" or
-"the UI freezes" report, and before adding `<Link>`, `router.refresh()` or live updates to a page.
+"the UI freezes" report, and before writing or reviewing tables, data fetching, mutations,
+filters, live data, or navigation/prefetch changes.
 
 ## 1. Measure first: server time vs browser time
 
@@ -54,11 +55,48 @@ bound it, and the narrower alternatives (apply the response, refetch one query) 
 - On a live list, a targeted refetch of the one query (or a row patch from the event payload)
   costs one request; a route refresh costs every server fetch on the route plus every prefetch.
 
-## 4. Review checklist
+## 4. Control responsiveness
+
+- **Free-text search** may debounce its URL/request write; 300 ms is a sensible default, not a
+  requirement. Anything longer needs a reason (an expensive server search, say).
+- **Discrete controls** — facet and multi-select clicks, dropdowns, sort, tabs, pagination —
+  apply on change. A debounce on a click adds its full delay to every interaction and buys
+  nothing, because each click is already a final choice.
+- Rapid discrete changes may be coalesced, but without an initial delay: start the first request
+  immediately and let later changes supersede it (abort or ignore the older response).
+- Preserve correctness while doing so: the latest selection wins; the URL stays the source of the
+  filter state; a filter change resets pagination to the first page; follow the app's existing
+  history convention (`replace` vs `push`); a response for an older selection never replaces a
+  newer one ([data-freshness.md](data-freshness.md) §4).
+- Measure it: input event → request start in a browser trace. A discrete control should start its
+  request within one frame or two of the click.
+
+## 5. Optional UI loading
+
+Forms, dialogs, sheets and editors that open on demand still cost initial download and parse time
+when they are imported statically into the page.
+
+- Decide by measured cost: find the component's share of the route's initial JS (build output,
+  chunk inspection or a coverage trace). Line count is only a hint for where to look.
+- When the cost is material, load it on demand with the project's existing convention
+  (`React.lazy` + `Suspense`, or `next/dynamic`) and keep the trigger button in the initial
+  bundle.
+- Preserve behaviour: the permission gate that hides the trigger, loading feedback while the chunk
+  loads, an error state if it fails, focus moving into the opened UI and back to the trigger on
+  close, and keyboard/screen-reader access.
+- Verify both halves: the chunk is absent from the route's initial requests, and the UI works when
+  opened (including the first open on a slow connection).
+- No blanket rules: small or always-used UI stays static, and navigation prefetch is not disabled
+  globally to save bytes without evidence that it costs more than it saves.
+
+## 6. Review checklist
 
 - [ ] Every `<Link>` rendered per row/card/list item has `prefetch={false}`.
 - [ ] The [data-freshness.md](data-freshness.md) checklist passes for every list, mutation and
       `router.refresh()` the change touches.
+- [ ] Discrete controls apply on change; only free-text input is debounced, with a stated delay.
+- [ ] Heavy optional UI is checked against the route's initial chunks; deferred UI keeps its gate,
+      loading/error feedback and focus handling.
 - [ ] A latency fix is proven with the same measurement that found it: RSC request count per
       minute from the page, long tasks during the click → rows window, and click → rows time
       under 4× CPU throttling.

@@ -34,7 +34,7 @@ if has 'rust|cargo|axum|sqlx|clippy|borrow|lifetime|tokio|\.rs\b'; then
     lane="rust"
 elif has 'fastapi|pydantic|sqlalchemy|celery|alembic|python|\.py\b'; then
     lane="python"
-elif has 'next\.?js|react|component|\.tsx?\b|frontend|data.?table|\bpages?\b|\bui\b|nav ?bar|sidebar|skele?ton|browser|\bclick'; then
+elif has 'next\.?js|react|component|\.tsx?\b|frontend|data.?table|\bpages?\b|\bui\b|nav ?bar|sidebar|skele?ton|browser|\bclick|eventsource|\bsse\b|router\.refresh|\bfacets?\b'; then
     lane="frontend"
 elif has 'docker|compose|nginx|\bssl\b|container'; then
     lane="infra"
@@ -57,11 +57,11 @@ case "$lane" in
     rust)     lane_skills="rust-correctness plus the rust-* skill for the touched layer (axum-api, sqlx, testing, clean-architecture, nextjs-contract, quality-gates)" ;;
     python)   lane_skills="fastapi or python-clean-architecture; websocket, celery or tasks-management when named" ;;
     infra)    lane_skills="docker" ;;
-    frontend) lane_skills="nextjs, data-table for list pages, fetch-* for the fetch layer" ;;
+    frontend) lane_skills="nextjs (read references/data-freshness.md + client-performance.md for tables, fetching, mutations, filters, live data or navigation; live-updates.md for streams), data-table for list pages, fetch-* for the fetch layer" ;;
     *)        lane_skills="" ;;
 esac
 [ "$intent" = "performance" ] && [ "$lane" != "rust" ] && [ "$lane" != "python" ] && [ "$lane" != "infra" ] \
-    && lane_skills="nextjs (read references/client-performance.md), data-table for list pages"
+    && lane_skills="nextjs (read references/client-performance.md, data-freshness.md; live-updates.md for streams), data-table for list pages"
 
 line="[fullstack-agents] intent: ${intent:-general}, lane: ${lane:-any} -> invoke via the Skill tool (fullstack-agents:*): ${skills}"
 [ -n "$lane_skills" ] && line="${line}; lane: ${lane_skills} — load these NOW, before the root cause, the plan or any code"

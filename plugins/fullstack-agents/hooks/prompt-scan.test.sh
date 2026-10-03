@@ -28,6 +28,10 @@ expect "the login button is broken" "intent: debug"
 expect "add a nginx location for the new service" "lane: infra"
 expect "why does the sidebar show the wrong group" "lane: frontend"
 expect "why does the sidebar show the wrong group" "load these NOW, before the root cause"
+expect "add a create button to the campaigns data table" "data-freshness.md"
+expect "the EventSource stays closed after the realtime service restarts" "lane: frontend"
+expect "the EventSource stays closed after the realtime service restarts" "live-updates.md"
+expect "facet clicks wait before the list reloads" "client-performance.md"
 
 reject() {
     local prompt="$1" got
