@@ -309,22 +309,15 @@ export default function UsersTable({ initialData }: { initialData: UsersResponse
     }
   };
 
+  // The server decides a created row's page and position, and a delete shifts the next page up.
   const handleCreate = async (userData: Partial<User>) => {
-    const created = await api.post<User>('/api/setting/users', userData);
-    setData(current => ({
-      ...current!,
-      items: [created, ...current!.items],
-      total: current!.total + 1,
-    }));
+    await api.post<User>('/api/setting/users', userData);
+    await refresh();
   };
 
   const handleDelete = async (userId: string) => {
     await api.delete(`/api/setting/users/${userId}`);
-    setData(current => ({
-      ...current!,
-      items: current!.items.filter(u => u.id !== userId),
-      total: current!.total - 1,
-    }));
+    await refresh();
   };
 
   // ... render table

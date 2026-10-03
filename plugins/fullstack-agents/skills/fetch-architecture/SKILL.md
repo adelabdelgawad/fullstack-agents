@@ -598,7 +598,7 @@ Page → Server Action → directBackendFetch() → FastAPI  (single hop, no API
 useState(initialData) → api.get (manual refresh) → API Route → withAuth → backendFetch → FastAPI
 ```
 
-This application uses Strategy A (Simple Fetching) exclusively. No SWR.
+Strategy A (Simple Fetching) is the default; mutation updates and refresh ownership follow [data-freshness.md](../nextjs/references/data-freshness.md).
 
 ## Client-Side State Management
 

@@ -1,7 +1,5 @@
 # SWR Fetching Pattern (Strategy B)
 
-> **Note:** This application does NOT use SWR. This document is kept as a reference only for cases where SWR might be considered in the future. The app uses `useState(initialData)` with server actions for data fetching (see table-pattern.md).
-
 Data fetching pattern using SWR with automatic revalidation. **Requires documented justification.**
 
 ## When to Use
@@ -60,6 +58,12 @@ When using SWR, **always include a justification comment** explaining:
 ```
 
 ## Configuration Presets
+
+The SWR key is the dataset's one refresh coordinator: interval, focus, reconnect, mutation and
+manual triggers all dedupe through it. Each preset's triggers are opt-in and named in its
+justification. Do not poll when a realtime stream already covers the data, and do not add a second
+mechanism (`router.refresh()`, a table auto-revalidate) for the same data — see
+[data-freshness.md](data-freshness.md) §2.
 
 ### Preset: Dashboard (Live Updates)
 

@@ -6,7 +6,7 @@ Client-side table component with SWR data management and server-response updates
 
 1. **"use client"** - Table is a client component
 2. **SWR with fallbackData** - SSR data as initial cache
-3. **Server response updates** - NOT optimistic updates
+3. **Server response updates** - NOT optimistic updates; which update each mutation gets follows [data-freshness.md](data-freshness.md)
 4. **Context provider** - Pass actions to children
 
 ## Basic Table Structure
@@ -86,20 +86,8 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
       responseMap.has(item.id) ? responseMap.get(item.id)! : item
     );
 
-    // Recalculate counts
-    const newActiveCount = updatedList.filter(i => i.isActive).length;
-    const newInactiveCount = updatedList.filter(i => !i.isActive).length;
-
-    // Update cache with server data
-    await mutate(
-      {
-        ...currentData,
-        items: updatedList,
-        activeCount: newActiveCount,
-        inactiveCount: newInactiveCount,
-      },
-      { revalidate: false }
-    );
+    // Counts and membership stay server-owned; only the rows are patched.
+    await mutate({ ...currentData, items: updatedList }, { revalidate: false });
   };
 
   // Define actions for context
@@ -111,6 +99,8 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
           { is_active: isActive }
         );
         await updateItems([updated]);
+        // isActive is filtered and counted: revalidate the list query.
+        void mutate();
         return { success: true, message: `Item ${isActive ? "enabled" : "disabled"}` };
       } catch (error) {
         return { success: false, error: "Failed to update status" };
@@ -139,6 +129,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
         if (result.updatedItems?.length > 0) {
           await updateItems(result.updatedItems);
         }
+        void mutate();
         return { success: true, message: `Updated ${ids.length} items` };
       } catch (error) {
         return { success: false, error: "Failed to update items" };
@@ -275,69 +266,27 @@ const handleUpdate = async (id: string, data: UpdateData) => {
 };
 ```
 
-## Adding New Items
+## Creating and Deleting Items
+
+A created row's page, position and the aggregate counts are decided by the server's filter, sort
+and pagination, and a delete pulls the next page's first row onto this one. Never splice the row
+into the cached page or adjust `total` locally: revalidate the list query.
 
 ```tsx
 const addItem = async (newItem: ItemCreate) => {
   try {
-    const created = await api.post<Item>(
-      '/setting/items',
-      newItem
-    );
-
-    // Add to cache
-    const currentData = data;
-    if (currentData) {
-      await mutate(
-        {
-          ...currentData,
-          items: [created, ...currentData.items],
-          total: currentData.total + 1,
-          activeCount: created.isActive 
-            ? currentData.activeCount + 1 
-            : currentData.activeCount,
-          inactiveCount: !created.isActive 
-            ? currentData.inactiveCount + 1 
-            : currentData.inactiveCount,
-        },
-        { revalidate: false }
-      );
-    }
-
+    const created = await api.post<Item>('/setting/items', newItem);
+    await mutate();
     return { success: true, data: created };
   } catch (error) {
     return { success: false, error: "Failed to create item" };
   }
 };
-```
 
-## Deleting Items
-
-```tsx
 const deleteItem = async (id: string) => {
   try {
     await api.delete(`/setting/items/${id}`);
-
-    // Remove from cache
-    const currentData = data;
-    if (currentData) {
-      const deletedItem = currentData.items.find(i => i.id === id);
-      await mutate(
-        {
-          ...currentData,
-          items: currentData.items.filter(i => i.id !== id),
-          total: currentData.total - 1,
-          activeCount: deletedItem?.isActive 
-            ? currentData.activeCount - 1 
-            : currentData.activeCount,
-          inactiveCount: !deletedItem?.isActive 
-            ? currentData.inactiveCount - 1 
-            : currentData.inactiveCount,
-        },
-        { revalidate: false }
-      );
-    }
-
+    await mutate();
     return { success: true };
   } catch (error) {
     return { success: false, error: "Failed to delete item" };

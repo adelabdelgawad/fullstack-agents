@@ -1,6 +1,6 @@
 ---
 name: nextjs
-description: Generate production-ready Next.js pages with SSR initial load, client-side data management, and server-response-based updates. Use when creating, changing, reviewing or diagnosing Next.js pages — admin or settings pages, CRUD, layouts, router navigation, `<Link>` prefetch, `router.refresh()`, and slow navigation, long loading skeletons or frozen pages (read references/client-performance.md). Do not use for backend FastAPI code (use fastapi); for full entity data-table pages prefer data-table.
+description: Generate production-ready Next.js pages with SSR initial load, client-side data management, and server-response-based updates. Use when creating, changing, reviewing or diagnosing Next.js pages — admin or settings pages, CRUD, layouts, router navigation, `<Link>` prefetch, `router.refresh()`, data refresh after mutations or live events, and slow navigation, long loading skeletons or frozen pages (read references/data-freshness.md and references/client-performance.md). Do not use for backend FastAPI code (use fastapi); for full entity data-table pages prefer data-table.
 ---
 
 # Next.js Template Skill
@@ -213,6 +213,10 @@ const updatedList = currentData.items.map(item =>
 );
 ```
 
+A row patch is safe only when filter, sort, pagination and counts stay correct; creates, deletes
+and changes to filtered, sorted or counted fields reload the list. The full decision, refresh
+ownership and `router.refresh()` rules: [references/data-freshness.md](references/data-freshness.md).
+
 ### 3. Context Pattern for Actions
 
 ```tsx
@@ -309,4 +313,5 @@ See the `references/` directory for detailed patterns:
 - `api-route-pattern.md` - API routes
 - `fetch-pattern.md` - Fetch utilities
 - `select-components.md` - SingleSelect and MultiSelect component source and usage
-- `client-performance.md` - Slow navigation / long skeleton diagnosis, `<Link>` prefetch in rows, `router.refresh()` storms — read before diagnosing latency or adding live refresh
+- `data-freshness.md` - **Required** for any page that lists, mutates or filters data: mutation updates, the one refresh coordinator, `router.refresh()` fan-out, stale responses
+- `client-performance.md` - **Required** for tables, data fetching, mutations, filters, live data and navigation/prefetch changes: latency measurement, `<Link>` prefetch, refresh storms

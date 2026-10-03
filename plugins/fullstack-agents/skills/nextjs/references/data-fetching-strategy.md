@@ -18,10 +18,15 @@ Does this data need to refresh automatically?
           ├── Real-time dashboard/monitoring → Strategy B: SWR
           │
           └── What triggers the refresh?
-              ├── Interval-based (polling)
+              ├── A realtime stream, if the backend has one (no polling on top)
+              ├── Interval-based (polling), when no stream exists
               ├── Focus-based (tab regains focus)
               └── Manual only (user clicks refresh)
 ```
+
+Whatever the strategy, each dataset has one refresh coordinator and every trigger goes through it;
+mutation updates, `router.refresh()` and opt-in background refresh follow
+[data-freshness.md](data-freshness.md).
 
 ## Strategy Comparison
 
@@ -88,7 +93,8 @@ Select all that apply:
 
 ### Question 3: What triggers the refresh?
 
-- **Interval-based**: Data should poll every N seconds
+- **Realtime stream**: an existing server stream invalidates the dataset; keep a watchdog or reconnect resync for missed events
+- **Interval-based**: Data should poll every N seconds, only when no stream meets the freshness requirement
 - **Focus-based**: Refetch when tab regains focus
 - **Manual only**: User clicks refresh button (SWR provides caching benefits)
 
@@ -105,14 +111,10 @@ Select all that apply:
 | Notification feed | B (SWR) | New items arrive externally |
 | Collaborative document | B (SWR) | Multiple users editing |
 
-## Current Application State
-
-**This application uses Strategy A (Simple Fetching) exclusively.** All data tables (users, roles, etc.) use `useState` + server response updates. No SWR is currently used anywhere in the codebase.
-
 ## Implementation References
 
 - **Strategy A**: See [simple-fetching-pattern.md](simple-fetching-pattern.md)
-- **Strategy B**: See [swr-fetching-pattern.md](swr-fetching-pattern.md) (reference only — not currently used)
+- **Strategy B**: See [swr-fetching-pattern.md](swr-fetching-pattern.md)
 
 ## Key Principle
 

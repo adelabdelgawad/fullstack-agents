@@ -3,10 +3,10 @@
 The main table component is a "use client" component that manages data and wraps with context.
 
 **Choose based on data fetching strategy:**
-- **Strategy A (Default)**: Simple state with `useState` - for most CRUD tables. **All current tables in the app use this.**
-- **Strategy B (When Justified)**: SWR with `useSWR` - for dashboards/multi-user scenarios (reference only — not currently used)
+- **Strategy A (Default)**: Simple state with `useState` - for most CRUD tables.
+- **Strategy B (When Justified)**: SWR with `useSWR` - for dashboards/multi-user scenarios.
 
-See [data-fetching-strategy.md](../../nextjs/references/data-fetching-strategy.md) for the decision framework.
+See [data-fetching-strategy.md](../../nextjs/references/data-fetching-strategy.md) for the decision framework and [data-freshness.md](../../nextjs/references/data-freshness.md) for which update each mutation gets. Both strategies below patch rows only; creates, deletes and changes to filtered, sorted or counted fields reload the list.
 
 **Reference implementations in the actual codebase:**
 - `src/frontend/app/(pages)/setting/users/_components/table/users-table.tsx` (Strategy A)
@@ -22,7 +22,7 @@ Use this for most CRUD/admin tables where data changes only via user actions.
 // _components/table/[entity]-table.tsx
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import type { [Entity]ListResponse, [Entity]Response } from "@/lib/types/api/[entity]";
 import { StatusPanel } from "../sidebar/status-panel";
@@ -65,17 +65,19 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
   const activeCount = data?.activeCount ?? 0;
   const inactiveCount = data?.inactiveCount ?? 0;
 
-  // Manual refresh function
+  // List coordinator: every trigger reloads through here; a superseded response is dropped.
+  const requestSeq = useRef(0);
   const refresh = useCallback(async () => {
+    const seq = ++requestSeq.current;
     setIsLoading(true);
     setError(null);
     try {
       const response = await api.get<[Entity]ListResponse>(apiUrl);
-      setData(response);
+      if (seq === requestSeq.current) setData(response);
     } catch (err) {
-      setError(err as Error);
+      if (seq === requestSeq.current) setError(err as Error);
     } finally {
-      setIsLoading(false);
+      if (seq === requestSeq.current) setIsLoading(false);
     }
   }, [apiUrl]);
 
@@ -87,14 +89,8 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
       const updatedList = current.items.map(item =>
         responseMap.has(item.id) ? responseMap.get(item.id)! : item
       );
-      const newActiveCount = updatedList.filter(item => item.isActive).length;
-      const newInactiveCount = updatedList.filter(item => !item.isActive).length;
-      return {
-        ...current,
-        items: updatedList,
-        activeCount: newActiveCount,
-        inactiveCount: newInactiveCount,
-      };
+      // Counts and membership stay server-owned; only the rows are patched.
+      return { ...current, items: updatedList };
     });
   }, []);
 
@@ -126,6 +122,8 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
           { entity_id: id, is_active: isActive }
         );
         updateItems([updated]);
+        // isActive is filtered and counted: reload membership and counts.
+        void refresh();
         return { success: true, message: `Item ${isActive ? "enabled" : "disabled"}`, data: updated };
       } catch (error: unknown) {
         const err = error as { data?: { detail?: string }; message?: string };
@@ -280,7 +278,7 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
    * Updates SWR cache with backend response data (NOT optimistic)
    * - Takes the actual server response from PUT/POST
    * - Replaces matching items in cache with server data
-   * - Recalculates counts from the updated list
+   * - Leaves counts and membership to the server (revalidate for those)
    */
   const updateItems = async (serverResponse: [Entity]Response[]) => {
     const currentData = data;
@@ -294,20 +292,7 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
       responseMap.has(item.id) ? responseMap.get(item.id)! : item
     );
 
-    // Recalculate counts from updated list
-    const newActiveCount = updatedList.filter((item) => item.isActive).length;
-    const newInactiveCount = updatedList.filter((item) => !item.isActive).length;
-
-    // Update cache with server data
-    await mutate(
-      {
-        ...currentData,
-        items: updatedList,
-        activeCount: newActiveCount,
-        inactiveCount: newInactiveCount,
-      },
-      { revalidate: false }
-    );
+    await mutate({ ...currentData, items: updatedList }, { revalidate: false });
   };
 
   const totalItems = data?.total ?? 0;
@@ -338,6 +323,8 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
           { entity_id: id, is_active: isActive }
         );
         await updateItems([updated]);
+        // isActive is filtered and counted: revalidate the list query.
+        void mutate();
         return {
           success: true,
           message: `Item ${isActive ? "enabled" : "disabled"} successfully`,
@@ -385,6 +372,7 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
         if (result.updatedItems?.length > 0) {
           await updateItems(result.updatedItems);
         }
+        void mutate();
 
         return {
           success: true,
@@ -478,12 +466,12 @@ export default [Entity]Table;
 
 ### Strategy A (Simple)
 - Uses `useState` for local data management
-- Manual `refresh()` function for data reload
+- One `refresh()` list coordinator that drops superseded responses
 - No automatic revalidation
 - Lower complexity, no SWR dependency
 
 ### Strategy B (SWR)
 - Requires **justification comment** explaining why SWR is needed
 - Uses `useSWR` with configurable revalidation
-- Supports automatic refresh (interval, focus, reconnect)
+- Automatic refresh (interval, focus, reconnect) is opt-in per dataset with its freshness requirement named ([data-freshness.md](../../nextjs/references/data-freshness.md) §2)
 - Built-in caching and deduplication

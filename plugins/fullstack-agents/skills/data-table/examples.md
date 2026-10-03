@@ -220,7 +220,11 @@ export function useUsers() {
 }
 ```
 
-## Example 4: Optimistic Updates
+## Example 4: Optimistic Updates (exception)
+
+The default is server-response updates ([data-freshness.md](../nextjs/references/data-freshness.md)).
+Optimistic removal is an exception for slow endpoints; it always reconciles with the server
+afterwards, because the next page's first row and the counts can only come from the server.
 
 ```typescript
 // Optimistic delete example
@@ -245,6 +249,7 @@ const handleDelete = async (userId: string) => {
       toast.error(result.error);
     } else {
       toast.success("User deleted");
+      refresh();
     }
   } catch (error) {
     refresh();

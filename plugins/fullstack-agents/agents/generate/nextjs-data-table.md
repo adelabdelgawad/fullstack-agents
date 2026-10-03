@@ -141,8 +141,10 @@ actions: actions (view, edit, delete)
 **Select strategy:**
 - [x] **Strategy A: Simplified Mutation-Driven** [DEFAULT]
   - `useState(initialData)` + `useEffect` sync from SSR
-  - `router.refresh()` for add operations
-  - Direct state updates from backend responses for edits
+  - One list coordinator (`refreshList`) that every trigger calls; after a create, and after an edit
+    that changes a filtered, sorted or counted field, it reloads the list (SSR source)
+  - Row patch from the backend response only when filter, sort, pagination and counts stay correct
+  - Rules: `skills/nextjs/references/data-freshness.md`
   - No SWR dependency, no polling, no automatic refetch
   - Lower complexity, easier to maintain
 
@@ -271,7 +273,7 @@ page.tsx (Server Component)
 ├── updateEntities() helper — in-place update from server response
 ├── Action handlers — call api.put/post(), update state
 ├── Context provider — pass actions to children
-└── router.refresh() — for add operations
+└── refreshList() — the one list coordinator (creates, membership/count changes, Refresh button)
 
 {entity}-actions-context.tsx
 ├── onToggleStatus()
@@ -291,7 +293,11 @@ page.tsx (Server Component)
 
 ### Phase 6: Code Generation
 
-**Read skill references based on strategy:**
+**Always read first** (they override any template below that disagrees):
+- `skills/nextjs/references/data-freshness.md` — mutation updates, refresh coordinator, `router.refresh()`
+- `skills/nextjs/references/client-performance.md` — prefetch, responsiveness, optional UI loading
+
+**Then read skill references based on strategy:**
 
 For Strategy A (Simplified Mutation-Driven) [DEFAULT]:
 1. Read `skills/nextjs/references/simple-fetching-pattern.md`
@@ -416,7 +422,7 @@ export const { PUT } = createStatusRoute('/setting/{entities}/', 'id');
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useTransition } from "react";
 import { {Entity}, {Entity}Response } from "@/lib/types/api/{entity}";
 import { {Entity}ActionsProvider } from "../context/{entity}-actions-context";
 import api from "@/lib/client-axios";
@@ -436,12 +442,13 @@ export function {Entity}Table({ initialData }: {Entity}TableProps) {
     setData(initialData);
   }, [initialData]);
 
-  // Manual refresh function (triggers server component re-render)
-  const handleRefresh = useCallback(() => {
-    router.refresh();
+  // List coordinator: the SSR page is the list source, so a reload re-renders it (data-freshness.md §1-2).
+  const [, startRefresh] = useTransition();
+  const refreshList = useCallback(() => {
+    startRefresh(() => router.refresh());
   }, [router]);
 
-  // Update helper - updates items with server response
+  // Patch rows from the server response; counts and membership stay server-owned.
   const update{Entities} = useCallback(
     async (serverResponse: {Entity}[]) => {
       const currentData = data;
@@ -455,8 +462,6 @@ export function {Entity}Table({ initialData }: {Entity}TableProps) {
       setData({
         ...currentData,
         {entities}: updatedList,
-        activeCount: updatedList.filter((e) => e.isActive).length,
-        inactiveCount: updatedList.filter((e) => !e.isActive).length,
       });
     },
     [data]
@@ -470,14 +475,16 @@ export function {Entity}Table({ initialData }: {Entity}TableProps) {
         { is_active: isActive }
       );
       await update{Entities}([result.data]);
+      // isActive is filtered and counted, so membership and counts come back from the server.
+      refreshList();
       return { success: true, data: result.data };
     },
-    [update{Entities}]
+    [update{Entities}, refreshList]
   );
 
   const actions = {
     onToggleStatus: handleToggleStatus,
-    onRefresh: handleRefresh,
+    onRefresh: refreshList,
   };
 
   return (
@@ -558,12 +565,12 @@ export default async function {Entity}Page({ searchParams }: PageProps) {
 
 | Flow | Trigger | Mutation | UI Update |
 |------|---------|----------|-----------|
-| **Add** | Sheet form → server action (`create{Entity}`) | `serverPost` | `router.refresh()` (new row via SSR re-fetch) |
-| **Edit** | Sheet form → `api.put()` | Client-side `api.put` | `update{Entities}([response])` (in-place) |
+| **Add** | Sheet form → server action (`create{Entity}`) | `serverPost` | `refreshList()` — never insert the row into the visible page |
+| **Edit** | Sheet form → `api.put()` | Client-side `api.put` | `update{Entities}([response])`; plus `refreshList()` when a filtered, sorted or counted field changed |
 | **View** | Sheet (read-only) | None | None |
-| **Toggle Status** | Action button → `api.put()` | Client-side `api.put` | `update{Entities}([response])` (in-place) |
+| **Toggle Status** | Action button → `api.put()` | Client-side `api.put` | `update{Entities}([response])` then `refreshList()` (status is filtered and counted) |
 
-**Why Add uses `router.refresh()`**: New entities affect pagination, counts, and sort order. A full server re-fetch is correct. Edits only change existing rows, so in-place update is sufficient.
+**Why creates reload the list**: a new entity's page, position and the aggregate counts are decided by the server's filter, sort and pagination. The client cannot place it safely. In this template the SSR page is the list source, so the reload is `router.refresh()` inside `refreshList`; a page whose list comes from a client query refetches that query instead. Check the route's refresh fan-out before shipping (`skills/nextjs/references/data-freshness.md` §3).
 
 ### Phase 7: Mandatory Post-Generation Chain
 
@@ -572,7 +579,7 @@ After generation completes, AUTOMATICALLY run these steps without asking the use
 1. **Pattern compliance review** — Run the equivalent of `/review patterns {entity}` on all generated files. Check:
    - Table state pattern (useState vs useSWR) matches codebase profile
    - Mutation approach (client api vs server actions) matches codebase profile
-   - Update pattern (updateItems in-place vs router.refresh) follows conventions
+   - Update choice per mutation follows `skills/nextjs/references/data-freshness.md` §1 (no blind insert, no page-slice counts)
    - API route pattern (route factory vs manual proxy) matches codebase profile
    - Column definitions, sheet forms, and action menus follow existing conventions
 

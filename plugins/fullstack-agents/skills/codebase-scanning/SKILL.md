@@ -95,7 +95,7 @@ Read 2-3 existing entities to extract actual patterns. Read ONE file from each c
 
 **ONE table component** (from _components/table/):
 - State management (`useState` with initialData? `useSWR`?)
-- Update pattern (in-place `updateItems`? `router.refresh()`?)
+- Update pattern per mutation (row patch? list refetch? `router.refresh()`?) and who owns refresh. Record it; where it breaks [data-freshness.md](../nextjs/references/data-freshness.md) (blind insert, page-slice counts, unbounded or uncoordinated refresh), report it instead of copying it
 - Mutation approach (client-side `api.put`? Server actions?)
 
 ## Phase 3: Style Profile Construction
@@ -120,7 +120,7 @@ After extraction, build this profile and keep it in your working context:
 │ Type annotations     │ [Mapped[T] | Column(T)]          │
 │ Frontend state       │ [useState | useSWR | hybrid]      │
 │ Mutation approach    │ [client api.put | server actions]  │
-│ Table update pattern │ [updateItems in-place | router.refresh] │
+│ Table update pattern │ [patch | list refetch | router.refresh] │
 │ API route pattern    │ [route factory | manual proxy]     │
 │ Import style         │ [absolute | relative]              │
 │ Indentation          │ [2 spaces | 4 spaces]              │

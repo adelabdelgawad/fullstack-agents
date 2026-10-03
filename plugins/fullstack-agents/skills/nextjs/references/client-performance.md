@@ -43,29 +43,22 @@ live list that means one RSC request per row, per mount.
 
 ## 3. `router.refresh()` is a whole-page repaint and a cache purge
 
-`router.refresh()` re-renders every server component on the route. It also invalidates the
-client router cache, so every visible `<Link>` that prefetches fetches again.
+`router.refresh()` re-renders every server component on the route and invalidates the client
+router cache, so every visible `<Link>` that prefetches fetches again. When to use it, how to
+bound it, and the narrower alternatives (apply the response, refetch one query) are in
+[data-freshness.md](data-freshness.md) — the canonical rules. The latency-specific points:
 
-- **Never drive `router.refresh()` from a live event stream without a floor.** A trailing
-  debounce alone does not bound the rate: under a continuous event stream it fires once per
-  debounce gap, indefinitely. Enforce a minimum interval between refreshes (seconds, not
-  milliseconds) and coalesce everything in between into one trailing refresh.
-- **Pause while hidden.** `document.visibilityState === "hidden"` → do not refresh. Remember that
-  an event arrived, and refresh once on `visibilitychange` back to visible. Background tabs of
-  the same site can share a renderer process, so a hidden tab's refresh loop freezes the tab the
-  user is looking at.
-- Prefer a targeted client refetch (TanStack Query / SWR invalidation of the one list) or a row
-  patch from the event payload over a whole-route refresh when the page is a live list.
-- Mutation success paths patch the row from the server response; they do not call
-  `router.refresh()` (see the data-table skill).
+- A refresh driven by a timer or event stream without a minimum interval (seconds) and a
+  hidden-tab pause is a storm source. Background tabs of the same site can share a renderer
+  process, so a hidden tab's refresh loop freezes the tab the user is looking at.
+- On a live list, a targeted refetch of the one query (or a row patch from the event payload)
+  costs one request; a route refresh costs every server fetch on the route plus every prefetch.
 
 ## 4. Review checklist
 
 - [ ] Every `<Link>` rendered per row/card/list item has `prefetch={false}`.
-- [ ] No `router.refresh()` reachable from a timer or event stream without a minimum interval and
-      a hidden-tab pause.
-- [ ] Live pages refetch the one query they display, not the whole route, where the data layer
-      allows it.
+- [ ] The [data-freshness.md](data-freshness.md) checklist passes for every list, mutation and
+      `router.refresh()` the change touches.
 - [ ] A latency fix is proven with the same measurement that found it: RSC request count per
       minute from the page, long tasks during the click → rows window, and click → rows time
       under 4× CPU throttling.

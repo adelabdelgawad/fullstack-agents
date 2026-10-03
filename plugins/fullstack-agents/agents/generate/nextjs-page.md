@@ -99,7 +99,9 @@ What data will this page display?
 
 ### Data Fetching Strategy
 
-**Does this page need automatic data refresh?**
+**Does this page need automatic data refresh?** Mutation updates, the one refresh coordinator per
+dataset and `router.refresh()` follow `skills/nextjs/references/data-freshness.md`; read it and
+`skills/nextjs/references/client-performance.md` before generating.
 
 Consider:
 - Will data change while the user is viewing the page?
@@ -128,7 +130,8 @@ Consider:
     - [ ] Real-time dashboard/monitoring
     - [ ] Other: ___________
   - Refresh trigger:
-    - [ ] Interval-based (every ___ seconds)
+    - [ ] Existing realtime stream (no polling on top; keep a reconnect resync)
+    - [ ] Interval-based (every ___ seconds), only when no stream exists
     - [ ] Focus-based (refetch on tab focus)
     - [ ] Manual only (with SWR caching benefits)
 

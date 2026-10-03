@@ -11,7 +11,7 @@ Use this pattern when:
 - Forms and profile pages
 - Single-user workflows
 
-**Key principle:** The UI updates from server responses to mutations, not from polling or background refetch.
+**Key principle:** The UI updates from server responses to mutations, not from polling or background refetch. Which update each mutation gets (patch, list refetch, `router.refresh()`) follows [data-freshness.md](data-freshness.md).
 
 ## Pattern Overview
 
@@ -34,7 +34,7 @@ table.tsx (Client Component)
 // _components/table/items-table.tsx
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQueryState, parseAsInteger } from "nuqs";
 import api from "@/lib/fetch/client";
@@ -78,76 +78,30 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
     return `/api/setting/items?${params.toString()}`;
   }, [page, limit, search, status]);
 
-  // Manual refresh function
+  // List coordinator: every trigger reloads through here; a superseded response is dropped.
+  const requestSeq = useRef(0);
   const refresh = useCallback(async () => {
+    const seq = ++requestSeq.current;
     setIsLoading(true);
     setError(null);
     try {
       const fresh = await api.get<ItemsResponse>(apiUrl);
-      setData(fresh);
+      if (seq === requestSeq.current) setData(fresh);
     } catch (err) {
-      setError(err as Error);
+      if (seq === requestSeq.current) setError(err as Error);
     } finally {
-      setIsLoading(false);
+      if (seq === requestSeq.current) setIsLoading(false);
     }
   }, [apiUrl]);
 
-  // Update items from server response
+  // Patch rows from the server response; counts and membership stay server-owned.
   const updateItems = useCallback((serverResponse: Item[]) => {
     setData(current => {
       if (!current) return current;
-
       const responseMap = new Map(serverResponse.map(i => [i.id, i]));
-      const updatedList = current.items.map(item =>
-        responseMap.has(item.id) ? responseMap.get(item.id)! : item
-      );
-
-      // Recalculate counts
-      const activeCount = updatedList.filter(i => i.is_active).length;
-      const inactiveCount = updatedList.filter(i => !i.is_active).length;
-
       return {
         ...current,
-        items: updatedList,
-        active_count: activeCount,
-        inactive_count: inactiveCount,
-      };
-    });
-  }, []);
-
-  // Add new item to list
-  const addItem = useCallback((newItem: Item) => {
-    setData(current => {
-      if (!current) return current;
-      return {
-        ...current,
-        items: [newItem, ...current.items],
-        total: current.total + 1,
-        active_count: newItem.is_active
-          ? current.active_count + 1
-          : current.active_count,
-        inactive_count: !newItem.is_active
-          ? current.inactive_count + 1
-          : current.inactive_count,
-      };
-    });
-  }, []);
-
-  // Remove item from list
-  const removeItem = useCallback((id: string) => {
-    setData(current => {
-      if (!current) return current;
-      const item = current.items.find(i => i.id === id);
-      return {
-        ...current,
-        items: current.items.filter(i => i.id !== id),
-        total: current.total - 1,
-        active_count: item?.is_active
-          ? current.active_count - 1
-          : current.active_count,
-        inactive_count: !item?.is_active
-          ? current.inactive_count - 1
-          : current.inactive_count,
+        items: current.items.map(item => responseMap.get(item.id) ?? item),
       };
     });
   }, []);
@@ -162,6 +116,8 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
           { is_active: isActive }
         );
         updateItems([updated]);
+        // is_active is filtered and counted: membership and counts come from the server.
+        void refresh();
         return {
           success: true,
           message: `Item ${isActive ? "enabled" : "disabled"}`,
@@ -179,7 +135,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
         });
       }
     },
-    [updateItems]
+    [updateItems, refresh]
   );
 
   // Update action
@@ -192,6 +148,8 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
           payload
         );
         updateItems([updated]);
+        // Fields this list filters, sorts or counts on can move the row: reload the list.
+        if ("is_active" in payload || "name" in payload) void refresh();
         return { success: true, data: updated };
       } catch (error) {
         return {
@@ -206,7 +164,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
         });
       }
     },
-    [updateItems]
+    [updateItems, refresh]
   );
 
   // Create action
@@ -217,7 +175,8 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
           `/api/setting/items`,
           payload
         );
-        addItem(created);
+        // The server decides the new row's page, position and the counts.
+        await refresh();
         return { success: true, data: created };
       } catch (error) {
         return {
@@ -226,7 +185,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
         };
       }
     },
-    [addItem]
+    [refresh]
   );
 
   // Delete action
@@ -235,7 +194,8 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
       setUpdatingIds(prev => new Set(prev).add(id));
       try {
         await api.delete(`/api/setting/items/${id}`);
-        removeItem(id);
+        // A delete shifts the next page's first row onto this page and changes counts.
+        await refresh();
         return { success: true };
       } catch (error) {
         return {
@@ -250,7 +210,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
         });
       }
     },
-    [removeItem]
+    [refresh]
   );
 
   // Bulk status update
@@ -263,6 +223,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
           { ids, is_active: isActive }
         );
         updateItems(updated);
+        void refresh();
         return {
           success: true,
           message: `${ids.length} items ${isActive ? "enabled" : "disabled"}`,
@@ -282,7 +243,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
         );
       }
     },
-    [updateItems]
+    [updateItems, refresh]
   );
 
   // Actions object for context
@@ -437,15 +398,15 @@ Or let the page component handle it via SSR (recommended):
 - When URL changes, Next.js re-renders the server component
 - Server fetches new data
 - Client receives new `initialData` prop
-- State resets to new data
+- `useState(initialData)` does **not** reset on a new prop: sync it (`useEffect(() => setData(initialData), [initialData])`) or key the table by the query string, or the old filter's rows stay on screen
 
 ## Checklist
 
 - [ ] No SWR import or dependency
 - [ ] `useState` for data management
-- [ ] `updateItems()` uses server response
-- [ ] `addItem()` adds to local state
-- [ ] `removeItem()` removes from local state
-- [ ] Manual `refresh()` function available
+- [ ] `updateItems()` patches rows from the server response and never recomputes counts
+- [ ] Create, delete and edits of filtered/sorted/counted fields reload the list through `refresh()`
+- [ ] `refresh()` drops superseded responses
+- [ ] [data-freshness.md](data-freshness.md) checklist passes
 - [ ] Loading state tracked manually
 - [ ] Error state tracked manually

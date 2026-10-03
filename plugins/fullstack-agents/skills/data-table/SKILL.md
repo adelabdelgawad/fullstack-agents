@@ -212,7 +212,9 @@ import { SelectionDisplay, EnableButton, DisableButton, ExportButton, PrintButto
 
 ### Key Patterns
 
-- **Cell links never prefetch.** A `<Link>` in a column cell takes `prefetch={false}`; live tables never repaint via an unbounded `router.refresh()`. See `../nextjs/references/client-performance.md`.
+- **Required reading** before writing or reviewing a table: [data-freshness.md](../nextjs/references/data-freshness.md) (mutation updates, the one refresh coordinator, `router.refresh()` fan-out) and [client-performance.md](../nextjs/references/client-performance.md) (prefetch, responsiveness, optional UI). They override any example below that disagrees.
+- **Cell links never prefetch.** A `<Link>` in a column cell takes `prefetch={false}`.
+- **Server-owned counts.** Facet counts, `total` and status counts come from the list envelope; never recompute them from the current page's rows.
 
 1. **URL-Driven State**: Search, filter, sort, pagination ALL sync to URL params
 2. **Generic `<TData>`**: All components use TypeScript generics
@@ -223,7 +225,7 @@ import { SelectionDisplay, EnableButton, DisableButton, ExportButton, PrintButto
 
 ## Data Fetching Strategy
 
-**This application uses Strategy A (Simple Fetching) exclusively.** All current tables use `useState` + server response updates.
+**Strategy A (Simple Fetching) is the default.** Strategy B, or a live-update stream, is chosen per table when its data changes without the user's action; either way one coordinator owns the table's refreshes.
 
 ### Decision Question
 **Does this table's data change without user action?**
@@ -363,6 +365,10 @@ updateItems([updated]); // Update local state with server data
 const optimistic = { ...current, ...changes };
 setData({ items: [...items.filter(i => i.id !== id), optimistic] });
 ```
+
+A row patch is safe only when filter, sort, pagination and counts stay correct. Creates, deletes
+and edits of filtered, sorted or counted fields reload the list through the table's one refresh
+coordinator — see [data-freshness.md](../nextjs/references/data-freshness.md) §1.
 
 ### Simple State Management (Default)
 ```tsx
