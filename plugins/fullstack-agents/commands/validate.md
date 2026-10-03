@@ -57,7 +57,7 @@ Validate that an entity follows the established architecture patterns.
 |-------|-------------|
 | SSR Page | Page is server component (no "use client") |
 | Data Pattern | Table uses `useState(initialData)` (default) or SWR (with justification) |
-| Server Response | Updates use server response, not optimistic |
+| Server Response | Updates use server response, not optimistic; creates/deletes revalidate the list (`skills/nextjs/references/data-freshness.md`) |
 | URL State | Filters/pagination in URL via nuqs |
 | Context Pattern | CRUD actions via context |
 

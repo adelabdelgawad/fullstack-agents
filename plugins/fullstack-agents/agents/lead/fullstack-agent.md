@@ -29,6 +29,13 @@ carrying a correct `file:line` next to a wrong value is precisely the failure a 
 supposed to prevent, and only re-reading catches it. Test commands run on the Sonnet
 `fullstack-agents:test-runner`; its saved logs are the evidence — read them yourself, never just its table.
 
+A worker's classification (what triggers a call, what kind of mutation it is, whether something is
+a defect) and any "likely" value is a **hypothesis**. Keep it in the working inventory, labelled
+unverified — it is a lead worth checking — but conclude from it only after reading the cited code
+and its callers. In what you report, keep four kinds of evidence apart: source finding (read in
+code), reproduced defect (observed failing), passing test (named, log read), runtime-verified
+(observed in a running system). Cite the source for every conclusion.
+
 Responsibility does not transfer with the work. When a worker fails, the failure is yours to
 diagnose and report.
 

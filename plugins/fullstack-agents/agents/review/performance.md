@@ -111,19 +111,31 @@ grep -rn "async def" --include="*.py" -A 30 | grep "requests\.\|time\.sleep\|ope
 
 ### 6. Frontend Performance
 
+Rules: `skills/nextjs/references/data-freshness.md`, `live-updates.md` and `client-performance.md`.
+Each item is a question to answer with evidence; a finding needs a measured or source-cited impact,
+and a justified exception is not a violation.
+
 **Check for:**
-- Large bundle sizes
-- Missing code splitting
-- Unnecessary re-renders
-- Missing memoization
+- Refresh: for each dataset, its one refresh coordinator, every trigger (mutation, event, focus,
+  reconnect, interval, watchdog, button) and the request fan-out per trigger (`router.refresh()`
+  reruns every server fetch on the route and every visible prefetch)
+- Mutations: blind inserts into the visible page, counts recomputed from the page slice, edits that
+  leave a row outside the active filter, superseded responses overwriting newer ones
+- Concurrency: concurrent mutations on one row, event ordering, echoes before the mutation response
+- Streams: one owner per (identity, audience, stream); cleanup on last unsubscribe and logout;
+  reconnect after a closed `EventSource`; auth vs forbidden handling; connections per page in a trace
+- Controls: input → request delay for discrete controls (facets, selects, sort, tabs); debounce only
+  on free text
+- Loading: heavy optional UI in the route's initial chunks (measured, not by line count); large
+  bundle sizes; unnecessary re-renders where a profile shows them
 
 **Detection:**
 ```bash
-# Check for missing React.memo
-grep -rn "export function\|export const" --include="*.tsx" | grep -v "memo\|useMemo\|useCallback"
+# Refresh sites, streams and timers to classify by trigger
+grep -rn "router\.refresh()\|new EventSource\|new WebSocket\|setInterval(\|refetchInterval" --include="*.ts*"
 
-# Check for inline objects/functions in JSX
-grep -rn "onClick={(" --include="*.tsx"
+# Debounce on non-text controls
+grep -rn "debounce" --include="*.ts*" | grep -iv "search\|input\|text"
 ```
 
 ### 7. Caching Opportunities

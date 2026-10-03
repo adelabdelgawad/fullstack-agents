@@ -117,10 +117,11 @@ grep -n "SWR JUSTIFICATION" app/\(pages\)/setting/{entity}/_components/table/{en
 
 #### 2. Server Response Updates
 
-**Required Pattern:**
-- Never use optimistic updates
-- Always update cache with server response
-- Use `mutate` with server response
+**Required Pattern** (`skills/nextjs/references/data-freshness.md` §1):
+- Never use optimistic updates (a reconciled optimistic delete is a documented exception)
+- Patch rows from the server response only when filter, sort, pagination and counts stay correct
+- Creates, deletes and edits of filtered/sorted/counted fields revalidate the list (`mutate()` or
+  the table's refresh coordinator); never insert into the visible page or recompute counts from it
 
 **Validation:**
 ```bash
@@ -257,20 +258,20 @@ raise NotFoundError(f"{Entity} with id {id} not found")
 
 ### Warnings
 
-#### 2. Missing Server Response in Delete
+#### 2. Created Row Inserted Into the Visible Page
 
 **Location:** `app/(pages)/setting/{entity}/context/{entity}-context.tsx:89`
 
 **Current:**
-```python
-await deleteEntity(id)
-mutate()  # Just revalidates
+```tsx
+const created = await createEntity(payload)
+mutate(data => ({ ...data, items: [created, ...data.items], total: data.total + 1 }), false)
 ```
 
 **Recommended:**
-```python
-const response = await deleteEntity(id)
-mutate(data => data.filter(item => item.id !== id), false)
+```tsx
+await createEntity(payload)
+await mutate()  // the server places the row and returns the counts
 ```
 
 ### Passed Checks

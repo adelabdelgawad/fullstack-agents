@@ -123,6 +123,12 @@ logs it names yourself — grep the result and failure lines, never trust the ta
 diff touched is not a green result. The implementer does not run test suites (they are denied to the implementer); it runs only the brief's
 `BUILD:` compile or type check, so test output never inflates its context.
 
+On frontend diffs, a new `router.refresh()`, a new stream or polling loop, a debounce on a
+non-text control, or a static import of a large on-demand sheet/dialog is a review question, not an
+automatic violation: the plan or the brief states why it is needed and how its fan-out was checked
+(`nextjs/references/data-freshness.md`, `live-updates.md`, `client-performance.md`). Scale the
+justification to the impact; a one-line reason covers a low-traffic admin page.
+
 Auditing is reading and testing. A fix the orchestrator spots goes back as a re-brief, never into
 the file — otherwise the diff under review no longer matches what was delegated.
 
