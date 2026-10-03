@@ -51,6 +51,9 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
 
   const apiUrl = `/api/setting/items?${params.toString()}`;
 
+  // Fields this list filters, sorts or counts on.
+  const LIST_FIELDS = ["isActive", "name"] as const;
+
   // SWR hook with optimized configuration
   const { data, mutate, isLoading, error } = useSWR<ItemsResponse>(
     apiUrl,
@@ -114,6 +117,8 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
           updateData
         );
         await updateItems([updated]);
+        // An edit to a field this list filters, sorts or counts on can move the row.
+        if (LIST_FIELDS.some(field => field in updateData)) void mutate();
         return { success: true, message: "Item updated", data: updated };
       } catch (error) {
         return { success: false, error: "Failed to update item" };
@@ -220,7 +225,7 @@ const { data, mutate, isLoading, error } = useSWR(
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
 
-    // Optional: dedupe interval
+    // Optional: dedupe interval (2000 ms is SWR's default; raise it only for data that changes rarely)
     dedupingInterval: 2000,
 
     // Optional: error retry

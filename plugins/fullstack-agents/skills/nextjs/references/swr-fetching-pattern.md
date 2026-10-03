@@ -72,8 +72,8 @@ For dashboards that need periodic refresh:
 ```tsx
 /**
  * SWR JUSTIFICATION:
- * - Reason: Dashboard metrics updated by background jobs
- * - Trigger: Interval-based polling
+ * - Reason: Dashboard metrics updated by background jobs; no realtime stream exists
+ * - Trigger: Interval-based polling, plus focus and network reconnect (catch up after absence)
  * - Interval: 30 seconds
  */
 const { data, mutate, isLoading } = useSWR<DashboardData>(

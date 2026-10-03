@@ -223,8 +223,9 @@ export function useUsers() {
 ## Example 4: Optimistic Updates (exception)
 
 The default is server-response updates ([data-freshness.md](../nextjs/references/data-freshness.md)).
-Optimistic removal is an exception for slow endpoints; it always reconciles with the server
-afterwards, because the next page's first row and the counts can only come from the server.
+Optimistic updates are an exception for slow endpoints; each one reconciles with the server
+afterwards on success and on failure, because membership, the next page's first row and the counts
+can only come from the server. Never adjust `total` or counts optimistically.
 
 ```typescript
 // Optimistic delete example
@@ -236,7 +237,6 @@ const handleDelete = async (userId: string) => {
     (current) => current ? {
       ...current,
       items: current.items.filter(u => u.id !== userId),
-      total: current.total - 1,
     } : current,
     false // Don't revalidate yet
   );
@@ -274,10 +274,8 @@ const handleToggleStatus = async (user: User) => {
 
   try {
     const result = await toggleUserStatus(user.id, !user.is_active);
-    if (!result.success) {
-      refresh();
-      toast.error(result.error);
-    }
+    refresh();
+    if (!result.success) toast.error(result.error);
   } catch (error) {
     refresh();
     toast.error("Failed to update status");

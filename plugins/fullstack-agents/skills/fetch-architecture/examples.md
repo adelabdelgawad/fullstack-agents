@@ -262,6 +262,7 @@ export async function DELETE(request: Request, { params }: RouteParams) {
 "use client";
 
 import { useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import api from "@/lib/fetch/client";
 import { ApiError } from "@/lib/fetch/errors";
 import { toast } from "sonner";
@@ -270,17 +271,19 @@ import type { User, UsersResponse } from "@/lib/types/api/users";
 export default function UsersTable({ initialData }: { initialData: UsersResponse }) {
   const [data, setData] = useState(initialData);
   const [isLoading, setIsLoading] = useState(false);
+  const searchParams = useSearchParams();
 
+  // Reload the list the URL describes (page, filters, sort), not an unfiltered first page.
   const refresh = useCallback(async () => {
     setIsLoading(true);
     try {
       // api returns T directly — no { data } unwrapping
-      const fresh = await api.get<UsersResponse>('/api/setting/users');
+      const fresh = await api.get<UsersResponse>(`/api/setting/users?${searchParams.toString()}`);
       setData(fresh);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [searchParams]);
 
   const updateItems = useCallback((updated: User[]) => {
     setData(current => {
@@ -301,6 +304,8 @@ export default function UsersTable({ initialData }: { initialData: UsersResponse
         { is_active: isActive }
       );
       updateItems([updated]);
+      // is_active is filtered and counted: reload membership and counts.
+      void refresh();
       toast.success(`User ${isActive ? 'activated' : 'deactivated'}`);
     } catch (error) {
       if (error instanceof ApiError) {

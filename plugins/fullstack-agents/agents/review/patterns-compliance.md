@@ -121,7 +121,8 @@ grep -n "SWR JUSTIFICATION" app/\(pages\)/setting/{entity}/_components/table/{en
 - Never use optimistic updates (a reconciled optimistic delete is a documented exception)
 - Patch rows from the server response only when filter, sort, pagination and counts stay correct
 - Creates, deletes and edits of filtered/sorted/counted fields revalidate the list (`mutate()` or
-  the table's refresh coordinator); never insert into the visible page or recompute counts from it
+  the table's refresh coordinator) unless the response gives position and counts; never insert
+  blindly into the visible page or recompute counts from it
 
 **Validation:**
 ```bash

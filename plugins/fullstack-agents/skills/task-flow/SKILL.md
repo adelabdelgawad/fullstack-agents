@@ -125,7 +125,8 @@ diff touched is not a green result. The implementer does not run test suites (th
 
 On frontend diffs, a new `router.refresh()`, a new stream or polling loop, a debounce on a
 non-text control, or a static import of a large on-demand sheet/dialog is a review question, not an
-automatic violation: the plan or the brief states why it is needed and how its fan-out was checked
+automatic violation: the plan or the brief states why it is needed and the evidence that matches it — request fan-out for a refresh,
+stream or poll, the measured input delay for a debounce, the measured chunk cost for an import
 (`nextjs/references/data-freshness.md`, `live-updates.md`, `client-performance.md`). Scale the
 justification to the impact; a one-line reason covers a low-traffic admin page.
 

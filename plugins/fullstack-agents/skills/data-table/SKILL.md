@@ -214,7 +214,7 @@ import { SelectionDisplay, EnableButton, DisableButton, ExportButton, PrintButto
 
 - **Required reading** before writing or reviewing a table: [data-freshness.md](../nextjs/references/data-freshness.md) (mutation updates, the one refresh coordinator, `router.refresh()` fan-out) and [client-performance.md](../nextjs/references/client-performance.md) (prefetch, responsiveness, optional UI). They override any example below that disagrees.
 - **Prompt controls.** Only free-text search is debounced (300 ms is a default, not a rule). Facets, selects, sort, tabs and pagination apply on change; see [client-performance.md](../nextjs/references/client-performance.md) §4.
-- **Cell links never prefetch.** A `<Link>` in a column cell takes `prefetch={false}`.
+- **Cell links default to no prefetch.** A `<Link>` in a column cell takes `prefetch={false}` unless a measured high-intent case says otherwise ([client-performance.md](../nextjs/references/client-performance.md) §2).
 - **Server-owned counts.** Facet counts, `total` and status counts come from the list envelope; never recompute them from the current page's rows.
 
 1. **URL-Driven State**: Search, filter, sort, pagination ALL sync to URL params
@@ -236,14 +236,14 @@ import { SelectionDisplay, EnableButton, DisableButton, ExportButton, PrintButto
 | **No** | A: Simple Fetching (Default) | Settings, admin CRUD, most entity tables |
 | **Yes** | B: SWR Fetching | Dashboards, multi-user editing, live monitoring |
 
-### Strategy A: Simple Fetching (Default — Used by All Current Tables)
+### Strategy A: Simple Fetching (Default)
 - Use `useState` for local data management
 - Update state from server mutation responses
 - No automatic revalidation
 - Lower complexity, no SWR dependency
 - **See:** [nextjs/references/simple-fetching-pattern.md](../nextjs/references/simple-fetching-pattern.md)
 
-### Strategy B: SWR Fetching (Reference Only — Requires Justification)
+### Strategy B: SWR Fetching (Requires Justification)
 - Use `useSWR` with documented justification
 - Configure appropriate revalidation triggers
 - For dashboards and multi-user scenarios
@@ -369,7 +369,8 @@ setData({ items: [...items.filter(i => i.id !== id), optimistic] });
 
 A row patch is safe only when filter, sort, pagination and counts stay correct. Creates, deletes
 and edits of filtered, sorted or counted fields reload the list through the table's one refresh
-coordinator — see [data-freshness.md](../nextjs/references/data-freshness.md) §1.
+coordinator unless the server response itself tells you the row's position and the new counts —
+see [data-freshness.md](../nextjs/references/data-freshness.md) §1.
 
 ### Simple State Management (Default)
 ```tsx

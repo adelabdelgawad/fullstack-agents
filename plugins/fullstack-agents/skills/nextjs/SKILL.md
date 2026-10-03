@@ -214,7 +214,8 @@ const updatedList = currentData.items.map(item =>
 ```
 
 A row patch is safe only when filter, sort, pagination and counts stay correct; creates, deletes
-and changes to filtered, sorted or counted fields reload the list. The full decision, refresh
+and changes to filtered, sorted or counted fields reload the list unless the server response
+itself gives the row's position and the new counts. The full decision, refresh
 ownership and `router.refresh()` rules: [references/data-freshness.md](references/data-freshness.md).
 
 ### 3. Context Pattern for Actions

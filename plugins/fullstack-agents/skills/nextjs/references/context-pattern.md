@@ -269,10 +269,8 @@ interface ItemsActionsContextType {
   onToggleStatus: (id: string, isActive: boolean) => Promise<ActionResult>;
   onBulkUpdateStatus: (ids: string[], isActive: boolean) => Promise<ActionResult>;
   
-  // Cache operations
+  // Cache operations: row patches only; creates and deletes revalidate (data-freshness.md)
   updateItems: (items: Item[]) => Promise<void>;
-  addItem: (item: Item) => Promise<void>;
-  removeItem: (id: string) => Promise<void>;
   
   // Refresh
   onRefresh: () => Promise<ActionResult>;

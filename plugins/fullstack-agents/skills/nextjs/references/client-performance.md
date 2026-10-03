@@ -33,8 +33,10 @@ storm source, whatever page the user complained about.
 `next/link` prefetches every link that enters the viewport. In a table row, a card grid or a
 live list that means one RSC request per row, per mount.
 
-- **Links inside table cells, list rows and cards: `prefetch={false}`.** Prefetch is for a few
-  high-intent navigation targets (sidebar, primary tabs), never for N data rows.
+- **Links inside table cells, list rows and cards default to `prefetch={false}`.** Prefetch is for a
+  few high-intent navigation targets (sidebar, primary tabs). Re-enable it for a row only when a
+  measurement shows the navigation gain outweighs N prefetches; never disable navigation prefetch
+  app-wide without that evidence.
 - A cell that remounts (new row identity, column rebuild, `router.refresh()`) prefetches again.
   Remount plus prefetch turns every refresh into N requests plus N RSC parses on the main thread.
 - A link whose `href` embeds a per-row value (`?dial=<phone>`, `?campaignIds=<id>`) never hits a
@@ -91,7 +93,7 @@ when they are imported statically into the page.
 
 ## 6. Review checklist
 
-- [ ] Every `<Link>` rendered per row/card/list item has `prefetch={false}`.
+- [ ] Every `<Link>` rendered per row/card/list item has `prefetch={false}`, or a measured reason.
 - [ ] The [data-freshness.md](data-freshness.md) checklist passes for every list, mutation and
       `router.refresh()` the change touches.
 - [ ] Discrete controls apply on change; only free-text input is debounced, with a stated delay.

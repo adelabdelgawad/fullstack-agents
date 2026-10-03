@@ -22,8 +22,9 @@ Work down this list and stop at the first option whose correctness you can state
    or in the plan, and check its fan-out (§3).
 
 Never:
-- prepend a created row to the visible page and add 1 to `total`; it corrupts sort, page size and
-  pagination;
+- prepend a created row to the visible page and add 1 to `total` without knowing where it belongs;
+  it corrupts sort, page size and pagination (inserting is fine when the response or a
+  client-complete dataset tells you its position and the new counts);
 - recompute aggregate counts (`activeCount`, facet counts, `total`) from the rows of the current
   page; on a server-paginated table those counts come from the server envelope, so update them
   from a server response or refetch them;
@@ -48,9 +49,11 @@ its own.
 | Manual Refresh button | Always allowed |
 | Watchdog (no events for N s) | Recovery for missed events; keep it when events can be lost |
 
-- The coordinator coalesces: overlapping triggers produce one in-flight request plus at most one
-  trailing request. It never drops a trigger that arrived after the in-flight request started —
-  that trigger may carry newer data.
+- Overlapping triggers never become racing parallel requests. Either coalesce (one in-flight
+  request plus at most one trailing request) or supersede (each trigger starts a request and only
+  the newest result applies). Coalesce when triggers burst (events, focus); superseding is enough
+  for occasional user-driven reloads. Neither may drop a trigger that arrived after the in-flight
+  request started — that trigger may carry newer data.
 - Background refresh (interval, focus, reconnect) is **opt-in**, enabled per dataset with its
   freshness requirement named. A table-wide "refresh on focus" default is the costly choice.
 - Do not poll when a realtime stream already meets the freshness requirement; keep a watchdog or

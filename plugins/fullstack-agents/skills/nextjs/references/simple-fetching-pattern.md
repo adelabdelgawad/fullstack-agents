@@ -62,6 +62,9 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
   const search = searchParams?.get("search") || "";
   const status = searchParams?.get("is_active") || "";
 
+  // Fields this list filters, sorts or counts on: an edit to one of them can move the row.
+  const LIST_FIELDS = ["is_active", "name"] as const;
+
   // Local state (no SWR)
   const [data, setData] = useState<ItemsResponse | null>(initialData);
   const [isLoading, setIsLoading] = useState(false);
@@ -78,11 +81,11 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
     return `/api/setting/items?${params.toString()}`;
   }, [page, limit, search, status]);
 
-  // List coordinator: every trigger reloads through here; a superseded response is dropped.
+  // List coordinator: every trigger reloads through here; the newest request wins.
   const requestSeq = useRef(0);
-  const refresh = useCallback(async () => {
+  const load = useCallback(async (background: boolean) => {
     const seq = ++requestSeq.current;
-    setIsLoading(true);
+    if (!background) setIsLoading(true);
     setError(null);
     try {
       const fresh = await api.get<ItemsResponse>(apiUrl);
@@ -93,6 +96,9 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
       if (seq === requestSeq.current) setIsLoading(false);
     }
   }, [apiUrl]);
+  // Refresh button shows the loading overlay; post-mutation reloads run in the background.
+  const refresh = useCallback(() => load(false), [load]);
+  const revalidate = useCallback(() => load(true), [load]);
 
   // Patch rows from the server response; counts and membership stay server-owned.
   const updateItems = useCallback((serverResponse: Item[]) => {
@@ -117,7 +123,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
         );
         updateItems([updated]);
         // is_active is filtered and counted: membership and counts come from the server.
-        void refresh();
+        void revalidate();
         return {
           success: true,
           message: `Item ${isActive ? "enabled" : "disabled"}`,
@@ -135,7 +141,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
         });
       }
     },
-    [updateItems, refresh]
+    [updateItems, revalidate]
   );
 
   // Update action
@@ -148,8 +154,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
           payload
         );
         updateItems([updated]);
-        // Fields this list filters, sorts or counts on can move the row: reload the list.
-        if ("is_active" in payload || "name" in payload) void refresh();
+        if (LIST_FIELDS.some(field => field in payload)) void revalidate();
         return { success: true, data: updated };
       } catch (error) {
         return {
@@ -164,7 +169,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
         });
       }
     },
-    [updateItems, refresh]
+    [updateItems, revalidate]
   );
 
   // Create action
@@ -176,7 +181,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
           payload
         );
         // The server decides the new row's page, position and the counts.
-        await refresh();
+        await revalidate();
         return { success: true, data: created };
       } catch (error) {
         return {
@@ -185,7 +190,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
         };
       }
     },
-    [refresh]
+    [revalidate]
   );
 
   // Delete action
@@ -195,7 +200,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
       try {
         await api.delete(`/api/setting/items/${id}`);
         // A delete shifts the next page's first row onto this page and changes counts.
-        await refresh();
+        await revalidate();
         return { success: true };
       } catch (error) {
         return {
@@ -210,7 +215,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
         });
       }
     },
-    [refresh]
+    [revalidate]
   );
 
   // Bulk status update
@@ -223,7 +228,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
           { ids, is_active: isActive }
         );
         updateItems(updated);
-        void refresh();
+        void revalidate();
         return {
           success: true,
           message: `${ids.length} items ${isActive ? "enabled" : "disabled"}`,
@@ -243,7 +248,7 @@ export default function ItemsTable({ initialData }: ItemsTableProps) {
         );
       }
     },
-    [updateItems, refresh]
+    [updateItems, revalidate]
   );
 
   // Actions object for context

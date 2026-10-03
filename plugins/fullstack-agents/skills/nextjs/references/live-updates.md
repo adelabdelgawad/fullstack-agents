@@ -60,8 +60,10 @@ are [data-freshness.md](data-freshness.md). Read both before adding, sharing or 
 - A reconnect may have missed events. Request one resync through the dataset's refresh
   coordinator ([data-freshness.md](data-freshness.md) §2) — once per reconnect, not once per
   subscriber and not once per missed event.
-- If the server sends a resync/snapshot marker on connect, use it instead of a client refetch, and
-  skip the redundant initial resync on first mount when the page was just server-rendered.
+- If the server sends a resync/snapshot marker on connect, use it instead of a client refetch.
+  Skip the initial resync on first mount only when nothing can be missed between the server
+  render and the subscription (the marker or snapshot covers that window); otherwise resync once
+  after the first `open`.
 - Keep a watchdog (no events for N seconds on a supposedly open stream → resync) when the
   transport can go half-open; it is the fallback for missed events, not a polling loop.
 

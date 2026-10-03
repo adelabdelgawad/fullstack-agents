@@ -6,7 +6,7 @@ The main table component is a "use client" component that manages data and wraps
 - **Strategy A (Default)**: Simple state with `useState` - for most CRUD tables.
 - **Strategy B (When Justified)**: SWR with `useSWR` - for dashboards/multi-user scenarios.
 
-See [data-fetching-strategy.md](../../nextjs/references/data-fetching-strategy.md) for the decision framework and [data-freshness.md](../../nextjs/references/data-freshness.md) for which update each mutation gets. Both strategies below patch rows only; creates, deletes and changes to filtered, sorted or counted fields reload the list.
+See [data-fetching-strategy.md](../../nextjs/references/data-fetching-strategy.md) for the decision framework and [data-freshness.md](../../nextjs/references/data-freshness.md) for which update each mutation gets. In both strategies below, row patches leave counts to the server, and toggles, bulk updates and edits of filtered, sorted or counted fields (`LIST_FIELDS`) reload the list; add create and delete handlers the same way.
 
 **Reference implementations in the actual codebase:**
 - `src/frontend/app/(pages)/setting/users/_components/table/users-table.tsx` (Strategy A)
@@ -22,7 +22,7 @@ Use this for most CRUD/admin tables where data changes only via user actions.
 // _components/table/[entity]-table.tsx
 "use client";
 
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import type { [Entity]ListResponse, [Entity]Response } from "@/lib/types/api/[entity]";
 import { StatusPanel } from "../sidebar/status-panel";
@@ -57,7 +57,12 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
   }, [page, limit, filter, isActive]);
 
   // Local state (no SWR)
+  // Fields this list filters, sorts or counts on: an edit to one of them can move the row.
+  const LIST_FIELDS = ["isActive", "name"] as const;
+
   const [data, setData] = useState<[Entity]ListResponse | null>(initialData);
+  // A new server render (URL change) replaces local state; useState alone would keep the old rows.
+  useEffect(() => setData(initialData), [initialData]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -65,11 +70,11 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
   const activeCount = data?.activeCount ?? 0;
   const inactiveCount = data?.inactiveCount ?? 0;
 
-  // List coordinator: every trigger reloads through here; a superseded response is dropped.
+  // List coordinator: every trigger reloads through here; the newest request wins.
   const requestSeq = useRef(0);
-  const refresh = useCallback(async () => {
+  const load = useCallback(async (background: boolean) => {
     const seq = ++requestSeq.current;
-    setIsLoading(true);
+    if (!background) setIsLoading(true);
     setError(null);
     try {
       const response = await api.get<[Entity]ListResponse>(apiUrl);
@@ -80,6 +85,9 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
       if (seq === requestSeq.current) setIsLoading(false);
     }
   }, [apiUrl]);
+  // Refresh button shows the loading overlay; post-mutation reloads run in the background.
+  const refresh = useCallback(() => load(false), [load]);
+  const revalidate = useCallback(() => load(true), [load]);
 
   // Update items from server response
   const updateItems = useCallback((serverResponse: [Entity]Response[]) => {
@@ -123,7 +131,7 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
         );
         updateItems([updated]);
         // isActive is filtered and counted: reload membership and counts.
-        void refresh();
+        void revalidate();
         return { success: true, message: `Item ${isActive ? "enabled" : "disabled"}`, data: updated };
       } catch (error: unknown) {
         const err = error as { data?: { detail?: string }; message?: string };
@@ -138,6 +146,8 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
           payload
         );
         updateItems([updated]);
+        // An edit to a field this list filters, sorts or counts on can move the row.
+        if (LIST_FIELDS.some((field) => field in payload)) void revalidate();
         return { success: true, message: "Updated", data: updated };
       } catch (error: unknown) {
         const err = error as { data?: { detail?: string }; message?: string };
@@ -154,6 +164,7 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
         if (result.updatedItems?.length > 0) {
           updateItems(result.updatedItems);
         }
+        void revalidate();
         return { success: true, message: `Updated ${ids.length} items`, data: result.updatedItems };
       } catch (error: unknown) {
         const err = error as { data?: { detail?: string }; message?: string };
@@ -175,7 +186,7 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
 
     onRefresh: refresh,
     updateItems,
-  }), [updateItems, refresh]);
+  }), [updateItems, refresh, revalidate]);
 
   return (
     <[Entity]ActionsProvider actions={actions}>
@@ -249,6 +260,9 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
   if (isActive) params.append("is_active", isActive);
 
   const apiUrl = `/[section]/[entity]?${params.toString()}`;
+
+  // Fields this list filters, sorts or counts on: an edit to one of them can move the row.
+  const LIST_FIELDS = ["isActive", "name"] as const;
 
   /**
    * SWR JUSTIFICATION:
@@ -346,6 +360,7 @@ function [Entity]Table({ initialData }: [Entity]TableProps) {
           payload
         );
         await updateItems([updated]);
+        if (LIST_FIELDS.some((field) => field in payload)) void mutate();
         return {
           success: true,
           message: "Updated successfully",
