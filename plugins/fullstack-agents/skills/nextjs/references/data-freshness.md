@@ -42,7 +42,7 @@ its own.
 | Trigger | Role |
 |---|---|
 | Mutation completion | Asks the coordinator for the update chosen in §1 |
-| Realtime event | Asks the coordinator to invalidate (see `live-updates.md`) |
+| Realtime event | Asks the coordinator to invalidate (see [live-updates.md](live-updates.md)) |
 | Window focus / network reconnect | Opt-in; only when the freshness requirement needs it |
 | Stream reconnect resync | Asks once after a reconnect, not per missed event |
 | Manual Refresh button | Always allowed |

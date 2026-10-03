@@ -11,7 +11,7 @@ Production-grade WebSocket patterns for real-time communication in Python applic
 
 Use this skill when:
 - Building real-time features (chat, notifications, live updates)
-- Implementing bidirectional client-server communication
+- Implementing bidirectional client-server communication (server side; the browser client's lifecycle is `nextjs/references/live-updates.md`)
 - Creating collaborative features (multi-user editing, presence)
 - Building dashboards with live data feeds
 - Implementing game servers or real-time applications

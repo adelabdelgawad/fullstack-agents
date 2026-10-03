@@ -80,6 +80,7 @@ diagnose, and a root cause reached without it is a guess.
 | Porting a frontend or a backend | `frontend-transformation` / `backend-migration-from-frontend` |
 | FastAPI entity, router, SQLAlchemy | `fastapi` (new service with DDD: `python-clean-architecture`) |
 | Python WebSocket | `websocket` |
+| Browser SSE/WebSocket client, live-update hook, SSE proxy route | `nextjs` (`references/live-updates.md`) |
 | Celery worker / background task; scheduled job | `celery`; `tasks-management` |
 | Docker, compose, nginx, SSL | `docker` |
 | Rust Axum handler, router, middleware | `rust-axum-api` |

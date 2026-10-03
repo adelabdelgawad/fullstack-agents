@@ -225,7 +225,7 @@ import { SelectionDisplay, EnableButton, DisableButton, ExportButton, PrintButto
 
 ## Data Fetching Strategy
 
-**Strategy A (Simple Fetching) is the default.** Strategy B, or a live-update stream, is chosen per table when its data changes without the user's action; either way one coordinator owns the table's refreshes.
+**Strategy A (Simple Fetching) is the default.** Strategy B, or a live-update stream ([live-updates.md](../nextjs/references/live-updates.md)), is chosen per table when its data changes without the user's action; either way one coordinator owns the table's refreshes.
 
 ### Decision Question
 **Does this table's data change without user action?**

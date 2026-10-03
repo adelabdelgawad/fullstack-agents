@@ -313,5 +313,6 @@ See the `references/` directory for detailed patterns:
 - `api-route-pattern.md` - API routes
 - `fetch-pattern.md` - Fetch utilities
 - `select-components.md` - SingleSelect and MultiSelect component source and usage
+- `live-updates.md` - **Required** before adding, sharing or changing an SSE/WebSocket client or its proxy route: one owner per connection, reconnect, auth/forbidden handling, resync, mutation echoes
 - `data-freshness.md` - **Required** for any page that lists, mutates or filters data: mutation updates, the one refresh coordinator, `router.refresh()` fan-out, stale responses
 - `client-performance.md` - **Required** for tables, data fetching, mutations, filters, live data and navigation/prefetch changes: latency measurement, `<Link>` prefetch, refresh storms
