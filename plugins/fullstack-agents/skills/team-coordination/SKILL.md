@@ -58,6 +58,8 @@ The project's `CLAUDE.md` names its own; these are the generic ones that collide
 - migration version order — after a peer deploys a migration, every later image must carry it;
 - the shared build cache — concurrent worktrees overwrite each other's artifacts; clean it only
   when no peer is building, or build with a private cache;
+- a shared test database — two suites against it at once both fail falsely; announce a run
+  before and after, or hold a `tests` lock on the board;
 - bind-mounted proxy or service config read from the main checkout — merging changes it on
   disk and the next reload activates it;
 - other sessions' uncommitted files in a shared checkout — never touch them.
