@@ -107,8 +107,14 @@ else
     doctrine_escaped=$(escape_for_json "$(cat "${PLUGIN_ROOT}/hooks/session-doctrine.md")")
     session_context="<EXTREMELY_IMPORTANT>\n**Project Detection:** ${project_info_escaped}\n\n${doctrine_escaped}\n</EXTREMELY_IMPORTANT>"
 fi
+board_session=$(printf '%s' "$hook_input" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+board_summary=$("${PLUGIN_ROOT}/scripts/team-board" --session "${board_session:-none}" status 2>/dev/null | head -12 || true)
+if [ -n "$board_summary" ] && [ "$board_summary" != "board empty" ]; then
+    board_escaped=$(escape_for_json "$board_summary")
+    session_context="${session_context}\n\n**Team board** — other Claude sessions on this repository. Invoke 'fullstack-agents:team-coordination' before a deploy, a default-branch merge, a migration or any shared change:\n${board_escaped}"
+fi
 scripts_escaped=$(escape_for_json "${PLUGIN_ROOT}/scripts")
-session_context="${session_context}\n\n**Plugin scripts:** \`${scripts_escaped}\` — \`codex-task.sh\` (Codex dispatch, \`--herdr\` for a visible pane) and \`herdr-watch.sh\` (live view of a background worker's transcript)."
+session_context="${session_context}\n\n**Plugin scripts:** \`${scripts_escaped}\` — \`codex-task.sh\` (Codex dispatch, \`--herdr\` for a visible pane) \`herdr-watch.sh\` (live view of a background worker's transcript) and \`team-board\` (shared claims, locks and notes for the sessions on this repository)."
 
 # Output context injection as JSON.
 # Keep both shapes for compatibility:

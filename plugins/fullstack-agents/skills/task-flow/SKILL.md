@@ -162,6 +162,13 @@ the whole log. Deny agent reads of dependency, build and archive directories.
 Batch test execution at the integration boundary — one run per workspace, never per edit or per
 task. Write the cases as you go; run them once.
 
+## Working alongside other sessions
+
+When other Claude sessions work on the same repository, `team-coordination` governs every shared
+action: claim the task on the board at intake, re-claim on a scope change, hold the `deploy` lock
+for a deploy, and on finish leave a note with the SHA, image and migrations for the sessions that
+build next. Base a release on the commit production runs, not on a default branch that drifted.
+
 ## Project bindings
 
 The project supplies these values in its `CLAUDE.md` or in a bindings file that `CLAUDE.md` names.

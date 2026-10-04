@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# PreToolUse(Bash): a project-declared deploy command is blocked only while another live session holds the board's deploy lock.
+set -uo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+TB="${SCRIPT_DIR}/../scripts/team-board"
+
+hook_input=""
+[ ! -t 0 ] && hook_input=$(cat || true)
+[ -n "$hook_input" ] || exit 0
+
+read_field() {
+    printf '%s' "$hook_input" | python3 -c "import json,sys
+try:
+    d=json.load(sys.stdin)
+except ValueError:
+    sys.exit(0)
+v=d
+for k in sys.argv[1].split('.'):
+    v=v.get(k) if isinstance(v,dict) else None
+print(v or '')" "$1" 2>/dev/null
+}
+
+command=$(read_field tool_input.command)
+session=$(read_field session_id)
+cwd=$(read_field cwd)
+[ -n "$command" ] || exit 0
+[ -n "$cwd" ] && cd "$cwd" 2>/dev/null
+
+deploy_regex="${FSA_TEAM_DEPLOY_REGEX:-}"
+if [ -z "$deploy_regex" ]; then
+    top=$(git rev-parse --show-toplevel 2>/dev/null || true)
+    conf="${top:-.}/.claude/fsa-team.conf"
+    [ -f "$conf" ] && deploy_regex=$(sed -n 's/^deploy_regex=//p' "$conf" | head -1)
+fi
+[ -n "$deploy_regex" ] || exit 0
+printf '%s' "$command" | grep -Eq -- "$deploy_regex" || exit 0
+
+held=$("$TB" --session "${session:-unknown}" check-lock deploy 2>/dev/null)
+rc=$?
+if [ "$rc" -eq 3 ] && [ "${FSA_TEAM_GATE_OFF:-}" != "1" ]; then
+    printf '[fullstack-agents] BLOCKED: %s\nCoordinate with that session first (fullstack-agents:team-coordination): message it, wait for its release, or ask the user. Override only on the user'"'"'s word: FSA_TEAM_GATE_OFF=1.\n' "$held" >&2
+    exit 2
+fi
+
+note="[fullstack-agents] Deploy command: hold the board's deploy lock (team-board lock deploy --name <your session name> --reason ...) and tell the sessions on the board before it runs; release it after (fullstack-agents:team-coordination)."
+note=$(printf '%s' "$note" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read())[1:-1])')
+printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}\n' "$note"
+exit 0

@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+"""Per-repository board of session claims, expiring locks and events; expired entries never block."""
+import argparse
+import datetime as dt
+import fcntl
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import tempfile
+
+DEFAULT_CLAIM_TTL_MIN = 240
+DEFAULT_LOCK_TTL_MIN = 120
+MAX_EVENTS = 40
+EXIT_LOCK_HELD = 3
+
+
+def now():
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def iso(t):
+    return t.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def parse(ts):
+    try:
+        return dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except (AttributeError, ValueError):
+        return None
+
+
+def board_path(explicit):
+    if explicit:
+        return explicit
+    env = os.environ.get("FSA_TEAM_BOARD")
+    if env:
+        return env
+    try:
+        common = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True, text=True, check=True, timeout=5,
+        ).stdout.strip()
+        if common:
+            return os.path.join(common, "fsa-team", "board.json")
+    except (OSError, subprocess.SubprocessError):
+        pass
+    base = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
+    key = hashlib.sha1(os.getcwd().encode()).hexdigest()[:12]
+    return os.path.join(base, "fsa-team", f"{key}.json")
+
+
+def session_id(explicit):
+    sid = explicit or os.environ.get("CLAUDE_CODE_SESSION_ID") or os.environ.get("CLAUDE_SESSION_ID")
+    if not sid:
+        sys.exit("team-board: no session id (set CLAUDE_CODE_SESSION_ID or pass --session)")
+    return sid
+
+
+def empty():
+    return {"version": 1, "claims": {}, "locks": {}, "events": []}
+
+
+def load(path):
+    try:
+        with open(path) as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        return empty()
+    except (OSError, ValueError):
+        sys.stderr.write(f"team-board: unreadable board {path}; treating it as empty\n")
+        return empty()
+    if not isinstance(data, dict):
+        return empty()
+    for key, default in (("claims", {}), ("locks", {}), ("events", [])):
+        if not isinstance(data.get(key), type(default)):
+            data[key] = default
+    return data
+
+
+def alive(entry, t):
+    exp = parse(entry.get("expires_at", "")) if isinstance(entry, dict) else None
+    return bool(exp and exp > t and entry.get("session"))
+
+
+def prune(data, t):
+    data["claims"] = {k: v for k, v in data["claims"].items() if alive(v, t)}
+    data["locks"] = {k: v for k, v in data["locks"].items() if alive(v, t)}
+    data["events"] = [e for e in data["events"] if isinstance(e, dict)][-MAX_EVENTS:]
+
+
+def save(path, data):
+    directory = os.path.dirname(path)
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".board.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            json.dump(data, fh, indent=1, sort_keys=True)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+class Locked:
+    def __init__(self, path):
+        self.path = path
+
+    def __enter__(self):
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        self.fh = open(self.path + ".lock", "a")
+        fcntl.flock(self.fh, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc):
+        fcntl.flock(self.fh, fcntl.LOCK_UN)
+        self.fh.close()
+
+
+def event(data, t, sid, name, text):
+    data["events"].append({"at": iso(t), "session": sid, "name": name, "text": text})
+    data["events"] = data["events"][-MAX_EVENTS:]
+
+
+def age(ts, t):
+    p = parse(ts)
+    if not p:
+        return "?"
+    mins = int((t - p).total_seconds() // 60)
+    return f"{mins}m" if mins < 120 else f"{mins // 60}h"
+
+
+def render(data, t, me):
+    lines = []
+    for k, v in sorted(data["locks"].items()):
+        mine = " (you)" if v.get("session") == me else ""
+        lines.append(f"LOCK {k}: {v.get('name', '?')}{mine} — {v.get('reason', '')} (since {age(v.get('since', ''), t)} ago, until {v.get('expires_at', '?')})")
+    for sid, v in sorted(data["claims"].items(), key=lambda kv: kv[1].get("updated_at", "")):
+        mine = " (you)" if sid == me else ""
+        scope = f" [{v['scope']}]" if v.get("scope") else ""
+        lines.append(f"CLAIM {v.get('name', '?')}{mine}: {v.get('task', '')}{scope} (updated {age(v.get('updated_at', ''), t)} ago)")
+    for e in data["events"][-5:]:
+        lines.append(f"EVENT {e.get('at', '?')} {e.get('name', '?')}: {e.get('text', '')}")
+    return lines
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="team-board")
+    ap.add_argument("--board")
+    ap.add_argument("--session")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("status")
+    s.add_argument("--json", action="store_true")
+    c = sub.add_parser("claim")
+    c.add_argument("--name", required=True)
+    c.add_argument("--task", required=True)
+    c.add_argument("--scope", default="")
+    c.add_argument("--ttl", type=int, default=DEFAULT_CLAIM_TTL_MIN)
+    sub.add_parser("release")
+    lk = sub.add_parser("lock")
+    lk.add_argument("surface")
+    lk.add_argument("--name", required=True)
+    lk.add_argument("--reason", required=True)
+    lk.add_argument("--ttl", type=int, default=DEFAULT_LOCK_TTL_MIN)
+    ul = sub.add_parser("unlock")
+    ul.add_argument("surface")
+    ck = sub.add_parser("check-lock")
+    ck.add_argument("surface")
+    n = sub.add_parser("note")
+    n.add_argument("--name", required=True)
+    n.add_argument("text")
+    rs = sub.add_parser("release-session")
+    rs.add_argument("target")
+    args = ap.parse_args()
+
+    path = board_path(args.board)
+    t = now()
+
+    if args.cmd in ("status", "check-lock"):
+        data = load(path)
+        prune(data, t)
+        me = args.session or os.environ.get("CLAUDE_CODE_SESSION_ID", "")
+        if args.cmd == "status":
+            if args.json:
+                print(json.dumps(data, indent=1, sort_keys=True))
+            else:
+                print("\n".join(render(data, t, me)) or "board empty")
+            return 0
+        held = data["locks"].get(args.surface)
+        if held and held.get("session") != me:
+            print(f"{args.surface} lock held by {held.get('name', '?')} ({held.get('session')}) since {held.get('since', '?')} until {held.get('expires_at', '?')}: {held.get('reason', '')}")
+            return EXIT_LOCK_HELD
+        return 0
+
+    with Locked(path):
+        data = load(path)
+        prune(data, t)
+        if args.cmd == "release-session":
+            target = args.target
+            data["claims"].pop(target, None)
+            data["locks"] = {k: v for k, v in data["locks"].items() if v.get("session") != target}
+            save(path, data)
+            return 0
+        sid = session_id(args.session)
+        if args.cmd == "claim":
+            prev = data["claims"].get(sid, {})
+            data["claims"][sid] = {
+                "session": sid, "name": args.name, "task": args.task, "scope": args.scope,
+                "since": prev.get("since", iso(t)), "updated_at": iso(t),
+                "expires_at": iso(t + dt.timedelta(minutes=args.ttl)),
+            }
+            for v in data["locks"].values():
+                if v.get("session") == sid:
+                    v["expires_at"] = iso(t + dt.timedelta(minutes=max(args.ttl, DEFAULT_LOCK_TTL_MIN)))
+            if prev.get("task") != args.task:
+                event(data, t, sid, args.name, f"claimed: {args.task}")
+        elif args.cmd == "release":
+            gone = data["claims"].pop(sid, None)
+            if gone:
+                event(data, t, sid, gone.get("name", "?"), "released its claim")
+        elif args.cmd == "lock":
+            held = data["locks"].get(args.surface)
+            if held and held.get("session") != sid:
+                print(f"{args.surface} lock held by {held.get('name', '?')} until {held.get('expires_at', '?')}: {held.get('reason', '')}")
+                return EXIT_LOCK_HELD
+            data["locks"][args.surface] = {
+                "session": sid, "name": args.name, "reason": args.reason,
+                "since": (held or {}).get("since", iso(t)),
+                "expires_at": iso(t + dt.timedelta(minutes=args.ttl)),
+            }
+            event(data, t, sid, args.name, f"locked {args.surface}: {args.reason}")
+        elif args.cmd == "unlock":
+            held = data["locks"].get(args.surface)
+            if held and held.get("session") == sid:
+                data["locks"].pop(args.surface)
+                event(data, t, sid, held.get("name", "?"), f"unlocked {args.surface}")
+        elif args.cmd == "note":
+            event(data, t, sid, args.name, args.text)
+        save(path, data)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

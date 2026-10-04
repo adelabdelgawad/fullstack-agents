@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# SessionEnd: a session that exits releases its board claim and locks so peers are never blocked by it.
+set -uo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+hook_input=""
+[ ! -t 0 ] && hook_input=$(cat || true)
+session=$(printf '%s' "$hook_input" | python3 -c 'import json,sys
+try:
+    print(json.load(sys.stdin).get("session_id") or "")
+except ValueError:
+    pass' 2>/dev/null)
+cwd=$(printf '%s' "$hook_input" | python3 -c 'import json,sys
+try:
+    print(json.load(sys.stdin).get("cwd") or "")
+except ValueError:
+    pass' 2>/dev/null)
+[ -n "$session" ] || exit 0
+[ -n "$cwd" ] && cd "$cwd" 2>/dev/null
+"${SCRIPT_DIR}/../scripts/team-board" release-session "$session" >/dev/null 2>&1 || true
+exit 0
