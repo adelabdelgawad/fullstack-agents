@@ -47,6 +47,28 @@ $TB unlock deploy ; $TB release
    claim, and message the sessions that depend on it ("rebuild on `<sha>`; it adds migration
    `<v>`").
 
+## Handoffs: no mutual waits
+
+Two sessions that each wait for the other stall a release silently. Every dependency between
+sessions therefore has one owner of the next step, a deadline and a fallback.
+
+- **Name the owner.** A handoff message says who acts next and that the sender will not wait:
+  "FINAL: `<branch>` @ `<sha>` … you own the cut, batch and deploy; I will not wait on you."
+- **Check for a cycle before you wait.** Read `$TB status` and the peer's last message. If the
+  peer is waiting on you, you hold the decision: make it now.
+- **Decide instead of parking.** When a peer needs your answer and a safe default exists (ship
+  what is verified, defer what is not), take the default, say so in the same message, and tell
+  your user in the same turn. Ask your user first only for an irreversible or scope-changing
+  choice, and then tell the peer exactly what you asked and what happens if no answer arrives.
+- **Every wait has a deadline and a fallback**, written into the message: "if you hear nothing
+  by `HH:MMZ`, proceed without `X`" or "… treat my part as blocked and tell our user."
+- **Ready notes carry everything the next owner needs:** branch, SHA, base commit, migrations,
+  deploy class, the tests to run and the drain or rollback facts. Write them to the board
+  (`$TB note`) first, then message.
+- **Watch work a peer depends on.** If your own background job (a build, an implementer run, a
+  test batch) stalls, tell the waiting peer at once with a new estimate. Never let a peer find
+  out from silence.
+
 ## Shared surfaces
 
 The project's `CLAUDE.md` names its own; these are the generic ones that collide:

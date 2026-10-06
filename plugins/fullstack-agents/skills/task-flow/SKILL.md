@@ -113,6 +113,22 @@ first with `herdr --skill`.
 - **Hygiene.** Close each worker's pane after its audit. A worker blocked on an approval dialog is
   shown to the user; never answer it on their behalf.
 
+## Watching a run
+
+A dispatched run is never left unattended. Arm a watchdog at dispatch that reports three
+outcomes, not only completion:
+
+- **Stuck start** — no sign of work within 5 minutes. Some engines write their log only when they
+  finish, so watch the engine's own session activity (for opencode, its session database) or the
+  worktree's changed files, not the log size alone.
+- **Stall** — work started, then nothing changed for 5 minutes.
+- **Finished** — the result file exists.
+
+On a stuck start or a stall, stop the run by its **engine process** (the child whose working
+directory is the worktree), not only the wrapper script: a surviving child can wake later and
+overwrite files a re-dispatched run wrote. Re-dispatch once; if it hangs again, report it to the
+user instead of retrying silently, and tell any peer session waiting on the result.
+
 ## Auditing
 
 The implementer's completion report is not evidence. Read the git diff restricted to the paths the
@@ -168,6 +184,8 @@ When other Claude sessions work on the same repository, `team-coordination` gove
 action: claim the task on the board at intake, re-claim on a scope change, hold the `deploy` lock
 for a deploy, and on finish leave a note with the SHA, image and migrations for the sessions that
 build next. Base a release on the commit production runs, not on a default branch that drifted.
+A peer waiting on your result is never left waiting on silence: follow `team-coordination`'s
+handoff rules (one owner of the next step, a deadline and a fallback on every wait).
 
 ## Project bindings
 
