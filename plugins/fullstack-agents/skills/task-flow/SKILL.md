@@ -180,12 +180,11 @@ task. Write the cases as you go; run them once.
 
 ## Working alongside other sessions
 
-When other Claude sessions work on the same repository, `team-coordination` governs every shared
-action: claim the task on the board at intake, re-claim on a scope change, hold the `deploy` lock
-for a deploy, and on finish leave a note with the SHA, image and migrations for the sessions that
-build next. Base a release on the commit production runs, not on a default branch that drifted.
-A peer waiting on your result is never left waiting on silence: follow `team-coordination`'s
-handoff rules (one owner of the next step, a deadline and a fallback on every wait).
+When other Claude sessions work on the same repository, follow `team-coordination`'s lightweight
+protocol. Work in your own worktree, rebase and resolve your own conflicts, and merge only
+deployable work. Hold the `deploy` lock only for the production restart window, claim migration
+versions with a board note, and leave a deploy note (SHA, image, migrations). Never hold a deploy
+for a peer or wait on a peer's uncommitted files.
 
 ## Project bindings
 

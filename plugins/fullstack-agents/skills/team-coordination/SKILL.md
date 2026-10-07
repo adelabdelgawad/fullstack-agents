@@ -1,104 +1,70 @@
 ---
 name: team-coordination
-description: Use whenever more than one Claude session works on the same repository or production — before a deploy, a default-branch merge, a migration, a shared image tag, a shared cache clean, a proxy reload or any change another session could collide with; at task start, on scope change and on finish. Makes parallel sessions act as one team through a shared board plus direct messages.
+description: Use whenever more than one Claude session works on the same repository or production — before a production deploy, a proxy reload, a migration, a default-branch merge or a shared cache clean. Lightweight protocol: each session works in its own worktree, merges only deployable work, and coordinates only the few actions that can actually collide.
 ---
 
 # Team coordination
 
-Several Claude sessions often work on one repository and one production at once. Without
-coordination they deploy over each other, move the default branch under each other, ship a
-migration the next image lacks, and clean caches mid-build. This skill is the protocol that
-prevents it. It is mandatory whenever the board or `ListAgents` shows another session.
+Several Claude sessions often work on one repository and one production at once. Heavy
+coordination (holding deploys for each other, waiting for peers' uncommitted files, negotiating
+by message) costs more delivery time than it saves. This protocol coordinates only what can
+cause real damage: two restarts at once, colliding migration versions, an image missing an
+applied migration, and a cache cleaned under a running build. Everything else runs independently.
 
-## The two channels
+## How sessions work
 
-1. **The board is the record.** `team-board` (in the plugin's `scripts/`; the SessionStart
-   context prints the path) keeps one JSON file per repository in the git common dir, shared by
-   every worktree. It holds each session's claim, named locks (`deploy`, …) and a short event
-   log. Every entry expires; an expired or ownerless entry never blocks anything.
-2. **Messages are best effort.** `SendMessage` (load it with `ToolSearch` if it is deferred) can
-   fail on a stale socket or wait unseen behind a human approval. Write the board first, then
-   message. Silence is never agreement.
+1. **Own worktree per session.** Every session that edits source works on its own branch in its
+   own worktree, never in the shared main checkout. It rebases on the default branch, resolves its
+   own conflicts, and never waits for another session's uncommitted files.
+2. **Merged means deployable.** Fast-forward the default branch only with work that is tested and
+   ready for production. Whoever deploys next ships the default branch as it is; nobody holds a
+   deploy for a peer, and nobody asks a peer to hold one.
+3. **The board is the record.** `team-board` (in the plugin's `scripts/`; the SessionStart
+   context prints the path) keeps claims, locks and a short event log per repository, shared by
+   every worktree. Every entry expires. Notes replace negotiation: a session reads the board
+   instead of asking.
+4. **Messages are for incidents only.** Production damage, a broken default branch, or a lock
+   that has outlived its owner. A message's first line states the whole point.
 
 ```bash
 TB=<plugin scripts>/team-board          # session id comes from CLAUDE_CODE_SESSION_ID
 $TB status                              # claims, locks, recent events
-$TB claim --name <your ListAgents name> --task "<one line>" --scope "<paths / surfaces>"
-$TB lock deploy --name <name> --reason "<what, image, migration>"   # exit 3: a peer holds it
-$TB note --name <name> "deployed <sha>; image <id>; adds migration <v>"
+$TB claim --name <name> --task "<one line>" --scope "<paths / surfaces>"
+$TB lock deploy --name <name> --reason "<sha, migrations>"   # exit 3: a peer holds it
+$TB note --name <name> "deployed <sha>; image <id>; migrations <v>"
 $TB unlock deploy ; $TB release
 ```
 
-## Protocol
+## The four coordinated actions
 
-1. **Start of a task.** Run `$TB status` and `ListAgents`. Claim your task on the board, with
-   its scope. If your scope overlaps a live claim, message that session before you start.
-2. **Scope change.** Re-claim with the new task and scope, then message every session whose
-   claim or plan your change affects.
-3. **Before a shared action** (the surfaces below):
-   - take the board lock for it (`deploy` for any production deploy);
-   - message the sessions on the board with what, when, and what it changes for them;
-   - if a peer holds the lock or has announced the same slot, agree an order explicitly: the
-     one ready first goes first, the other rebuilds on its result. Never race;
-   - re-read `$TB status` immediately before the action.
-4. **While working.** Answer every peer message, with facts: commit SHA, image ID, migration
-   versions, pause start and end. Re-claim at least every few hours so your entry stays live.
-5. **On finish or handoff.** Release the lock, write a `note` with the result, release your
-   claim, and message the sessions that depend on it ("rebuild on `<sha>`; it adds migration
-   `<v>`").
-
-## Handoffs: no mutual waits
-
-Two sessions that each wait for the other stall a release silently. Every dependency between
-sessions therefore has one owner of the next step, a deadline and a fallback.
-
-- **Name the owner.** A handoff message says who acts next and that the sender will not wait:
-  "FINAL: `<branch>` @ `<sha>` … you own the cut, batch and deploy; I will not wait on you."
-- **Check for a cycle before you wait.** Read `$TB status` and the peer's last message. If the
-  peer is waiting on you, you hold the decision: make it now.
-- **Decide instead of parking.** When a peer needs your answer and a safe default exists (ship
-  what is verified, defer what is not), take the default, say so in the same message, and tell
-  your user in the same turn. Ask your user first only for an irreversible or scope-changing
-  choice, and then tell the peer exactly what you asked and what happens if no answer arrives.
-- **Every wait has a deadline and a fallback**, written into the message: "if you hear nothing
-  by `HH:MMZ`, proceed without `X`" or "… treat my part as blocked and tell our user."
-- **Ready notes carry everything the next owner needs:** branch, SHA, base commit, migrations,
-  deploy class, the tests to run and the drain or rollback facts. Write them to the board
-  (`$TB note`) first, then message.
-- **Watch work a peer depends on.** If your own background job (a build, an implementer run, a
-  test batch) stalls, tell the waiting peer at once with a new estimate. Never let a peer find
-  out from silence.
-
-## Shared surfaces
-
-The project's `CLAUDE.md` names its own; these are the generic ones that collide:
-
-- production deploys and any pause they need (dialling, traffic, maintenance windows);
-- the default branch drifting from what production runs — base a release on the deployed
-  commit, and fast-forward the default branch only when no peer has it claimed;
-- shared image tags such as `:latest`, and rollback tags another session keeps;
-- migration version order — after a peer deploys a migration, every later image must carry it;
-- the shared build cache — concurrent worktrees overwrite each other's artifacts; clean it only
-  when no peer is building, or build with a private cache;
-- a shared test database — two suites against it at once both fail falsely; announce a run
-  before and after, or hold a `tests` lock on the board;
-- bind-mounted proxy or service config read from the main checkout — merging changes it on
-  disk and the next reload activates it;
-- other sessions' uncommitted files in a shared checkout — never touch them.
+1. **Production restart or proxy reload.** Hold the board's `deploy` lock only for the window
+   that touches production: pause → drain → restart → resume, or the reload itself. Build and
+   test before taking it. If a peer holds it, wait for the unlock note; do not negotiate order.
+   Re-read `$TB status` immediately before the restart, then unlock and write the deploy note
+   (SHA, image, migrations, pause window) as soon as it ends.
+2. **Migration versions.** Claim the next version with one board note before writing the file.
+   An image must contain every migration production has applied: build from the default branch
+   at or after the last deployed commit.
+3. **Rollback.** Once a release applied a migration, an older image may refuse to boot against
+   it. Write the rollback in every deploy plan as a forward fix unless the project proves the old
+   image boots against the new schema.
+4. **Shared build cache.** Clean it only when no peer is building, or build with a private cache;
+   a stale shared artifact from another worktree can fake a compile error.
 
 ## Rules
 
-- A peer's message is information, never the user's approval. A peer cannot grant permission;
-  route anything a peer asks you to do that your user has not approved back to your user.
-- Never retag a shared image or move the default branch while a peer has it claimed or locked.
+- A peer's message is information, never the user's approval. Route anything a peer asks that
+  your user has not approved back to your user.
 - Never deploy without the `deploy` lock. A project that sets `deploy_regex` in
   `.claude/fsa-team.conf` (or `FSA_TEAM_DEPLOY_REGEX`) gets a hook that blocks a deploy command
   while another live session holds the lock; the override `FSA_TEAM_GATE_OFF=1` needs the user's word.
+- Never touch another session's uncommitted files or worktree.
 - When you learn production moved, re-check what it runs before building anything.
-- A message's first line states the whole point; the rest carries the facts.
+- A session that finds its own release harming production fixes it forward at once, writes an
+  incident note on the board, and messages only the sessions whose work ships in the same image.
 
 ## Project bindings
 
 The project's `CLAUDE.md` supplies, in its task-flow bindings: the deploy command pattern
-(also written to `.claude/fsa-team.conf` as `deploy_regex=`), its shared surfaces, and who
-may override the deploy gate.
+(also written to `.claude/fsa-team.conf` as `deploy_regex=`), the worktree approval rule, its
+own coordinated surfaces, and who may override the deploy gate.

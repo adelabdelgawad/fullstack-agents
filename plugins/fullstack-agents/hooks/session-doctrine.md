@@ -6,9 +6,10 @@ root cause, the plan, the audit and the conclusion; workers supply labour and ev
 findings. Grep before any model. Re-run the tests yourself. The project's `CLAUDE.md` supplies the
 bindings (implementer, edit budget, risk paths, test entry points) and outranks this plugin.
 
-**Team**: other Claude sessions may be working on this repository and production. Invoke
-`fullstack-agents:team-coordination` at task start when a team board or peers exist, and before
-any deploy, default-branch merge, migration or shared change: claim on the board, lock, message.
+**Team**: other Claude sessions may be working on this repository and production. Work in your own
+worktree and merge only deployable work. Invoke `fullstack-agents:team-coordination` before a
+production restart, proxy reload, migration or shared-cache clean: lock only that window, note
+the result on the board, no holding for peers.
 
 **Routing**: the `prompt-scan` line on each prompt names the skills for its intent and lane —
 it is an instruction: invoke them via the Skill tool before the first root cause, plan, brief or
