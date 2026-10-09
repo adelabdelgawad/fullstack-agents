@@ -459,6 +459,7 @@ Ensure project has:
 - [ ] Bulk actions use `EnableButton`/`DisableButton` with confirmation
 - [ ] URL params drive filtering/pagination/sorting
 - [ ] Edit sheets use fetch-then-open pattern (not row.original)
+- [ ] Sheets follow the mandatory layout rules in [references/edit-sheet-pattern.md](references/edit-sheet-pattern.md#sheet-layout-and-behaviour-rules-mandatory): titled sections when a tab has more than one group, save closes the sheet, edit prefills stored non-secret values, secrets write-only with blank-keeps
 
 ## References
 

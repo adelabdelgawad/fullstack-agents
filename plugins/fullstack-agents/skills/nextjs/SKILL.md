@@ -286,6 +286,13 @@ When creating a new entity page, generate files in this order:
 
 ## Quick Reference
 
+### Sheets (mandatory)
+Any add/edit/view sheet follows the restrictions in
+`data-table/references/edit-sheet-pattern.md` ("Sheet Layout and Behaviour Rules"): titled section
+per group when a tab has more than one group (none for a single group), successful save closes the
+sheet, edit prefills every stored non-secret value, secrets are write-only and a blank secret keeps
+the stored value.
+
 ### Data Fetching Strategy
 - **Strategy A (Default)**: `useState` + server response updates
 - **Strategy B (Opt-in)**: `useSWR` with documented justification

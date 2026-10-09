@@ -339,3 +339,26 @@ const handleEditClick = () => {
 4. **Sheet opens ready** - no skeleton or loading spinner in the sheet
 5. **Server response updates cache** - never optimistic updates
 6. **Keep sheet open on save error** - allow user to fix and retry
+
+## Sheet Layout and Behaviour Rules (mandatory)
+
+These are restrictions, not suggestions. A generated, changed or reviewed sheet that breaks one is
+not done; a project design system that already encodes the same rule (for example a titled
+settings-group primitive) is used rather than re-implemented.
+
+1. **Titled sections when a tab has more than one group.** When one sheet tab (or a sheet without
+   tabs) renders two or more field groups, every group carries a visible section title naming what
+   it holds, for example "Basic information", "Connection information", "Routing". A tab with a
+   single group has no section title; the tab label already names it. A conditionally rendered
+   group counts whenever it can appear next to another group.
+2. **Successful save closes the sheet** — on create and on edit alike, after the server response
+   has updated the list. Save errors keep it open (rule 6 above). A sheet that must stay open after
+   save (for example a pairing flow that shows a QR code next) states that exception in its code.
+3. **Edit shows what is stored.** Every stored non-secret value is prefilled in its input, so the
+   user edits in place. The edit endpoint must return those values; a write-only blob the form
+   cannot read back is a backend gap to fix, not a reason to render empty inputs.
+4. **Secrets stay write-only, one field at a time.** Tokens, passwords, API keys and webhook
+   secrets are never returned to the browser. Their inputs show a "saved — leave blank to keep" or
+   "not set" hint from a server-provided list of which secrets exist, and a blank secret input keeps
+   the stored value. The server merges submitted fields over the stored configuration, so changing
+   one field never forces the user to re-enter the others.
