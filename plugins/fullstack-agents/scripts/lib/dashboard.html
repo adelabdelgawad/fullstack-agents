@@ -61,6 +61,7 @@ main { padding: 16px 20px 40px; }
 .list { display: grid; gap: 10px; max-width: 980px; }
 .list .card { cursor: default; }
 .snip { white-space: pre-wrap; margin-top: 6px; font-size: 13px; }
+.mono { font: 12px ui-monospace, monospace; user-select: all; word-break: break-all; }
 .empty { color: var(--muted); padding: 20px 0; }
 aside { position: fixed; top: 0; right: 0; bottom: 0; width: min(1280px, 96vw); background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; transform: translateX(100%); transition: transform .18s, width .18s; z-index: 10; }
 aside.open { transform: none; }
@@ -219,6 +220,15 @@ function nowHtml(s) {
   </div>`;
 }
 
+function resumeHtml(s) {
+  const cmd = s.title ? `claude --resume "${s.title}"` : `claude --resume ${s.id}`;
+  return `<div class="now">
+    <div><b>${esc(s.title || s.name)}</b></div>
+    <div class="lbl">Session id</div><div class="mono">${esc(s.id)}</div>
+    <div class="lbl">Resume with</div><div class="mono">${esc(cmd)}</div>
+  </div>`;
+}
+
 function stepsHtml(c) {
   if (!c.steps.length) return c.sessions.length ? '<div class="s">The lead has not listed its steps for this task yet; “Session” above shows what it is doing.</div>' : "";
   return `<ul class="steps">${c.steps.map(x => `<li class="${esc(x.state)}"><span class="mk" aria-label="${esc(x.state)}">${STEP_MARK[x.state] || "○"}</span><span class="tx">${esc(x.text)}</span>${x.note ? `<span class="nt">${esc(x.note)}</span>` : ""}</li>`).join("")}</ul>`;
@@ -341,7 +351,8 @@ function infoHtml(c) {
   }).join("");
   const desc = c.desc || c.goal;
   const steps = stepsHtml(c);
-  return `${c.now && c.now.length ? `<h4>Session</h4>${c.now.map(nowHtml).join("")}` : ""}
+  return `${c.now && c.now.length ? `<h4>Session id</h4>${c.now.map(resumeHtml).join("")}` : ""}
+    ${c.now && c.now.length ? `<h4>Session</h4>${c.now.map(nowHtml).join("")}` : ""}
     ${steps ? `<h4>Steps${c.steps.length ? ` · ${stepsDone(c)}/${c.steps.length}` : ""}</h4>${steps}` : ""}
     ${c.declared && c.declared.note ? `<h4>Phase note</h4><div class="snip">${esc(c.declared.note)}</div>` : ""}
     ${desc ? `<h4>Brief</h4><div class="snip">${esc(desc)}</div>` : ""}

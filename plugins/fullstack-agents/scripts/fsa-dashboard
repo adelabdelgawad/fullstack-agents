@@ -572,6 +572,7 @@ def read_session(path, now, wt_re, names, waits):
     return {
         "id": sid, "name": title or names.get(sid) or first_prompt(path) or f"{Path(cwd).name or 'session'} {sid[:8]}",
         "named": bool(title or names.get(sid)),
+        "title": title,
         "cwd": cwd, "branch": branch, "worktree": worktree, "state": state, "updated": mtime,
         "idle": idle, "snippet": snippet(text) if state in ("waiting", "still_open", "idle") else "",
         "briefs": sorted(briefs), "chips": chips,
@@ -720,7 +721,7 @@ def build_state(repo, gc):
         steps = [(board.get("steps") or {}).get(s["id"]) for s in g["sessions"]]
         card["steps"] = max([x for x in steps if isinstance(x, dict) and isinstance(x.get("items"), list)],
                             key=lambda x: x.get("at", ""), default={"items": []})["items"]
-        card["now"] = [{k: s[k] for k in ("id", "name", "state", "updated", "ask", "need", "action", "action_at", "said")}
+        card["now"] = [{k: s[k] for k in ("id", "name", "title", "state", "updated", "ask", "need", "action", "action_at", "said")}
                        for s in sorted(g["sessions"], key=lambda s: -s["updated"])]
         card["declared"] = max((declared[s["id"]] for s in g["sessions"] if s["id"] in declared),
                                key=lambda d: d["at"], default=None)
