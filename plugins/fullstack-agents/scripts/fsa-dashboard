@@ -138,6 +138,7 @@ class GitCache:
     def worktrees(self, now):
         if now - self.at > GIT_TTL_S:
             self.at, self.details = now, {}
+            self.main_sha = (git(self.repo.root, "rev-parse", self.repo.main) or "").strip() or self.repo.main
             self.trees = {}
             cur = {}
             for line in (git(self.repo.root, "worktree", "list", "--porcelain") or "").splitlines() + [""]:
@@ -157,7 +158,7 @@ class GitCache:
         if path not in self.details:
             tree = self.trees.get(path, {})
             head = tree.get("head", "")
-            main = self.repo.main
+            main = self.main_sha
             status = git(path, "status", "--porcelain", "-uno") or ""
             ahead = (git(self.repo.root, "rev-list", "--count", f"{main}..{head}") or "0").strip() if head else "0"
             fresh = self.fresh(tree.get("branch"))
