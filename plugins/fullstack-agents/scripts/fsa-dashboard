@@ -590,7 +590,7 @@ def build_state(repo, gc):
         return sorted(out, key=lambda x: -x["updated"])
 
     return {
-        "generated": now, "repo": main_root, "main": repo.main,
+        "generated": now, "ui": int(HTML.stat().st_mtime), "repo": main_root, "main": repo.main,
         "cards": sorted(cards, key=lambda c: -c["updated"]),
         "waiting": attention("waiting"), "still_open": attention("still_open"),
         "abandoned": sorted(old, key=lambda r: -r["updated"])[:30],
