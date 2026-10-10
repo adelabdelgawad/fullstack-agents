@@ -1,0 +1,628 @@
+#!/usr/bin/env python3
+"""Read-only board of a repository's agent sessions, implementer runs and worktrees; no model runs here."""
+import argparse
+import http.server
+import json
+import os
+import re
+import secrets
+import signal
+import subprocess
+import sys
+import threading
+import time
+import urllib.parse
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+HTML = HERE / "lib" / "dashboard.html"
+RUN_WINDOW_S = 72 * 3600
+SESSION_WINDOW_S = 48 * 3600
+STALL_S = 300
+ABANDON_S = 24 * 3600
+LOOSE_RUN_S = 12 * 3600
+WAIT_MIN_S = 60
+STILL_OPEN_S = 900
+SUBAGENT_BUSY_S = 120
+TAIL_BYTES = 262144
+STATE_TTL_S = 3
+GIT_TTL_S = 30
+RUN_ID_RE = re.compile(r"^[a-z]+-\d{8}-\d{6}-\d+$")
+BRIEF_RE = re.compile(r"\.codex-briefs/([\w.-]+)\.md")
+DEPLOYED_RE = re.compile(r"\bDEPLOYED\b.*?\b([0-9a-f]{9,40})\b")
+ROOT_RE = re.compile(r"(?:--cd|-C|\bcd) '([^']+)'")
+FIX_RE = re.compile(r"-fix\d+$")
+
+
+def load_json(path):
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def git_env():
+    return dict(os.environ, GIT_OPTIONAL_LOCKS="0")
+
+
+def git(cwd, *args):
+    try:
+        r = subprocess.run(["git", "--no-optional-locks", "-C", str(cwd), *args],
+                           capture_output=True, text=True, timeout=15, env=git_env())
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+def git_ok(cwd, *args):
+    try:
+        return subprocess.run(["git", "--no-optional-locks", "-C", str(cwd), *args],
+                              capture_output=True, timeout=15, env=git_env()).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def tail_lines(path, size=TAIL_BYTES):
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            end = f.tell()
+            f.seek(max(0, end - size))
+            data = f.read().decode("utf-8", "replace")
+    except OSError:
+        return []
+    lines = data.splitlines()
+    return lines[1:] if end > size else lines
+
+
+def encode_project(path):
+    return re.sub(r"[^A-Za-z0-9-]", "-", str(path))
+
+
+class Repo:
+    def __init__(self, repo, runs, projects):
+        common = (git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir") or "").strip()
+        if not common:
+            sys.exit(f"fsa-dashboard: {repo} is not a git repository")
+        self.common = Path(common)
+        self.root = self.common.parent if self.common.name == ".git" else Path(repo).resolve()
+        self.state = self.common / "fsa-team"
+        self.state.mkdir(exist_ok=True)
+        self.board = self.state / "board.json"
+        self.dismissed = self.state / "dashboard-dismissed.json"
+        self.runs = Path(runs or os.environ.get("FSA_CODEX_RUNS_DIR") or self.binding_runs()
+                         or Path.home() / ".codex" / "fsa-runs")
+        bases = projects or [os.environ.get("CLAUDE_CONFIG_DIR"), "~/.claude", "~/.claude-anthropic"]
+        self.projects = list(dict.fromkeys(Path(b).expanduser() / "projects" for b in bases if b))
+        head = (git(self.root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD") or "").strip()
+        self.main = head.split("/", 1)[1] if "/" in head else "main"
+
+    def binding_runs(self):
+        try:
+            text = (self.root / "scripts" / "codex-task.sh").read_text()
+        except OSError:
+            return None
+        m = re.search(r'FSA_CODEX_RUNS_DIR="?([^"\n]+)"?', text)
+        return os.path.expandvars(m.group(1)) if m else None
+
+
+class GitCache:
+    def __init__(self, repo):
+        self.repo = repo
+        self.at = 0.0
+        self.trees = {}
+        self.details = {}
+        self.ancestry = {}
+
+    def worktrees(self, now):
+        if now - self.at > GIT_TTL_S:
+            self.at, self.details = now, {}
+            self.trees = {}
+            cur = {}
+            for line in (git(self.repo.root, "worktree", "list", "--porcelain") or "").splitlines() + [""]:
+                if not line:
+                    if cur.get("path"):
+                        self.trees[cur["path"]] = cur
+                    cur = {}
+                elif line.startswith("worktree "):
+                    cur["path"] = line[9:]
+                elif line.startswith("HEAD "):
+                    cur["head"] = line[5:]
+                elif line.startswith("branch "):
+                    cur["branch"] = line[7:].removeprefix("refs/heads/")
+        return self.trees
+
+    def detail(self, path):
+        if path not in self.details:
+            tree = self.trees.get(path, {})
+            head = tree.get("head", "")
+            main = self.repo.main
+            status = git(path, "status", "--porcelain", "-uno") or ""
+            ahead = (git(self.repo.root, "rev-list", "--count", f"{main}..{head}") or "0").strip() if head else "0"
+            landed = bool(head) and self.landed(head, main)
+            self.details[path] = {
+                "branch": tree.get("branch") or "detached",
+                "head": head,
+                "merged": landed,
+                "ahead": int(ahead or 0),
+                "dirty": len(status.splitlines()),
+            }
+        return self.details[path]
+
+    def landed(self, head, ref):
+        key = (head, ref)
+        if key not in self.ancestry:
+            cherry = git(self.repo.root, "cherry", ref, head)
+            self.ancestry[key] = git_ok(self.repo.root, "merge-base", "--is-ancestor", head, ref) or (
+                cherry is not None and not any(line.startswith("+") for line in cherry.splitlines()))
+        return self.ancestry[key]
+
+
+def run_root(runs, rid, meta):
+    if meta.get("root"):
+        return meta["root"]
+    try:
+        m = ROOT_RE.search((runs / f"{rid}.runner.sh").read_text())
+    except OSError:
+        return None
+    return m.group(1) if m else None
+
+
+def goal_line(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if line.startswith("GOAL:"):
+                    return line[5:].strip()[:220]
+    except OSError:
+        pass
+    return ""
+
+
+def pid_alive(pid):
+    try:
+        return b"codex-task" in Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        return False
+
+
+def touched_paths(runs, rid):
+    try:
+        pre = set((runs / f"{rid}.pre.txt").read_text().splitlines())
+        post = set((runs / f"{rid}.post.txt").read_text().splitlines())
+    except OSError:
+        return None
+    return sorted({line.split(" ", 1)[-1] for line in pre ^ post})
+
+
+def read_run(runs, rid, log_mtime, now):
+    mode = rid.split("-", 1)[0]
+    meta = load_json(runs / f"{rid}.meta.json") or {}
+    brief = meta.get("brief") or ""
+    unit = Path(brief).stem if brief else ""
+    last = runs / f"{rid}.last.txt"
+    result = None
+    if last.exists() and last.stat().st_size:
+        result = load_json(last) or {"summary": last.read_text(errors="replace")[:2000]}
+    if result:
+        state = "done"
+    elif pid_alive(rid.rsplit("-", 1)[-1]):
+        state = "stalled" if now - log_mtime > STALL_S else "running"
+    else:
+        state = "abandoned" if now - log_mtime > ABANDON_S else "failed"
+    touched = touched_paths(runs, rid) if mode == "implement" else None
+    flags = []
+    if state in ("failed", "stalled"):
+        flags.append(state)
+    if state == "done" and touched is not None:
+        try:
+            allow = set((runs / f"{rid}.allow").read_text().split())
+        except OSError:
+            allow = set()
+        if allow and set(touched) - allow:
+            flags.append("out_of_scope")
+        if not touched:
+            flags.append("no_changes")
+    return {
+        "id": rid, "mode": mode, "engine": meta.get("engine", ""), "unit": unit,
+        "family": FIX_RE.sub("", unit), "session": meta.get("session", ""),
+        "root": run_root(runs, rid, meta), "goal": goal_line(runs / f"{rid}.prompt.md"),
+        "state": state, "flags": flags, "updated": log_mtime,
+        "touched": touched or [], "open_risks": (result or {}).get("open_risks", []),
+        "summary": ((result or {}).get("summary") or "")[:1500],
+    }
+
+
+def collect_runs(repo, now):
+    out = []
+    try:
+        entries = os.scandir(repo.runs)
+    except OSError:
+        return out
+    with entries:
+        for e in entries:
+            if not e.name.endswith(".log"):
+                continue
+            mtime = e.stat().st_mtime
+            rid = e.name[:-4]
+            if now - mtime <= RUN_WINDOW_S and RUN_ID_RE.match(rid):
+                out.append(read_run(repo.runs, rid, mtime, now))
+    return sorted(out, key=lambda r: r["updated"])
+
+
+def final_text(message):
+    content = message.get("content")
+    if isinstance(content, str):
+        return content
+    texts = [c.get("text", "") for c in content or [] if isinstance(c, dict) and c.get("type") == "text"]
+    return texts[-1] if texts else ""
+
+
+def snippet(text, size=420):
+    text = text.strip()
+    if len(text) <= size:
+        return text
+    cut = text[-size:]
+    nl = cut.find("\n\n")
+    return ("… " + cut[nl + 2:]) if 0 <= nl < size // 2 else "… " + cut
+
+
+def subagent_chips(session_dir, now):
+    chips, busy = [], False
+    sub = session_dir / "subagents"
+    if not sub.is_dir():
+        return chips, busy
+    for meta_file in sub.glob("*.meta.json"):
+        log = meta_file.with_name(meta_file.name.replace(".meta.json", ".jsonl"))
+        try:
+            mtime = log.stat().st_mtime
+        except OSError:
+            continue
+        if now - mtime < SUBAGENT_BUSY_S:
+            busy = True
+        meta = load_json(meta_file) or {}
+        kind = meta.get("agentType", "")
+        if now - mtime > SESSION_WINDOW_S or not kind.endswith(("test-runner", "diff-reviewer")):
+            continue
+        verdict, lens = "", ""
+        for line in tail_lines(log, 65536):
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            msg = d.get("message") or {}
+            if d.get("type") == "assistant":
+                first = final_text(msg).strip().splitlines()[:1]
+                m = re.match(r"(RESULT|VERDICT):\s*(\w+)", first[0]) if first else None
+                verdict = m.group(2) if m else verdict
+        try:
+            head = log.open(encoding="utf-8", errors="replace").read(4096)
+            m = re.search(r"LENS:\s*(\w+)", head)
+            lens = m.group(1) if m else ""
+        except OSError:
+            pass
+        if verdict:
+            chips.append({"kind": "tests" if kind.endswith("test-runner") else lens or "review",
+                          "verdict": verdict, "at": mtime, "label": meta.get("description", "")})
+    return chips, busy
+
+
+def read_session(path, now, wt_re, names):
+    mtime = path.stat().st_mtime
+    sid = path.stem
+    last, cwd, branch, title, text = None, "", "", "", ""
+    mentions, briefs = {}, set()
+    for line in tail_lines(path):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if d.get("type") == "custom-title":
+            title = d.get("customTitle") or title
+        if d.get("isSidechain") or d.get("type") not in ("user", "assistant"):
+            continue
+        cwd, branch = d.get("cwd") or cwd, d.get("gitBranch") or branch
+        msg = d.get("message") or {}
+        if d["type"] == "assistant":
+            text = final_text(msg) or text
+        last = (d["type"], msg.get("stop_reason"), d.get("timestamp"))
+        if wt_re:
+            for m in wt_re.findall(line):
+                mentions[m] = mentions.get(m, 0) + 1
+        briefs.update(BRIEF_RE.findall(line))
+    if not last:
+        return None
+    chips, busy = subagent_chips(path.with_suffix(""), now)
+    ended = last[0] == "assistant" and last[1] == "end_turn"
+    idle = now - mtime
+    asks = "?" in text[-500:]
+    state = "working"
+    if ended and not busy:
+        if asks and idle >= WAIT_MIN_S:
+            state = "waiting"
+        elif not asks and idle >= STILL_OPEN_S:
+            state = "still_open"
+        else:
+            state = "idle"
+    elif not ended and idle > STALL_S and not busy:
+        state = "quiet"
+    worktree = max(mentions, key=mentions.get) if mentions else ""
+    return {
+        "id": sid, "name": title or names.get(sid) or f"{Path(cwd).name or 'session'} {sid[:8]}",
+        "cwd": cwd, "branch": branch, "worktree": worktree, "state": state, "updated": mtime,
+        "idle": idle, "snippet": snippet(text) if state in ("waiting", "still_open", "idle") else "",
+        "briefs": sorted(briefs), "chips": chips,
+    }
+
+
+def collect_sessions(repo, trees, now, names):
+    paths = [repo.root] + [Path(p) for p in trees if Path(p) != repo.root]
+    wt = [re.escape(p) for p in trees if Path(p) != repo.root]
+    wt_re = re.compile("(" + "|".join(sorted(wt, key=len, reverse=True)) + r")(?![\w.-])") if wt else None
+    out = []
+    for base in repo.projects:
+        for p in paths:
+            d = base / encode_project(p)
+            if not d.is_dir():
+                continue
+            for f in d.glob("*.jsonl"):
+                try:
+                    if now - f.stat().st_mtime > SESSION_WINDOW_S:
+                        continue
+                except OSError:
+                    continue
+                s = read_session(f, now, wt_re, names)
+                if s:
+                    if Path(s["cwd"]) != repo.root and s["cwd"] in trees:
+                        s["worktree"] = s["cwd"]
+                    out.append(s)
+    return out
+
+
+def phase_of(card, runs, sessions, board, gc, repo, deployed_shas):
+    tree = card.get("tree")
+    impl = [r for r in runs if r["mode"] == "implement"]
+    latest = impl[-1] if impl else None
+    if latest:
+        family = latest["family"]
+        card["round"] = len([r for r in impl if family and r["family"] == family]) or 1
+    lock = (board.get("locks") or {}).get("deploy")
+    if lock and lock.get("session") in {s["id"] for s in sessions}:
+        return "deploying"
+    if tree and tree["merged"]:
+        for sha in deployed_shas:
+            if gc.landed(tree["head"], sha):
+                return "deployed"
+        return "merged"
+    if latest and latest["state"] in ("running", "stalled"):
+        return "rework" if card.get("round", 1) > 1 else "implement"
+    if latest:
+        return "audit"
+    briefs_run = {r["unit"] for r in runs}
+    if any(set(s["briefs"]) - briefs_run for s in sessions):
+        return "plan"
+    return "investigate"
+
+
+def needs_you(card, runs):
+    impl = [r for r in runs if r["mode"] == "implement"]
+    if not impl:
+        return []
+    flags = list(impl[-1]["flags"])
+    if flags and card.get("round", 1) >= 3:
+        flags.append("retries_exhausted")
+    return flags
+
+
+def build_state(repo, gc):
+    now = time.time()
+    trees = gc.worktrees(now)
+    board = load_json(repo.board) or {}
+    names = {e.get("session"): e.get("name") for e in board.get("events", []) if e.get("session")}
+    names.update({k: v.get("name") for k, v in (board.get("claims") or {}).items()})
+    runs = collect_runs(repo, now)
+    sessions = collect_sessions(repo, trees, now, names)
+    deployed_shas = [m.group(1) for e in board.get("events", []) for m in [DEPLOYED_RE.search(e.get("text", ""))] if m]
+    dismissed = load_json(repo.dismissed) or {}
+    main_root = str(repo.root)
+
+    groups, old = {}, []
+    for r in runs:
+        live = r["state"] in ("running", "stalled")
+        gone = r["root"] and r["root"] != main_root and r["root"] not in trees
+        loose = r["root"] in (None, main_root)
+        if loose:
+            r["flags"] = [f for f in r["flags"] if f != "out_of_scope"]
+        if r["state"] == "abandoned" or gone and not live or loose and not live and now - r["updated"] > LOOSE_RUN_S:
+            if r["state"] in ("abandoned", "failed"):
+                old.append(r)
+            continue
+        key = r["root"] if r["root"] and r["root"] != main_root else f"run:{r['id']}"
+        groups.setdefault(key, {"runs": [], "sessions": []})["runs"].append(r)
+    for s in sessions:
+        key = s["worktree"] if s["worktree"] and s["worktree"] != main_root else f"session:{s['id']}"
+        groups.setdefault(key, {"runs": [], "sessions": []})["sessions"].append(s)
+
+    cards = []
+    for key, g in groups.items():
+        tree = gc.detail(key) if key in trees else None
+        latest_run = g["runs"][-1] if g["runs"] else None
+        title = (latest_run or {}).get("unit") or (tree or {}).get("branch") \
+            or (g["sessions"][0]["name"] if g["sessions"] else "") or (latest_run or {}).get("goal", "")[:90] or key
+        card = {"key": key, "title": title, "tree": tree, "worktree": key if tree else "",
+                "goal": (latest_run or {}).get("goal", ""),
+                "sessions": [{k: s[k] for k in ("id", "name", "state", "updated", "branch")} for s in g["sessions"]],
+                "runs": g["runs"][-6:], "chips": [c for s in g["sessions"] for c in s["chips"]][-6:]}
+        card["phase"] = phase_of(card, g["runs"], g["sessions"], board, gc, repo, deployed_shas)
+        card["needs_you"] = [] if card["phase"] in ("merged", "deployed") else needs_you(card, g["runs"])
+        card["updated"] = max([r["updated"] for r in g["runs"]] + [s["updated"] for s in g["sessions"]] + [0])
+        if dismissed.get(key, 0) < card["updated"]:
+            cards.append(card)
+
+    def attention(state):
+        out = []
+        for s in sessions:
+            if s["state"] != state:
+                continue
+            key = f"session:{s['id']}"
+            card = next((c for c in cards if any(x["id"] == s["id"] for x in c["sessions"])), None)
+            if state == "still_open" and card and card["phase"] in ("merged", "deployed"):
+                continue
+            if dismissed.get(key, 0) >= s["updated"]:
+                continue
+            out.append({**s, "key": key, "phase": card["phase"] if card else "", "card": card["key"] if card else ""})
+        return sorted(out, key=lambda x: -x["updated"])
+
+    return {
+        "generated": now, "repo": main_root, "main": repo.main,
+        "cards": sorted(cards, key=lambda c: -c["updated"]),
+        "waiting": attention("waiting"), "still_open": attention("still_open"),
+        "abandoned": sorted(old, key=lambda r: -r["updated"])[:30],
+        "locks": board.get("locks") or {}, "events": (board.get("events") or [])[-12:],
+    }
+
+
+class Server(http.server.ThreadingHTTPServer):
+    daemon_threads = True
+
+    def __init__(self, addr, repo, token):
+        super().__init__(addr, Handler)
+        self.repo, self.token, self.gc = repo, token, GitCache(repo)
+        self.lock, self.cached, self.cached_at = threading.Lock(), None, 0.0
+
+    def state(self):
+        with self.lock:
+            if time.time() - self.cached_at > STATE_TTL_S:
+                self.cached = json.dumps(build_state(self.repo, self.gc)).encode()
+                self.cached_at = time.time()
+            return self.cached
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    server: Server
+
+    def log_message(self, fmt, *args):
+        return
+
+    def authorised(self, query):
+        cookie = self.headers.get("Cookie") or ""
+        given = (query.get("t") or [""])[0] or dict(
+            p.strip().split("=", 1) for p in cookie.split(";") if "=" in p).get("fsa_t", "")
+        return secrets.compare_digest(given, self.server.token)
+
+    def send(self, code, body, ctype="application/json", extra=None):
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Cache-Control", "no-store")
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except ConnectionError:
+            pass
+
+    def do_GET(self):
+        url = urllib.parse.urlparse(self.path)
+        q = urllib.parse.parse_qs(url.query)
+        if not self.authorised(q):
+            return self.send(403, b"forbidden: open the URL printed by 'fsa-dashboard start'", "text/plain")
+        if url.path == "/":
+            cookie = f"fsa_t={self.server.token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000"
+            return self.send(200, HTML.read_bytes(), "text/html; charset=utf-8", {"Set-Cookie": cookie})
+        if url.path == "/api/state":
+            return self.send(200, self.server.state())
+        if url.path == "/api/log":
+            rid = (q.get("id") or [""])[0]
+            if not RUN_ID_RE.match(rid):
+                return self.send(400, b"bad run id", "text/plain")
+            lines = tail_lines(self.server.repo.runs / f"{rid}.log", 12000)
+            return self.send(200, "\n".join(lines[-120:]).encode(), "text/plain; charset=utf-8")
+        return self.send(404, b"not found", "text/plain")
+
+    def do_POST(self):
+        url = urllib.parse.urlparse(self.path)
+        if not self.authorised({}) or url.path != "/api/dismiss":
+            return self.send(403, b"forbidden", "text/plain")
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+            key = str(body["key"])[:512]
+        except (ValueError, KeyError, TypeError):
+            return self.send(400, b"bad request", "text/plain")
+        path = self.server.repo.dismissed
+        with self.server.lock:
+            data = load_json(path) or {}
+            data[key] = time.time()
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data))
+            tmp.replace(path)
+            self.server.cached_at = 0
+        return self.send(200, b"{}")
+
+
+def token_for(repo):
+    path = repo.state / "dashboard.token"
+    if not path.exists():
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(secrets.token_urlsafe(24))
+    return path.read_text().strip()
+
+
+def host_ip():
+    out = subprocess.run(["hostname", "-I"], capture_output=True, text=True).stdout.split()
+    return next((ip for ip in out if not ip.startswith(("172.", "127."))), out[0] if out else "localhost")
+
+
+def running_pid(repo):
+    try:
+        pid = int((repo.state / "dashboard.pid").read_text())
+        os.kill(pid, 0)
+        return pid
+    except (OSError, ValueError):
+        return None
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="fsa-dashboard")
+    ap.add_argument("cmd", choices=["start", "stop", "status", "serve", "state"])
+    ap.add_argument("--repo", default=os.getcwd())
+    ap.add_argument("--runs")
+    ap.add_argument("--projects", action="append")
+    ap.add_argument("--host", default=os.environ.get("FSA_DASHBOARD_HOST", "0.0.0.0"))
+    ap.add_argument("--port", type=int, default=int(os.environ.get("FSA_DASHBOARD_PORT", "8766")))
+    args = ap.parse_args()
+    repo = Repo(args.repo, args.runs, args.projects)
+    token = token_for(repo)
+    url = f"http://{host_ip()}:{args.port}/?t={token}"
+    pid = running_pid(repo)
+
+    if args.cmd == "state":
+        print(json.dumps(build_state(repo, GitCache(repo)), indent=1))
+    elif args.cmd == "serve":
+        srv = Server((args.host, args.port), repo, token)
+        (repo.state / "dashboard.pid").write_text(str(os.getpid()))
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+        srv.serve_forever()
+    elif args.cmd == "start":
+        if not pid:
+            log = open(repo.state / "dashboard.log", "ab")
+            cmd = [sys.executable, str(Path(__file__).resolve()), "serve", "--repo", str(repo.root),
+                   "--runs", str(repo.runs), "--host", args.host, "--port", str(args.port)]
+            for p in args.projects or []:
+                cmd += ["--projects", p]
+            subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+            time.sleep(1.5)
+            if not running_pid(repo):
+                sys.exit(f"fsa-dashboard: failed to start; see {repo.state / 'dashboard.log'}")
+        print(url)
+    elif args.cmd == "stop":
+        if pid:
+            os.kill(pid, signal.SIGTERM)
+        print("stopped" if pid else "not running")
+    else:
+        print(url if pid else "not running")
+
+
+if __name__ == "__main__":
+    main()

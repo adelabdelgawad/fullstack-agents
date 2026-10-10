@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agents</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1c1a; --muted: #6b6862; --line: #e4e1da;
+  --amber: #b26a00; --amber-bg: #fff3dc; --blue: #2459c9; --blue-bg: #e6eeff;
+  --red: #b42318; --red-bg: #fde8e6; --green: #1f7a3d; --green-bg: #e3f4e8; --chip: #efede8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161514; --panel: #201f1d; --ink: #ecebe7; --muted: #a09d96; --line: #34322e;
+    --amber: #f2b24c; --amber-bg: #3a2c12; --blue: #8fb0ff; --blue-bg: #1b2744;
+    --red: #ff8a7f; --red-bg: #43201c; --green: #7fd59a; --green-bg: #183323; --chip: #2c2a27;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+header h1 { font-size: 15px; margin: 0; font-weight: 650; }
+.meta { color: var(--muted); font-size: 12px; margin-left: auto; }
+nav { display: flex; gap: 4px; flex-wrap: wrap; }
+nav button { border: 1px solid transparent; background: none; color: var(--ink); padding: 6px 12px; border-radius: 8px; cursor: pointer; font: inherit; display: flex; gap: 6px; align-items: center; }
+nav button[aria-selected="true"] { background: var(--chip); border-color: var(--line); font-weight: 600; }
+.badge { min-width: 20px; padding: 0 6px; border-radius: 10px; font-size: 12px; font-weight: 700; text-align: center; background: var(--chip); color: var(--muted); }
+.badge.amber { background: var(--amber); color: var(--panel); }
+.badge.blue { background: var(--blue); color: var(--panel); }
+.badge.red { background: var(--red); color: var(--panel); }
+.badge.pulse { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { transform: scale(1.25); } }
+main { padding: 16px 20px 40px; }
+.strip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.board { display: grid; grid-template-columns: repeat(8, minmax(170px, 1fr)); gap: 10px; overflow-x: auto; }
+.col h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; display: flex; justify-content: space-between; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 8px; cursor: pointer; border-left-width: 4px; }
+.card:hover { border-color: var(--muted); }
+.card.red { border-left-color: var(--red); background: var(--red-bg); }
+.card.amber { border-left-color: var(--amber); background: var(--amber-bg); }
+.card.blue { border-left-color: var(--blue); background: var(--blue-bg); }
+.card .t { font-weight: 600; word-break: break-word; }
+.card .s { color: var(--muted); font-size: 12px; margin-top: 2px; word-break: break-word; }
+.chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.chip { font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--chip); }
+.chip.ok { background: var(--green-bg); color: var(--green); }
+.chip.bad { background: var(--red-bg); color: var(--red); }
+.row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.dismiss { margin-left: auto; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 6px; font-size: 11px; padding: 2px 8px; cursor: pointer; }
+.list { display: grid; gap: 10px; max-width: 980px; }
+.list .card { cursor: default; }
+.snip { white-space: pre-wrap; margin-top: 6px; font-size: 13px; }
+.empty { color: var(--muted); padding: 20px 0; }
+aside { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100%); background: var(--panel); border-left: 1px solid var(--line); padding: 18px; overflow-y: auto; transform: translateX(100%); transition: transform .18s; z-index: 10; }
+aside.open { transform: none; }
+aside h3 { margin: 0 0 4px; font-size: 16px; }
+aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 360px; overflow: auto; }
+aside .close { float: right; }
+#toasts { position: fixed; top: 64px; right: 16px; display: grid; gap: 8px; z-index: 20; width: min(360px, calc(100% - 32px)); }
+.toast { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--amber); border-radius: 10px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18); cursor: pointer; animation: slide .2s ease-out; }
+.toast.blue { border-left-color: var(--blue); }
+.toast.red { border-left-color: var(--red); }
+@keyframes slide { from { transform: translateX(30px); opacity: 0; } }
+@media (max-width: 700px) { main, header { padding-left: 16px; padding-right: 16px; } .board { grid-template-columns: repeat(8, 78vw); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Agents</h1>
+  <nav role="tablist">
+    <button role="tab" data-tab="board" aria-selected="true">Board <span class="badge" id="b-board">0</span></button>
+    <button role="tab" data-tab="waiting">Waiting on you <span class="badge" id="b-waiting">0</span></button>
+    <button role="tab" data-tab="still_open">Still open <span class="badge" id="b-still_open">0</span></button>
+    <button role="tab" data-tab="abandoned">Old runs <span class="badge" id="b-abandoned">0</span></button>
+  </nav>
+  <span class="meta" id="meta">loading…</span>
+</header>
+<main id="main"></main>
+<aside id="panel" aria-label="Details"></aside>
+<div id="toasts" aria-live="polite"></div>
+<script>
+const PHASES = [["investigate","Investigate"],["plan","Plan"],["implement","Implement"],["rework","Rework"],["audit","Audit"],["merged","Merged"],["deploying","Deploying"],["deployed","Deployed"]];
+const FLAG_TEXT = {failed:"run failed", stalled:"run stalled", out_of_scope:"changed outside its paths", no_changes:"changed nothing", retries_exhausted:"retries used up"};
+let tab = "board", state = null, seen = null, unseen = {waiting: false, still_open: false};
+try { tab = localStorage.getItem("fsa-tab") || "board"; } catch (e) {}
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ago = t => { const s = Math.max(0, Date.now()/1000 - t); return s < 90 ? `${Math.round(s)}s` : s < 5400 ? `${Math.round(s/60)}m` : s < 172800 ? `${Math.round(s/3600)}h` : `${Math.round(s/86400)}d`; };
+const chip = c => { const good = /^(GREEN|PASS)$/.test(c.verdict), bad = /^(RED|CHANGES)$/.test(c.verdict); return `<span class="chip ${good ? "ok" : bad ? "bad" : ""}" title="${esc(c.label)}">${esc(c.kind)} ${esc(c.verdict)}</span>`; };
+
+async function dismiss(key, ev) {
+  ev?.stopPropagation();
+  await fetch("/api/dismiss", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({key})});
+  load();
+}
+
+function cardHtml(c) {
+  const tone = c.needs_you.length ? "red" : c.sessions.some(s => s.state === "waiting") ? "amber" : c.sessions.some(s => s.state === "still_open") ? "blue" : "";
+  const sess = c.sessions.map(s => s.name).filter(n => n !== c.title).join(", ");
+  const branch = c.tree ? c.tree.branch : (c.sessions[0] || {}).branch;
+  const sub = [branch !== c.title ? branch : "", sess].filter(Boolean).join(" · ");
+  const chips = [
+    c.round > 1 ? `<span class="chip">round ${c.round}</span>` : "",
+    ...c.needs_you.map(f => `<span class="chip bad">${esc(FLAG_TEXT[f] || f)}</span>`),
+    ...c.chips.map(chip),
+    c.tree && c.tree.dirty ? `<span class="chip">${c.tree.dirty} uncommitted</span>` : "",
+  ].join("");
+  return `<div class="card ${tone}" tabindex="0" data-key="${esc(c.key)}">
+    <div class="t">${esc(c.title)}</div><div class="s">${esc(sub)}</div>
+    <div class="chips">${chips}</div>
+    <div class="row"><span class="s">${ago(c.updated)} ago</span><button class="dismiss" data-dismiss="${esc(c.key)}">Dismiss</button></div></div>`;
+}
+
+function attentionHtml(items, tone, emptyText) {
+  if (!items.length) return `<div class="empty">${emptyText}</div>`;
+  return `<div class="list">${items.map(s => `<div class="card ${tone}">
+    <div class="t">${esc(s.name)}</div>
+    <div class="s">idle ${ago(s.updated)} · ${esc(s.phase || "no task card")}${s.branch ? " · " + esc(s.branch) : ""}</div>
+    <div class="snip">${esc(s.snippet)}</div>
+    <div class="row"><span class="s">${esc(s.id)}</span><button class="dismiss" data-dismiss="${esc(s.key)}">Dismiss</button></div></div>`).join("")}</div>`;
+}
+
+function render() {
+  if (!state) return;
+  const m = document.getElementById("main");
+  const red = state.cards.filter(c => c.needs_you.length);
+  if (tab === "board") {
+    const strip = red.length ? `<div class="strip">${red.map(c => `<div class="card red" data-key="${esc(c.key)}"><b>Needs you:</b> ${esc(c.title)} — ${esc(c.needs_you.map(f => FLAG_TEXT[f] || f).join(", "))}</div>`).join("")}</div>` : "";
+    m.innerHTML = strip + `<div class="board">${PHASES.map(([k, label]) => {
+      const cs = state.cards.filter(c => c.phase === k);
+      return `<section class="col"><h2>${label}<span>${cs.length}</span></h2>${cs.map(cardHtml).join("")}</section>`;
+    }).join("")}</div>`;
+  } else if (tab === "waiting") {
+    m.innerHTML = attentionHtml(state.waiting, "amber", "No session is waiting on you.");
+  } else if (tab === "still_open") {
+    m.innerHTML = attentionHtml(state.still_open, "blue", "No session stopped with unfinished work.");
+  } else {
+    m.innerHTML = state.abandoned.length ? `<div class="list">${state.abandoned.map(r => `<div class="card"><div class="t">${esc(r.unit || r.id)}</div><div class="s">${esc(r.goal)}</div><div class="s">${esc(r.root || "")} · last log ${ago(r.updated)} ago</div></div>`).join("")}</div>` : `<div class="empty">No abandoned runs.</div>`;
+  }
+  document.querySelectorAll("[data-key]").forEach(el => el.onclick = () => openCard(el.dataset.key));
+  document.querySelectorAll("[data-dismiss]").forEach(el => el.onclick = ev => dismiss(el.dataset.dismiss, ev));
+  document.querySelectorAll("nav button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+}
+
+async function openCard(key) {
+  const c = state.cards.find(x => x.key === key);
+  if (!c) return;
+  const p = document.getElementById("panel");
+  const runs = c.runs.slice().reverse().map(r => `<div class="card" style="cursor:default">
+    <div class="t">${esc(r.unit || r.id)} <span class="chip ${r.flags.length ? "bad" : r.state === "done" ? "ok" : ""}">${esc(r.state)}</span></div>
+    <div class="s">${esc(r.engine)} · ${ago(r.updated)} ago · ${r.touched.length} files</div>
+    ${r.goal ? `<div class="snip">${esc(r.goal)}</div>` : ""}
+    ${r.summary ? `<pre>${esc(r.summary)}</pre>` : ""}
+    ${r.open_risks.length ? `<div class="s"><b>Open risks:</b> ${esc(r.open_risks.join(" · "))}</div>` : ""}
+    ${r.touched.length ? `<pre>${esc(r.touched.join("\n"))}</pre>` : ""}
+    <button class="dismiss" style="margin:0" data-log="${esc(r.id)}">Show log tail</button><pre hidden id="log-${esc(r.id)}"></pre></div>`).join("");
+  p.innerHTML = `<button class="dismiss close" id="close">Close</button>
+    <h3>${esc(c.title)}</h3>
+    <div class="s">${esc(c.phase)}${c.tree ? ` · ${esc(c.tree.branch)} · ${c.tree.ahead} ahead · ${c.tree.dirty} uncommitted` : ""}</div>
+    <div class="s">${esc(c.worktree)}</div>
+    <div class="chips">${c.chips.map(chip).join("")}</div>
+    <p><b>Sessions:</b> ${c.sessions.map(s => `${esc(s.name)} (${esc(s.state)}, ${ago(s.updated)} ago)`).join(", ") || "none"}</p>
+    ${runs || '<div class="empty">No implementer runs.</div>'}`;
+  p.classList.add("open");
+  document.getElementById("close").onclick = () => p.classList.remove("open");
+  p.querySelectorAll("[data-log]").forEach(b => b.onclick = async () => {
+    const pre = document.getElementById("log-" + b.dataset.log);
+    pre.textContent = await (await fetch("/api/log?id=" + encodeURIComponent(b.dataset.log))).text();
+    pre.hidden = false;
+  });
+}
+
+function toast(text, tone, target) {
+  const t = document.createElement("div");
+  t.className = "toast " + tone;
+  t.innerHTML = text;
+  t.onclick = () => { setTab(target); t.remove(); };
+  document.getElementById("toasts").appendChild(t);
+  setTimeout(() => t.remove(), 15000);
+}
+
+function notify() {
+  const ids = {waiting: new Set(state.waiting.map(s => s.key + s.updated)), still_open: new Set(state.still_open.map(s => s.key + s.updated))};
+  if (seen) {
+    state.waiting.filter(s => !seen.waiting.has(s.key + s.updated)).forEach(s => { unseen.waiting = tab !== "waiting"; toast(`<b>Waiting on you:</b> ${esc(s.name)}<div class="s">${esc(s.snippet.slice(-140))}</div>`, "", "waiting"); });
+    state.still_open.filter(s => !seen.still_open.has(s.key + s.updated)).forEach(s => { unseen.still_open = tab !== "still_open"; toast(`<b>Still open:</b> ${esc(s.name)}`, "blue", "still_open"); });
+  }
+  seen = ids;
+  const n = {board: state.cards.filter(c => c.needs_you.length).length, waiting: state.waiting.length, still_open: state.still_open.length, abandoned: state.abandoned.length};
+  const tone = {board: "red", waiting: "amber", still_open: "blue", abandoned: ""};
+  for (const k in n) {
+    const b = document.getElementById("b-" + k);
+    b.textContent = n[k];
+    b.className = "badge" + (n[k] && tone[k] ? " " + tone[k] : "") + (unseen[k] ? " pulse" : "");
+  }
+  const total = n.waiting + n.still_open + n.board;
+  document.title = total ? `(${total}) Agents` : "Agents";
+}
+
+function setTab(t) {
+  tab = t;
+  unseen[t] = false;
+  try { localStorage.setItem("fsa-tab", t); } catch (e) {}
+  render();
+  if (state) notify();
+}
+
+async function load() {
+  try {
+    const r = await fetch("/api/state", {cache: "no-store"});
+    if (!r.ok) throw new Error(r.status);
+    state = await r.json();
+    document.getElementById("meta").textContent = `${state.repo} · ${state.locks.deploy ? "deploy lock held · " : ""}updated ${new Date(state.generated * 1000).toLocaleTimeString()}`;
+    notify();
+    render();
+  } catch (e) {
+    document.getElementById("meta").textContent = "offline — retrying";
+  }
+}
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => setTab(b.dataset.tab));
+document.addEventListener("keydown", e => { if (e.key === "Escape") document.getElementById("panel").classList.remove("open"); });
+load();
+setInterval(load, 4000);
+</script>
+</body>
+</html>

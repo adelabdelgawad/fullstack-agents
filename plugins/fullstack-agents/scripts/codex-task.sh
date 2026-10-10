@@ -137,6 +137,9 @@ result_contract() {
   cat "$schema"
 }
 
+jq -n --arg id "$id" --arg mode "$mode" --arg engine "$engine" --arg model "$model" --arg brief "$(realpath "$brief")" \
+  --arg root "$root" --arg session "${CLAUDE_CODE_SESSION_ID:-${CLAUDE_SESSION_ID:-}}" --arg started "$(date -u +%FT%TZ)" \
+  '{id:$id,mode:$mode,engine:$engine,model:$model,brief:$brief,root:$root,session:$session,started:$started}' > "$runs/$id.meta.json" || true
 prompt="$runs/$id.prompt.md"; runner="$runs/$id.runner.sh"
 { conventions_preamble; skills_preamble; cat "$brief"; result_contract; } > "$prompt"
 
