@@ -407,7 +407,10 @@ def phase_of(card, runs, sessions, board, gc, repo, deployed_shas):
     if latest and latest["state"] in ("running", "stalled"):
         return "rework" if card.get("round", 1) > 1 else "implement"
     if latest:
-        return "audit"
+        ended = latest["state"] == "done" and any(
+            x["id"] == latest["session"] and x["state"] in ("idle", "waiting", "still_open")
+            and x["updated"] > latest["updated"] for x in sessions)
+        return "review" if ended else "audit"
     briefs_run = {r["unit"] for r in runs}
     if any(set(s["briefs"]) - briefs_run for s in sessions):
         return "plan"

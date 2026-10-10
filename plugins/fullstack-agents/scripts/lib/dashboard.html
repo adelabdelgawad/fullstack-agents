@@ -33,7 +33,7 @@ nav button[aria-selected="true"] { background: var(--chip); border-color: var(--
 @keyframes pulse { 50% { transform: scale(1.25); } }
 main { padding: 16px 20px 40px; }
 .strip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
-.board { display: grid; grid-template-columns: repeat(8, minmax(170px, 1fr)); gap: 10px; overflow-x: auto; }
+.board { display: grid; grid-template-columns: repeat(9, minmax(170px, 1fr)); gap: 10px; overflow-x: auto; }
 .col h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; display: flex; justify-content: space-between; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 8px; cursor: pointer; border-left-width: 4px; }
 .card:hover { border-color: var(--muted); }
@@ -62,7 +62,7 @@ aside .close { float: right; }
 .toast.blue { border-left-color: var(--blue); }
 .toast.red { border-left-color: var(--red); }
 @keyframes slide { from { transform: translateX(30px); opacity: 0; } }
-@media (max-width: 700px) { main, header { padding-left: 16px; padding-right: 16px; } .board { grid-template-columns: repeat(8, 78vw); } }
+@media (max-width: 700px) { main, header { padding-left: 16px; padding-right: 16px; } .board { grid-template-columns: repeat(9, 78vw); } }
 </style>
 </head>
 <body>
@@ -80,7 +80,7 @@ aside .close { float: right; }
 <aside id="panel" aria-label="Details"></aside>
 <div id="toasts" aria-live="polite"></div>
 <script>
-const PHASES = [["investigate","Investigate"],["plan","Plan"],["implement","Implement"],["rework","Rework"],["audit","Audit"],["merged","Merged"],["deploying","Deploying"],["deployed","Deployed"]];
+const PHASES = [["investigate","Investigate"],["plan","Plan"],["implement","Implement"],["rework","Rework"],["audit","Audit"],["review","Review"],["merged","Merged"],["deploying","Deploying"],["deployed","Deployed"]];
 const FLAG_TEXT = {failed:"run failed", stalled:"run stalled", out_of_scope:"changed outside its paths", no_changes:"changed nothing", retries_exhausted:"retries used up"};
 let tab = "board", state = null, seen = null, unseen = {waiting: false, still_open: false};
 try { tab = localStorage.getItem("fsa-tab") || "board"; } catch (e) {}
