@@ -48,6 +48,12 @@ FIX_RE = re.compile(r"-fix\d+$")
 COMMAND_RE = re.compile(r"<command-name>([^<]+)</command-name>")
 ARGS_RE = re.compile(r"<command-args>([^<]*)</command-args>")
 PHASES = ("investigate", "plan", "audit", "review")
+NOTE_RE = re.compile(r"<task-id>([\w-]+)</task-id>.*?<status>(\w+)</status>")
+SOURCE_ID_RE = re.compile(r"^[\w-]{1,80}$")
+ACTIVITY_KEEP_S = 900
+ACTIVITY_MAX = 6
+OUTPUT_CHARS = 60000
+AGENT_STALE_S = 3600
 
 
 def load_json(path):
@@ -347,7 +353,7 @@ def read_run(runs, rid, log_mtime, now):
         if not touched:
             flags.append("no_changes")
     return {
-        "id": rid, "mode": mode, "engine": meta.get("engine", ""), "unit": unit,
+        "id": rid, "mode": mode, "engine": meta.get("engine", ""), "model": meta.get("model", ""), "unit": unit,
         "family": FIX_RE.sub("", unit), "session": meta.get("session", ""),
         "root": run_root(runs, rid, meta), "goal": goal_line(runs / f"{rid}.prompt.md"),
         "desc": goal_line(runs / f"{rid}.prompt.md", 900),
@@ -454,6 +460,75 @@ def snippet(text, size=420):
     return ("… " + cut[nl + 2:]) if 0 <= nl < size // 2 else "… " + cut
 
 
+def result_text(block):
+    content = block.get("content")
+    if isinstance(content, list):
+        content = " ".join(c.get("text", "") for c in content if isinstance(c, dict))
+    return str(content or "")
+
+
+def turn_ended(log):
+    for line in reversed(tail_lines(log, 65536)):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if d.get("type") in ("user", "assistant"):
+            return d["type"] == "assistant" and (d.get("message") or {}).get("stop_reason") == "end_turn"
+    return False
+
+
+def agent_items(session_dir, ended, now):
+    out = []
+    for meta_file in (session_dir / "subagents").glob("*.meta.json"):
+        log = meta_file.with_name(meta_file.name.replace(".meta.json", ".jsonl"))
+        try:
+            at = log.stat().st_mtime
+        except OSError:
+            continue
+        aid = log.stem.removeprefix("agent-")
+        meta = load_json(meta_file) or {}
+        state = ended.get(aid) or ("completed" if turn_ended(log) else "running")
+        if state == "running" and now - at > AGENT_STALE_S:
+            continue
+        if state == "running" or now - at <= ACTIVITY_KEEP_S:
+            kind = meta.get("agentType", "").split(":")[-1]
+            label = " · ".join(x for x in (kind, meta.get("description", "")) if x)
+            out.append({"id": aid, "label": label, "state": state, "at": at, "path": str(log)})
+    return sorted(out, key=lambda x: -x["at"])[:ACTIVITY_MAX]
+
+
+def render_transcript(path):
+    out = []
+    for line in tail_lines(path, 400000):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if d.get("type") not in ("user", "assistant"):
+            continue
+        msg = d.get("message") or {}
+        content = msg.get("content")
+        blocks = content if isinstance(content, list) else []
+        if d["type"] == "user":
+            ask = prompt_text(msg)
+            if ask:
+                out.append(f"\n› You: {ask}")
+            for b in blocks:
+                if isinstance(b, dict) and b.get("type") == "tool_result":
+                    text = " ".join(result_text(b).split())
+                    out.append(f"    ↳ {text[:300]}{'…' if len(text) > 300 else ''}")
+            continue
+        for b in blocks:
+            if not isinstance(b, dict):
+                continue
+            if b.get("type") == "text" and b.get("text", "").strip():
+                out.append(f"\nClaude: {b['text'].strip()}")
+            elif b.get("type") == "tool_use":
+                out.append(f"  ⚙ {tool_action({'content': [b]})}")
+    return "\n".join(out)[-OUTPUT_CHARS:]
+
+
 def subagent_chips(session_dir, now):
     chips, busy = [], False
     sub = session_dir / "subagents"
@@ -527,7 +602,10 @@ def read_session(path, now, wt_re, names, waits):
     last, cwd, branch, title, text = None, "", "", "", ""
     action, action_at, seen_at, turn_at = "", "", "", ""
     mentions, briefs = {}, set()
+    finished = {}
     for line in tail_lines(path):
+        for m in NOTE_RE.finditer(line):
+            finished[m.group(1)] = m.group(2)
         try:
             d = json.loads(line)
         except ValueError:
@@ -579,6 +657,7 @@ def read_session(path, now, wt_re, names, waits):
         "title": title,
         "cwd": cwd, "branch": branch, "worktree": worktree, "state": state, "updated": updated,
         "turn_at": iso_epoch(turn_at),
+        "agents": agent_items(path.with_suffix(""), finished, now),
         "idle": idle, "snippet": snippet(text) if state in ("waiting", "still_open", "idle") else "",
         "briefs": sorted(briefs), "chips": chips,
         "ask": snippet(ask, 600), "need": need, "action": action, "action_at": iso_epoch(action_at),
@@ -726,7 +805,8 @@ def build_state(repo, gc):
         steps = [(board.get("steps") or {}).get(s["id"]) for s in g["sessions"]]
         card["steps"] = max([x for x in steps if isinstance(x, dict) and isinstance(x.get("items"), list)],
                             key=lambda x: x.get("at", ""), default={"items": []})["items"]
-        card["now"] = [{k: s[k] for k in ("id", "name", "title", "state", "updated", "ask", "need", "action", "action_at", "said")}
+        card["now"] = [{**{k: s[k] for k in ("id", "name", "title", "state", "updated", "ask", "need", "action", "action_at", "said")},
+                        "agents": [{f: x[f] for f in ("id", "label", "state", "at")} for x in s["agents"]]}
                        for s in sorted(g["sessions"], key=lambda s: -s["updated"])]
         card["declared"] = max((declared[s["id"]] for s in g["sessions"] if s["id"] in declared),
                                key=lambda d: d["at"], default=None)
@@ -761,9 +841,18 @@ def build_state(repo, gc):
         "generated": now, "ui": int(HTML.stat().st_mtime), "repo": main_root, "main": repo.main,
         "cards": sorted(cards, key=lambda c: -c["updated"]),
         "waiting": attention("waiting"), "still_open": attention("still_open"),
+        "_sources": output_sources(sessions),
         "abandoned": sorted(old, key=lambda r: -r["updated"])[:30],
         "locks": board.get("locks") or {}, "events": (board.get("events") or [])[-12:],
     }
+
+
+def output_sources(sessions):
+    out = {}
+    for s in sessions:
+        for x in s["agents"]:
+            out[f"{s['id']}/{x['id']}"] = x["path"]
+    return out
 
 
 class Server(http.server.ThreadingHTTPServer):
@@ -772,12 +861,14 @@ class Server(http.server.ThreadingHTTPServer):
     def __init__(self, addr, repo, token):
         super().__init__(addr, Handler)
         self.repo, self.token, self.gc = repo, token, GitCache(repo)
-        self.lock, self.cached, self.cached_at = threading.Lock(), None, 0.0
+        self.lock, self.cached, self.cached_at, self.sources = threading.Lock(), None, 0.0, {}
 
     def state(self):
         with self.lock:
             if time.time() - self.cached_at > STATE_TTL_S:
-                self.cached = json.dumps(build_state(self.repo, self.gc)).encode()
+                st = build_state(self.repo, self.gc)
+                self.sources = st.pop("_sources")
+                self.cached = json.dumps(st).encode()
                 self.cached_at = time.time()
             return self.cached
 
@@ -822,6 +913,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.send(400, b"bad run id", "text/plain")
             lines = tail_lines(self.server.repo.runs / f"{rid}.log", 12000)
             return self.send(200, "\n".join(lines[-120:]).encode(), "text/plain; charset=utf-8")
+        if url.path == "/api/output":
+            sid, aid = ((q.get(k) or [""])[0] for k in ("sid", "id"))
+            if not SOURCE_ID_RE.match(sid) or not SOURCE_ID_RE.match(aid):
+                return self.send(400, b"bad subagent id", "text/plain")
+            self.server.state()
+            path = self.server.sources.get(f"{sid}/{aid}")
+            if not path:
+                return self.send(404, b"unknown subagent", "text/plain")
+            return self.send(200, render_transcript(path).encode(), "text/plain; charset=utf-8")
         if url.path in ("/api/changes", "/api/files", "/api/diff"):
             key = (q.get("key") or [""])[0]
             if key not in set(self.server.gc.worktrees(time.time())) | {str(self.server.repo.root)}:
@@ -898,7 +998,9 @@ def main():
     pid = running_pid(repo)
 
     if args.cmd == "state":
-        print(json.dumps(build_state(repo, GitCache(repo)), indent=1))
+        st = build_state(repo, GitCache(repo))
+        st.pop("_sources")
+        print(json.dumps(st, indent=1))
     elif args.cmd == "serve":
         srv = Server((args.host, args.port), repo, token)
         (repo.state / "dashboard.pid").write_text(str(os.getpid()))
