@@ -207,6 +207,7 @@ Declare each one the moment it starts, with the plugin's `scripts/team-board`:
 | The plan or first brief is written | `team-board phase plan` |
 | An implementer run returns and the audit begins | `team-board phase audit` |
 | The result goes back to the user (report, question or merge decision) | `team-board phase review --note "<one line>"` |
+| Any reply that needs the user to approve, decide, answer or act | `team-board wait "<what you need>"` (cleared by the user's next message) |
 
 The card also shows the lead's own steps, so the user can follow investigation, design and
 planning work that no implementer run records. At intake, list the task's steps in plain words

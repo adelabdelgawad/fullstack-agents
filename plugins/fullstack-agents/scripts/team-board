@@ -63,7 +63,7 @@ def session_id(explicit):
 
 
 def empty():
-    return {"version": 1, "claims": {}, "locks": {}, "events": [], "phases": {}, "steps": {}}
+    return {"version": 1, "claims": {}, "locks": {}, "events": [], "phases": {}, "steps": {}, "waits": {}}
 
 
 def load(path):
@@ -77,7 +77,7 @@ def load(path):
         return empty()
     if not isinstance(data, dict):
         return empty()
-    for key, default in (("claims", {}), ("locks", {}), ("events", []), ("phases", {}), ("steps", {})):
+    for key, default in (("claims", {}), ("locks", {}), ("events", []), ("phases", {}), ("steps", {}), ("waits", {})):
         if not isinstance(data.get(key), type(default)):
             data[key] = default
     return data
@@ -98,6 +98,8 @@ def prune(data, t):
     data["steps"] = {k: v for k, v in data["steps"].items()
                      if isinstance(v, dict) and isinstance(v.get("items"), list)
                      and (parse(v.get("at", "")) or cutoff) > cutoff}
+    data["waits"] = {k: v for k, v in data["waits"].items()
+                     if isinstance(v, dict) and (parse(v.get("at", "")) or cutoff) > cutoff}
 
 
 def save(path, data):
@@ -212,6 +214,9 @@ def main():
     st.add_argument("action", choices=("set", "add") + STEP_STATES)
     st.add_argument("args", nargs="+", help="step texts for set/add, a 1-based step number otherwise")
     st.add_argument("--note", default="")
+    wt = sub.add_parser("wait")
+    wt.add_argument("need", nargs="?", default="", help="what the user must approve, decide or do")
+    wt.add_argument("--clear", action="store_true")
     rs = sub.add_parser("release-session")
     rs.add_argument("target")
     args = ap.parse_args()
@@ -286,6 +291,14 @@ def main():
             if failed:
                 print(f"team-board: {failed}", file=sys.stderr)
                 return 2
+        elif args.cmd == "wait":
+            if args.clear:
+                data["waits"].pop(sid, None)
+            elif not args.need.strip():
+                print("team-board: say what you need from the user, or pass --clear", file=sys.stderr)
+                return 2
+            else:
+                data["waits"][sid] = {"at": iso(t), "need": " ".join(args.need.split())[:300]}
         elif args.cmd == "note":
             event(data, t, sid, args.name, args.text)
         save(path, data)

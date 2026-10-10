@@ -36,6 +36,10 @@ MAX_FILES = 400
 MAX_DIFF = 120000
 WORKTREE_REF = "WORKTREE"
 SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+ASK_RE = re.compile(r"\b(?:reply|approve[ds]?|approval|go[- ]ahead|let me know|tell me|want me to|shall i|should i|"
+                    r"(?:please|can you|could you) confirm|confirm (?:whether|if|which)|"
+                    r"your (?:call|decision|choice|word|answer)|waiting (?:for|on) you)\b", re.I)
+URL_RE = re.compile(r"\w+://\S+")
 RUN_ID_RE = re.compile(r"^[a-z]+-\d{8}-\d{6}-\d+$")
 BRIEF_RE = re.compile(r"\.codex-briefs/([\w.-]+)\.md")
 DEPLOYED_RE = re.compile(r"\bDEPLOYED\b.*?\b([0-9a-f]{9,40})\b")
@@ -417,25 +421,28 @@ def ask_of(d):
 
 def latest_ask(path):
     key = str(path)
-    offset, ask = LAST_ASKS.get(key, (0, ""))
+    offset, ask, at = LAST_ASKS.get(key, (0, "", 0))
     try:
         with path.open("rb") as fh:
             if fh.seek(0, 2) < offset:
-                offset, ask = 0, ""
+                offset, ask, at = 0, "", 0
             fh.seek(offset)
             chunk = fh.read()
     except OSError:
-        return ask
+        return ask, at
     end = chunk.rfind(b"\n") + 1
     for line in chunk[:end].splitlines():
         if b'"user"' not in line and b'queued_command' not in line:
             continue
         try:
-            ask = ask_of(json.loads(line)) or ask
+            d = json.loads(line)
         except ValueError:
             continue
-    LAST_ASKS[key] = (offset + end, ask)
-    return ask
+        found = ask_of(d)
+        if found:
+            ask, at = found, iso_epoch(d.get("timestamp", ""))
+    LAST_ASKS[key] = (offset + end, ask, at)
+    return ask, at
 
 
 def snippet(text, size=420):
@@ -514,7 +521,7 @@ def first_prompt(path):
     return FIRST_PROMPTS[key]
 
 
-def read_session(path, now, wt_re, names):
+def read_session(path, now, wt_re, names, waits):
     mtime = path.stat().st_mtime
     sid = path.stem
     last, cwd, branch, title, text = None, "", "", "", ""
@@ -546,10 +553,14 @@ def read_session(path, now, wt_re, names):
     chips, busy = subagent_chips(path.with_suffix(""), now)
     ended = last[0] == "assistant" and last[1] == "end_turn"
     idle = now - mtime
-    asks = "?" in text[-500:]
+    tail = URL_RE.sub("", text[-500:])
+    asks = "?" in tail or bool(ASK_RE.search(tail.strip().rsplit("\n\n", 1)[-1]))
+    ask, ask_at = latest_ask(path)
+    declared = waits.get(sid) if isinstance(waits.get(sid), dict) else {}
+    need = declared.get("need", "") if iso_epoch(declared.get("at", "")) >= ask_at else ""
     state = "working"
     if ended and not busy:
-        if asks and idle >= WAIT_MIN_S:
+        if need or asks and idle >= WAIT_MIN_S:
             state = "waiting"
         elif not asks and idle >= STILL_OPEN_S:
             state = "still_open"
@@ -564,12 +575,12 @@ def read_session(path, now, wt_re, names):
         "cwd": cwd, "branch": branch, "worktree": worktree, "state": state, "updated": mtime,
         "idle": idle, "snippet": snippet(text) if state in ("waiting", "still_open", "idle") else "",
         "briefs": sorted(briefs), "chips": chips,
-        "ask": snippet(latest_ask(path), 600), "action": action, "action_at": iso_epoch(action_at),
+        "ask": snippet(ask, 600), "need": need, "action": action, "action_at": iso_epoch(action_at),
         "said": snippet(text, 600),
     }
 
 
-def collect_sessions(repo, trees, now, names):
+def collect_sessions(repo, trees, now, names, waits):
     paths = [repo.root] + [Path(p) for p in trees if Path(p) != repo.root]
     wt = [re.escape(p) for p in trees if Path(p) != repo.root]
     wt_re = re.compile("(" + "|".join(sorted(wt, key=len, reverse=True)) + r")(?![\w.-])") if wt else None
@@ -585,7 +596,7 @@ def collect_sessions(repo, trees, now, names):
                         continue
                 except OSError:
                     continue
-                s = read_session(f, now, wt_re, names)
+                s = read_session(f, now, wt_re, names, waits)
                 if s:
                     if Path(s["cwd"]) != repo.root and s["cwd"] in trees:
                         s["worktree"] = s["cwd"]
@@ -651,7 +662,7 @@ def build_state(repo, gc):
     names = {e.get("session"): e.get("name") for e in board.get("events", []) if e.get("session")}
     names.update({k: v.get("name") for k, v in (board.get("claims") or {}).items()})
     runs = collect_runs(repo, now)
-    sessions = collect_sessions(repo, trees, now, names)
+    sessions = collect_sessions(repo, trees, now, names, board.get("waits") or {})
     deployed_shas = [m.group(1) for e in board.get("events", []) for m in [DEPLOYED_RE.search(e.get("text", ""))] if m]
     dismissed = load_json(repo.dismissed) or {}
     main_root = str(repo.root)
@@ -709,7 +720,7 @@ def build_state(repo, gc):
         steps = [(board.get("steps") or {}).get(s["id"]) for s in g["sessions"]]
         card["steps"] = max([x for x in steps if isinstance(x, dict) and isinstance(x.get("items"), list)],
                             key=lambda x: x.get("at", ""), default={"items": []})["items"]
-        card["now"] = [{k: s[k] for k in ("id", "name", "state", "updated", "ask", "action", "action_at", "said")}
+        card["now"] = [{k: s[k] for k in ("id", "name", "state", "updated", "ask", "need", "action", "action_at", "said")}
                        for s in sorted(g["sessions"], key=lambda s: -s["updated"])]
         card["declared"] = max((declared[s["id"]] for s in g["sessions"] if s["id"] in declared),
                                key=lambda d: d["at"], default=None)

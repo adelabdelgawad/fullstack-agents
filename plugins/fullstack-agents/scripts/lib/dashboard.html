@@ -204,14 +204,15 @@ function cardHtml(c) {
 }
 
 function cardNow(c) {
-  const step = activeStep(c), s = (c.now || [])[0];
-  const line = step ? `▸ ${step.text}` : s && s.action && s.state === "working" ? s.action : s && s.ask ? `“${s.ask}”` : "";
+  const step = activeStep(c), s = (c.now || [])[0], wait = (c.now || []).find(x => x.state === "waiting" && x.need);
+  const line = wait ? `Needs you: ${wait.need}` : step ? `▸ ${step.text}` : s && s.action && s.state === "working" ? s.action : s && s.ask ? `“${s.ask}”` : "";
   return line ? `<div class="act" title="${esc(line)}">${esc(line)}</div>` : "";
 }
 
 function nowHtml(s) {
   return `<div class="now">
     <div><b>${esc(s.name)}</b> <span class="chip ${s.state === "waiting" ? "st-waiting" : s.state === "working" ? "st-working" : ""}">${esc(STATE_TEXT[s.state] || s.state)}</span> <span class="s">last activity ${ago(s.updated)} ago</span></div>
+    ${s.state === "waiting" && s.need ? `<div class="lbl">Needs from you</div><div class="snip" style="margin:0"><b>${esc(s.need)}</b></div>` : ""}
     ${s.ask ? `<div class="lbl">Latest request</div><div class="snip" style="margin:0">${esc(s.ask)}</div>` : ""}
     ${s.action ? `<div class="lbl">${s.state === "working" ? "Doing now" : "Last action"}</div><div class="s">${esc(s.action)}${s.action_at ? ` · ${ago(s.action_at)} ago` : ""}</div>` : ""}
     ${s.said ? `<div class="lbl">Last message from Claude</div><div class="snip" style="margin:0">${esc(s.said)}</div>` : ""}
@@ -228,6 +229,7 @@ function attentionHtml(items, tone, emptyText) {
   return `<div class="list">${items.map(s => `<div class="card ${tone}"${s.card ? ` data-key="${esc(s.card)}" tabindex="0"` : ""}>
     <div class="t">${esc(s.name)}</div>
     <div class="s">idle ${ago(s.updated)} · ${esc(s.phase || "no task card")}${s.branch ? " · " + esc(s.branch) : ""}</div>
+    ${s.need ? `<div class="snip"><b>Needs you: ${esc(s.need)}</b></div>` : ""}
     <div class="snip">${esc(s.snippet)}</div>
     <div class="row"><span class="s">${esc(s.id)}</span><button class="dismiss" data-dismiss="${esc(s.key)}">Dismiss</button></div></div>`).join("")}</div>`;
 }

@@ -53,6 +53,14 @@ ok "$([ "$(steps)" = "plan fix=active ship=pending" ] && echo true)" "set keeps 
 "$TB" --session A phase plan
 ok "$([ "$(steps)" = "plan fix=active ship=pending" ] && echo true)" "a phase change keeps the steps" "$(steps)"
 
+"$TB" --session A wait "approve the staged plan"
+out=$("$TB" --session C status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["waits"]["A"]["need"])')
+ok "$([ "$out" = "approve the staged plan" ] && echo true)" "wait records what the session needs" "$out"
+"$TB" --session A wait 2>/dev/null; ok "$([ $? -eq 2 ] && echo true)" "wait without a need is refused" ""
+"$TB" --session A wait --clear
+out=$("$TB" --session C status --json | python3 -c 'import json,sys; print("A" in json.load(sys.stdin)["waits"])')
+ok "$([ "$out" = "False" ] && echo true)" "wait --clear removes it" "$out"
+
 echo '{not json' > "$FSA_TEAM_BOARD"
 "$TB" --session B check-lock deploy 2>/dev/null; ok "$([ $? -eq 0 ] && echo true)" "a malformed board never blocks" ""
 "$TB" --session B claim --name beta --task recover 2>/dev/null

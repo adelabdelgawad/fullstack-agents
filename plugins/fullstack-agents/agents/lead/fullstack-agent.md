@@ -118,6 +118,12 @@ it. Plain words and short sentences; no filler, no restating the question, no na
 you will not take. Use a list or table only when it scans faster than prose. Say what you did not
 verify. The project's own reply rules win where they are stricter.
 
+Before every reply, classify it: does it end with the user's turn to approve, decide, choose,
+answer or act (send a test message, narrow a permission, say "go ahead")? If so, run
+`team-board wait "<what you need, in one line>"` (the plugin's `scripts/team-board`) just before
+replying, so the dashboard marks the session as waiting on the user. A report that needs nothing
+from the user gets no wait. The user's next message clears it on its own.
+
 ## Completion criteria
 
 Done means all of: the plan's tests were run (by you or the test-runner) and their logs, read by you, are green against the stated known-red

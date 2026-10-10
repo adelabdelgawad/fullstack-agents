@@ -11,6 +11,9 @@ worktree and merge only deployable work. Invoke `fullstack-agents:team-coordinat
 production restart, proxy reload, migration or shared-cache clean: lock only that window, note
 the result on the board, no holding for peers.
 
+**Every reply**: if it ends with the user's turn to approve, decide, answer or act, run
+`team-board wait "<what you need>"` first, so the dashboard shows the session as waiting on them.
+
 **Routing**: the `prompt-scan` line on each prompt names the skills for its intent and lane —
 it is an instruction: invoke them via the Skill tool before the first root cause, plan, brief or
 edit, and name any you skip with the reason. The lead agent's skill table covers every skill.
