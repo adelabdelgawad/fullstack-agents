@@ -220,6 +220,23 @@ def touched_paths(runs, rid):
     return sorted({line.split(" ", 1)[-1] for line in pre ^ post})
 
 
+def file_diff(root, started, path):
+    base = "HEAD"
+    if started:
+        base = (git(root, "rev-list", "-1", f"--before={started}", "HEAD") or "").strip() or "HEAD"
+    out = git(root, "diff", "--no-color", "--no-ext-diff", base, "--", path) or ""
+    if not out.strip():
+        try:
+            out = subprocess.run(["git", "--no-optional-locks", "-C", str(root), "diff", "--no-color", "--no-index", "--", "/dev/null", path],
+                                 capture_output=True, text=True, timeout=15, env=git_env()).stdout
+        except (OSError, subprocess.SubprocessError):
+            out = ""
+    out = out.strip("\n")
+    if not out:
+        return "(no differences from the commit this run started on)"
+    return out[:80000] + ("\n… diff truncated" if len(out) > 80000 else "")
+
+
 def read_run(runs, rid, log_mtime, now):
     mode = rid.split("-", 1)[0]
     meta = load_json(runs / f"{rid}.meta.json") or {}
@@ -522,12 +539,6 @@ def build_state(repo, gc):
         card["updated"] = max([r["updated"] for r in g["runs"]] + [s["updated"] for s in g["sessions"]] + [0])
         if dismissed.get(key, 0) < card["updated"]:
             cards.append(card)
-    titled = {}
-    for c in cards:
-        titled[c["title"]] = titled.get(c["title"], 0) + 1
-    for c in cards:
-        if titled[c["title"]] > 1:
-            c["title"] += f" · {(c['tree'] or {}).get('branch') or Path(c['key']).name}"
 
     def attention(state):
         out = []
@@ -611,6 +622,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.send(400, b"bad run id", "text/plain")
             lines = tail_lines(self.server.repo.runs / f"{rid}.log", 12000)
             return self.send(200, "\n".join(lines[-120:]).encode(), "text/plain; charset=utf-8")
+        if url.path == "/api/diff":
+            rid, path = (q.get("id") or [""])[0], (q.get("path") or [""])[0]
+            if not RUN_ID_RE.match(rid):
+                return self.send(400, b"bad run id", "text/plain")
+            runs = self.server.repo.runs
+            root = run_root(runs, rid, load_json(runs / f"{rid}.meta.json") or {})
+            known = set(self.server.gc.worktrees(time.time())) | {str(self.server.repo.root)}
+            if not root or root not in known or path not in (touched_paths(runs, rid) or []):
+                return self.send(404, b"not a file this run touched", "text/plain")
+            started = (load_json(runs / f"{rid}.meta.json") or {}).get("started", "")
+            return self.send(200, file_diff(root, started, path).encode(), "text/plain; charset=utf-8")
         return self.send(404, b"not found", "text/plain")
 
     def do_POST(self):

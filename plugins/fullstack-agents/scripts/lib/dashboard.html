@@ -67,6 +67,18 @@ aside .sheet pre.log { flex: 1; min-height: 120px; max-height: none; margin: 10p
 .end.bad { border-top-color: var(--red); }
 .end.live { border-top-color: var(--blue); }
 aside .end pre { max-height: 140px; margin: 6px 0 0; }
+.card .br { font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--blue); margin-top: 3px; word-break: break-all; }
+.runrow .snip { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.files { display: grid; gap: 2px; margin: 4px 0 0; max-height: 132px; overflow: auto; }
+.file { text-align: left; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--chip); border: 0; color: var(--ink); padding: 3px 8px; border-radius: 6px; cursor: pointer; word-break: break-all; }
+.file:hover, .file.on { background: var(--blue-bg); color: var(--blue); }
+.diffbar { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; }
+.diffbar b { word-break: break-all; font-weight: 600; }
+aside .sheet pre.diff { white-space: pre; overflow: auto; }
+.diff span { display: block; }
+.diff .a { color: var(--green); background: var(--green-bg); }
+.diff .d { color: var(--red); background: var(--red-bg); }
+.diff .h { color: var(--blue); }
 .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--blue); margin-right: 6px; animation: pulse 1.2s ease-in-out infinite; }
 #toasts { position: fixed; top: 64px; right: 16px; display: grid; gap: 8px; z-index: 20; width: min(360px, calc(100% - 32px)); }
 .toast { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--amber); border-radius: 10px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18); cursor: pointer; animation: slide .2s ease-out; }
@@ -110,7 +122,7 @@ function cardHtml(c) {
   const tone = c.needs_you.length ? "red" : c.sessions.some(s => s.state === "waiting") ? "amber" : c.sessions.some(s => s.state === "still_open") ? "blue" : "";
   const sess = c.sessions.map(s => s.name).filter(n => n !== c.title).join(", ");
   const branch = c.tree ? c.tree.branch : (c.sessions[0] || {}).branch;
-  const sub = [...new Set([c.label, branch].filter(n => n && n !== c.title)), sess, c.declared ? c.declared.note : ""].filter(Boolean).join(" · ");
+  const sub = [c.label && c.label !== c.title ? c.label : "", sess, c.declared ? c.declared.note : ""].filter(Boolean).join(" · ");
   const chips = [
     c.round > 1 ? `<span class="chip">round ${c.round}</span>` : "",
     ...c.needs_you.map(f => `<span class="chip bad">${esc(FLAG_TEXT[f] || f)}</span>`),
@@ -118,7 +130,9 @@ function cardHtml(c) {
     c.tree && c.tree.dirty ? `<span class="chip">${c.tree.dirty} uncommitted</span>` : "",
   ].join("");
   return `<div class="card ${tone}" tabindex="0" data-key="${esc(c.key)}">
-    <div class="t">${esc(c.title)}</div><div class="s">${esc(sub)}</div>
+    <div class="t">${esc(c.title)}</div>
+    ${branch ? `<div class="br">${esc(branch)}</div>` : ""}
+    ${sub ? `<div class="s">${esc(sub)}</div>` : ""}
     <div class="chips">${chips}</div>
     <div class="row"><span class="s">${ago(c.updated)} ago</span><button class="dismiss" data-dismiss="${esc(c.key)}">Dismiss</button></div></div>`;
 }
@@ -154,7 +168,7 @@ function render() {
   document.querySelectorAll("nav button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
 }
 
-let openKey = null, openRun = null, panelHtml = "", logSeen = "", logTimer = null, wasLive = false;
+let openKey = null, openRun = null, openFile = null, panelHtml = "", logSeen = "", logTimer = null, wasLive = false, tick = 0;
 const LIVE = r => r.state === "running" || r.state === "stalled";
 const stateChip = r => `<span class="chip ${r.flags.length ? "bad" : r.state === "done" ? "ok" : ""}">${esc(r.state)}</span>`;
 const panel = () => document.getElementById("panel");
@@ -171,10 +185,11 @@ function listHtml(c) {
   const rows = c.runs.slice().reverse().map(r => `<button class="card runrow" data-run="${esc(r.id)}">
     <div class="t">${esc(r.unit || r.id)} ${stateChip(r)}</div>
     <div class="s">${esc(r.engine)} · ${ago(r.updated)} ago · ${r.touched.length} files</div>
-    ${r.goal ? `<div class="snip">${esc(r.goal.slice(0, 160))}</div>` : ""}</button>`).join("");
+    ${r.goal ? `<div class="snip">${esc(r.goal)}</div>` : ""}</button>`).join("");
   return `<button class="dismiss close" id="close">Close</button>
     <h3>${esc(c.title)}</h3>
-    <div class="s">${esc(c.phase)}${c.tree ? ` · ${esc(c.tree.branch)} · ${c.tree.ahead} ahead · ${c.tree.dirty} uncommitted` : ""}</div>
+    ${c.tree ? `<div class="br" style="font:12px ui-monospace,monospace;color:var(--blue)">${esc(c.tree.branch)}</div>` : ""}
+    <div class="s">${esc(c.phase)}${c.tree ? ` · ${c.tree.ahead} ahead · ${c.tree.dirty} uncommitted` : ""}</div>
     <div class="s">${esc(c.worktree)}</div>
     <div class="chips">${c.chips.map(chip).join("")}</div>
     <p><b>Sessions:</b> ${c.sessions.map(s => `${esc(s.name)} (${esc(s.state)}, ${ago(s.updated)} ago)`).join(", ") || "none"}</p>
@@ -186,7 +201,26 @@ function headHtml(c, r) {
     <h3>${LIVE(r) ? '<span class="live-dot"></span>' : ""}${esc(r.unit || r.id)} ${stateChip(r)}</h3>
     <div class="s">${esc(c.title)} · ${esc(r.engine)} · <span id="sh-age"></span></div>
     ${r.goal ? `<div class="snip">${esc(r.goal)}</div>` : ""}
-    ${r.touched.length ? `<details><summary class="s">${r.touched.length} files touched</summary><pre>${esc(r.touched.join("\n"))}</pre></details>` : ""}`;
+    ${r.touched.length ? `<div class="s" style="margin-top:8px">${r.touched.length} files changed — click one to see its diff</div><div class="files">${r.touched.map(f => `<button class="file${f === openFile ? " on" : ""}" data-file="${esc(f)}">${esc(f)}</button>`).join("")}</div>` : ""}`;
+}
+
+async function loadDiff() {
+  const path = openFile, id = openRun;
+  if (!path || !id) return;
+  try {
+    const t = await (await fetch(`/api/diff?id=${encodeURIComponent(id)}&path=${encodeURIComponent(path)}`, {cache: "no-store"})).text();
+    const el = document.getElementById("diff");
+    if (!el || openFile !== path || openRun !== id) return;
+    const cls = l => l.startsWith("+") && !l.startsWith("+++") ? "a" : l.startsWith("-") && !l.startsWith("---") ? "d" : l.startsWith("@@") ? "h" : "";
+    const html = t.split("\n").map(l => `<span class="${cls(l)}">${esc(l) || "&#8203;"}</span>`).join("");
+    if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }
+  } catch (e) {}
+}
+
+function showFile(path) {
+  openFile = path;
+  paintPanel();
+  loadDiff();
 }
 
 function endHtml(r) {
@@ -233,23 +267,31 @@ function paintPanel() {
   p.classList.add("sheeted");
   if (panelHtml !== "sheet:" + r.id) {
     stopLog();
-    p.innerHTML = '<div class="sheet"><div id="sh-head"></div><pre class="log" id="log" tabindex="0">loading…</pre><div class="end" id="sh-end"></div></div>';
+    p.innerHTML = '<div class="sheet"><div id="sh-head"></div><div class="diffbar" id="diffbar" hidden></div><pre class="log" id="log" tabindex="0">loading…</pre><pre class="log diff" id="diff" hidden></pre><div class="end" id="sh-end"></div></div>';
     panelHtml = "sheet:" + r.id;
     logSeen = "";
+    openFile = null;
     wasLive = LIVE(r);
   }
   if (setIfChanged("sh-head", headHtml(c, r))) {
-    document.getElementById("back").onclick = () => { openRun = null; paintPanel(); };
+    document.getElementById("back").onclick = () => { openRun = openFile = null; paintPanel(); };
     document.getElementById("close").onclick = closePanel;
+    document.querySelectorAll("#sh-head .file").forEach(b => b.onclick = () => showFile(b.dataset.file));
+  }
+  document.getElementById("log").hidden = !!openFile;
+  document.getElementById("diff").hidden = !openFile;
+  document.getElementById("diffbar").hidden = !openFile;
+  if (openFile && setIfChanged("diffbar", `<button class="dismiss" id="difback" style="margin:0">← Log</button><b>${esc(openFile)}</b>`)) {
+    document.getElementById("difback").onclick = () => { openFile = null; paintPanel(); };
   }
   document.getElementById("sh-age").textContent = `${ago(r.updated)} ago${LIVE(r) ? " · live" : ""}`;
   document.getElementById("sh-end").className = "end " + (LIVE(r) ? "live" : r.flags.length || r.state !== "done" ? "bad" : "ok");
   setIfChanged("sh-end", endHtml(r));
   if (LIVE(r)) {
-    if (!logTimer) { pollLog(r.id); logTimer = setInterval(() => pollLog(r.id), 2500); }
+    if (!logTimer) { pollLog(r.id); logTimer = setInterval(() => { pollLog(r.id); if (++tick % 3 === 0) loadDiff(); }, 2500); }
   } else {
     stopLog();
-    if (wasLive || !logSeen) pollLog(r.id);
+    if (wasLive || !logSeen) { pollLog(r.id); loadDiff(); }
     wasLive = false;
   }
 }
@@ -270,7 +312,7 @@ function openTask(id) {
 
 function closePanel() {
   stopLog();
-  openKey = openRun = null;
+  openKey = openRun = openFile = null;
   panelHtml = "";
   panel().classList.remove("open", "sheeted");
 }
@@ -325,7 +367,7 @@ async function load() {
 }
 
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => setTab(b.dataset.tab));
-document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (openRun) { openRun = null; paintPanel(); } else closePanel(); });
+document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (openFile) { openFile = null; paintPanel(); } else if (openRun) { openRun = null; paintPanel(); } else closePanel(); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && openRun) pollLog(openRun); });
 load();
 setInterval(load, 4000);
