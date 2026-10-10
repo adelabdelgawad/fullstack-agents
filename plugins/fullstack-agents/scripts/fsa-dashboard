@@ -139,15 +139,24 @@ class GitCache:
             main = self.repo.main
             status = git(path, "status", "--porcelain", "-uno") or ""
             ahead = (git(self.repo.root, "rev-list", "--count", f"{main}..{head}") or "0").strip() if head else "0"
-            landed = bool(head) and self.landed(head, main)
+            fresh = self.fresh(tree.get("branch"))
+            landed = bool(head) and not fresh and not status and self.landed(head, main)
             self.details[path] = {
                 "branch": tree.get("branch") or "detached",
                 "head": head,
+                "fresh": fresh,
                 "merged": landed,
                 "ahead": int(ahead or 0),
                 "dirty": len(status.splitlines()),
             }
         return self.details[path]
+
+    def fresh(self, branch):
+        if not branch:
+            return False
+        log = git(self.repo.root, "reflog", "show", "--format=%gs", f"refs/heads/{branch}") or ""
+        entries = log.splitlines()
+        return len(entries) == 1 and entries[0].startswith("branch: Created from")
 
     def landed(self, head, ref):
         key = (head, ref)
@@ -447,7 +456,8 @@ def build_state(repo, gc):
     for key, g in groups.items():
         tree = gc.detail(key) if key in trees else None
         latest_run = g["runs"][-1] if g["runs"] else None
-        title = (latest_run or {}).get("unit") or (tree or {}).get("branch") \
+        label = g["sessions"][0]["name"] if tree and tree["fresh"] and g["sessions"] else (tree or {}).get("branch")
+        title = (latest_run or {}).get("unit") or label \
             or (g["sessions"][0]["name"] if g["sessions"] else "") or (latest_run or {}).get("goal", "")[:90] or key
         card = {"key": key, "title": title, "tree": tree, "worktree": key if tree else "",
                 "goal": (latest_run or {}).get("goal", ""),
