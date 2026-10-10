@@ -8,13 +8,13 @@
 :root {
   --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1c1a; --muted: #6b6862; --line: #e4e1da;
   --amber: #b26a00; --amber-bg: #fff3dc; --blue: #2459c9; --blue-bg: #e6eeff;
-  --red: #b42318; --red-bg: #fde8e6; --green: #1f7a3d; --green-bg: #e3f4e8; --chip: #efede8;
+  --red: #b42318; --red-bg: #fde8e6; --green: #1f7a3d; --green-bg: #e3f4e8; --chip: #efede8; --yellow: #c9a400;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #161514; --panel: #201f1d; --ink: #ecebe7; --muted: #a09d96; --line: #34322e;
     --amber: #f2b24c; --amber-bg: #3a2c12; --blue: #8fb0ff; --blue-bg: #1b2744;
-    --red: #ff8a7f; --red-bg: #43201c; --green: #7fd59a; --green-bg: #183323; --chip: #2c2a27;
+    --red: #ff8a7f; --red-bg: #43201c; --green: #7fd59a; --green-bg: #183323; --chip: #2c2a27; --yellow: #e8c547;
   }
 }
 * { box-sizing: border-box; }
@@ -48,9 +48,8 @@ main { padding: 16px 20px 40px; }
 .col h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; display: flex; justify-content: space-between; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 8px; cursor: pointer; border-left-width: 4px; }
 .card:hover { border-color: var(--muted); }
-.card.red { border-left-color: var(--red); background: var(--red-bg); }
-.card.amber { border-left-color: var(--amber); background: var(--amber-bg); }
-.card.blue { border-left-color: var(--blue); background: var(--blue-bg); }
+.card.running { border-left-color: var(--green); }
+.card.waiting { border-left-color: var(--yellow); }
 .card .t { font-weight: 600; word-break: break-word; }
 .card .s { color: var(--muted); font-size: 12px; margin-top: 2px; word-break: break-word; }
 .chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
@@ -176,7 +175,8 @@ async function dismiss(key, ev) {
 }
 
 function cardHtml(c) {
-  const tone = c.needs_you.length ? "red" : c.sessions.some(s => s.state === "waiting") ? "amber" : c.sessions.some(s => s.state === "still_open") ? "blue" : "";
+  const tone = c.sessions.some(s => s.state === "waiting") ? "waiting"
+    : c.sessions.some(s => s.state === "working") || c.runs.some(r => r.state === "running") ? "running" : "";
   const sess = c.sessions.map(s => s.name).filter(n => n !== c.title).join(", ");
   const branch = c.tree ? c.tree.branch : (c.sessions[0] || {}).branch;
   const sub = [c.label && c.label !== c.title && c.label !== branch ? c.label : "", sess, c.declared ? c.declared.note : ""].filter(Boolean).join(" · ");
@@ -235,7 +235,7 @@ function render() {
   const red = state.cards.filter(c => c.needs_you.length);
   if (tab === "board") {
     const paths = c => c.outside && c.outside.length ? `<div class="paths">${c.outside.slice(0, 4).map(esc).join("<br>")}${c.outside.length > 4 ? `<br>+${c.outside.length - 4} more` : ""}</div>` : "";
-    const strip = red.length ? `<div class="strip">${red.map(c => `<div class="card red" tabindex="0" data-key="${esc(c.key)}"><b>Needs you:</b> ${esc(c.title)} — ${esc(c.needs_you.map(f => FLAG_TEXT[f] || f).join(", "))}<span class="open">Open ›</span>${paths(c)}</div>`).join("")}</div>` : "";
+    const strip = red.length ? `<div class="strip">${red.map(c => `<div class="card" tabindex="0" data-key="${esc(c.key)}"><b>Needs you:</b> ${esc(c.title)} — ${esc(c.needs_you.map(f => FLAG_TEXT[f] || f).join(", "))}<span class="open">Open ›</span>${paths(c)}</div>`).join("")}</div>` : "";
     const wide = matchMedia("(max-width: 700px)").matches ? "78vw" : "minmax(150px, 1fr)";
     const cols = PHASES.map(([k, label]) => [k, label, state.cards.filter(c => c.phase === k)]);
     const tmpl = cols.map(([, , cs]) => cs.length ? wide : "76px").join(" ");
@@ -245,9 +245,9 @@ function render() {
       return `<section class="col col-${k}${cs.length ? "" : " empty-col"}"><h2 title="${label}">${label}<span>${cs.length}</span></h2>${shown.map(cardHtml).join("")}${more}</section>`;
     }).join("")}</div>`;
   } else if (tab === "waiting") {
-    m.innerHTML = attentionHtml(state.waiting, "amber", "No session is waiting on you.");
+    m.innerHTML = attentionHtml(state.waiting, "waiting", "No session is waiting on you.");
   } else if (tab === "still_open") {
-    m.innerHTML = attentionHtml(state.still_open, "blue", "No session stopped with unfinished work.");
+    m.innerHTML = attentionHtml(state.still_open, "", "No session stopped with unfinished work.");
   } else {
     m.innerHTML = state.abandoned.length ? `<div class="list">${state.abandoned.map(r => `<div class="card"><div class="t">${esc(r.unit || r.id)}</div><div class="s">${esc(r.goal)}</div><div class="s">${esc(r.root || "")} · last log ${ago(r.updated)} ago</div></div>`).join("")}</div>` : `<div class="empty">No abandoned runs.</div>`;
   }
