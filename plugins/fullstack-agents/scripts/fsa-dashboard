@@ -28,6 +28,7 @@ SUBAGENT_BUSY_S = 120
 TAIL_BYTES = 262144
 STATE_TTL_S = 3
 GIT_TTL_S = 30
+EDIT_FRESH_S = 600
 RUN_ID_RE = re.compile(r"^[a-z]+-\d{8}-\d{6}-\d+$")
 BRIEF_RE = re.compile(r"\.codex-briefs/([\w.-]+)\.md")
 DEPLOYED_RE = re.compile(r"\bDEPLOYED\b.*?\b([0-9a-f]{9,40})\b")
@@ -108,6 +109,18 @@ class Repo:
         return os.path.expandvars(m.group(1)) if m else None
 
 
+def newest_edit(path, status):
+    names = [line[3:].split(" -> ")[-1] for line in status.splitlines()]
+    names += (git(path, "ls-files", "--others", "--exclude-standard") or "").splitlines()
+    newest = 0.0
+    for name in names[:400]:
+        try:
+            newest = max(newest, os.stat(os.path.join(path, name)).st_mtime)
+        except OSError:
+            pass
+    return newest
+
+
 class GitCache:
     def __init__(self, repo):
         self.repo = repo
@@ -150,6 +163,7 @@ class GitCache:
                 "merged": landed,
                 "ahead": int(ahead or 0),
                 "dirty": len(status.splitlines()),
+                "edited": newest_edit(path, status),
             }
         return self.details[path]
 
@@ -416,6 +430,9 @@ def phase_of(card, runs, sessions, board, gc, repo, deployed_shas):
     if latest and latest["state"] in ("running", "stalled"):
         return "rework" if card.get("round", 1) > 1 else "implement"
     declared = card.get("declared")
+    since = max(latest["updated"] if latest else 0, declared["at"] if declared else 0)
+    if tree and tree.get("edited", 0) > max(since, time.time() - EDIT_FRESH_S) and any(s["state"] == "working" for s in sessions):
+        return "implement"
     if declared and (not latest or declared["at"] >= latest["updated"]):
         return declared["phase"]
     if latest:
@@ -505,6 +522,12 @@ def build_state(repo, gc):
         card["updated"] = max([r["updated"] for r in g["runs"]] + [s["updated"] for s in g["sessions"]] + [0])
         if dismissed.get(key, 0) < card["updated"]:
             cards.append(card)
+    titled = {}
+    for c in cards:
+        titled[c["title"]] = titled.get(c["title"], 0) + 1
+    for c in cards:
+        if titled[c["title"]] > 1:
+            c["title"] += f" · {(c['tree'] or {}).get('branch') or Path(c['key']).name}"
 
     def attention(state):
         out = []

@@ -57,6 +57,17 @@ aside.open { transform: none; }
 aside h3 { margin: 0 0 4px; font-size: 16px; }
 aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 360px; overflow: auto; }
 aside .close { float: right; }
+aside.sheeted { display: flex; flex-direction: column; overflow: hidden; }
+.sheet { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.sheet h3 { margin-top: 10px; }
+aside .sheet pre.log { flex: 1; min-height: 120px; max-height: none; margin: 10px 0; font-size: 11px; }
+.runrow { display: block; width: 100%; text-align: left; font: inherit; color: inherit; }
+.end { flex: none; margin: 0 -18px -18px; padding: 12px 18px; border-top: 3px solid var(--line); background: var(--panel); }
+.end.ok { border-top-color: var(--green); }
+.end.bad { border-top-color: var(--red); }
+.end.live { border-top-color: var(--blue); }
+aside .end pre { max-height: 140px; margin: 6px 0 0; }
+.live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--blue); margin-right: 6px; animation: pulse 1.2s ease-in-out infinite; }
 #toasts { position: fixed; top: 64px; right: 16px; display: grid; gap: 8px; z-index: 20; width: min(360px, calc(100% - 32px)); }
 .toast { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--amber); border-radius: 10px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18); cursor: pointer; animation: slide .2s ease-out; }
 .toast.blue { border-left-color: var(--blue); }
@@ -143,32 +154,125 @@ function render() {
   document.querySelectorAll("nav button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
 }
 
-async function openCard(key) {
-  const c = state.cards.find(x => x.key === key);
-  if (!c) return;
-  const p = document.getElementById("panel");
-  const runs = c.runs.slice().reverse().map(r => `<div class="card" style="cursor:default">
-    <div class="t">${esc(r.unit || r.id)} <span class="chip ${r.flags.length ? "bad" : r.state === "done" ? "ok" : ""}">${esc(r.state)}</span></div>
+let openKey = null, openRun = null, panelHtml = "", logSeen = "", logTimer = null, wasLive = false;
+const LIVE = r => r.state === "running" || r.state === "stalled";
+const stateChip = r => `<span class="chip ${r.flags.length ? "bad" : r.state === "done" ? "ok" : ""}">${esc(r.state)}</span>`;
+const panel = () => document.getElementById("panel");
+
+function setIfChanged(id, html) {
+  const el = document.getElementById(id);
+  if (!el || el.dataset.h === html) return false;
+  el.innerHTML = html;
+  el.dataset.h = html;
+  return true;
+}
+
+function listHtml(c) {
+  const rows = c.runs.slice().reverse().map(r => `<button class="card runrow" data-run="${esc(r.id)}">
+    <div class="t">${esc(r.unit || r.id)} ${stateChip(r)}</div>
     <div class="s">${esc(r.engine)} · ${ago(r.updated)} ago · ${r.touched.length} files</div>
-    ${r.goal ? `<div class="snip">${esc(r.goal)}</div>` : ""}
-    ${r.summary ? `<pre>${esc(r.summary)}</pre>` : ""}
-    ${r.open_risks.length ? `<div class="s"><b>Open risks:</b> ${esc(r.open_risks.join(" · "))}</div>` : ""}
-    ${r.touched.length ? `<pre>${esc(r.touched.join("\n"))}</pre>` : ""}
-    <button class="dismiss" style="margin:0" data-log="${esc(r.id)}">Show log tail</button><pre hidden id="log-${esc(r.id)}"></pre></div>`).join("");
-  p.innerHTML = `<button class="dismiss close" id="close">Close</button>
+    ${r.goal ? `<div class="snip">${esc(r.goal.slice(0, 160))}</div>` : ""}</button>`).join("");
+  return `<button class="dismiss close" id="close">Close</button>
     <h3>${esc(c.title)}</h3>
     <div class="s">${esc(c.phase)}${c.tree ? ` · ${esc(c.tree.branch)} · ${c.tree.ahead} ahead · ${c.tree.dirty} uncommitted` : ""}</div>
     <div class="s">${esc(c.worktree)}</div>
     <div class="chips">${c.chips.map(chip).join("")}</div>
     <p><b>Sessions:</b> ${c.sessions.map(s => `${esc(s.name)} (${esc(s.state)}, ${ago(s.updated)} ago)`).join(", ") || "none"}</p>
-    ${runs || '<div class="empty">No implementer runs.</div>'}`;
-  p.classList.add("open");
-  document.getElementById("close").onclick = () => p.classList.remove("open");
-  p.querySelectorAll("[data-log]").forEach(b => b.onclick = async () => {
-    const pre = document.getElementById("log-" + b.dataset.log);
-    pre.textContent = await (await fetch("/api/log?id=" + encodeURIComponent(b.dataset.log))).text();
-    pre.hidden = false;
-  });
+    ${rows || '<div class="empty">No implementer runs.</div>'}`;
+}
+
+function headHtml(c, r) {
+  return `<div class="row" style="margin:0"><button class="dismiss" id="back" style="margin-left:0">← Runs</button><button class="dismiss" id="close">Close</button></div>
+    <h3>${LIVE(r) ? '<span class="live-dot"></span>' : ""}${esc(r.unit || r.id)} ${stateChip(r)}</h3>
+    <div class="s">${esc(c.title)} · ${esc(r.engine)} · <span id="sh-age"></span></div>
+    ${r.goal ? `<div class="snip">${esc(r.goal)}</div>` : ""}
+    ${r.touched.length ? `<details><summary class="s">${r.touched.length} files touched</summary><pre>${esc(r.touched.join("\n"))}</pre></details>` : ""}`;
+}
+
+function endHtml(r) {
+  if (LIVE(r)) return `<b>End of task</b> <span class="s">— still running; the result lands here when it finishes.</span>`;
+  const flags = r.flags.map(f => `<span class="chip bad">${esc(FLAG_TEXT[f] || f)}</span>`).join(" ");
+  return `<b>End of task</b> ${stateChip(r)} ${flags}
+    ${r.summary ? `<pre>${esc(r.summary)}</pre>` : '<div class="s">No result text was recorded.</div>'}
+    ${r.open_risks.length ? `<div class="s"><b>Open risks:</b> ${esc(r.open_risks.join(" · "))}</div>` : ""}`;
+}
+
+async function pollLog(id) {
+  if (document.hidden) return;
+  try {
+    const t = await (await fetch("/api/log?id=" + encodeURIComponent(id), {cache: "no-store"})).text();
+    const el = document.getElementById("log");
+    if (!el || openRun !== id || t === logSeen) return;
+    const stick = !logSeen || el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    el.textContent = logSeen = t || "(log is empty)";
+    if (stick) el.scrollTop = el.scrollHeight;
+  } catch (e) {}
+}
+
+function stopLog() { clearInterval(logTimer); logTimer = null; }
+
+function paintPanel() {
+  const p = panel();
+  const c = openKey && state && state.cards.find(x => x.key === openKey);
+  if (!c) return closePanel();
+  const r = openRun && c.runs.find(x => x.id === openRun);
+  if (openRun && !r) openRun = null;
+  if (!r) {
+    stopLog();
+    p.classList.remove("sheeted");
+    const html = listHtml(c);
+    if (html !== panelHtml) {
+      const top = p.scrollTop;
+      p.innerHTML = panelHtml = html;
+      p.scrollTop = top;
+      document.getElementById("close").onclick = closePanel;
+      p.querySelectorAll("[data-run]").forEach(b => b.onclick = () => openTask(b.dataset.run));
+    }
+    return;
+  }
+  p.classList.add("sheeted");
+  if (panelHtml !== "sheet:" + r.id) {
+    stopLog();
+    p.innerHTML = '<div class="sheet"><div id="sh-head"></div><pre class="log" id="log" tabindex="0">loading…</pre><div class="end" id="sh-end"></div></div>';
+    panelHtml = "sheet:" + r.id;
+    logSeen = "";
+    wasLive = LIVE(r);
+  }
+  if (setIfChanged("sh-head", headHtml(c, r))) {
+    document.getElementById("back").onclick = () => { openRun = null; paintPanel(); };
+    document.getElementById("close").onclick = closePanel;
+  }
+  document.getElementById("sh-age").textContent = `${ago(r.updated)} ago${LIVE(r) ? " · live" : ""}`;
+  document.getElementById("sh-end").className = "end " + (LIVE(r) ? "live" : r.flags.length || r.state !== "done" ? "bad" : "ok");
+  setIfChanged("sh-end", endHtml(r));
+  if (LIVE(r)) {
+    if (!logTimer) { pollLog(r.id); logTimer = setInterval(() => pollLog(r.id), 2500); }
+  } else {
+    stopLog();
+    if (wasLive || !logSeen) pollLog(r.id);
+    wasLive = false;
+  }
+}
+
+function openCard(key) {
+  openKey = key;
+  openRun = null;
+  panelHtml = "";
+  panel().classList.add("open");
+  paintPanel();
+}
+
+function openTask(id) {
+  openRun = id;
+  panelHtml = "";
+  paintPanel();
+}
+
+function closePanel() {
+  stopLog();
+  openKey = openRun = null;
+  panelHtml = "";
+  panel().classList.remove("open", "sheeted");
 }
 
 function toast(text, tone, target) {
@@ -214,13 +318,15 @@ async function load() {
     document.getElementById("meta").textContent = `${state.repo} · ${state.locks.deploy ? "deploy lock held · " : ""}updated ${new Date(state.generated * 1000).toLocaleTimeString()}`;
     notify();
     render();
+    if (openKey) paintPanel();
   } catch (e) {
     document.getElementById("meta").textContent = "offline — retrying";
   }
 }
 
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => setTab(b.dataset.tab));
-document.addEventListener("keydown", e => { if (e.key === "Escape") document.getElementById("panel").classList.remove("open"); });
+document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (openRun) { openRun = null; paintPanel(); } else closePanel(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && openRun) pollLog(openRun); });
 load();
 setInterval(load, 4000);
 </script>
