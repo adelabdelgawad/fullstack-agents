@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 HERE = Path(__file__).resolve().parent
 HTML = HERE / "lib" / "dashboard.html"
 FIRST_PROMPTS = {}
+LAST_ASKS = {}
 RUN_WINDOW_S = 72 * 3600
 SESSION_WINDOW_S = 48 * 3600
 STALL_S = 300
@@ -40,6 +41,8 @@ BRIEF_RE = re.compile(r"\.codex-briefs/([\w.-]+)\.md")
 DEPLOYED_RE = re.compile(r"\bDEPLOYED\b.*?\b([0-9a-f]{9,40})\b")
 ROOT_RE = re.compile(r"(?:--cd|-C|\bcd) '([^']+)'")
 FIX_RE = re.compile(r"-fix\d+$")
+COMMAND_RE = re.compile(r"<command-name>([^<]+)</command-name>")
+ARGS_RE = re.compile(r"<command-args>([^<]*)</command-args>")
 PHASES = ("investigate", "plan", "audit", "review")
 
 
@@ -375,6 +378,66 @@ def final_text(message):
     return texts[-1] if texts else ""
 
 
+def prompt_text(msg):
+    content = msg.get("content")
+    if isinstance(content, list):
+        if any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
+            return ""
+        content = " ".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
+    text = " ".join(str(content or "").split())
+    cmd = COMMAND_RE.search(text)
+    if cmd:
+        return " ".join(x for x in (cmd.group(1), (ARGS_RE.search(text) or [None, ""])[1]) if x)
+    return "" if text.startswith(("<", "Caveat:", "[Request interrupted")) else text
+
+
+def tool_action(msg):
+    uses = [c for c in msg.get("content") or [] if isinstance(c, dict) and c.get("type") == "tool_use"]
+    if not uses:
+        return ""
+    name, inp = uses[-1].get("name", ""), uses[-1].get("input") or {}
+    detail = inp.get("description") or inp.get("skill") or inp.get("file_path") or inp.get("pattern") \
+        or inp.get("command") or inp.get("prompt") or ""
+    if name in ("Read", "Edit", "Write") and detail:
+        detail = Path(str(detail)).name
+    detail = " ".join(str(detail).split())
+    return f"{name}: {detail[:160]}" if detail else name
+
+
+def ask_of(d):
+    if d.get("isSidechain") or d.get("isMeta"):
+        return ""
+    if d.get("type") == "user":
+        return prompt_text(d.get("message") or {})
+    att = d.get("attachment") if d.get("type") == "attachment" else None
+    if isinstance(att, dict) and att.get("type") == "queued_command" and (att.get("origin") or {}).get("kind") == "human":
+        return " ".join(str(att.get("prompt") or "").split())
+    return ""
+
+
+def latest_ask(path):
+    key = str(path)
+    offset, ask = LAST_ASKS.get(key, (0, ""))
+    try:
+        with path.open("rb") as fh:
+            if fh.seek(0, 2) < offset:
+                offset, ask = 0, ""
+            fh.seek(offset)
+            chunk = fh.read()
+    except OSError:
+        return ask
+    end = chunk.rfind(b"\n") + 1
+    for line in chunk[:end].splitlines():
+        if b'"user"' not in line and b'queued_command' not in line:
+            continue
+        try:
+            ask = ask_of(json.loads(line)) or ask
+        except ValueError:
+            continue
+    LAST_ASKS[key] = (offset + end, ask)
+    return ask
+
+
 def snippet(text, size=420):
     text = text.strip()
     if len(text) <= size:
@@ -455,6 +518,7 @@ def read_session(path, now, wt_re, names):
     mtime = path.stat().st_mtime
     sid = path.stem
     last, cwd, branch, title, text = None, "", "", "", ""
+    action, action_at = "", ""
     mentions, briefs = {}, set()
     for line in tail_lines(path):
         try:
@@ -469,6 +533,9 @@ def read_session(path, now, wt_re, names):
         msg = d.get("message") or {}
         if d["type"] == "assistant":
             text = final_text(msg) or text
+            done = tool_action(msg)
+            if done:
+                action, action_at = done, d.get("timestamp") or action_at
         last = (d["type"], msg.get("stop_reason"), d.get("timestamp"))
         if wt_re:
             for m in wt_re.findall(line):
@@ -497,6 +564,8 @@ def read_session(path, now, wt_re, names):
         "cwd": cwd, "branch": branch, "worktree": worktree, "state": state, "updated": mtime,
         "idle": idle, "snippet": snippet(text) if state in ("waiting", "still_open", "idle") else "",
         "briefs": sorted(briefs), "chips": chips,
+        "ask": snippet(latest_ask(path), 600), "action": action, "action_at": iso_epoch(action_at),
+        "said": snippet(text, 600),
     }
 
 
@@ -637,6 +706,11 @@ def build_state(repo, gc):
         brief = newest_brief(repo, {b for x in g["sessions"] for b in by_id[x["id"]]["briefs"]}, key)
         if brief and brief[0] > (latest_run or {}).get("updated", 0):
             card["desc"] = brief[1]
+        steps = [(board.get("steps") or {}).get(s["id"]) for s in g["sessions"]]
+        card["steps"] = max([x for x in steps if isinstance(x, dict) and isinstance(x.get("items"), list)],
+                            key=lambda x: x.get("at", ""), default={"items": []})["items"]
+        card["now"] = [{k: s[k] for k in ("id", "name", "state", "updated", "ask", "action", "action_at", "said")}
+                       for s in sorted(g["sessions"], key=lambda s: -s["updated"])]
         card["declared"] = max((declared[s["id"]] for s in g["sessions"] if s["id"] in declared),
                                key=lambda d: d["at"], default=None)
         card["phase"] = phase_of(card, g["runs"], g["sessions"], board, gc, repo, deployed_shas)

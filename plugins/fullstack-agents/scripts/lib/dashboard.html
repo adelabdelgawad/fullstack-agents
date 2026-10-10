@@ -83,6 +83,16 @@ aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-sp
 .task input { margin: 3px 0 0; }
 .task .tn { font-weight: 600; }
 .task .tg { grid-column: 2; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.steps li { display: grid; grid-template-columns: 22px 1fr; gap: 0 6px; font-size: 13px; }
+.steps .mk { font-weight: 700; text-align: center; color: var(--muted); }
+.steps .active .mk, .steps .active .tx { color: var(--blue); font-weight: 600; }
+.steps .done .mk { color: var(--green); }
+.steps .skipped .tx { text-decoration: line-through; color: var(--muted); }
+.steps .nt { grid-column: 2; color: var(--muted); font-size: 12px; }
+.now { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 4px; margin-bottom: 8px; }
+.now .lbl { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
+.card .act { font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .task .th { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .task .caret { margin-left: auto; color: var(--muted); }
 .task .tg { cursor: pointer; }
@@ -175,6 +185,7 @@ function cardHtml(c) {
     : c.sessions.length && c.sessions.every(s => s.state === "still_open") ? `<span class="chip st-stopped">stopped ${ago(Math.max(...c.sessions.map(s => s.updated)))} ago</span>` : "";
   const chips = [
     st,
+    c.steps.length ? `<span class="chip" title="steps the lead listed">${stepsDone(c)}/${c.steps.length} steps</span>` : "",
     c.round > 1 ? `<span class="chip">round ${c.round}</span>` : "",
     ...c.needs_you.map(f => `<span class="chip bad">${esc(FLAG_TEXT[f] || f)}</span>`),
     ...c.chips.map(chip),
@@ -185,7 +196,28 @@ function cardHtml(c) {
     ${branch ? `<div class="br">${esc(branch)}</div>` : ""}
     ${sub ? `<div class="s">${esc(sub)}</div>` : ""}
     <div class="chips">${chips}</div>
+    ${cardNow(c)}
     <div class="row"><span class="s">${ago(c.updated)} ago</span><button class="dismiss" data-dismiss="${esc(c.key)}">Dismiss</button></div></div>`;
+}
+
+function cardNow(c) {
+  const step = activeStep(c), s = (c.now || [])[0];
+  const line = step ? `▸ ${step.text}` : s && s.action && s.state === "working" ? s.action : s && s.ask ? `“${s.ask}”` : "";
+  return line ? `<div class="act" title="${esc(line)}">${esc(line)}</div>` : "";
+}
+
+function nowHtml(s) {
+  return `<div class="now">
+    <div><b>${esc(s.name)}</b> <span class="chip ${s.state === "waiting" ? "st-waiting" : s.state === "working" ? "st-working" : ""}">${esc(STATE_TEXT[s.state] || s.state)}</span> <span class="s">last activity ${ago(s.updated)} ago</span></div>
+    ${s.ask ? `<div class="lbl">Latest request</div><div class="snip" style="margin:0">${esc(s.ask)}</div>` : ""}
+    ${s.action ? `<div class="lbl">${s.state === "working" ? "Doing now" : "Last action"}</div><div class="s">${esc(s.action)}${s.action_at ? ` · ${ago(s.action_at)} ago` : ""}</div>` : ""}
+    ${s.said ? `<div class="lbl">Last message from Claude</div><div class="snip" style="margin:0">${esc(s.said)}</div>` : ""}
+  </div>`;
+}
+
+function stepsHtml(c) {
+  if (!c.steps.length) return c.sessions.length ? '<div class="s">The lead has not listed its steps for this task yet; “Session” above shows what it is doing.</div>' : "";
+  return `<ul class="steps">${c.steps.map(x => `<li class="${esc(x.state)}"><span class="mk" aria-label="${esc(x.state)}">${STEP_MARK[x.state] || "○"}</span><span class="tx">${esc(x.text)}</span>${x.note ? `<span class="nt">${esc(x.note)}</span>` : ""}</li>`).join("")}</ul>`;
 }
 
 function attentionHtml(items, tone, emptyText) {
@@ -242,6 +274,10 @@ const dur = r => {
   const s = Math.max(0, Math.round((LIVE(r) ? Date.now() / 1000 : r.updated) - (r.started || r.updated)));
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s` : `${Math.floor(s / 3600)}h ${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}m`;
 };
+const STEP_MARK = {done: "✓", active: "▸", skipped: "–", pending: "○"};
+const STATE_TEXT = {working: "working", waiting: "waiting on you", idle: "just finished a turn", still_open: "stopped", quiet: "no output for 5+ min"};
+const stepsDone = c => c.steps.filter(x => x.state === "done" || x.state === "skipped").length;
+const activeStep = c => c.steps.find(x => x.state === "active");
 const panel = () => document.getElementById("panel");
 const enc = encodeURIComponent;
 
@@ -298,9 +334,13 @@ function infoHtml(c) {
       ${r.goal ? `<div class="snip tg">${esc(r.goal)}</div>` : ""}
       ${open ? detailHtml(r) : ""}</li>`;
   }).join("");
-  return `<h4>Description</h4>
-    <div class="snip">${esc(c.desc || c.goal || "No brief has been recorded for this work yet.")}</div>
-    <h4>Tasks</h4>${tasks ? `<ul class="tasks">${tasks}</ul>` : '<div class="empty">No implementer tasks yet.</div>'}`;
+  const desc = c.desc || c.goal;
+  const steps = stepsHtml(c);
+  return `${c.now && c.now.length ? `<h4>Session</h4>${c.now.map(nowHtml).join("")}` : ""}
+    ${steps ? `<h4>Steps${c.steps.length ? ` · ${stepsDone(c)}/${c.steps.length}` : ""}</h4>${steps}` : ""}
+    ${c.declared && c.declared.note ? `<h4>Phase note</h4><div class="snip">${esc(c.declared.note)}</div>` : ""}
+    ${desc ? `<h4>Brief</h4><div class="snip">${esc(desc)}</div>` : ""}
+    <h4>Implementer runs</h4>${tasks ? `<ul class="tasks">${tasks}</ul>` : '<div class="s">None — no code has been handed to an implementer for this task.</div>'}`;
 }
 
 async function pollLog(id) {

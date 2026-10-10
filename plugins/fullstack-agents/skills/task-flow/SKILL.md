@@ -208,6 +208,18 @@ Declare each one the moment it starts, with the plugin's `scripts/team-board`:
 | An implementer run returns and the audit begins | `team-board phase audit` |
 | The result goes back to the user (report, question or merge decision) | `team-board phase review --note "<one line>"` |
 
+The card also shows the lead's own steps, so the user can follow investigation, design and
+planning work that no implementer run records. At intake, list the task's steps in plain words
+(3–8, each one outcome the user would recognise, e.g. "Find where the dashboard builds the task
+list"), then keep them current:
+
+| When | Command |
+|---|---|
+| Intake (replace the list whenever the plan changes; matching texts keep their state) | `team-board steps set "<step>" "<step>" …` |
+| A step starts | `team-board steps active <n>` |
+| A step ends | `team-board steps done <n> --note "<what it found or produced>"` |
+| A step is dropped / a new one appears | `team-board steps skipped <n>` / `team-board steps add "<step>"` |
+
 Implement, Rework, Merged, Deploying and Deployed come from run files, git and the board's
 deploy lock and note; never declare them. The command costs no tokens and never blocks.
 

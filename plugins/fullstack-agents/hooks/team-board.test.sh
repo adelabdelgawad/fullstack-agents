@@ -40,6 +40,19 @@ out=$("$TB" --session C status --json | python3 -c 'import json,sys; v=json.load
 ok "$([ "$out" = "review /tmp/wt-a" ] && echo true)" "phase records the latest phase and keeps the declared worktree" "$out"
 "$TB" --session A phase merged 2>/dev/null; ok "$([ $? -ne 0 ] && echo true)" "phase rejects a phase the dashboard derives itself" ""
 
+steps() { "$TB" --session C status --json | python3 -c 'import json,sys; print(" ".join(i["text"] + "=" + i["state"] for i in json.load(sys.stdin)["steps"]["A"]["items"]))'; }
+"$TB" --session A steps set "find cause" "plan fix"
+"$TB" --session A steps active 1
+"$TB" --session A steps done 1 --note "found it"
+"$TB" --session A steps add "write brief"
+"$TB" --session A steps active 2
+ok "$([ "$(steps)" = "find cause=done plan fix=active write brief=pending" ] && echo true)" "steps record add, active and done" "$(steps)"
+"$TB" --session A steps set "plan fix" "ship"
+ok "$([ "$(steps)" = "plan fix=active ship=pending" ] && echo true)" "set keeps the state of a step whose text is unchanged" "$(steps)"
+"$TB" --session A steps done 9 2>/dev/null; ok "$([ $? -eq 2 ] && echo true)" "a step number out of range is refused" ""
+"$TB" --session A phase plan
+ok "$([ "$(steps)" = "plan fix=active ship=pending" ] && echo true)" "a phase change keeps the steps" "$(steps)"
+
 echo '{not json' > "$FSA_TEAM_BOARD"
 "$TB" --session B check-lock deploy 2>/dev/null; ok "$([ $? -eq 0 ] && echo true)" "a malformed board never blocks" ""
 "$TB" --session B claim --name beta --task recover 2>/dev/null

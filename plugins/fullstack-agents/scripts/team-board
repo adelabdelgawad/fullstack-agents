@@ -15,6 +15,8 @@ DEFAULT_LOCK_TTL_MIN = 120
 MAX_EVENTS = 40
 PHASE_TTL_H = 48
 PHASES = ("investigate", "plan", "audit", "review")
+STEP_STATES = ("active", "done", "skipped", "pending")
+MAX_STEPS = 20
 EXIT_LOCK_HELD = 3
 
 
@@ -61,7 +63,7 @@ def session_id(explicit):
 
 
 def empty():
-    return {"version": 1, "claims": {}, "locks": {}, "events": [], "phases": {}}
+    return {"version": 1, "claims": {}, "locks": {}, "events": [], "phases": {}, "steps": {}}
 
 
 def load(path):
@@ -75,7 +77,7 @@ def load(path):
         return empty()
     if not isinstance(data, dict):
         return empty()
-    for key, default in (("claims", {}), ("locks", {}), ("events", []), ("phases", {})):
+    for key, default in (("claims", {}), ("locks", {}), ("events", []), ("phases", {}), ("steps", {})):
         if not isinstance(data.get(key), type(default)):
             data[key] = default
     return data
@@ -93,6 +95,9 @@ def prune(data, t):
     cutoff = t - dt.timedelta(hours=PHASE_TTL_H)
     data["phases"] = {k: v for k, v in data["phases"].items()
                       if isinstance(v, dict) and (parse(v.get("at", "")) or cutoff) > cutoff}
+    data["steps"] = {k: v for k, v in data["steps"].items()
+                     if isinstance(v, dict) and isinstance(v.get("items"), list)
+                     and (parse(v.get("at", "")) or cutoff) > cutoff}
 
 
 def save(path, data):
@@ -151,6 +156,29 @@ def render(data, t, me):
     return lines
 
 
+def update_steps(data, sid, args, t):
+    items = (data["steps"].get(sid) or {}).get("items") or []
+    if args.action in ("set", "add"):
+        texts = [" ".join(x.split())[:200] for x in args.args if x.strip()]
+        known = {i.get("text"): i for i in items} if args.action == "set" else {}
+        fresh = [known.get(x) or {"text": x, "state": "pending", "note": ""} for x in texts]
+        items = (fresh if args.action == "set" else items + fresh)[:MAX_STEPS]
+    else:
+        try:
+            n = int(args.args[0])
+        except ValueError:
+            return f"step number expected, got {args.args[0]!r}"
+        if not 1 <= n <= len(items):
+            return f"no step {n}; this session has {len(items)}"
+        if args.action == "active":
+            for i in items:
+                if i.get("state") == "active":
+                    i["state"] = "pending"
+        items[n - 1].update(state=args.action, note=" ".join(args.note.split())[:200], at=iso(t))
+    data["steps"][sid] = {"at": iso(t), "items": items}
+    return ""
+
+
 def main():
     ap = argparse.ArgumentParser(prog="team-board")
     ap.add_argument("--board")
@@ -180,6 +208,10 @@ def main():
     ph.add_argument("phase", choices=PHASES)
     ph.add_argument("--worktree", default="")
     ph.add_argument("--note", default="")
+    st = sub.add_parser("steps")
+    st.add_argument("action", choices=("set", "add") + STEP_STATES)
+    st.add_argument("args", nargs="+", help="step texts for set/add, a 1-based step number otherwise")
+    st.add_argument("--note", default="")
     rs = sub.add_parser("release-session")
     rs.add_argument("target")
     args = ap.parse_args()
@@ -249,6 +281,11 @@ def main():
             prev = data["phases"].get(sid, {})
             worktree = os.path.abspath(args.worktree) if args.worktree else prev.get("worktree", "")
             data["phases"][sid] = {"phase": args.phase, "at": iso(t), "note": args.note, "worktree": worktree}
+        elif args.cmd == "steps":
+            failed = update_steps(data, sid, args, t)
+            if failed:
+                print(f"team-board: {failed}", file=sys.stderr)
+                return 2
         elif args.cmd == "note":
             event(data, t, sid, args.name, args.text)
         save(path, data)
