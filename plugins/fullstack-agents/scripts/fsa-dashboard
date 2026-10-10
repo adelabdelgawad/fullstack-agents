@@ -29,6 +29,10 @@ TAIL_BYTES = 262144
 STATE_TTL_S = 3
 GIT_TTL_S = 30
 EDIT_FRESH_S = 600
+MAX_FILES = 400
+MAX_DIFF = 120000
+WORKTREE_REF = "WORKTREE"
+SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 RUN_ID_RE = re.compile(r"^[a-z]+-\d{8}-\d{6}-\d+$")
 BRIEF_RE = re.compile(r"\.codex-briefs/([\w.-]+)\.md")
 DEPLOYED_RE = re.compile(r"\bDEPLOYED\b.*?\b([0-9a-f]{9,40})\b")
@@ -193,12 +197,12 @@ def run_root(runs, rid, meta):
     return m.group(1) if m else None
 
 
-def goal_line(path):
+def goal_line(path, limit=220):
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
             for line in f:
                 if line.startswith("GOAL:"):
-                    return line[5:].strip()[:220]
+                    return line[5:].strip()[:limit]
     except OSError:
         pass
     return ""
@@ -220,21 +224,48 @@ def touched_paths(runs, rid):
     return sorted({line.split(" ", 1)[-1] for line in pre ^ post})
 
 
-def file_diff(root, started, path):
-    base = "HEAD"
-    if started:
-        base = (git(root, "rev-list", "-1", f"--before={started}", "HEAD") or "").strip() or "HEAD"
-    out = git(root, "diff", "--no-color", "--no-ext-diff", base, "--", path) or ""
-    if not out.strip():
-        try:
-            out = subprocess.run(["git", "--no-optional-locks", "-C", str(root), "diff", "--no-color", "--no-index", "--", "/dev/null", path],
-                                 capture_output=True, text=True, timeout=15, env=git_env()).stdout
-        except (OSError, subprocess.SubprocessError):
-            out = ""
+def status_files(root):
+    out = []
+    for line in (git(root, "status", "--porcelain", "-uall") or "").splitlines()[:MAX_FILES]:
+        code = line[:2].strip() or "?"
+        out.append({"status": "?" if code == "??" else code[:1], "path": line[3:].split(" -> ")[-1].strip('"')})
+    return out
+
+
+def commit_files(root, sha):
+    out = []
+    for line in (git(root, "show", "--name-status", "--format=", "-M", sha) or "").splitlines()[:MAX_FILES]:
+        cols = line.split("\t")
+        if len(cols) >= 2:
+            out.append({"status": cols[0][:1], "path": cols[-1]})
+    return out
+
+
+def change_items(root, main):
+    ahead = int((git(root, "rev-list", "--count", f"{main}..HEAD") or "0").strip() or 0)
+    args = ["log", "--no-color", "--format=%h\t%s\t%at", "-n", "60"] + ([f"{main}..HEAD"] if ahead else [])
+    commits = []
+    for line in (git(root, *args) or "").splitlines():
+        sha, subject, at = (line.split("\t") + ["", "0"])[:3]
+        commits.append({"sha": sha, "subject": subject, "at": int(at or 0)})
+    return {"ahead": ahead, "recent": not ahead, "dirty": len(status_files(root)), "commits": commits}
+
+
+def ref_diff(root, ref, path):
+    if ref == WORKTREE_REF:
+        out = git(root, "diff", "--no-color", "--no-ext-diff", "HEAD", "--", path) or ""
+        if not out.strip():
+            try:
+                out = subprocess.run(["git", "--no-optional-locks", "-C", str(root), "diff", "--no-color", "--no-index", "--", "/dev/null", path],
+                                     capture_output=True, text=True, timeout=15, env=git_env()).stdout
+            except (OSError, subprocess.SubprocessError):
+                out = ""
+    else:
+        out = git(root, "show", "--no-color", "--no-ext-diff", "--format=", "-M", ref, "--", path) or ""
     out = out.strip("\n")
     if not out:
-        return "(no differences from the commit this run started on)"
-    return out[:80000] + ("\n… diff truncated" if len(out) > 80000 else "")
+        return "(no textual changes: binary file, mode change or empty file)"
+    return out[:MAX_DIFF] + ("\n... diff truncated" if len(out) > MAX_DIFF else "")
 
 
 def read_run(runs, rid, log_mtime, now):
@@ -269,6 +300,7 @@ def read_run(runs, rid, log_mtime, now):
         "id": rid, "mode": mode, "engine": meta.get("engine", ""), "unit": unit,
         "family": FIX_RE.sub("", unit), "session": meta.get("session", ""),
         "root": run_root(runs, rid, meta), "goal": goal_line(runs / f"{rid}.prompt.md"),
+        "desc": goal_line(runs / f"{rid}.prompt.md", 900),
         "state": state, "flags": flags, "updated": log_mtime,
         "touched": touched or [], "open_risks": (result or {}).get("open_risks", []),
         "summary": ((result or {}).get("summary") or "")[:1500],
@@ -529,7 +561,7 @@ def build_state(repo, gc):
         label = (latest_run or {}).get("unit") or (tree or {}).get("branch") or ""
         title = (owner or {}).get("name") or label or (latest_run or {}).get("goal", "")[:90] or key
         card = {"key": key, "title": title, "label": label, "tree": tree, "worktree": key if tree else "",
-                "goal": (latest_run or {}).get("goal", ""),
+                "goal": (latest_run or {}).get("goal", ""), "desc": (latest_run or {}).get("desc", ""),
                 "sessions": [{k: s[k] for k in ("id", "name", "state", "updated", "branch")} for s in g["sessions"]],
                 "runs": g["runs"][-6:], "chips": [c for s in g["sessions"] for c in s["chips"]][-6:]}
         card["declared"] = max((declared[s["id"]] for s in g["sessions"] if s["id"] in declared),
@@ -622,17 +654,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.send(400, b"bad run id", "text/plain")
             lines = tail_lines(self.server.repo.runs / f"{rid}.log", 12000)
             return self.send(200, "\n".join(lines[-120:]).encode(), "text/plain; charset=utf-8")
-        if url.path == "/api/diff":
-            rid, path = (q.get("id") or [""])[0], (q.get("path") or [""])[0]
-            if not RUN_ID_RE.match(rid):
-                return self.send(400, b"bad run id", "text/plain")
-            runs = self.server.repo.runs
-            root = run_root(runs, rid, load_json(runs / f"{rid}.meta.json") or {})
-            known = set(self.server.gc.worktrees(time.time())) | {str(self.server.repo.root)}
-            if not root or root not in known or path not in (touched_paths(runs, rid) or []):
-                return self.send(404, b"not a file this run touched", "text/plain")
-            started = (load_json(runs / f"{rid}.meta.json") or {}).get("started", "")
-            return self.send(200, file_diff(root, started, path).encode(), "text/plain; charset=utf-8")
+        if url.path in ("/api/changes", "/api/files", "/api/diff"):
+            key = (q.get("key") or [""])[0]
+            if key not in set(self.server.gc.worktrees(time.time())) | {str(self.server.repo.root)}:
+                return self.send(404, b"unknown worktree", "text/plain")
+            if url.path == "/api/changes":
+                return self.send(200, json.dumps(change_items(key, self.server.repo.main)).encode())
+            ref = (q.get("ref") or [""])[0]
+            if ref != WORKTREE_REF and not SHA_RE.match(ref):
+                return self.send(400, b"bad ref", "text/plain")
+            files = status_files(key) if ref == WORKTREE_REF else commit_files(key, ref)
+            if url.path == "/api/files":
+                return self.send(200, json.dumps(files).encode())
+            path = (q.get("path") or [""])[0]
+            if path not in {f["path"] for f in files}:
+                return self.send(404, b"not a changed file", "text/plain")
+            return self.send(200, ref_diff(key, ref, path).encode(), "text/plain; charset=utf-8")
         return self.send(404, b"not found", "text/plain")
 
     def do_POST(self):

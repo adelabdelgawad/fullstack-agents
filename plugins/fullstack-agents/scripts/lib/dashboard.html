@@ -52,33 +52,63 @@ main { padding: 16px 20px 40px; }
 .list .card { cursor: default; }
 .snip { white-space: pre-wrap; margin-top: 6px; font-size: 13px; }
 .empty { color: var(--muted); padding: 20px 0; }
-aside { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100%); background: var(--panel); border-left: 1px solid var(--line); padding: 18px; overflow-y: auto; transform: translateX(100%); transition: transform .18s; z-index: 10; }
+aside { position: fixed; top: 0; right: 0; bottom: 0; width: min(620px, 100%); background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; transform: translateX(100%); transition: transform .18s, width .18s; z-index: 10; }
 aside.open { transform: none; }
+aside.wide { width: min(1280px, 96vw); }
 aside h3 { margin: 0 0 4px; font-size: 16px; }
+aside h4 { margin: 14px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 360px; overflow: auto; }
-aside .close { float: right; }
-aside.sheeted { display: flex; flex-direction: column; overflow: hidden; }
-.sheet { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+#phead { flex: none; padding: 16px 18px 6px; }
+#phead .close { float: right; }
+.ptabs { flex: none; display: flex; gap: 4px; padding: 0 18px; border-bottom: 1px solid var(--line); }
+.tab2 { border: 0; background: none; color: var(--muted); font: inherit; padding: 8px 12px; cursor: pointer; border-bottom: 2px solid transparent; display: flex; gap: 6px; align-items: center; }
+.tab2[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--blue); }
+.tab2:disabled { opacity: .4; cursor: default; }
+.pbody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#info { flex: 1; min-height: 0; overflow: auto; padding: 4px 18px 18px; }
+.tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.task { display: grid; grid-template-columns: 18px 1fr; gap: 2px 8px; align-items: start; padding: 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; background: var(--panel); }
+.task:hover { border-color: var(--muted); }
+.task input { margin: 3px 0 0; }
+.task .tn { font-weight: 600; }
+.task .tg { grid-column: 2; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.sheet { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 0 18px; }
 .sheet h3 { margin-top: 10px; }
 aside .sheet pre.log { flex: 1; min-height: 120px; max-height: none; margin: 10px 0; font-size: 11px; }
-.runrow { display: block; width: 100%; text-align: left; font: inherit; color: inherit; }
-.end { flex: none; margin: 0 -18px -18px; padding: 12px 18px; border-top: 3px solid var(--line); background: var(--panel); }
+.end { flex: none; margin: 0 -18px; padding: 12px 18px; border-top: 3px solid var(--line); background: var(--panel); }
 .end.ok { border-top-color: var(--green); }
 .end.bad { border-top-color: var(--red); }
 .end.live { border-top-color: var(--blue); }
 aside .end pre { max-height: 140px; margin: 6px 0 0; }
 .card .br { font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--blue); margin-top: 3px; word-break: break-all; }
-.runrow .snip { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.files { display: grid; gap: 2px; margin: 4px 0 0; max-height: 132px; overflow: auto; }
-.file { text-align: left; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--chip); border: 0; color: var(--ink); padding: 3px 8px; border-radius: 6px; cursor: pointer; word-break: break-all; }
-.file:hover, .file.on { background: var(--blue-bg); color: var(--blue); }
-.diffbar { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; }
-.diffbar b { word-break: break-all; font-weight: 600; }
-aside .sheet pre.diff { white-space: pre; overflow: auto; }
-.diff span { display: block; }
+.gitview { flex: 1; min-height: 0; display: flex; }
+.gcol { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); }
+.g1, .g2 { flex: 0 0 20%; }
+.g3 { flex: 1; border-right: 0; }
+.g1.hid, .g2.hid { flex: 0 0 30px; }
+.gh { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.gh .gt { font-weight: 600; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.gh .dismiss { margin-left: 0; flex: none; }
+.gb { flex: 1; min-height: 0; overflow: auto; }
+.rail { flex: 1; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; }
+.rail:hover { background: var(--chip); color: var(--ink); }
+.grp { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; border: 0; background: var(--chip); color: var(--ink); font: inherit; font-weight: 600; font-size: 12px; padding: 6px 10px; cursor: pointer; position: sticky; top: 0; z-index: 1; }
+.gi, .gf { display: block; width: 100%; text-align: left; border: 0; background: none; color: inherit; font: inherit; padding: 6px 10px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.gi:hover, .gf:hover { background: var(--chip); }
+.gi.on, .gf.on { background: var(--blue-bg); }
+.gi .sha { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--blue); margin-right: 6px; }
+.gi .sub, .gf .fd { display: block; color: var(--muted); font-size: 11px; word-break: break-all; }
+.gf .fn { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+.st { display: inline-block; min-width: 16px; text-align: center; font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace; border-radius: 4px; margin-right: 6px; background: var(--chip); }
+.st-A, .st-U { color: var(--green); }
+.st-D { color: var(--red); }
+.st-M, .st-R { color: var(--amber); }
+aside .gcol pre.diff { margin: 0; border-radius: 0; background: none; padding: 0; white-space: pre; font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; max-height: none; overflow: visible; min-width: max-content; }
+.diff span { display: block; padding: 0 10px; }
 .diff .a { color: var(--green); background: var(--green-bg); }
 .diff .d { color: var(--red); background: var(--red-bg); }
 .diff .h { color: var(--blue); }
+.hint { color: var(--muted); padding: 14px 10px; font-size: 12px; }
 .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--blue); margin-right: 6px; animation: pulse 1.2s ease-in-out infinite; }
 #toasts { position: fixed; top: 64px; right: 16px; display: grid; gap: 8px; z-index: 20; width: min(360px, calc(100% - 32px)); }
 .toast { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--amber); border-radius: 10px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18); cursor: pointer; animation: slide .2s ease-out; }
@@ -168,59 +198,58 @@ function render() {
   document.querySelectorAll("nav button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
 }
 
-let openKey = null, openRun = null, openFile = null, panelHtml = "", logSeen = "", logTimer = null, wasLive = false, tick = 0;
+const freshGit = () => ({sig: "", at: 0, items: null, open: {unc: true, com: true}, item: null, files: null, file: null, diff: ""});
+let openKey = null, openRun = null, tab2 = "info", bodyKind = "", logSeen = "", logTimer = null, wasLive = false;
+let git = {...freshGit(), hide1: false, hide2: false};
 const LIVE = r => r.state === "running" || r.state === "stalled";
 const stateChip = r => `<span class="chip ${r.flags.length ? "bad" : r.state === "done" ? "ok" : ""}">${esc(r.state)}</span>`;
 const panel = () => document.getElementById("panel");
+const enc = encodeURIComponent;
 
 function setIfChanged(id, html) {
   const el = document.getElementById(id);
   if (!el || el.dataset.h === html) return false;
+  const gb = el.querySelector(".gb"), top = gb ? gb.scrollTop : 0, left = gb ? gb.scrollLeft : 0, own = el.scrollTop;
   el.innerHTML = html;
   el.dataset.h = html;
+  const nb = el.querySelector(".gb");
+  if (nb) { nb.scrollTop = top; nb.scrollLeft = left; }
+  el.scrollTop = own;
   return true;
 }
 
-function listHtml(c) {
-  const rows = c.runs.slice().reverse().map(r => `<button class="card runrow" data-run="${esc(r.id)}">
-    <div class="t">${esc(r.unit || r.id)} ${stateChip(r)}</div>
-    <div class="s">${esc(r.engine)} · ${ago(r.updated)} ago · ${r.touched.length} files</div>
-    ${r.goal ? `<div class="snip">${esc(r.goal)}</div>` : ""}</button>`).join("");
-  return `<button class="dismiss close" id="close">Close</button>
-    <h3>${esc(c.title)}</h3>
-    ${c.tree ? `<div class="br" style="font:12px ui-monospace,monospace;color:var(--blue)">${esc(c.tree.branch)}</div>` : ""}
-    <div class="s">${esc(c.phase)}${c.tree ? ` · ${c.tree.ahead} ahead · ${c.tree.dirty} uncommitted` : ""}</div>
-    <div class="s">${esc(c.worktree)}</div>
-    <div class="chips">${c.chips.map(chip).join("")}</div>
-    <p><b>Sessions:</b> ${c.sessions.map(s => `${esc(s.name)} (${esc(s.state)}, ${ago(s.updated)} ago)`).join(", ") || "none"}</p>
-    ${rows || '<div class="empty">No implementer runs.</div>'}`;
+function ensureBody(kind, html, onNew) {
+  if (bodyKind === kind) return;
+  bodyKind = kind;
+  document.getElementById("pbody").innerHTML = html;
+  if (onNew) onNew();
+}
+
+const paneHead = c => `<button class="dismiss close" id="close">Close</button>
+  <h3>${esc(c.title)}</h3>
+  ${c.tree ? `<div style="font:12px ui-monospace,monospace;color:var(--blue)">${esc(c.tree.branch)}</div>` : ""}
+  <div class="s">${esc(c.phase)}${c.tree ? ` · ${c.tree.ahead} ahead · ${c.tree.dirty} uncommitted` : ""}</div>`;
+
+const tabsHtml = c => `<button class="tab2" role="tab" data-t="info" aria-selected="${tab2 === "info"}">Information</button>
+  <button class="tab2" role="tab" data-t="git" aria-selected="${tab2 === "git"}" ${c.tree ? "" : "disabled"}>Git changes${c.tree && c.tree.dirty ? ` <span class="badge">${c.tree.dirty}</span>` : ""}</button>`;
+
+function infoHtml(c) {
+  const tasks = c.runs.map(r => `<li class="task" data-run="${esc(r.id)}">
+    <input type="checkbox" disabled ${r.state === "done" ? "checked" : ""} aria-label="${esc(r.state)}">
+    <div><span class="tn">${esc(r.unit || r.id)}</span> ${stateChip(r)} <span class="s">${LIVE(r) ? '<span class="live-dot"></span>live · ' : ""}${ago(r.updated)} ago</span></div>
+    ${r.goal ? `<div class="snip tg">${esc(r.goal)}</div>` : ""}</li>`).join("");
+  return `<h4>Description</h4>
+    <div class="snip">${esc(c.desc || c.goal || "No brief has been recorded for this work yet.")}</div>
+    <div class="s" style="margin-top:6px">${esc(c.worktree)}</div>
+    <p style="margin:8px 0 0"><b>Sessions:</b> ${c.sessions.map(s => `${esc(s.name)} (${esc(s.state)}, ${ago(s.updated)} ago)`).join(", ") || "none"}</p>
+    <h4>Tasks</h4>${tasks ? `<ul class="tasks">${tasks}</ul>` : '<div class="empty">No implementer tasks yet.</div>'}`;
 }
 
 function headHtml(c, r) {
-  return `<div class="row" style="margin:0"><button class="dismiss" id="back" style="margin-left:0">← Runs</button><button class="dismiss" id="close">Close</button></div>
+  return `<div class="row" style="margin:0"><button class="dismiss" id="back" style="margin-left:0">← Tasks</button></div>
     <h3>${LIVE(r) ? '<span class="live-dot"></span>' : ""}${esc(r.unit || r.id)} ${stateChip(r)}</h3>
     <div class="s">${esc(c.title)} · ${esc(r.engine)} · <span id="sh-age"></span></div>
-    ${r.goal ? `<div class="snip">${esc(r.goal)}</div>` : ""}
-    ${r.touched.length ? `<div class="s" style="margin-top:8px">${r.touched.length} files changed — click one to see its diff</div><div class="files">${r.touched.map(f => `<button class="file${f === openFile ? " on" : ""}" data-file="${esc(f)}">${esc(f)}</button>`).join("")}</div>` : ""}`;
-}
-
-async function loadDiff() {
-  const path = openFile, id = openRun;
-  if (!path || !id) return;
-  try {
-    const t = await (await fetch(`/api/diff?id=${encodeURIComponent(id)}&path=${encodeURIComponent(path)}`, {cache: "no-store"})).text();
-    const el = document.getElementById("diff");
-    if (!el || openFile !== path || openRun !== id) return;
-    const cls = l => l.startsWith("+") && !l.startsWith("+++") ? "a" : l.startsWith("-") && !l.startsWith("---") ? "d" : l.startsWith("@@") ? "h" : "";
-    const html = t.split("\n").map(l => `<span class="${cls(l)}">${esc(l) || "&#8203;"}</span>`).join("");
-    if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }
-  } catch (e) {}
-}
-
-function showFile(path) {
-  openFile = path;
-  paintPanel();
-  loadDiff();
+    ${r.goal ? `<div class="snip">${esc(r.desc || r.goal)}</div>` : ""}`;
 }
 
 function endHtml(r) {
@@ -234,7 +263,7 @@ function endHtml(r) {
 async function pollLog(id) {
   if (document.hidden) return;
   try {
-    const t = await (await fetch("/api/log?id=" + encodeURIComponent(id), {cache: "no-store"})).text();
+    const t = await (await fetch("/api/log?id=" + enc(id), {cache: "no-store"})).text();
     const el = document.getElementById("log");
     if (!el || openRun !== id || t === logSeen) return;
     const stick = !logSeen || el.scrollHeight - el.scrollTop - el.clientHeight < 40;
@@ -245,76 +274,178 @@ async function pollLog(id) {
 
 function stopLog() { clearInterval(logTimer); logTimer = null; }
 
-function paintPanel() {
-  const p = panel();
-  const c = openKey && state && state.cards.find(x => x.key === openKey);
-  if (!c) return closePanel();
+function paintInfo(c) {
   const r = openRun && c.runs.find(x => x.id === openRun);
   if (openRun && !r) openRun = null;
   if (!r) {
     stopLog();
-    p.classList.remove("sheeted");
-    const html = listHtml(c);
-    if (html !== panelHtml) {
-      const top = p.scrollTop;
-      p.innerHTML = panelHtml = html;
-      p.scrollTop = top;
-      document.getElementById("close").onclick = closePanel;
-      p.querySelectorAll("[data-run]").forEach(b => b.onclick = () => openTask(b.dataset.run));
-    }
+    ensureBody("info", '<div id="info"></div>');
+    if (setIfChanged("info", infoHtml(c))) document.querySelectorAll("#info [data-run]").forEach(li => li.onclick = () => openTask(li.dataset.run));
     return;
   }
-  p.classList.add("sheeted");
-  if (panelHtml !== "sheet:" + r.id) {
+  ensureBody("sheet:" + r.id, '<div class="sheet"><div id="sh-head"></div><pre class="log" id="log" tabindex="0">loading…</pre><div class="end" id="sh-end"></div></div>', () => {
     stopLog();
-    p.innerHTML = '<div class="sheet"><div id="sh-head"></div><div class="diffbar" id="diffbar" hidden></div><pre class="log" id="log" tabindex="0">loading…</pre><pre class="log diff" id="diff" hidden></pre><div class="end" id="sh-end"></div></div>';
-    panelHtml = "sheet:" + r.id;
     logSeen = "";
-    openFile = null;
     wasLive = LIVE(r);
-  }
-  if (setIfChanged("sh-head", headHtml(c, r))) {
-    document.getElementById("back").onclick = () => { openRun = openFile = null; paintPanel(); };
-    document.getElementById("close").onclick = closePanel;
-    document.querySelectorAll("#sh-head .file").forEach(b => b.onclick = () => showFile(b.dataset.file));
-  }
-  document.getElementById("log").hidden = !!openFile;
-  document.getElementById("diff").hidden = !openFile;
-  document.getElementById("diffbar").hidden = !openFile;
-  if (openFile && setIfChanged("diffbar", `<button class="dismiss" id="difback" style="margin:0">← Log</button><b>${esc(openFile)}</b>`)) {
-    document.getElementById("difback").onclick = () => { openFile = null; paintPanel(); };
-  }
+  });
+  if (setIfChanged("sh-head", headHtml(c, r))) document.getElementById("back").onclick = () => { openRun = null; paintPanel(); };
   document.getElementById("sh-age").textContent = `${ago(r.updated)} ago${LIVE(r) ? " · live" : ""}`;
   document.getElementById("sh-end").className = "end " + (LIVE(r) ? "live" : r.flags.length || r.state !== "done" ? "bad" : "ok");
   setIfChanged("sh-end", endHtml(r));
   if (LIVE(r)) {
-    if (!logTimer) { pollLog(r.id); logTimer = setInterval(() => { pollLog(r.id); if (++tick % 3 === 0) loadDiff(); }, 2500); }
+    if (!logTimer) { pollLog(r.id); logTimer = setInterval(() => pollLog(r.id), 2500); }
   } else {
     stopLog();
-    if (wasLive || !logSeen) { pollLog(r.id); loadDiff(); }
+    if (wasLive || !logSeen) pollLog(r.id);
     wasLive = false;
   }
 }
 
+const stc = s => s === "?" ? "U" : s;
+const diffHtml = t => (t || "").split("\n").map(l => `<span class="${l.startsWith("+") && !l.startsWith("+++") ? "a" : l.startsWith("-") && !l.startsWith("---") ? "d" : l.startsWith("@@") ? "h" : ""}">${esc(l) || "&#8203;"}</span>`).join("");
+
+function col1Html(c) {
+  if (git.hide1) return '<button class="rail" data-show="1" title="Show changes" aria-label="Show changes">»</button>';
+  const it = git.items, unc = it ? it.dirty : c.tree ? c.tree.dirty : 0, n = it ? it.commits.length : 0;
+  let h = '<div class="gh"><span class="gt">Changes</span><button class="dismiss" data-hide="1" title="Hide changes">Hide «</button></div><div class="gb">';
+  h += `<button class="grp" data-g="unc">${git.open.unc ? "▾" : "▸"} Uncommitted changes <span class="badge">${unc}</span></button>`;
+  if (git.open.unc) h += unc ? `<button class="gi${git.item === "WORKTREE" ? " on" : ""}" data-ref="WORKTREE"><b>Working tree</b><span class="sub">${unc} file${unc === 1 ? "" : "s"} · not committed yet</span></button>` : '<div class="hint">Working tree is clean.</div>';
+  h += `<button class="grp" data-g="com">${git.open.com ? "▾" : "▸"} ${it && it.recent ? "Recent commits" : "Commits ahead of main"} <span class="badge">${n}</span></button>`;
+  if (git.open.com) h += !it ? '<div class="hint">Loading…</div>' : n ? it.commits.map(m => `<button class="gi${git.item === m.sha ? " on" : ""}" data-ref="${esc(m.sha)}"><span class="sha">${esc(m.sha)}</span>${esc(m.subject)}<span class="sub">${ago(m.at)} ago</span></button>`).join("") : '<div class="hint">No commits.</div>';
+  return h + "</div>";
+}
+
+function col2Html() {
+  if (git.hide2) return '<button class="rail" data-show="2" title="Show files" aria-label="Show files">»</button>';
+  let h = '<div class="gh"><span class="gt">Files</span><button class="dismiss" data-hide="2" title="Hide files">Hide «</button></div><div class="gb">';
+  if (!git.item) h += '<div class="hint">Pick a change on the left.</div>';
+  else if (!git.files) h += '<div class="hint">Loading…</div>';
+  else if (!git.files.length) h += '<div class="hint">No files.</div>';
+  else h += git.files.map(f => {
+    const i = f.path.lastIndexOf("/");
+    return `<button class="gf${git.file === f.path ? " on" : ""}" data-file="${esc(f.path)}"><span class="st st-${esc(stc(f.status))}">${esc(f.status)}</span><span class="fn">${esc(f.path.slice(i + 1))}</span><span class="fd">${esc(i < 0 ? "" : f.path.slice(0, i))}</span></button>`;
+  }).join("");
+  return h + "</div>";
+}
+
+const col3Html = () => `<div class="gh"><span class="gt">${esc(git.file || "Changes")}</span></div><div class="gb">${git.file ? `<pre class="diff">${diffHtml(git.diff)}</pre>` : '<div class="hint">Pick a file to see its changes.</div>'}</div>`;
+
+function wireGit(c) {
+  const root = document.querySelector(".gitview");
+  if (!root) return;
+  root.querySelectorAll("[data-g]").forEach(b => b.onclick = () => { git.open[b.dataset.g] = !git.open[b.dataset.g]; paintGit(c); });
+  root.querySelectorAll("[data-ref]").forEach(b => b.onclick = () => pickItem(c, b.dataset.ref));
+  root.querySelectorAll("[data-file]").forEach(b => b.onclick = () => pickFile(c, b.dataset.file));
+  root.querySelectorAll("[data-hide]").forEach(b => b.onclick = () => { git["hide" + b.dataset.hide] = true; paintGit(c); });
+  root.querySelectorAll("[data-show]").forEach(b => b.onclick = () => { git["hide" + b.dataset.show] = false; paintGit(c); });
+}
+
+function paintGit(c) {
+  ensureBody("git", '<div class="gitview"><section class="gcol g1" id="g1"></section><section class="gcol g2" id="g2"></section><section class="gcol g3" id="g3"></section></div>');
+  document.getElementById("g1").classList.toggle("hid", git.hide1);
+  document.getElementById("g2").classList.toggle("hid", git.hide2);
+  const changed = [setIfChanged("g1", col1Html(c)), setIfChanged("g2", col2Html()), setIfChanged("g3", col3Html())];
+  if (changed.some(Boolean)) wireGit(c);
+}
+
+async function getJson(url) { return (await fetch(url, {cache: "no-store"})).json(); }
+
+async function loadChanges(c, force) {
+  const sig = c.tree ? `${c.tree.head}|${c.tree.dirty}|${c.tree.edited}` : "";
+  if (!force && git.items && git.sig === sig && Date.now() - git.at < 15000) return;
+  git.sig = sig;
+  git.at = Date.now();
+  try { git.items = await getJson("/api/changes?key=" + enc(c.key)); } catch (e) { return; }
+  if (openKey !== c.key || tab2 !== "git") return;
+  const it = git.items, pick = it.dirty ? "WORKTREE" : (it.commits[0] || {}).sha;
+  if (!git.item && pick) return pickItem(c, pick);
+  paintGit(c);
+  if (git.item) loadFiles(c);
+}
+
+function pickItem(c, ref) {
+  git.item = ref;
+  git.files = null;
+  git.file = null;
+  git.diff = "";
+  paintGit(c);
+  loadFiles(c);
+}
+
+async function loadFiles(c) {
+  const ref = git.item;
+  if (!ref) return;
+  try { git.files = await getJson(`/api/files?key=${enc(c.key)}&ref=${enc(ref)}`); } catch (e) { return; }
+  if (git.item !== ref || openKey !== c.key) return;
+  if (git.file && !git.files.some(f => f.path === git.file)) git.file = null;
+  if (!git.file && git.files.length) return pickFile(c, git.files[0].path);
+  paintGit(c);
+  if (git.file) loadGitDiff(c);
+}
+
+function pickFile(c, path) {
+  git.file = path;
+  git.diff = "";
+  paintGit(c);
+  const gb = document.querySelector("#g3 .gb");
+  if (gb) { gb.scrollTop = 0; gb.scrollLeft = 0; }
+  loadGitDiff(c);
+}
+
+async function loadGitDiff(c) {
+  const ref = git.item, path = git.file;
+  if (!ref || !path) return;
+  try {
+    const t = await (await fetch(`/api/diff?key=${enc(c.key)}&ref=${enc(ref)}&path=${enc(path)}`, {cache: "no-store"})).text();
+    if (git.item !== ref || git.file !== path) return;
+    git.diff = t;
+    paintGit(c);
+  } catch (e) {}
+}
+
+function paintPanel() {
+  const c = openKey && state && state.cards.find(x => x.key === openKey);
+  if (!c) return closePanel();
+  const p = panel();
+  if (!document.getElementById("pbody")) {
+    p.innerHTML = '<div id="phead"></div><div class="ptabs" id="ptabs" role="tablist"></div><div class="pbody" id="pbody"></div>';
+    bodyKind = "";
+  }
+  p.classList.toggle("wide", tab2 === "git");
+  if (setIfChanged("phead", paneHead(c))) document.getElementById("close").onclick = closePanel;
+  if (setIfChanged("ptabs", tabsHtml(c))) document.querySelectorAll("#ptabs [data-t]").forEach(b => b.onclick = () => { tab2 = b.dataset.t; paintPanel(); });
+  if (tab2 === "git" && c.tree) {
+    stopLog();
+    paintGit(c);
+    loadChanges(c, false);
+  } else {
+    paintInfo(c);
+  }
+}
+
 function openCard(key) {
+  if (openKey !== key) git = {...freshGit(), hide1: git.hide1, hide2: git.hide2};
   openKey = key;
   openRun = null;
-  panelHtml = "";
+  tab2 = "info";
+  bodyKind = "";
+  panel().innerHTML = "";
   panel().classList.add("open");
   paintPanel();
 }
 
 function openTask(id) {
   openRun = id;
-  panelHtml = "";
   paintPanel();
 }
 
 function closePanel() {
   stopLog();
-  openKey = openRun = openFile = null;
-  panelHtml = "";
-  panel().classList.remove("open", "sheeted");
+  openKey = openRun = null;
+  bodyKind = "";
+  git = {...freshGit(), hide1: git.hide1, hide2: git.hide2};
+  panel().classList.remove("open", "wide");
+  panel().innerHTML = "";
 }
 
 function toast(text, tone, target) {
@@ -367,7 +498,7 @@ async function load() {
 }
 
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => setTab(b.dataset.tab));
-document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (openFile) { openFile = null; paintPanel(); } else if (openRun) { openRun = null; paintPanel(); } else closePanel(); });
+document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (openRun) { openRun = null; paintPanel(); } else closePanel(); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && openRun) pollLog(openRun); });
 load();
 setInterval(load, 4000);
