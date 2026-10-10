@@ -449,15 +449,26 @@ def build_state(repo, gc):
             continue
         key = r["root"] if r["root"] and r["root"] != main_root else f"run:{r['id']}"
         groups.setdefault(key, {"runs": [], "sessions": []})["runs"].append(r)
+    by_id = {s["id"]: s for s in sessions}
+    for g in groups.values():
+        for sid in dict.fromkeys(r["session"] for r in g["runs"]):
+            if sid in by_id:
+                g["sessions"].append(by_id[sid])
+    dispatched = {s["id"] for g in groups.values() for s in g["sessions"]}
     for s in sessions:
+        if s["id"] in dispatched:
+            continue
         key = s["worktree"] if s["worktree"] and s["worktree"] != main_root else f"session:{s['id']}"
+        if groups.get(key, {}).get("sessions") and s["cwd"] != key:
+            key = f"session:{s['id']}"
         groups.setdefault(key, {"runs": [], "sessions": []})["sessions"].append(s)
 
     cards = []
     for key, g in groups.items():
         tree = gc.detail(key) if key in trees else None
         latest_run = g["runs"][-1] if g["runs"] else None
-        owner = max(g["sessions"], key=lambda s: (s["named"], s["updated"]), default=None)
+        owner = by_id.get((latest_run or {}).get("session")) \
+            or max(g["sessions"], key=lambda s: (s["named"], s["updated"]), default=None)
         label = (latest_run or {}).get("unit") or (tree or {}).get("branch") or ""
         title = (owner or {}).get("name") or label or (latest_run or {}).get("goal", "")[:90] or key
         card = {"key": key, "title": title, "label": label, "tree": tree, "worktree": key if tree else "",
