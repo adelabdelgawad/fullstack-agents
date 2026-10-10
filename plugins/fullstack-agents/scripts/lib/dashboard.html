@@ -52,10 +52,9 @@ main { padding: 16px 20px 40px; }
 .list .card { cursor: default; }
 .snip { white-space: pre-wrap; margin-top: 6px; font-size: 13px; }
 .empty { color: var(--muted); padding: 20px 0; }
-aside { position: fixed; top: 0; right: 0; bottom: 0; width: min(620px, 100%); background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; transform: translateX(100%); transition: transform .18s, width .18s; z-index: 10; }
+aside { position: fixed; top: 0; right: 0; bottom: 0; width: min(1280px, 96vw); background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; transform: translateX(100%); transition: transform .18s, width .18s; z-index: 10; }
 aside.open { transform: none; }
 html.lock, html.lock body { overflow: hidden; }
-aside.wide { width: min(1280px, 96vw); }
 aside h3 { margin: 0 0 4px; font-size: 16px; }
 aside h4 { margin: 14px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 360px; overflow: auto; }
@@ -73,14 +72,17 @@ aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-sp
 .task input { margin: 3px 0 0; }
 .task .tn { font-weight: 600; }
 .task .tg { grid-column: 2; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.sheet { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 0 18px; overflow-y: auto; }
-.sheet h3 { margin-top: 10px; }
-aside .sheet pre.log { flex: 1; min-height: 120px; max-height: none; margin: 10px 0; font-size: 11px; }
-.end { flex: none; margin: 0 -18px; padding: 12px 18px; border-top: 3px solid var(--line); background: var(--panel); }
-.end.ok { border-top-color: var(--green); }
-.end.bad { border-top-color: var(--red); }
-.end.live { border-top-color: var(--blue); }
-aside .end pre { max-height: 140px; margin: 6px 0 0; }
+.task .th { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.task .caret { margin-left: auto; color: var(--muted); }
+.task .tg { cursor: pointer; }
+.task .detail { grid-column: 1 / -1; margin-top: 8px; cursor: default; }
+.task .detail pre { margin: 6px 0 0; max-height: 220px; }
+aside .task .detail pre.log { max-height: 260px; font-size: 11px; }
+.endbar { display: flex; justify-content: flex-end; margin-top: 10px; padding-top: 8px; border-top: 3px solid var(--line); }
+.endbar.ok { border-top-color: var(--green); }
+.endbar.bad { border-top-color: var(--red); }
+.endbar.live { border-top-color: var(--blue); }
+.endbar .dismiss { margin-left: 0; }
 .card .br { font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--blue); margin-top: 3px; word-break: break-all; }
 .gitview { flex: 1; min-height: 0; display: flex; }
 .gcol { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); }
@@ -200,7 +202,7 @@ function render() {
 }
 
 const freshGit = () => ({sig: "", at: 0, items: null, open: {unc: true, com: true}, item: null, files: null, file: null, diff: ""});
-let openKey = null, openRun = null, tab2 = "info", bodyKind = "", logSeen = "", logTimer = null, wasLive = false;
+let openKey = null, openRun = null, showLog = false, tab2 = "info", bodyKind = "", logSeen = "", logTimer = null, wasLive = false;
 let git = {...freshGit(), hide1: false, hide2: false};
 const LIVE = r => r.state === "running" || r.state === "stalled";
 const stateChip = r => `<span class="chip ${r.flags.length ? "bad" : r.state === "done" ? "ok" : ""}">${esc(r.state)}</span>`;
@@ -215,10 +217,13 @@ function setIfChanged(id, html) {
   const el = document.getElementById(id);
   if (!el || el.dataset.h === html) return false;
   const gb = el.querySelector(".gb"), top = gb ? gb.scrollTop : 0, left = gb ? gb.scrollLeft : 0, own = el.scrollTop;
+  const lg = el.querySelector("pre.log"), lt = lg ? lg.scrollTop : 0, stick = !lg || lg.scrollHeight - lg.scrollTop - lg.clientHeight < 40;
   el.innerHTML = html;
   el.dataset.h = html;
   const nb = el.querySelector(".gb");
   if (nb) { nb.scrollTop = top; nb.scrollLeft = left; }
+  const nl = el.querySelector("pre.log");
+  if (nl) nl.scrollTop = stick ? nl.scrollHeight : lt;
   el.scrollTop = own;
   return true;
 }
@@ -238,70 +243,76 @@ const paneHead = c => `<button class="dismiss close" id="close">Close</button>
 const tabsHtml = c => `<button class="tab2" role="tab" data-t="info" aria-selected="${tab2 === "info"}">Information</button>
   <button class="tab2" role="tab" data-t="git" aria-selected="${tab2 === "git"}" ${c.tree ? "" : "disabled"}>Git changes${c.tree && c.tree.dirty ? ` <span class="badge">${c.tree.dirty}</span>` : ""}</button>`;
 
+function detailHtml(r) {
+  const live = LIVE(r);
+  const tone = live ? "live" : r.flags.length || r.state !== "done" ? "bad" : "ok";
+  const flags = r.flags.map(f => `<span class="chip bad">${esc(FLAG_TEXT[f] || f)}</span>`).join(" ");
+  return `<div class="detail">
+    <div><b>End of task</b> ${stateChip(r)} ${flags}</div>
+    ${live ? '<div class="s">Still running — the result lands here when it finishes.</div>' : r.summary ? `<pre>${esc(r.summary)}</pre>` : '<div class="s">No result text was recorded.</div>'}
+    ${r.open_risks.length ? `<div class="s"><b>Open risks:</b> ${esc(r.open_risks.join(" · "))}</div>` : ""}
+    <div class="row" style="margin:6px 0 0"><button class="dismiss" data-log="1" style="margin-left:0">${showLog ? "Hide log" : "Show log"}</button></div>
+    ${showLog ? `<pre class="log" id="log">${esc(logSeen || "loading…")}</pre>` : ""}
+    <div class="endbar ${tone}"><button class="dismiss" data-collapse="1" title="Collapse this task">Hide ▴</button></div>
+  </div>`;
+}
+
 function infoHtml(c) {
-  const tasks = c.runs.map(r => `<li class="task" data-run="${esc(r.id)}">
-    <input type="checkbox" disabled ${r.state === "done" ? "checked" : ""} aria-label="${esc(r.state)}">
-    <div><span class="tn">${esc(r.unit || r.id)}</span> ${stateChip(r)} <span class="s">${LIVE(r) ? `<span class="live-dot"></span>running ${dur(r)}` : `took ${dur(r)} · ${ago(r.updated)} ago`}</span></div>
-    ${r.goal ? `<div class="snip tg">${esc(r.goal)}</div>` : ""}</li>`).join("");
+  const tasks = c.runs.map(r => {
+    const open = openRun === r.id;
+    return `<li class="task${open ? " open" : ""}" data-run="${esc(r.id)}">
+      <input type="checkbox" disabled ${r.state === "done" ? "checked" : ""} aria-label="${esc(r.state)}">
+      <div class="th"><span class="tn">${esc(r.unit || r.id)}</span> ${stateChip(r)} <span class="s">${LIVE(r) ? `<span class="live-dot"></span>running ${dur(r)}` : `took ${dur(r)} · ${ago(r.updated)} ago`}</span><span class="caret">${open ? "▾" : "▸"}</span></div>
+      ${r.goal ? `<div class="snip tg">${esc(r.goal)}</div>` : ""}
+      ${open ? detailHtml(r) : ""}</li>`;
+  }).join("");
   return `<h4>Description</h4>
     <div class="snip">${esc(c.desc || c.goal || "No brief has been recorded for this work yet.")}</div>
     <h4>Tasks</h4>${tasks ? `<ul class="tasks">${tasks}</ul>` : '<div class="empty">No implementer tasks yet.</div>'}`;
-}
-
-function headHtml(c, r) {
-  return `<div class="row" style="margin:0"><button class="dismiss" id="back" style="margin-left:0">← Tasks</button></div>
-    <h3>${LIVE(r) ? '<span class="live-dot"></span>' : ""}${esc(r.unit || r.id)} ${stateChip(r)}</h3>
-    <div class="s">${esc(c.title)} · ${esc(r.engine)} · <span id="sh-age"></span></div>
-    ${r.goal ? `<div class="snip">${esc(r.desc || r.goal)}</div>` : ""}`;
-}
-
-function endHtml(r) {
-  if (LIVE(r)) return `<b>End of task</b> <span class="s">— still running; the result lands here when it finishes.</span>`;
-  const flags = r.flags.map(f => `<span class="chip bad">${esc(FLAG_TEXT[f] || f)}</span>`).join(" ");
-  return `<b>End of task</b> ${stateChip(r)} ${flags}
-    ${r.summary ? `<pre>${esc(r.summary)}</pre>` : '<div class="s">No result text was recorded.</div>'}
-    ${r.open_risks.length ? `<div class="s"><b>Open risks:</b> ${esc(r.open_risks.join(" · "))}</div>` : ""}`;
 }
 
 async function pollLog(id) {
   if (document.hidden) return;
   try {
     const t = await (await fetch("/api/log?id=" + enc(id), {cache: "no-store"})).text();
-    const el = document.getElementById("log");
-    if (!el || openRun !== id || t === logSeen) return;
-    const stick = !logSeen || el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-    el.textContent = logSeen = t || "(log is empty)";
-    if (stick) el.scrollTop = el.scrollHeight;
+    if (openRun !== id || !showLog || t === logSeen) return;
+    logSeen = t || "(log is empty)";
+    paintPanel();
   } catch (e) {}
 }
 
 function stopLog() { clearInterval(logTimer); logTimer = null; }
 
+function wireInfo() {
+  document.querySelectorAll("#info .task").forEach(li => li.onclick = ev => { if (!ev.target.closest(".detail")) toggleTask(li.dataset.run); });
+  const lb = document.querySelector("#info [data-log]");
+  if (lb) lb.onclick = ev => { ev.stopPropagation(); showLog = !showLog; logSeen = ""; stopLog(); paintPanel(); };
+  const cb = document.querySelector("#info [data-collapse]");
+  if (cb) cb.onclick = ev => { ev.stopPropagation(); toggleTask(openRun); };
+}
+
 function paintInfo(c) {
+  if (openRun && !c.runs.some(x => x.id === openRun)) { openRun = null; showLog = false; stopLog(); }
+  ensureBody("info", '<div id="info"></div>');
+  if (setIfChanged("info", infoHtml(c))) wireInfo();
   const r = openRun && c.runs.find(x => x.id === openRun);
-  if (openRun && !r) openRun = null;
-  if (!r) {
-    stopLog();
-    ensureBody("info", '<div id="info"></div>');
-    if (setIfChanged("info", infoHtml(c))) document.querySelectorAll("#info [data-run]").forEach(li => li.onclick = () => openTask(li.dataset.run));
-    return;
-  }
-  ensureBody("sheet:" + r.id, '<div class="sheet"><div id="sh-head"></div><pre class="log" id="log" tabindex="0">loading…</pre><div class="end" id="sh-end"></div></div>', () => {
-    stopLog();
-    logSeen = "";
-    wasLive = LIVE(r);
-  });
-  if (setIfChanged("sh-head", headHtml(c, r))) document.getElementById("back").onclick = () => { openRun = null; paintPanel(); };
-  document.getElementById("sh-age").textContent = `${ago(r.updated)} ago${LIVE(r) ? " · live" : ""}`;
-  document.getElementById("sh-end").className = "end " + (LIVE(r) ? "live" : r.flags.length || r.state !== "done" ? "bad" : "ok");
-  setIfChanged("sh-end", endHtml(r));
+  if (!r || !showLog) return stopLog();
   if (LIVE(r)) {
+    wasLive = true;
     if (!logTimer) { pollLog(r.id); logTimer = setInterval(() => pollLog(r.id), 2500); }
   } else {
     stopLog();
-    if (wasLive || !logSeen) pollLog(r.id);
-    wasLive = false;
+    if (wasLive || !logSeen) { wasLive = false; pollLog(r.id); }
   }
+}
+
+function toggleTask(id) {
+  openRun = openRun === id ? null : id;
+  showLog = false;
+  logSeen = "";
+  wasLive = false;
+  stopLog();
+  paintPanel();
 }
 
 const stc = s => s === "?" ? "U" : s;
@@ -414,7 +425,6 @@ function paintPanel() {
     p.innerHTML = '<div id="phead"></div><div class="ptabs" id="ptabs" role="tablist"></div><div class="pbody" id="pbody"></div>';
     bodyKind = "";
   }
-  p.classList.toggle("wide", tab2 === "git");
   if (setIfChanged("phead", paneHead(c))) document.getElementById("close").onclick = closePanel;
   if (setIfChanged("ptabs", tabsHtml(c))) document.querySelectorAll("#ptabs [data-t]").forEach(b => b.onclick = () => { tab2 = b.dataset.t; paintPanel(); });
   if (tab2 === "git" && c.tree) {
@@ -430,6 +440,8 @@ function openCard(key) {
   if (openKey !== key) git = {...freshGit(), hide1: git.hide1, hide2: git.hide2};
   openKey = key;
   openRun = null;
+  showLog = false;
+  logSeen = "";
   tab2 = "info";
   bodyKind = "";
   panel().innerHTML = "";
@@ -438,17 +450,13 @@ function openCard(key) {
   paintPanel();
 }
 
-function openTask(id) {
-  openRun = id;
-  paintPanel();
-}
-
 function closePanel() {
   stopLog();
   openKey = openRun = null;
+  showLog = false;
   bodyKind = "";
   git = {...freshGit(), hide1: git.hide1, hide2: git.hide2};
-  panel().classList.remove("open", "wide");
+  panel().classList.remove("open");
   panel().innerHTML = "";
   document.documentElement.classList.remove("lock");
 }
@@ -505,7 +513,7 @@ async function load() {
 }
 
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => setTab(b.dataset.tab));
-document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (openRun) { openRun = null; paintPanel(); } else closePanel(); });
+document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (openRun) toggleTask(openRun); else closePanel(); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && openRun) pollLog(openRun); });
 load();
 setInterval(load, 4000);
