@@ -229,4 +229,6 @@ if [ "$mode" = "implement" ] && [ -n "$touched" ]; then
   outside=$(grep -vxF -f "$runs/$id.allow" <<<"$touched" || true)
   [ -n "$outside" ] && printf 'STATUS=OUT_OF_SCOPE (changed outside ALLOWED_PATHS during the run; confirm the author before auditing):\n%s\n' "$outside"
 fi
+noop=0; [ "$mode" = "implement" ] && [ -z "$touched" ] && { noop=1; echo "STATUS=NO_CHANGES (the run changed no file; read the summary before re-briefing)"; }
+[ "$codex_exit" -eq 0 ] && [ -s "$last" ] && [ "${summary_len:-0}" -lt 11500 ] && [ -z "${outside:-}" ] && [ "$noop" = 0 ] && echo "STATUS=OK (audit the diff before trusting it)"
 exit 0

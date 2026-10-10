@@ -17,7 +17,8 @@ For each command:
 2. Extract from that log only: the `test result:` lines (or the runner's summary line), the names of failing tests, and the first
    panic or error line of each failure, verbatim.
 
-Return exactly one Markdown table:
+Return one first line, exactly `RESULT: GREEN` when every command exited 0 with no failing tests, otherwise `RESULT: RED`,
+then exactly one Markdown table:
 
 | # | Command | Exit | Passed | Failed | Failing tests | First error line (verbatim) | Log |
 

@@ -33,6 +33,7 @@
   "agents": [
     "./agents/lead/fullstack-agent.md",
     "./agents/lead/bounded-extractor.md",
-    "./agents/lead/test-runner.md"
+    "./agents/lead/test-runner.md",
+    "./agents/lead/diff-reviewer.md"
   ]
 }

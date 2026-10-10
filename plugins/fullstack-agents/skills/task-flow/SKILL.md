@@ -21,7 +21,7 @@ Everything above **Project bindings** is project-independent; the bindings come 
 | 1. Investigate | Orchestrator | Lane skill loaded first; for latency, server vs client time measured first. Then root cause with `file:line`, the command/event path, minimal fix shape |
 | 2. Plan | Orchestrator (Claude, plan mode first; never delegated to the implementer) | ≤ 40 lines: outcome, files with `file:line`, minimum test set, verification commands, deploy class, risks |
 | 3. Implement | Orchestrator (small) or Implementer (rest) | The diff, nothing else |
-| 4. Audit | Orchestrator (Claude) | The implementer's git diff reviewed for conformity with the brief and the architecture docs (and accessibility on UI diffs), plus the plan's tests re-run |
+| 4. Audit | Orchestrator (Claude) | The implementer's git diff reviewed for conformity with the brief and the architecture docs (and accessibility on UI diffs), the plan's tests re-run, each `ACCEPTANCE:` item marked met with its evidence; `diff-reviewer` lens passes as extra evidence when the diff warrants them |
 | 5. Loop | Orchestrator | Re-brief with raw output; two retries, then hand the failure to the user |
 
 The orchestrator owns every step but the writing of large changes. It never delegates the
@@ -52,9 +52,15 @@ its paths locked, or the budget never applies to exactly the files under active 
 ## Briefs
 
 A brief is the contract and the audit scope. It states: goal; the plan reference; every path the
-implementer may touch; the one document to read; the known-red baseline; the tests that prove the
-fix; a `BUILD:` line (one compile or type-check command the implementer runs once at the end); forbidden moves. Keep it under 30
-lines. The tests that prove the fix are listed for the orchestrator's audit, not for the implementer to run.
+implementer may touch; the one document to read; the known-red baseline; an `ACCEPTANCE:` block;
+a `BUILD:` line (one compile or type-check command the implementer runs once at the end); forbidden moves. Keep it under 30
+lines.
+
+`ACCEPTANCE:` is a numbered list written before dispatch. Each item is one observable behaviour
+plus the exact check that proves it: a named test, a command and its expected output, a query, or
+a page and what it shows. Someone holding only the repository must be able to run it. It replaces
+a loose "tests that prove the fix" list. It is for the orchestrator's audit, not for the
+implementer to run. A behaviour with no check you can name is not understood well enough to delegate.
 
 The orchestrator already located every change site with grep while planning, so the brief hands
 those locations over: each site as `file:line` (or a line range) with what changes there — for a
@@ -138,6 +144,18 @@ keyboard reach, focus, contrast). Then have `fullstack-agents:test-runner` (Sonn
 logs it names yourself — grep the result and failure lines, never trust the table alone. A targeted run that skips a surface the
 diff touched is not a green result. The implementer does not run test suites (they are denied to the implementer); it runs only the brief's
 `BUILD:` compile or type check, so test output never inflates its context.
+
+Close the audit by marking each `ACCEPTANCE:` item met or not met, citing its evidence: the log
+line, the command output or the diff line. One item not met means the unit is not done.
+
+A single auditor misses what it is not looking for, so add independent lens passes when the diff
+warrants one: `fullstack-agents:diff-reviewer` with `LENS: security` for access control, auth,
+input parsing, SQL or secrets; `LENS: ux` for a user-facing page or flow; `LENS: code` for a risk
+carve-out path or a diff too large to hold at once. Save the diff to a file, then send the passes
+for different lenses in one message so they run in parallel. Each one reads only the files it is given and
+runs nothing. Its `VERDICT:` and findings are hypotheses: reopen every cited line before you act
+on it, and re-brief only the findings you confirmed. A lens pass never merges anything and never
+replaces your own reading of the diff.
 
 On frontend diffs, a new `router.refresh()`, a new stream or polling loop, a debounce on a
 non-text control, or a static import of a large on-demand sheet/dialog is a review question, not an

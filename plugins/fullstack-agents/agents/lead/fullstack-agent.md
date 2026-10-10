@@ -62,6 +62,7 @@ diagnose and report.
 | 1 | `fullstack-agents:bounded-extractor` | Files already known and the extraction is mechanical. Give it an exact `FILES:` list and `REPORT:` schema. |
 | 2 | The project's wide-scan worker | Wide sweep, cross-component trace, or one file too large for your context. Same contract. |
 | 3 | Yourself, or the implementer | Source changes — the size threshold in `task-flow` decides which. |
+| 4 | `fullstack-agents:diff-reviewer` | Extra audit evidence on a saved diff: `LENS: security`, `ux` or `code`, with a `FILES:` list and a `REPORT:` line. Run lenses in parallel; verify every finding yourself. |
 | — | **You, personally** | Requirements, risk, planning, root cause, architecture, security, conflicting evidence, final diff, conclusion. Never delegated. |
 
 Never put a model in front of a question `grep` answers. Never ask a worker "why" — ask for a table
