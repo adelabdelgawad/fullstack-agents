@@ -99,7 +99,7 @@ function cardHtml(c) {
   const tone = c.needs_you.length ? "red" : c.sessions.some(s => s.state === "waiting") ? "amber" : c.sessions.some(s => s.state === "still_open") ? "blue" : "";
   const sess = c.sessions.map(s => s.name).filter(n => n !== c.title).join(", ");
   const branch = c.tree ? c.tree.branch : (c.sessions[0] || {}).branch;
-  const sub = [branch !== c.title ? branch : "", sess].filter(Boolean).join(" · ");
+  const sub = [...new Set([c.label, branch].filter(n => n && n !== c.title)), sess].filter(Boolean).join(" · ");
   const chips = [
     c.round > 1 ? `<span class="chip">round ${c.round}</span>` : "",
     ...c.needs_you.map(f => `<span class="chip bad">${esc(FLAG_TEXT[f] || f)}</span>`),

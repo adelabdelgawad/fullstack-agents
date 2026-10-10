@@ -358,6 +358,7 @@ def read_session(path, now, wt_re, names):
     worktree = max(mentions, key=mentions.get) if mentions else ""
     return {
         "id": sid, "name": title or names.get(sid) or f"{Path(cwd).name or 'session'} {sid[:8]}",
+        "named": bool(title or names.get(sid)),
         "cwd": cwd, "branch": branch, "worktree": worktree, "state": state, "updated": mtime,
         "idle": idle, "snippet": snippet(text) if state in ("waiting", "still_open", "idle") else "",
         "briefs": sorted(briefs), "chips": chips,
@@ -456,10 +457,10 @@ def build_state(repo, gc):
     for key, g in groups.items():
         tree = gc.detail(key) if key in trees else None
         latest_run = g["runs"][-1] if g["runs"] else None
-        label = g["sessions"][0]["name"] if tree and tree["fresh"] and g["sessions"] else (tree or {}).get("branch")
-        title = (latest_run or {}).get("unit") or label \
-            or (g["sessions"][0]["name"] if g["sessions"] else "") or (latest_run or {}).get("goal", "")[:90] or key
-        card = {"key": key, "title": title, "tree": tree, "worktree": key if tree else "",
+        owner = max(g["sessions"], key=lambda s: (s["named"], s["updated"]), default=None)
+        label = (latest_run or {}).get("unit") or (tree or {}).get("branch") or ""
+        title = (owner or {}).get("name") or label or (latest_run or {}).get("goal", "")[:90] or key
+        card = {"key": key, "title": title, "label": label, "tree": tree, "worktree": key if tree else "",
                 "goal": (latest_run or {}).get("goal", ""),
                 "sessions": [{k: s[k] for k in ("id", "name", "state", "updated", "branch")} for s in g["sessions"]],
                 "runs": g["runs"][-6:], "chips": [c for s in g["sessions"] for c in s["chips"]][-6:]}
