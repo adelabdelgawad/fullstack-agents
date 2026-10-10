@@ -33,7 +33,18 @@ nav button[aria-selected="true"] { background: var(--chip); border-color: var(--
 @keyframes pulse { 50% { transform: scale(1.25); } }
 main { padding: 16px 20px 40px; }
 .strip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
-.board { display: grid; grid-template-columns: repeat(9, minmax(170px, 1fr)); gap: 10px; overflow-x: auto; }
+.board { display: grid; gap: 12px; overflow-x: auto; }
+.col.empty-col h2 { font-size: 11px; justify-content: flex-start; gap: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col.empty-col h2 span { opacity: .6; }
+.col-idle .card:not(:hover):not(:focus-within) { opacity: .72; }
+.more { width: 100%; border: 1px dashed var(--line); background: none; color: var(--muted); border-radius: 8px; padding: 6px; font: inherit; font-size: 12px; cursor: pointer; }
+.more:hover { color: var(--ink); border-color: var(--muted); }
+.chip.st-waiting { background: var(--amber); color: var(--panel); font-weight: 600; }
+.chip.st-stopped { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue); }
+.chip.st-working { background: var(--green-bg); color: var(--green); }
+.strip .card b + .open { margin-left: 8px; color: var(--muted); font-size: 12px; }
+.strip .paths { font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--red); margin-top: 4px; word-break: break-all; }
+@media (hover: hover) { .card .row .dismiss { opacity: 0; } .card:hover .row .dismiss, .card:focus-within .row .dismiss { opacity: 1; } }
 .col h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; display: flex; justify-content: space-between; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 8px; cursor: pointer; border-left-width: 4px; }
 .card:hover { border-color: var(--muted); }
@@ -118,7 +129,7 @@ aside .gcol pre.diff { margin: 0; border-radius: 0; background: none; padding: 0
 .toast.blue { border-left-color: var(--blue); }
 .toast.red { border-left-color: var(--red); }
 @keyframes slide { from { transform: translateX(30px); opacity: 0; } }
-@media (max-width: 700px) { main, header { padding-left: 16px; padding-right: 16px; } .board { grid-template-columns: repeat(9, 78vw); } }
+@media (max-width: 700px) { main, header { padding-left: 16px; padding-right: 16px; } nav { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; } nav button { flex: none; } }
 </style>
 </head>
 <body>
@@ -136,8 +147,11 @@ aside .gcol pre.diff { margin: 0; border-radius: 0; background: none; padding: 0
 <aside id="panel" aria-label="Details"></aside>
 <div id="toasts" aria-live="polite"></div>
 <script>
-const PHASES = [["investigate","Investigate"],["plan","Plan"],["implement","Implement"],["rework","Rework"],["audit","Audit"],["review","Review"],["merged","Merged"],["deploying","Deploying"],["deployed","Deployed"]];
-const FLAG_TEXT = {failed:"run failed", stalled:"run stalled", out_of_scope:"changed outside its paths", no_changes:"changed nothing", retries_exhausted:"retries used up"};
+const PHASES = [["idle","Idle"],["investigate","Investigate"],["plan","Plan"],["implement","Implement"],["rework","Rework"],["audit","Audit"],["review","Review"],["merged","Merged"],["deploying","Deploying"],["deployed","Deployed"]];
+const FLAG_TEXT = {failed:"run failed", stalled:"run stalled", out_of_scope:"edited files outside its brief", no_changes:"changed nothing", retries_exhausted:"retries used up"};
+const COLLAPSE = new Set(["idle", "merged", "deployed"]), SHOWN = 3;
+let expanded = new Set();
+try { expanded = new Set(JSON.parse(localStorage.getItem("fsa-expanded") || "[]")); } catch (e) {}
 let uiSeen = null, tab = "board", state = null, seen = null, unseen = {waiting: false, still_open: false};
 try { tab = localStorage.getItem("fsa-tab") || "board"; } catch (e) {}
 
@@ -155,8 +169,12 @@ function cardHtml(c) {
   const tone = c.needs_you.length ? "red" : c.sessions.some(s => s.state === "waiting") ? "amber" : c.sessions.some(s => s.state === "still_open") ? "blue" : "";
   const sess = c.sessions.map(s => s.name).filter(n => n !== c.title).join(", ");
   const branch = c.tree ? c.tree.branch : (c.sessions[0] || {}).branch;
-  const sub = [c.label && c.label !== c.title ? c.label : "", sess, c.declared ? c.declared.note : ""].filter(Boolean).join(" · ");
+  const sub = [c.label && c.label !== c.title && c.label !== branch ? c.label : "", sess, c.declared ? c.declared.note : ""].filter(Boolean).join(" · ");
+  const st = c.needs_you.length ? "" : c.sessions.some(s => s.state === "waiting") ? `<span class="chip st-waiting">waiting on you</span>`
+    : c.sessions.some(s => s.state === "working") ? `<span class="chip st-working">working</span>`
+    : c.sessions.length && c.sessions.every(s => s.state === "still_open") ? `<span class="chip st-stopped">stopped ${ago(Math.max(...c.sessions.map(s => s.updated)))} ago</span>` : "";
   const chips = [
+    st,
     c.round > 1 ? `<span class="chip">round ${c.round}</span>` : "",
     ...c.needs_you.map(f => `<span class="chip bad">${esc(FLAG_TEXT[f] || f)}</span>`),
     ...c.chips.map(chip),
@@ -172,7 +190,7 @@ function cardHtml(c) {
 
 function attentionHtml(items, tone, emptyText) {
   if (!items.length) return `<div class="empty">${emptyText}</div>`;
-  return `<div class="list">${items.map(s => `<div class="card ${tone}">
+  return `<div class="list">${items.map(s => `<div class="card ${tone}"${s.card ? ` data-key="${esc(s.card)}" tabindex="0"` : ""}>
     <div class="t">${esc(s.name)}</div>
     <div class="s">idle ${ago(s.updated)} · ${esc(s.phase || "no task card")}${s.branch ? " · " + esc(s.branch) : ""}</div>
     <div class="snip">${esc(s.snippet)}</div>
@@ -184,10 +202,15 @@ function render() {
   const m = document.getElementById("main");
   const red = state.cards.filter(c => c.needs_you.length);
   if (tab === "board") {
-    const strip = red.length ? `<div class="strip">${red.map(c => `<div class="card red" data-key="${esc(c.key)}"><b>Needs you:</b> ${esc(c.title)} — ${esc(c.needs_you.map(f => FLAG_TEXT[f] || f).join(", "))}</div>`).join("")}</div>` : "";
-    m.innerHTML = strip + `<div class="board">${PHASES.map(([k, label]) => {
-      const cs = state.cards.filter(c => c.phase === k);
-      return `<section class="col"><h2>${label}<span>${cs.length}</span></h2>${cs.map(cardHtml).join("")}</section>`;
+    const paths = c => c.outside && c.outside.length ? `<div class="paths">${c.outside.slice(0, 4).map(esc).join("<br>")}${c.outside.length > 4 ? `<br>+${c.outside.length - 4} more` : ""}</div>` : "";
+    const strip = red.length ? `<div class="strip">${red.map(c => `<div class="card red" tabindex="0" data-key="${esc(c.key)}"><b>Needs you:</b> ${esc(c.title)} — ${esc(c.needs_you.map(f => FLAG_TEXT[f] || f).join(", "))}<span class="open">Open ›</span>${paths(c)}</div>`).join("")}</div>` : "";
+    const wide = matchMedia("(max-width: 700px)").matches ? "78vw" : "minmax(150px, 1fr)";
+    const cols = PHASES.map(([k, label]) => [k, label, state.cards.filter(c => c.phase === k)]);
+    const tmpl = cols.map(([, , cs]) => cs.length ? wide : "76px").join(" ");
+    m.innerHTML = strip + `<div class="board" style="grid-template-columns:${tmpl}">${cols.map(([k, label, cs]) => {
+      const open = !COLLAPSE.has(k) || expanded.has(k), shown = open ? cs : cs.slice(0, SHOWN);
+      const more = COLLAPSE.has(k) && cs.length > SHOWN ? `<button class="more" data-more="${k}" aria-expanded="${open}">${open ? "Show fewer" : `Show all ${cs.length}`}</button>` : "";
+      return `<section class="col col-${k}${cs.length ? "" : " empty-col"}"><h2 title="${label}">${label}<span>${cs.length}</span></h2>${shown.map(cardHtml).join("")}${more}</section>`;
     }).join("")}</div>`;
   } else if (tab === "waiting") {
     m.innerHTML = attentionHtml(state.waiting, "amber", "No session is waiting on you.");
@@ -196,8 +219,17 @@ function render() {
   } else {
     m.innerHTML = state.abandoned.length ? `<div class="list">${state.abandoned.map(r => `<div class="card"><div class="t">${esc(r.unit || r.id)}</div><div class="s">${esc(r.goal)}</div><div class="s">${esc(r.root || "")} · last log ${ago(r.updated)} ago</div></div>`).join("")}</div>` : `<div class="empty">No abandoned runs.</div>`;
   }
-  document.querySelectorAll("[data-key]").forEach(el => el.onclick = () => openCard(el.dataset.key));
+  document.querySelectorAll("[data-key]").forEach(el => {
+    el.onclick = () => openCard(el.dataset.key);
+    el.onkeydown = e => { if ((e.key === "Enter" || e.key === " ") && e.target === el) { e.preventDefault(); openCard(el.dataset.key); } };
+  });
   document.querySelectorAll("[data-dismiss]").forEach(el => el.onclick = ev => dismiss(el.dataset.dismiss, ev));
+  document.querySelectorAll("[data-more]").forEach(el => el.onclick = () => {
+    const k = el.dataset.more;
+    expanded.has(k) ? expanded.delete(k) : expanded.add(k);
+    try { localStorage.setItem("fsa-expanded", JSON.stringify([...expanded])); } catch (e) {}
+    render();
+  });
   document.querySelectorAll("nav button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
 }
 
@@ -503,7 +535,8 @@ async function load() {
     state = await r.json();
     if (uiSeen && state.ui && uiSeen !== state.ui) return location.reload();
     uiSeen = state.ui;
-    document.getElementById("meta").textContent = `${state.repo} · ${state.locks.deploy ? "deploy lock held · " : ""}updated ${new Date(state.generated * 1000).toLocaleTimeString()}`;
+    document.getElementById("meta").title = state.repo;
+    document.getElementById("meta").textContent = `${state.repo.split("/").pop()} · ${state.locks.deploy ? "deploy lock held · " : ""}updated ${new Date(state.generated * 1000).toLocaleTimeString()}`;
     notify();
     render();
     if (openKey) paintPanel();

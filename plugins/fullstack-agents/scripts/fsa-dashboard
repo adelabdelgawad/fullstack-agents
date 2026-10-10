@@ -17,9 +17,11 @@ from datetime import datetime, timezone
 
 HERE = Path(__file__).resolve().parent
 HTML = HERE / "lib" / "dashboard.html"
+FIRST_PROMPTS = {}
 RUN_WINDOW_S = 72 * 3600
 SESSION_WINDOW_S = 48 * 3600
 STALL_S = 300
+IDLE_DROP_S = 12 * 3600
 ABANDON_S = 24 * 3600
 LOOSE_RUN_S = 12 * 3600
 WAIT_MIN_S = 60
@@ -323,7 +325,7 @@ def read_run(runs, rid, log_mtime, now):
     else:
         state = "abandoned" if now - log_mtime > ABANDON_S else "failed"
     touched = touched_paths(runs, rid) if mode == "implement" else None
-    flags = []
+    flags, outside = [], []
     if state in ("failed", "stalled"):
         flags.append(state)
     if state == "done" and touched is not None:
@@ -331,7 +333,8 @@ def read_run(runs, rid, log_mtime, now):
             allow = set((runs / f"{rid}.allow").read_text().split())
         except OSError:
             allow = set()
-        if allow and set(touched) - allow:
+        outside = sorted(set(touched) - allow) if allow else []
+        if outside:
             flags.append("out_of_scope")
         if not touched:
             flags.append("no_changes")
@@ -341,7 +344,7 @@ def read_run(runs, rid, log_mtime, now):
         "root": run_root(runs, rid, meta), "goal": goal_line(runs / f"{rid}.prompt.md"),
         "desc": goal_line(runs / f"{rid}.prompt.md", 900),
         "state": state, "flags": flags, "updated": log_mtime, "started": run_started(rid, meta),
-        "touched": touched or [], "open_risks": (result or {}).get("open_risks", []),
+        "touched": touched or [], "outside": outside, "open_risks": (result or {}).get("open_risks", []),
         "summary": ((result or {}).get("summary") or "")[:1500],
     }
 
@@ -420,6 +423,33 @@ def subagent_chips(session_dir, now):
     return chips, busy
 
 
+def first_prompt(path):
+    key = str(path)
+    if key not in FIRST_PROMPTS:
+        found = ""
+        try:
+            with path.open(encoding="utf-8", errors="replace") as fh:
+                head = fh.read(TAIL_BYTES).splitlines()[:-1]
+        except OSError:
+            head = []
+        for line in head:
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            if d.get("type") != "user" or d.get("isMeta") or d.get("isSidechain"):
+                continue
+            content = (d.get("message") or {}).get("content")
+            if isinstance(content, list):
+                content = " ".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
+            text = " ".join(str(content or "").split())
+            if text and not text.startswith(("<", "Caveat:", "[Request interrupted")):
+                found = text[:60] + ("…" if len(text) > 60 else "")
+                break
+        FIRST_PROMPTS[key] = found
+    return FIRST_PROMPTS[key]
+
+
 def read_session(path, now, wt_re, names):
     mtime = path.stat().st_mtime
     sid = path.stem
@@ -461,7 +491,7 @@ def read_session(path, now, wt_re, names):
         state = "quiet"
     worktree = max(mentions, key=mentions.get) if mentions else ""
     return {
-        "id": sid, "name": title or names.get(sid) or f"{Path(cwd).name or 'session'} {sid[:8]}",
+        "id": sid, "name": title or names.get(sid) or first_prompt(path) or f"{Path(cwd).name or 'session'} {sid[:8]}",
         "named": bool(title or names.get(sid)),
         "cwd": cwd, "branch": branch, "worktree": worktree, "state": state, "updated": mtime,
         "idle": idle, "snippet": snippet(text) if state in ("waiting", "still_open", "idle") else "",
@@ -531,7 +561,7 @@ def phase_of(card, runs, sessions, board, gc, repo, deployed_shas):
     briefs_run = {r["unit"] for r in runs}
     if any(set(s["briefs"]) - briefs_run for s in sessions):
         return "plan"
-    return "investigate"
+    return "idle" if sessions and all(s["state"] == "still_open" for s in sessions) else "investigate"
 
 
 def needs_you(card, runs):
@@ -610,7 +640,11 @@ def build_state(repo, gc):
                                key=lambda d: d["at"], default=None)
         card["phase"] = phase_of(card, g["runs"], g["sessions"], board, gc, repo, deployed_shas)
         card["needs_you"] = [] if card["phase"] in ("merged", "deployed") else needs_you(card, g["runs"])
+        impl = [r for r in g["runs"] if r["mode"] == "implement"]
+        card["outside"] = impl[-1]["outside"] if impl and "out_of_scope" in card["needs_you"] else []
         card["updated"] = max([r["updated"] for r in g["runs"]] + [s["updated"] for s in g["sessions"]] + [0])
+        if card["phase"] == "idle" and now - card["updated"] > IDLE_DROP_S:
+            continue
         if dismissed.get(key, 0) < card["updated"]:
             cards.append(card)
 
