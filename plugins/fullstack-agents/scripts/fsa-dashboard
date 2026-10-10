@@ -13,6 +13,7 @@ import threading
 import time
 import urllib.parse
 from pathlib import Path
+from datetime import datetime
 
 HERE = Path(__file__).resolve().parent
 HTML = HERE / "lib" / "dashboard.html"
@@ -32,6 +33,7 @@ BRIEF_RE = re.compile(r"\.codex-briefs/([\w.-]+)\.md")
 DEPLOYED_RE = re.compile(r"\bDEPLOYED\b.*?\b([0-9a-f]{9,40})\b")
 ROOT_RE = re.compile(r"(?:--cd|-C|\bcd) '([^']+)'")
 FIX_RE = re.compile(r"-fix\d+$")
+PHASES = ("investigate", "plan", "audit", "review")
 
 
 def load_json(path):
@@ -389,6 +391,13 @@ def collect_sessions(repo, trees, now, names):
     return out
 
 
+def iso_epoch(ts):
+    try:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+    except (AttributeError, ValueError):
+        return 0
+
+
 def phase_of(card, runs, sessions, board, gc, repo, deployed_shas):
     tree = card.get("tree")
     impl = [r for r in runs if r["mode"] == "implement"]
@@ -406,6 +415,9 @@ def phase_of(card, runs, sessions, board, gc, repo, deployed_shas):
         return "merged"
     if latest and latest["state"] in ("running", "stalled"):
         return "rework" if card.get("round", 1) > 1 else "implement"
+    declared = card.get("declared")
+    if declared and (not latest or declared["at"] >= latest["updated"]):
+        return declared["phase"]
     if latest:
         ended = latest["state"] == "done" and any(
             x["id"] == latest["session"] and x["state"] in ("idle", "waiting", "still_open")
@@ -452,6 +464,11 @@ def build_state(repo, gc):
             continue
         key = r["root"] if r["root"] and r["root"] != main_root else f"run:{r['id']}"
         groups.setdefault(key, {"runs": [], "sessions": []})["runs"].append(r)
+    declared = {}
+    for sid, v in (board.get("phases") or {}).items():
+        at = iso_epoch(v.get("at", ""))
+        if at and v.get("phase") in PHASES:
+            declared[sid] = {"phase": v["phase"], "at": at, "note": v.get("note", ""), "worktree": v.get("worktree", "")}
     by_id = {s["id"]: s for s in sessions}
     for g in groups.values():
         for sid in dict.fromkeys(r["session"] for r in g["runs"]):
@@ -461,9 +478,12 @@ def build_state(repo, gc):
     for s in sessions:
         if s["id"] in dispatched:
             continue
+        own = (declared.get(s["id"]) or {}).get("worktree")
         key = s["worktree"] if s["worktree"] and s["worktree"] != main_root else f"session:{s['id']}"
         if groups.get(key, {}).get("sessions") and s["cwd"] != key:
             key = f"session:{s['id']}"
+        if own in trees and own != main_root:
+            key = own
         groups.setdefault(key, {"runs": [], "sessions": []})["sessions"].append(s)
 
     cards = []
@@ -478,6 +498,8 @@ def build_state(repo, gc):
                 "goal": (latest_run or {}).get("goal", ""),
                 "sessions": [{k: s[k] for k in ("id", "name", "state", "updated", "branch")} for s in g["sessions"]],
                 "runs": g["runs"][-6:], "chips": [c for s in g["sessions"] for c in s["chips"]][-6:]}
+        card["declared"] = max((declared[s["id"]] for s in g["sessions"] if s["id"] in declared),
+                               key=lambda d: d["at"], default=None)
         card["phase"] = phase_of(card, g["runs"], g["sessions"], board, gc, repo, deployed_shas)
         card["needs_you"] = [] if card["phase"] in ("merged", "deployed") else needs_you(card, g["runs"])
         card["updated"] = max([r["updated"] for r in g["runs"]] + [s["updated"] for s in g["sessions"]] + [0])

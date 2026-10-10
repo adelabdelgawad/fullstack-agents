@@ -32,6 +32,7 @@ $TB status                              # claims, locks, recent events
 $TB claim --name <name> --task "<one line>" --scope "<paths / surfaces>"
 $TB lock deploy --name <name> --reason "<sha, migrations>"   # exit 3: a peer holds it
 $TB note --name <name> "deployed <sha>; image <id>; migrations <v>"
+$TB phase <investigate|plan|audit|review> [--worktree <path>] [--note "<one line>"]
 $TB unlock deploy ; $TB release
 ```
 
@@ -73,6 +74,8 @@ Investigate → Plan → Implement → Rework → Audit → Review → Merged �
 that need the user, and lists sessions **waiting on the user** (the last turn asked a question, or handed a Review card back)
 and **still open** (stopped without finishing). The user dismisses cards on the page.
 Its git calls take no optional locks, so it never blocks a peer's commit.
+A phase a session declares with `$TB phase` beats the dashboard's inference until a newer run,
+merge, deploy lock or deploy note overrides it; `--worktree` places the session on that card.
 
 ## Project bindings
 

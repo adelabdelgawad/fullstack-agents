@@ -34,6 +34,12 @@ ok "$([ $rc -eq 3 ] && echo true)" "cannot take a lock a peer holds" "rc=$rc"
 "$TB" --session A note --name alpha "deployed abc123; adds no migration"
 out=$("$TB" --session C status); ok "$(echo "$out" | grep -q 'EVENT .* alpha: deployed abc123' && echo true)" "notes reach the event log" "$out"
 
+"$TB" --session A phase audit --worktree /tmp/wt-a --note "u1 returned"
+"$TB" --session A phase review
+out=$("$TB" --session C status --json | python3 -c 'import json,sys; v=json.load(sys.stdin)["phases"]["A"]; print(v["phase"], v["worktree"])')
+ok "$([ "$out" = "review /tmp/wt-a" ] && echo true)" "phase records the latest phase and keeps the declared worktree" "$out"
+"$TB" --session A phase merged 2>/dev/null; ok "$([ $? -ne 0 ] && echo true)" "phase rejects a phase the dashboard derives itself" ""
+
 echo '{not json' > "$FSA_TEAM_BOARD"
 "$TB" --session B check-lock deploy 2>/dev/null; ok "$([ $? -eq 0 ] && echo true)" "a malformed board never blocks" ""
 "$TB" --session B claim --name beta --task recover 2>/dev/null

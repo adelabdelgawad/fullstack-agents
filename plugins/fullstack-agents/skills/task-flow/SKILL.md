@@ -196,6 +196,21 @@ the whole log. Deny agent reads of dependency, build and archive directories.
 Batch test execution at the integration boundary — one run per workspace, never per edit or per
 task. Write the cases as you go; run them once.
 
+## Reporting the phase
+
+The dashboard shows the user where each task stands, and only the lead knows four of its phases.
+Declare each one the moment it starts, with the plugin's `scripts/team-board`:
+
+| When | Command |
+|---|---|
+| Intake, and again once the task's worktree exists | `team-board phase investigate --worktree <path>` |
+| The plan or first brief is written | `team-board phase plan` |
+| An implementer run returns and the audit begins | `team-board phase audit` |
+| The result goes back to the user (report, question or merge decision) | `team-board phase review --note "<one line>"` |
+
+Implement, Rework, Merged, Deploying and Deployed come from run files, git and the board's
+deploy lock and note; never declare them. The command costs no tokens and never blocks.
+
 ## Working alongside other sessions
 
 When other Claude sessions work on the same repository, follow `team-coordination`'s lightweight

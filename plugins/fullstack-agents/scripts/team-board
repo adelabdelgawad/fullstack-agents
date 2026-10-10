@@ -13,6 +13,8 @@ import tempfile
 DEFAULT_CLAIM_TTL_MIN = 240
 DEFAULT_LOCK_TTL_MIN = 120
 MAX_EVENTS = 40
+PHASE_TTL_H = 48
+PHASES = ("investigate", "plan", "audit", "review")
 EXIT_LOCK_HELD = 3
 
 
@@ -59,7 +61,7 @@ def session_id(explicit):
 
 
 def empty():
-    return {"version": 1, "claims": {}, "locks": {}, "events": []}
+    return {"version": 1, "claims": {}, "locks": {}, "events": [], "phases": {}}
 
 
 def load(path):
@@ -73,7 +75,7 @@ def load(path):
         return empty()
     if not isinstance(data, dict):
         return empty()
-    for key, default in (("claims", {}), ("locks", {}), ("events", [])):
+    for key, default in (("claims", {}), ("locks", {}), ("events", []), ("phases", {})):
         if not isinstance(data.get(key), type(default)):
             data[key] = default
     return data
@@ -88,6 +90,9 @@ def prune(data, t):
     data["claims"] = {k: v for k, v in data["claims"].items() if alive(v, t)}
     data["locks"] = {k: v for k, v in data["locks"].items() if alive(v, t)}
     data["events"] = [e for e in data["events"] if isinstance(e, dict)][-MAX_EVENTS:]
+    cutoff = t - dt.timedelta(hours=PHASE_TTL_H)
+    data["phases"] = {k: v for k, v in data["phases"].items()
+                      if isinstance(v, dict) and (parse(v.get("at", "")) or cutoff) > cutoff}
 
 
 def save(path, data):
@@ -171,6 +176,10 @@ def main():
     n = sub.add_parser("note")
     n.add_argument("--name", required=True)
     n.add_argument("text")
+    ph = sub.add_parser("phase")
+    ph.add_argument("phase", choices=PHASES)
+    ph.add_argument("--worktree", default="")
+    ph.add_argument("--note", default="")
     rs = sub.add_parser("release-session")
     rs.add_argument("target")
     args = ap.parse_args()
@@ -236,6 +245,10 @@ def main():
             if held and held.get("session") == sid:
                 data["locks"].pop(args.surface)
                 event(data, t, sid, held.get("name", "?"), f"unlocked {args.surface}")
+        elif args.cmd == "phase":
+            prev = data["phases"].get(sid, {})
+            worktree = os.path.abspath(args.worktree) if args.worktree else prev.get("worktree", "")
+            data["phases"][sid] = {"phase": args.phase, "at": iso(t), "note": args.note, "worktree": worktree}
         elif args.cmd == "note":
             event(data, t, sid, args.name, args.text)
         save(path, data)
