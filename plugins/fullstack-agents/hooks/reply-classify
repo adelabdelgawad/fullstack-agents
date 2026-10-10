@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# reply-classify — Stop hook: Haiku marks the session as waiting on the user when the reply asks for them.
+[ "${FSA_WAIT_CLASSIFIER:-on}" = "off" ] && exit 0
+exec python3 "$(dirname "$0")/../scripts/fsa-classify" reply

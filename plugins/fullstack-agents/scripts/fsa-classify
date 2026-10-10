@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+"""Typed Haiku decisions for hooks: route a prompt to skills, or classify whether a reply waits on the user."""
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+SKILLS = HERE.parent / "skills"
+MODEL = os.environ.get("FSA_CLASSIFIER_MODEL", "haiku")
+TIMEOUT_S = float(os.environ.get("FSA_CLASSIFIER_TIMEOUT", "25"))
+MIN_ROUTE_CONF = float(os.environ.get("FSA_ROUTER_MIN_CONFIDENCE", "0.55"))
+MIN_WAIT_CONF = float(os.environ.get("FSA_WAIT_MIN_CONFIDENCE", "0.6"))
+INTENTS = ["question", "investigate", "debug", "performance", "plan", "implement", "review", "deploy", "other"]
+LANES = ["rust", "python", "frontend", "infra", "docs", "plugin", "none"]
+WORKERS = ["none", "bounded-extractor", "test-runner", "diff-reviewer", "implementer"]
+AWAITING = ["approval", "decision", "answer", "action", "none"]
+LOG = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "fullstack-agents" / "classifier.jsonl"
+
+ROUTE_SYSTEM = """You route a developer's prompt for a Claude Code session lead in a fullstack repository.
+Pick the intent, the code lanes the work touches, the skills the lead must load before reasoning,
+and whether a worker agent fits. Judge from what the user wants done, not from words inside pasted
+logs, plans or code. A short reply such as "go ahead" or "approved" continues the previous turn:
+use the previous assistant message to decide. Choose only skills whose description matches the
+work; fewer is better. The PROJECT line says which stacks exist: a bug in a call, queue, API or
+database path of a Rust backend is the rust lane even when the prompt does not say "Rust".
+confidence: 0.9 when the prompt clearly names the work, 0.75 when you infer the lane from the
+project, 0.5 or less when the request itself is unclear."""
+
+WAIT_SYSTEM = """You read the final message an AI coding assistant sent to its user and decide whether the
+assistant is now waiting on the user. approval: it asks the user to approve a plan or a risky step.
+decision: it asks the user to choose between options. answer: it asks a question it needs answered.
+action: it needs the user to do something outside the session (send a message, change a permission,
+log in). none: it reports finished work or progress and needs nothing. A mention that something
+happens later "with the user's go-ahead" inside a plan is not a request unless the message ends by
+asking for it. need is one short line saying what the user must do; empty for none."""
+
+
+def skill_catalogue():
+    out = {}
+    for f in sorted(SKILLS.glob("*/SKILL.md")):
+        head = f.read_text(encoding="utf-8", errors="replace")[:1500]
+        name = re.search(r"^name:\s*(.+)$", head, re.M)
+        desc = re.search(r"^description:\s*(.+)$", head, re.M)
+        if name:
+            out[name.group(1).strip()] = (desc.group(1).strip() if desc else "")[:140]
+    return out
+
+
+def project_profile(cwd):
+    root = Path(cwd or ".")
+    marks = []
+    found = lambda *globs: any(next(root.glob(g), None) for g in globs)
+    if found("Cargo.toml", "*/Cargo.toml", "*/*/Cargo.toml"):
+        marks.append("Rust (Cargo)")
+    if found("next.config.*", "*/next.config.*", "*/*/next.config.*"):
+        marks.append("Next.js frontend")
+    if found("pyproject.toml", "*/pyproject.toml", "requirements.txt"):
+        marks.append("Python")
+    if found("docker-compose*.yml", "compose*.yml"):
+        marks.append("Docker compose")
+    return f"{root.name}: {', '.join(marks) or 'unknown stack'}"
+
+
+def last_assistant_text(transcript, limit=1500):
+    try:
+        with open(transcript, "rb") as fh:
+            fh.seek(max(0, os.path.getsize(transcript) - 400000))
+            lines = fh.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return ""
+    for line in reversed(lines):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if d.get("type") != "assistant" or d.get("isSidechain"):
+            continue
+        texts = [c.get("text", "") for c in (d.get("message") or {}).get("content") or []
+                 if isinstance(c, dict) and c.get("type") == "text"]
+        if texts and texts[-1].strip():
+            return texts[-1].strip()[-limit:]
+    return ""
+
+
+def ask_haiku(system, user, schema):
+    cmd = os.environ.get("FSA_CLASSIFIER_CMD")
+    argv = cmd.split() if cmd else [
+        "claude", "-p", "--model", MODEL, "--setting-sources", "", "--strict-mcp-config", "--tools", "",
+        "--no-session-persistence", "--output-format", "json", "--json-schema", json.dumps(schema),
+        "--system-prompt", system]
+    cwd = tempfile.mkdtemp(prefix="fsa-classify-")
+    started = time.time()
+    try:
+        proc = subprocess.run(argv, input=user, capture_output=True, text=True, timeout=TIMEOUT_S, cwd=cwd,
+                              env={**os.environ, "FSA_CLASSIFIER_RUN": "1"})
+        result = json.loads(proc.stdout.strip().splitlines()[0]) if proc.stdout.strip() else {}
+    except (subprocess.TimeoutExpired, OSError, ValueError, IndexError):
+        result = {}
+    finally:
+        shutil.rmtree(cwd, ignore_errors=True)
+    out = result.get("structured_output") if isinstance(result, dict) and not result.get("is_error") else None
+    return out if isinstance(out, dict) else None, round(time.time() - started, 2)
+
+
+def log(entry):
+    try:
+        LOG.parent.mkdir(parents=True, exist_ok=True)
+        with LOG.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **entry}) + "\n")
+    except OSError:
+        pass
+
+
+def route(hook):
+    prompt = str(hook.get("prompt") or "").strip()
+    if not prompt:
+        return 1
+    skills = skill_catalogue()
+    schema = {"type": "object", "additionalProperties": False,
+              "required": ["intent", "lanes", "skills", "worker", "confidence", "reason"],
+              "properties": {
+                  "intent": {"type": "string", "enum": INTENTS},
+                  "lanes": {"type": "array", "items": {"type": "string", "enum": LANES}, "maxItems": 3},
+                  "skills": {"type": "array", "items": {"type": "string", "enum": sorted(skills)}, "maxItems": 6},
+                  "worker": {"type": "string", "enum": WORKERS},
+                  "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                  "reason": {"type": "string", "maxLength": 160}}}
+    catalogue = "\n".join(f"- {k}: {v}" for k, v in skills.items())
+    previous = last_assistant_text(hook.get("transcript_path") or "", 800)
+    user = (f"PROJECT: {project_profile(hook.get('cwd'))}\n\nSKILLS:\n{catalogue}\n\nPREVIOUS ASSISTANT MESSAGE (context only):\n{previous or '(none)'}\n\n"
+            f"USER PROMPT:\n{prompt[:4000]}")
+    out, took = ask_haiku(ROUTE_SYSTEM, user, schema)
+    log({"mode": "prompt", "session": hook.get("session_id", ""), "prompt": prompt[:300], "decision": out, "seconds": took})
+    if not out or out.get("confidence", 0) < MIN_ROUTE_CONF:
+        return 1
+    picked = [s for s in out.get("skills", []) if s in skills]
+    if out.get("intent") not in ("question", "other") and "task-flow" in skills and "task-flow" not in picked:
+        picked.insert(0, "task-flow")
+    lanes = [x for x in out.get("lanes", []) if x != "none"]
+    line = (f"[fullstack-agents] router ({MODEL}, {out['confidence']:.2f}): intent {out['intent']}, "
+            f"lanes {', '.join(lanes) or 'any'}")
+    line += f" -> invoke via the Skill tool (fullstack-agents:*): {', '.join(picked)}" if picked else " -> no skill needed"
+    if out.get("worker") not in (None, "none"):
+        line += f"; worker that fits: {out['worker']}"
+    print(f"{line}. Why: {out.get('reason', '')}. Name any skill you skip and the reason; the conclusion stays yours.")
+    print(next((x for x in lanes if x in ("rust", "python", "frontend", "infra")), ""))
+    return 0
+
+
+def wait(hook):
+    if hook.get("stop_hook_active"):
+        return 0
+    text = last_assistant_text(hook.get("transcript_path") or "", 2500)
+    sid = hook.get("session_id") or ""
+    if not text or not sid:
+        return 0
+    schema = {"type": "object", "additionalProperties": False, "required": ["awaiting", "need", "confidence"],
+              "properties": {"awaiting": {"type": "string", "enum": AWAITING},
+                             "need": {"type": "string", "maxLength": 200},
+                             "confidence": {"type": "number", "minimum": 0, "maximum": 1}}}
+    out, took = ask_haiku(WAIT_SYSTEM, f"FINAL MESSAGE:\n{text}", schema)
+    log({"mode": "reply", "session": sid, "tail": text[-300:], "decision": out, "seconds": took})
+    if out and out.get("awaiting") != "none" and out.get("confidence", 0) >= MIN_WAIT_CONF and out.get("need", "").strip():
+        need = f"{out['awaiting']}: {out['need'].strip()}"
+        subprocess.run([str(HERE / "team-board"), "--session", sid, "wait", need], capture_output=True, timeout=10,
+                       cwd=hook.get("cwd") or None)
+    return 0
+
+
+def main():
+    if os.environ.get("FSA_CLASSIFIER_RUN") or len(sys.argv) != 2 or sys.argv[1] not in ("prompt", "reply"):
+        return 2
+    try:
+        hook = json.loads(sys.stdin.read() or "{}")
+    except ValueError:
+        return 2
+    return route(hook) if sys.argv[1] == "prompt" else wait(hook)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

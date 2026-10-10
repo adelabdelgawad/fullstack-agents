@@ -97,7 +97,8 @@ After generation, the chain `REVIEW PATTERNS → FIX → VALIDATE` runs automati
 |------|------|------------------|
 | `session-start` | Session start | Detects your stack + constitution, injects the compact doctrine (`hooks/session-doctrine.md`, kept under the 10 KB hook-output cap) |
 | `prompt-polish` | Every prompt | Refine the request into a precise spec before acting / delegating |
-| `prompt-scan` | Every prompt | Routes by intent (investigate, debug, plan, implement, review, deploy) and lane to the skills to invoke; re-arms the 5-step gate for stack work |
+| `prompt-scan` | Every prompt | Routes by intent and lane to the skills to invoke: a Haiku classifier (`scripts/fsa-classify prompt`) picks from the real skill list with a confidence score, and the keyword rules take over below `FSA_ROUTER_MIN_CONFIDENCE` (0.55), on a timeout, or with `FSA_ROUTER=regex`; re-arms the 5-step gate for stack work |
+| `reply-classify` | Every finished reply (async) | Haiku decides whether the reply waits on the user (approval, decision, answer, action) and runs `team-board wait`; `FSA_WAIT_CLASSIFIER=off` disables it. Decisions are logged to `<config dir>/fullstack-agents/classifier.jsonl` |
 | `pre-edit-gate` | Before code edits | Blocks until codebase-scanning + a lane-relevant skill were invoked |
 | `post-edit-validate` | After code edits | ruff on Python, rustfmt on Rust (`FSA_SKIP_RUSTFMT=1` opts out) |
 

@@ -142,7 +142,8 @@ The generate → review → validate chain is enforced by the harness, not just 
 | Hook | Trigger | What it does |
 |------|---------|--------------|
 | `prompt-polish` | Every user prompt | Injects a directive to refine the raw request into a precise spec (intent / scope / success criteria / constraints) before acting and before delegating to worker subagents — full directive once per session, one-line reminder afterward; pure control replies (yes/continue) are skipped |
-| `prompt-scan` | Every user prompt | Detects stack-related prompts (Python/Rust/Next.js keywords), classifies lane + intent, and re-arms the routing mandate — full block once per session, one-line reminder afterward (token-efficient; the pre-edit gate enforces deterministically regardless) |
+| `reply-classify` | Every finished reply (async) | Haiku marks the session as waiting on the user (`team-board wait`) when the reply asks for approval, a decision, an answer or an action; `FSA_WAIT_CLASSIFIER=off` disables it |
+| `prompt-scan` | Every user prompt | Classifies intent, lanes and skills with Haiku (`scripts/fsa-classify`; keyword rules below 0.55 confidence or with `FSA_ROUTER=regex`), and re-arms the routing mandate — full block once per session, one-line reminder afterward (token-efficient; the pre-edit gate enforces deterministically regardless) |
 | `pre-edit-gate` | Before every `Write`/`Edit` to `.py`/`.rs`/`.ts`/`.tsx` | BLOCKS the edit (in governed projects) until `codebase-scanning` AND a lane-relevant skill have actually been invoked this session — verified against the transcript, not promised. Override: `FSA_SKIP_GATE=1` |
 | `post-edit-validate` | After every `Write`/`Edit` | Runs `ruff check` on edited Python files (violations block and feed back); auto-formats edited Rust files with `rustfmt` |
 

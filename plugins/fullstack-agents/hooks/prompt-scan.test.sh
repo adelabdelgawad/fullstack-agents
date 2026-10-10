@@ -3,6 +3,7 @@
 set -uo pipefail
 
 hook="$(dirname "$0")/prompt-scan"
+export FSA_ROUTER=regex
 fail=0
 
 route() {

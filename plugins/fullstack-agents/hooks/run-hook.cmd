@@ -1,4 +1,4 @@
-:; d=$(dirname "$0"); s=$1; shift; exec bash "$d/$s" "$@" # POSIX shells dispatch here and never read the batch below
+:; [ -n "${FSA_CLASSIFIER_RUN:-}" ] && exit 0; d=$(dirname "$0"); s=$1; shift; exec bash "$d/$s" "$@" # POSIX shells dispatch here and never read the batch below
 @echo off
 REM Cross-platform hook launcher.
 REM

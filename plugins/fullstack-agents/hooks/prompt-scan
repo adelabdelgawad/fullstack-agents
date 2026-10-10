@@ -8,9 +8,18 @@ HOOK_INPUT="$(cat)"
 prompt="$(json_get_field "prompt" "$HOOK_INPUT")"
 [ -n "$prompt" ] || exit 0
 
+routed=""
+if [ "${FSA_ROUTER:-haiku}" != "regex" ]; then
+    routed="$(printf '%s' "$HOOK_INPUT" | python3 "$(dirname "$0")/../scripts/fsa-classify" prompt 2>/dev/null)" || routed=""
+fi
+
 prompt_lower="$(printf '%s' "$prompt" | tr '[:upper:]' '[:lower:]')"
 has() { printf '%s' "$prompt_lower" | grep -qE "$1"; }
 
+if [ -n "$routed" ]; then
+    printf '%s\n' "$routed" | sed -n 1p
+    lane="$(printf '%s\n' "$routed" | sed -n 2p)"
+else
 # Intent: the first match wins, most specific first; stems tolerate common typos.
 intent=""
 if has 'deploy|release|roll ?out|restart (the )?(backend|frontend|service|container)'; then
@@ -66,6 +75,7 @@ esac
 line="[fullstack-agents] intent: ${intent:-general}, lane: ${lane:-any} -> invoke via the Skill tool (fullstack-agents:*): ${skills}"
 [ -n "$lane_skills" ] && line="${line}; lane: ${lane_skills} — load these NOW, before the root cause, the plan or any code"
 printf '%s. Take the cheapest rung that answers it; the conclusion, plan and audit stay yours.\n' "$line"
+fi
 
 # The full stack doctrine goes in once per session, only when code in a lane is in play.
 [ -n "$lane" ] || exit 0
