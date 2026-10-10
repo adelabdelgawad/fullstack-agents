@@ -487,10 +487,13 @@ def build_state(repo, gc):
     def attention(state):
         out = []
         for s in sessions:
-            if s["state"] != state:
+            mine = [c for c in cards if any(x["id"] == s["id"] for x in c["sessions"])]
+            card = next((c for c in mine if c["phase"] == "review"), mine[0] if mine else None)
+            handed_back = card and card["phase"] == "review" and s["state"] in ("idle", "still_open") \
+                and s["idle"] >= WAIT_MIN_S
+            if ("waiting" if handed_back else s["state"]) != state:
                 continue
             key = f"session:{s['id']}"
-            card = next((c for c in cards if any(x["id"] == s["id"] for x in c["sessions"])), None)
             if state == "still_open" and card and card["phase"] in ("merged", "deployed"):
                 continue
             if dismissed.get(key, 0) >= s["updated"]:

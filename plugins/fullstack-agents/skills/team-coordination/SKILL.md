@@ -70,7 +70,7 @@ worktree in the repository. It prints a URL that carries an access token, and `s
 It is a script, not an agent: it reads files sessions already write (transcripts, run files, the
 board) and costs no tokens. Never poll it from a session. It moves each task card through
 Investigate → Plan → Implement → Rework → Audit → Review → Merged → Deploying → Deployed. It flags runs
-that need the user, and lists sessions **waiting on the user** (the last turn asked a question)
+that need the user, and lists sessions **waiting on the user** (the last turn asked a question, or handed a Review card back)
 and **still open** (stopped without finishing). The user dismisses cards on the page.
 Its git calls take no optional locks, so it never blocks a peer's commit.
 
