@@ -54,6 +54,7 @@ main { padding: 16px 20px 40px; }
 .empty { color: var(--muted); padding: 20px 0; }
 aside { position: fixed; top: 0; right: 0; bottom: 0; width: min(620px, 100%); background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; transform: translateX(100%); transition: transform .18s, width .18s; z-index: 10; }
 aside.open { transform: none; }
+html.lock, html.lock body { overflow: hidden; }
 aside.wide { width: min(1280px, 96vw); }
 aside h3 { margin: 0 0 4px; font-size: 16px; }
 aside h4 { margin: 14px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
@@ -72,7 +73,7 @@ aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-sp
 .task input { margin: 3px 0 0; }
 .task .tn { font-weight: 600; }
 .task .tg { grid-column: 2; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.sheet { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 0 18px; }
+.sheet { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 0 18px; overflow-y: auto; }
 .sheet h3 { margin-top: 10px; }
 aside .sheet pre.log { flex: 1; min-height: 120px; max-height: none; margin: 10px 0; font-size: 11px; }
 .end { flex: none; margin: 0 -18px; padding: 12px 18px; border-top: 3px solid var(--line); background: var(--panel); }
@@ -203,6 +204,10 @@ let openKey = null, openRun = null, tab2 = "info", bodyKind = "", logSeen = "", 
 let git = {...freshGit(), hide1: false, hide2: false};
 const LIVE = r => r.state === "running" || r.state === "stalled";
 const stateChip = r => `<span class="chip ${r.flags.length ? "bad" : r.state === "done" ? "ok" : ""}">${esc(r.state)}</span>`;
+const dur = r => {
+  const s = Math.max(0, Math.round((LIVE(r) ? Date.now() / 1000 : r.updated) - (r.started || r.updated)));
+  return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s` : `${Math.floor(s / 3600)}h ${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}m`;
+};
 const panel = () => document.getElementById("panel");
 const enc = encodeURIComponent;
 
@@ -236,12 +241,10 @@ const tabsHtml = c => `<button class="tab2" role="tab" data-t="info" aria-select
 function infoHtml(c) {
   const tasks = c.runs.map(r => `<li class="task" data-run="${esc(r.id)}">
     <input type="checkbox" disabled ${r.state === "done" ? "checked" : ""} aria-label="${esc(r.state)}">
-    <div><span class="tn">${esc(r.unit || r.id)}</span> ${stateChip(r)} <span class="s">${LIVE(r) ? '<span class="live-dot"></span>live · ' : ""}${ago(r.updated)} ago</span></div>
+    <div><span class="tn">${esc(r.unit || r.id)}</span> ${stateChip(r)} <span class="s">${LIVE(r) ? `<span class="live-dot"></span>running ${dur(r)}` : `took ${dur(r)} · ${ago(r.updated)} ago`}</span></div>
     ${r.goal ? `<div class="snip tg">${esc(r.goal)}</div>` : ""}</li>`).join("");
   return `<h4>Description</h4>
     <div class="snip">${esc(c.desc || c.goal || "No brief has been recorded for this work yet.")}</div>
-    <div class="s" style="margin-top:6px">${esc(c.worktree)}</div>
-    <p style="margin:8px 0 0"><b>Sessions:</b> ${c.sessions.map(s => `${esc(s.name)} (${esc(s.state)}, ${ago(s.updated)} ago)`).join(", ") || "none"}</p>
     <h4>Tasks</h4>${tasks ? `<ul class="tasks">${tasks}</ul>` : '<div class="empty">No implementer tasks yet.</div>'}`;
 }
 
@@ -431,6 +434,7 @@ function openCard(key) {
   bodyKind = "";
   panel().innerHTML = "";
   panel().classList.add("open");
+  document.documentElement.classList.add("lock");
   paintPanel();
 }
 
@@ -446,6 +450,7 @@ function closePanel() {
   git = {...freshGit(), hide1: git.hide1, hide2: git.hide2};
   panel().classList.remove("open", "wide");
   panel().innerHTML = "";
+  document.documentElement.classList.remove("lock");
 }
 
 function toast(text, tone, target) {
