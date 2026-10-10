@@ -138,6 +138,11 @@ aside .gcol pre.diff { margin: 0; border-radius: 0; background: none; padding: 0
 .toast { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--amber); border-radius: 10px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18); cursor: pointer; animation: slide .2s ease-out; }
 .toast.blue { border-left-color: var(--blue); }
 .toast.red { border-left-color: var(--red); }
+#ctx { position: fixed; z-index: 30; min-width: 170px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: 0 6px 24px rgba(0,0,0,.18); }
+#ctx[hidden] { display: none; }
+#ctx button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 5px; cursor: pointer; }
+#ctx button:hover:not(:disabled), #ctx button:focus-visible { background: var(--bg); outline: none; }
+#ctx button:disabled { color: var(--muted); cursor: default; }
 @keyframes slide { from { transform: translateX(30px); opacity: 0; } }
 @media (max-width: 700px) { main, header { padding-left: 16px; padding-right: 16px; } nav { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; } nav button { flex: none; } }
 </style>
@@ -156,6 +161,11 @@ aside .gcol pre.diff { margin: 0; border-radius: 0; background: none; padding: 0
 <main id="main"></main>
 <aside id="panel" aria-label="Details"></aside>
 <div id="toasts" aria-live="polite"></div>
+<div id="ctx" role="menu" aria-label="Card actions" hidden>
+  <button role="menuitem" data-act="open">Open</button>
+  <button role="menuitem" data-act="copy">Copy session id</button>
+  <button role="menuitem" data-act="dismiss">Dismiss</button>
+</div>
 <script>
 const PHASES = [["idle","Idle"],["investigate","Investigate"],["plan","Plan"],["implement","Implement"],["rework","Rework"],["audit","Audit"],["review","Review"],["merged","Merged"],["deploying","Deploying"],["deployed","Deployed"]];
 const FLAG_TEXT = {failed:"run failed", stalled:"run stalled", out_of_scope:"edited files outside its brief", no_changes:"changed nothing", retries_exhausted:"retries used up"};
@@ -195,7 +205,8 @@ function cardHtml(c) {
     ...c.chips.map(chip),
     c.tree && c.tree.dirty ? `<span class="chip">${c.tree.dirty} uncommitted</span>` : "",
   ].join("");
-  return `<div class="card ${tone}" tabindex="0" data-key="${esc(c.key)}">
+  const sid = ((c.now || [])[0] || c.sessions[0] || {}).id || "";
+  return `<div class="card ${tone}" tabindex="0" data-key="${esc(c.key)}" data-sid="${esc(sid)}">
     <div class="t">${esc(c.title)}</div>
     ${branch ? `<div class="br">${esc(branch)}</div>` : ""}
     ${sub ? `<div class="s">${esc(sub)}</div>` : ""}
@@ -236,7 +247,7 @@ function stepsHtml(c) {
 
 function attentionHtml(items, tone, emptyText) {
   if (!items.length) return `<div class="empty">${emptyText}</div>`;
-  return `<div class="list">${items.map(s => `<div class="card ${tone}"${s.card ? ` data-key="${esc(s.card)}" tabindex="0"` : ""}>
+  return `<div class="list">${items.map(s => `<div class="card ${tone}" data-sid="${esc(s.id)}"${s.card ? ` data-key="${esc(s.card)}" tabindex="0"` : ""}>
     <div class="t">${esc(s.name)}</div>
     <div class="s">idle ${ago(s.updated)} · ${esc(s.phase || "no task card")}${s.branch ? " · " + esc(s.branch) : ""}</div>
     ${s.need ? `<div class="snip"><b>Needs you: ${esc(s.need)}</b></div>` : ""}
@@ -601,8 +612,71 @@ async function load() {
   }
 }
 
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  const ok = document.execCommand("copy");
+  ta.remove();
+  return ok ? Promise.resolve() : Promise.reject(new Error("copy failed"));
+}
+
+let ctxCard = null;
+const ctx = () => document.getElementById("ctx");
+
+function closeCtx() {
+  if (ctx().hidden) return false;
+  ctx().hidden = true;
+  if (ctxCard && document.contains(ctxCard)) ctxCard.focus();
+  ctxCard = null;
+  return true;
+}
+
+function openCtx(card, x, y) {
+  ctxCard = card;
+  const m = ctx(), d = card.querySelector("[data-dismiss]");
+  m.querySelector('[data-act="open"]').disabled = !card.dataset.key;
+  m.querySelector('[data-act="copy"]').disabled = !card.dataset.sid;
+  m.querySelector('[data-act="dismiss"]').disabled = !d;
+  m.hidden = false;
+  m.style.left = Math.max(8, Math.min(x, innerWidth - m.offsetWidth - 8)) + "px";
+  m.style.top = Math.max(8, Math.min(y, innerHeight - m.offsetHeight - 8)) + "px";
+  const first = m.querySelector("button:not(:disabled)");
+  if (first) first.focus();
+}
+
+document.addEventListener("contextmenu", e => {
+  const card = e.target.closest("#main .card");
+  if (!card) return closeCtx();
+  e.preventDefault();
+  const r = card.getBoundingClientRect();
+  openCtx(card, e.clientX || r.left + 12, e.clientY || r.top + 12);
+});
+document.addEventListener("click", e => { if (!e.target.closest("#ctx")) closeCtx(); });
+addEventListener("scroll", closeCtx, true);
+addEventListener("resize", closeCtx);
+ctx().addEventListener("keydown", e => {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  e.preventDefault();
+  const items = [...ctx().querySelectorAll("button:not(:disabled)")], i = items.indexOf(document.activeElement);
+  items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus();
+});
+ctx().addEventListener("click", e => {
+  const b = e.target.closest("[data-act]");
+  if (!b || b.disabled || !ctxCard) return;
+  const card = ctxCard, act = b.dataset.act;
+  closeCtx();
+  if (act === "open") openCard(card.dataset.key);
+  else if (act === "copy") copyText(card.dataset.sid).then(() => toast(`<b>Copied</b> ${esc(card.dataset.sid)}`, "blue", tab), () => toast("<b>Copy failed</b>", "red", tab));
+  else dismiss(card.querySelector("[data-dismiss]").dataset.dismiss);
+});
+
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => setTab(b.dataset.tab));
-document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (openRun) toggleTask(openRun); else closePanel(); });
+document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (closeCtx()) return; if (openRun) toggleTask(openRun); else closePanel(); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && openRun) pollLog(openRun); });
 load();
 setInterval(load, 4000);

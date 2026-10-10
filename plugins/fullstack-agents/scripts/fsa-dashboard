@@ -525,7 +525,7 @@ def read_session(path, now, wt_re, names, waits):
     mtime = path.stat().st_mtime
     sid = path.stem
     last, cwd, branch, title, text = None, "", "", "", ""
-    action, action_at = "", ""
+    action, action_at, seen_at, turn_at = "", "", "", ""
     mentions, briefs = {}, set()
     for line in tail_lines(path):
         try:
@@ -534,6 +534,7 @@ def read_session(path, now, wt_re, names, waits):
             continue
         if d.get("type") == "custom-title":
             title = d.get("customTitle") or title
+        seen_at = d.get("timestamp") or seen_at
         if d.get("isSidechain") or d.get("type") not in ("user", "assistant"):
             continue
         cwd, branch = d.get("cwd") or cwd, d.get("gitBranch") or branch
@@ -544,6 +545,8 @@ def read_session(path, now, wt_re, names, waits):
             if done:
                 action, action_at = done, d.get("timestamp") or action_at
         last = (d["type"], msg.get("stop_reason"), d.get("timestamp"))
+        if last[:2] == ("assistant", "end_turn"):
+            turn_at = last[2] or turn_at
         if wt_re:
             for m in wt_re.findall(line):
                 mentions[m] = mentions.get(m, 0) + 1
@@ -552,7 +555,8 @@ def read_session(path, now, wt_re, names, waits):
         return None
     chips, busy = subagent_chips(path.with_suffix(""), now)
     ended = last[0] == "assistant" and last[1] == "end_turn"
-    idle = now - mtime
+    updated = iso_epoch(seen_at) or mtime
+    idle = now - updated
     tail = URL_RE.sub("", text[-500:])
     asks = "?" in tail or bool(ASK_RE.search(tail.strip().rsplit("\n\n", 1)[-1]))
     ask, ask_at = latest_ask(path)
@@ -573,7 +577,8 @@ def read_session(path, now, wt_re, names, waits):
         "id": sid, "name": title or names.get(sid) or first_prompt(path) or f"{Path(cwd).name or 'session'} {sid[:8]}",
         "named": bool(title or names.get(sid)),
         "title": title,
-        "cwd": cwd, "branch": branch, "worktree": worktree, "state": state, "updated": mtime,
+        "cwd": cwd, "branch": branch, "worktree": worktree, "state": state, "updated": updated,
+        "turn_at": iso_epoch(turn_at),
         "idle": idle, "snippet": snippet(text) if state in ("waiting", "still_open", "idle") else "",
         "briefs": sorted(briefs), "chips": chips,
         "ask": snippet(ask, 600), "need": need, "action": action, "action_at": iso_epoch(action_at),
@@ -638,7 +643,7 @@ def phase_of(card, runs, sessions, board, gc, repo, deployed_shas):
     if latest:
         ended = latest["state"] == "done" and any(
             x["id"] == latest["session"] and x["state"] in ("idle", "waiting", "still_open")
-            and x["updated"] > latest["updated"] for x in sessions)
+            and x["turn_at"] > latest["updated"] for x in sessions)
         return "review" if ended else "audit"
     briefs_run = {r["unit"] for r in runs}
     if any(set(s["briefs"]) - briefs_run for s in sessions):
@@ -741,7 +746,7 @@ def build_state(repo, gc):
             mine = [c for c in cards if any(x["id"] == s["id"] for x in c["sessions"])]
             card = next((c for c in mine if c["phase"] == "review"), mine[0] if mine else None)
             handed_back = card and card["phase"] == "review" and s["state"] in ("idle", "still_open") \
-                and s["idle"] >= WAIT_MIN_S
+                and s["idle"] >= WAIT_MIN_S and not any(c["phase"] in ("implement", "rework", "audit") for c in mine)
             if ("waiting" if handed_back else s["state"]) != state:
                 continue
             key = f"session:{s['id']}"
