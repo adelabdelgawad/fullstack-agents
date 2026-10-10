@@ -63,8 +63,12 @@ main { padding: 0; }
 .feature { font-size: 13px; line-height: 1.4; margin: 0 0 4px; word-break: break-word; }
 .branch { font: 11px var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rounds { margin-top: 10px; display: grid; gap: 5px; }
-.round { display: flex; align-items: center; gap: 3px; }
-.round .r { flex: none; font: 10px var(--mono); color: var(--muted); width: 22px; }
+.round { display: grid; gap: 2px; }
+.round .rl { display: flex; gap: 6px; font: 10px var(--mono); color: var(--muted); min-width: 0; }
+.round .rl b { font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.round .rl span { flex: none; }
+.round .cells { display: flex; gap: 3px; }
+.rounds .earlier { font: 10px var(--mono); color: var(--muted); }
 .cell { flex: 1; min-width: 0; text-align: center; font: 10px/1.3 var(--mono); padding: 2px 0; border-radius: 4px; border: 1px dashed var(--faint); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: clip; }
 .cell.wait, .cell.live { border-style: solid; border-color: color-mix(in srgb, var(--active) 55%, transparent); color: var(--active); animation: breathe 1.6s ease-in-out infinite; }
 .cell.PASS { border: 1px solid transparent; color: var(--pass); background: color-mix(in srgb, var(--pass) 14%, transparent); }
@@ -246,6 +250,13 @@ const LENSES = [["security", "sec"], ["ux", "ux"], ["code", "code"]];
 const cell = (tone, label, title) => `<span class="cell ${tone}" title="${esc(title)}">${esc(label)}</span>`;
 const verdictTone = v => /^(GREEN|PASS)$/.test(v) ? "PASS" : /^(RED|CHANGES|FAIL)$/.test(v) ? "CHANGES" : "done";
 
+const unitPrefix = units => {
+  const parts = units.map(u => u.split("-"));
+  let n = 0;
+  while (parts.length && parts.every(p => p.length > n + 1 && p[n] === parts[0][n])) n++;
+  return n ? parts[0].slice(0, n).join("-") + "-" : "";
+};
+
 function roundOf(rounds, at) {
   let i = -1;
   rounds.forEach((r, n) => { if ((r.started || r.updated) <= at) i = n; });
@@ -253,14 +264,14 @@ function roundOf(rounds, at) {
 }
 
 function roundsHtml(c) {
-  const runs = c.runs.filter(r => r.mode === "implement").sort((a, b) => (a.started || a.updated) - (b.started || b.updated));
+  const runs = c.rounds || [];
   const agents = (c.now || []).flatMap(s => s.agents || []);
   if (!runs.length) {
     const scan = agents.filter(a => a.label.startsWith("bounded-extractor"));
     const lead = c.sessions.some(s => s.state === "working") ? "live" : c.sessions.some(s => s.state === "waiting") ? "bad" : c.sessions.length ? "done" : "";
-    return `<div class="rounds"><div class="round"><span class="r">··</span>${cell(lead, "lead", "lead (opus): " + (lead || "no session"))}${cell(scan.some(a => a.state === "running") ? "live" : scan.length ? "done" : "skip", "haiku", `bounded-extractor (haiku): ${scan.length ? scan.length + " scan(s)" : "not used"}`)}</div></div>`;
+    return `<div class="rounds"><div class="round"><div class="cells">${cell(lead, "lead", "lead (opus): " + (lead || "no session"))}${cell(scan.some(a => a.state === "running") ? "live" : scan.length ? "done" : "skip", "haiku", `bounded-extractor (haiku): ${scan.length ? scan.length + " scan(s)" : "not used"}`)}</div></div></div>`;
   }
-  const last = runs.length - 1, stage = stageOf(c);
+  const last = runs.length - 1, stage = stageOf(c), prefix = unitPrefix(runs.map(r => r.unit).filter(Boolean));
   const rows = runs.map((r, n) => {
     const at = x => roundOf(runs, x.at) === n;
     const chips = c.chips.filter(at), ags = agents.filter(at);
@@ -273,12 +284,13 @@ function roundsHtml(c) {
       if (ag.length) return cell("done", label, `${name}: ${ag.map(a => a.state).join(", ")}`);
       return cell(after ? "skip" : "", label, `${name}: ${after ? "not run" : "pending"}`);
     };
-    const fixed = runs[n + 1] && runs[n + 1].unit.startsWith(r.unit.replace(/-fix\d*$/, "")) && /-fix/.test(runs[n + 1].unit);
-    const lead = n < last ? (fixed ? "CHANGES" : "PASS") : stage === "review" ? "wait" : ["human", "merged"].includes(stage) ? "PASS" : "";
+    const lead = n < last ? (r.sent_back ? "CHANGES" : "PASS") : stage === "review" ? "wait" : ["human", "merged"].includes(stage) ? "PASS" : "";
     const leadTitle = {CHANGES: "lead audit: sent back for a fix", PASS: "lead audit: accepted", wait: "lead audit: in progress", "": "lead audit: pending"}[lead];
-    return `<div class="round" title="${esc(r.unit)}"><span class="r">R${n + 1}</span>${cell(runTone, "run", `implementer ${r.engine} ${r.model || ""} · ${r.unit}: ${r.state}${r.flags.length ? " · " + r.flags.join(", ") : ""}`)}${party("test-runner", x => x.kind === "tests", "test", "test-runner")}${LENSES.map(([k, s]) => party("diff-reviewer", x => x.kind === k, s, "diff-reviewer " + k)).join("")}${cell(lead, "lead", leadTitle)}</div>`;
+    const label = r.unit ? r.unit.slice(prefix.length) || r.unit : "no brief recorded";
+    return `<div class="round" title="${esc(r.unit || r.id)}"><div class="rl"><span>${n + 1}</span><b>${esc(label)}</b><span>${esc(r.model || r.engine)}</span></div><div class="cells">${cell(runTone, "run", `implementer ${r.engine} ${r.model || ""} · ${r.unit}: ${r.state}${r.flags.length ? " · " + r.flags.join(", ") : ""}`)}${party("test-runner", x => x.kind === "tests", "test", "test-runner")}${LENSES.map(([k, s]) => party("diff-reviewer", x => x.kind === k, s, "diff-reviewer " + k)).join("")}${cell(lead, "lead", leadTitle)}</div></div>`;
   });
-  return `<div class="rounds">${rows.slice(-3).join("")}</div>`;
+  const hidden = rows.length - 3;
+  return `<div class="rounds">${hidden > 0 ? `<div class="earlier">+${hidden} earlier run${hidden > 1 ? "s" : ""}</div>` : ""}${rows.slice(-3).join("")}</div>`;
 }
 
 function cardHtml(c) {

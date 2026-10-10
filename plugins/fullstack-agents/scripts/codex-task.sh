@@ -113,6 +113,7 @@ base=$(git -C "$root" rev-parse HEAD)
 snapshot > "$runs/$id.pre.txt"
 
 . "$here/lib/herdr-grid.sh"
+. "$here/lib/run-scope.sh"
 
 allow_tests=${FSA_IMPLEMENTER_ALLOW_TESTS:-${FSA_GROK_ALLOW_TESTS:-0}}
 
@@ -216,7 +217,7 @@ codex_exit=$?
 set -e
 
 snapshot > "$runs/$id.post.txt"
-touched=$( { comm -13 "$runs/$id.pre.txt" "$runs/$id.post.txt"; comm -23 "$runs/$id.pre.txt" "$runs/$id.post.txt"; } | cut -d' ' -f2- | sort -u )
+touched=$(run_touched "$runs" "$id")
 
 printf 'run=%s\nengine=%s\nmodel=%s\ncodex_exit=%s\nbase=%s\nlast_message=%s\nlog=%s\ntouched_by_this_run:\n%s\n' \
   "$id" "$engine" "$model" "$codex_exit" "$base" "$last" "$log" "${touched:-(none)}"
@@ -227,9 +228,10 @@ printf 'run=%s\nengine=%s\nmodel=%s\ncodex_exit=%s\nbase=%s\nlast_message=%s\nlo
 summary_len=$(jq -r '(.summary // "") | length' 2>/dev/null < "$last" || echo 0)
 [ "$codex_exit" -eq 0 ] && [ -s "$last" ] || echo "STATUS=FAILED (read the log tail before auditing)"
 [ "${summary_len:-0}" -ge 11500 ] && echo "STATUS=TRUNCATED (summary hit the schema cap; re-brief asking for a narrower scope)"
-# A shared tree also shows other sessions' edits here, so this flags paths for the audit rather than failing the run.
-if [ "$mode" = "implement" ] && [ -n "$touched" ]; then
-  outside=$(grep -vxF -f "$runs/$id.allow" <<<"$touched" || true)
+# Paths a concurrent run in this root or the lead's briefs account for are not this run's; the rest still needs its author confirmed.
+if [ "$mode" = "implement" ]; then
+  outside=$(run_outside "$runs" "$id" "$root" "$brief")
+  printf '%s' "${outside:+$outside$'\n'}" > "$runs/$id.outside"
   [ -n "$outside" ] && printf 'STATUS=OUT_OF_SCOPE (changed outside ALLOWED_PATHS during the run; confirm the author before auditing):\n%s\n' "$outside"
 fi
 noop=0; [ "$mode" = "implement" ] && [ -z "$touched" ] && { noop=1; echo "STATUS=NO_CHANGES (the run changed no file; read the summary before re-briefing)"; }

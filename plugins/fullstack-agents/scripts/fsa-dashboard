@@ -44,7 +44,6 @@ RUN_ID_RE = re.compile(r"^[a-z]+-\d{8}-\d{6}-\d+$")
 BRIEF_RE = re.compile(r"\.codex-briefs/([\w.-]+)\.md")
 DEPLOYED_RE = re.compile(r"\bDEPLOYED\b.*?\b([0-9a-f]{9,40})\b")
 ROOT_RE = re.compile(r"(?:--cd|-C|\bcd) '([^']+)'")
-FIX_RE = re.compile(r"-fix\d+$")
 COMMAND_RE = re.compile(r"<command-name>([^<]+)</command-name>")
 ARGS_RE = re.compile(r"<command-args>([^<]*)</command-args>")
 PHASES = ("investigate", "plan", "audit", "review")
@@ -323,7 +322,99 @@ def run_started(rid, meta):
         return 0
 
 
-def read_run(runs, rid, log_mtime, now):
+def run_window(runs, rid):
+    try:
+        start = (runs / f"{rid}.pre.txt").stat().st_mtime
+    except OSError:
+        return None
+    try:
+        return start, (runs / f"{rid}.post.txt").stat().st_mtime
+    except OSError:
+        return start, time.time()
+
+
+def read_allow(runs, rid):
+    try:
+        return set((runs / f"{rid}.allow").read_text().split())
+    except OSError:
+        return set()
+
+
+LEAD_EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
+OUTSIDE_CACHE = {}
+
+
+def session_transcript(projects, session):
+    for base in projects if session else []:
+        for path in base.glob(f"*/{session}.jsonl"):
+            return path
+    return None
+
+
+def lead_edits(projects, session, root, window):
+    path = session_transcript(projects, session)
+    if not path or not window or not root:
+        return set()
+    out = set()
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if '"tool_use"' not in line:
+                continue
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            if d.get("type") != "assistant" or not window[0] <= iso_epoch(d.get("timestamp") or "") <= window[1]:
+                continue
+            for b in (d.get("message") or {}).get("content") or []:
+                if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") in LEAD_EDIT_TOOLS:
+                    target = (b.get("input") or {}).get("file_path") or (b.get("input") or {}).get("notebook_path") or ""
+                    if target.startswith(root + "/"):
+                        out.add(target[len(root) + 1:])
+    return out
+
+
+def claimed_paths(runs, rid, meta, projects):
+    root, mine = meta.get("root", ""), run_window(runs, rid)
+    claimed = read_allow(runs, rid)
+    if not claimed:
+        return {p for p in touched_paths(runs, rid) or []}
+    for allow in runs.glob("implement-*.allow"):
+        oid = allow.name[:-len(".allow")]
+        other = run_window(runs, oid)
+        if oid == rid or not other or not mine or other[0] > mine[1] or other[1] < mine[0]:
+            continue
+        if (load_json(runs / f"{oid}.meta.json") or {}).get("root") == root:
+            claimed |= read_allow(runs, oid)
+    claimed |= lead_edits(projects, meta.get("session", ""), root, mine)
+    brief = meta.get("brief", "")
+    prefix = os.path.relpath(os.path.dirname(brief), root) + "/" if brief and root else None
+    return claimed | {p for p in touched_paths(runs, rid) or [] if prefix and p.startswith(prefix)}
+
+
+def fix_target(units, i):
+    unit = units[i]
+    if "-fix" not in unit:
+        return None
+    base = unit[:unit.index("-fix")]
+    return next((j for j in range(i - 1, -1, -1) if units[j] == base or units[j].startswith(base + "-")), None)
+
+
+def round_list(impl):
+    units = [r["unit"] for r in impl]
+    sent_back = {fix_target(units, i) for i in range(len(units))} - {None}
+    return [{k: r[k] for k in ("id", "unit", "engine", "model", "state", "flags", "started", "updated")} | {"sent_back": i in sent_back}
+            for i, r in enumerate(impl)]
+
+
+def fix_depth(units):
+    depth, i = 1, len(units) - 1
+    while i is not None and (i := fix_target(units, i)) is not None:
+        depth += 1
+    return depth
+
+
+def read_run(runs, rid, log_mtime, now, projects):
     mode = rid.split("-", 1)[0]
     meta = load_json(runs / f"{rid}.meta.json") or {}
     brief = meta.get("brief") or ""
@@ -343,18 +434,20 @@ def read_run(runs, rid, log_mtime, now):
     if state in ("failed", "stalled"):
         flags.append(state)
     if state == "done" and touched is not None:
-        try:
-            allow = set((runs / f"{rid}.allow").read_text().split())
-        except OSError:
-            allow = set()
-        outside = sorted(set(touched) - allow) if allow else []
+        recorded = runs / f"{rid}.outside"
+        if recorded.exists():
+            outside = recorded.read_text().split()
+        else:
+            if rid not in OUTSIDE_CACHE:
+                OUTSIDE_CACHE[rid] = sorted(set(touched) - claimed_paths(runs, rid, meta, projects))
+            outside = OUTSIDE_CACHE[rid]
         if outside:
             flags.append("out_of_scope")
         if not touched:
             flags.append("no_changes")
     return {
         "id": rid, "mode": mode, "engine": meta.get("engine", ""), "model": meta.get("model", ""), "unit": unit,
-        "family": FIX_RE.sub("", unit), "session": meta.get("session", ""),
+        "session": meta.get("session", ""),
         "root": run_root(runs, rid, meta), "goal": goal_line(runs / f"{rid}.prompt.md"),
         "desc": goal_line(runs / f"{rid}.prompt.md", 900),
         "state": state, "flags": flags, "updated": log_mtime, "started": run_started(rid, meta),
@@ -376,7 +469,7 @@ def collect_runs(repo, now):
             mtime = e.stat().st_mtime
             rid = e.name[:-4]
             if now - mtime <= RUN_WINDOW_S and RUN_ID_RE.match(rid):
-                out.append(read_run(repo.runs, rid, mtime, now))
+                out.append(read_run(repo.runs, rid, mtime, now, repo.projects))
     return sorted(out, key=lambda r: r["updated"])
 
 
@@ -701,8 +794,7 @@ def phase_of(card, runs, sessions, board, gc, repo, deployed_shas):
     impl = [r for r in runs if r["mode"] == "implement"]
     latest = impl[-1] if impl else None
     if latest:
-        family = latest["family"]
-        card["round"] = len([r for r in impl if family and r["family"] == family]) or 1
+        card["round"] = fix_depth([r["unit"] for r in sorted(impl, key=lambda r: r["started"] or r["updated"])])
     lock = (board.get("locks") or {}).get("deploy")
     if lock and lock.get("session") in {s["id"] for s in sessions}:
         return "deploying"
@@ -798,7 +890,9 @@ def build_state(repo, gc):
         card = {"key": key, "title": title, "label": label, "tree": tree, "worktree": key if tree else "",
                 "goal": (latest_run or {}).get("goal", ""), "desc": (latest_run or {}).get("desc", ""),
                 "sessions": [{k: s[k] for k in ("id", "name", "state", "updated", "branch")} for s in g["sessions"]],
-                "runs": g["runs"][-6:], "chips": [c for s in g["sessions"] for c in s["chips"]][-6:]}
+                "runs": g["runs"][-6:],
+                "rounds": round_list(sorted((r for r in g["runs"] if r["mode"] == "implement"), key=lambda r: r["started"] or r["updated"])),
+                "chips": [c for s in g["sessions"] for c in s["chips"]][-6:]}
         brief = newest_brief(repo, {b for x in g["sessions"] for b in by_id[x["id"]]["briefs"]}, key)
         if brief and brief[0] > (latest_run or {}).get("updated", 0):
             card["desc"] = brief[1]
