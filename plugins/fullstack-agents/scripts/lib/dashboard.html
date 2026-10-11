@@ -31,6 +31,15 @@ header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01e
 .status.error { color: var(--human); }
 .status.error .dot { background: var(--human); }
 .status .lock { color: var(--changes); }
+.hright { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.favsw { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; padding: 2px 0; }
+.favsw:hover { color: var(--ink); }
+.favsw:focus-visible { outline: 2px solid var(--active); outline-offset: 2px; border-radius: 4px; }
+.favsw .track { position: relative; width: 28px; height: 16px; border-radius: 8px; background: var(--line); transition: background .15s; }
+.favsw .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--panel); box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: left .15s; }
+.favsw[aria-checked="true"] { color: var(--ink); }
+.favsw[aria-checked="true"] .track { background: var(--amber); }
+.favsw[aria-checked="true"] .track::after { left: 14px; }
 @keyframes pulse { 50% { transform: scale(1.25); } }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 @keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
@@ -57,6 +66,11 @@ main { padding: 0; }
 .card-top { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; min-width: 0; }
 .card-top .num { font: 11px var(--mono); color: var(--muted); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .blink { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--active); animation: blink 1.6s ease-in-out infinite; }
+.star { margin-left: auto; flex: none; border: 0; background: none; padding: 0 2px; font-size: 15px; line-height: 1; color: var(--faint); cursor: pointer; }
+.star:hover { color: var(--amber); }
+.star:focus-visible { outline: 2px solid var(--active); outline-offset: 1px; border-radius: 4px; }
+.star[aria-pressed="true"] { color: var(--amber); }
+.flag + .star { margin-left: 0; }
 .flag { margin-left: auto; flex: none; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--human); white-space: nowrap; }
 .card .t { font-size: 13px; font-weight: 600; line-height: 1.4; word-break: break-word; }
 .card .s { color: var(--muted); font-size: 12px; margin-top: 2px; word-break: break-word; }
@@ -198,7 +212,10 @@ aside .gcol pre.diff { margin: 0; border-radius: 0; background: none; padding: 0
 <body>
 <header>
   <h1>Agents</h1>
-  <div class="status" id="meta"><span class="dot"></span>loading…</div>
+  <div class="hright">
+    <button class="favsw" id="favsw" role="switch" aria-checked="false"><span class="track" aria-hidden="true"></span>Favourites only</button>
+    <div class="status" id="meta"><span class="dot"></span>loading…</div>
+  </div>
 </header>
 <main id="main"></main>
 <aside id="panel" aria-label="Details"></aside>
@@ -229,11 +246,25 @@ const FLAG_TEXT = {failed:"run failed", stalled:"run stalled", out_of_scope:"edi
 const SHOWN = 3;
 let expanded = new Set();
 try { expanded = new Set(JSON.parse(localStorage.getItem("fsa-expanded") || "[]")); } catch (e) {}
+let favOnly = false;
+try { favOnly = localStorage.getItem("fsa-fav-only") === "1"; } catch (e) {}
 let uiSeen = null, state = null, seen = null;
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const ago = t => { const s = Math.max(0, Date.now()/1000 - t); return s < 90 ? `${Math.round(s)}s` : s < 5400 ? `${Math.round(s/60)}m` : s < 172800 ? `${Math.round(s/3600)}h` : `${Math.round(s/86400)}d`; };
 const chip = c => { const good = /^(GREEN|PASS)$/.test(c.verdict), bad = /^(RED|CHANGES)$/.test(c.verdict); return `<span class="chip ${good ? "ok" : bad ? "bad" : ""}" title="${esc(c.label)}">${esc(c.kind)} ${esc(c.verdict)}</span>`; };
+
+const favKeys = c => [c.key, ...c.sessions.map(s => `session:${s.id}`)];
+
+async function toggleFavourite(key, ev) {
+  ev?.stopPropagation();
+  const c = state && state.cards.find(x => x.key === key);
+  if (!c) return;
+  c.favourite = !c.favourite;
+  render();
+  await fetch("/api/favourite", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({keys: favKeys(c), on: c.favourite})});
+  load();
+}
 
 async function dismiss(key, ev) {
   ev?.stopPropagation();
@@ -312,7 +343,7 @@ function cardHtml(c) {
   const paths = c.outside && c.outside.length ? `<div class="paths">${c.outside.slice(0, 4).map(esc).join("<br>")}${c.outside.length > 4 ? `<br>+${c.outside.length - 4} more` : ""}</div>` : "";
   const sid = ((c.now || [])[0] || c.sessions[0] || {}).id || "";
   return `<div class="card${live ? " live" : ""}${human ? " human" : ""}${QUIET.has(c.phase) && !human ? " quiet" : ""}" tabindex="0" data-key="${esc(c.key)}" data-sid="${esc(sid)}">
-    <div class="card-top">${live ? '<span class="blink" aria-label="running"></span>' : ""}<span class="num">${esc(c.key.startsWith("session:") ? "session " + c.key.slice(8, 16) : c.key.split("/").pop())}</span>${flag ? `<span class="flag">${esc(flag)}</span>` : ""}</div>
+    <div class="card-top">${live ? '<span class="blink" aria-label="running"></span>' : ""}<span class="num">${esc(c.key.startsWith("session:") ? "session " + c.key.slice(8, 16) : c.key.split("/").pop())}</span>${flag ? `<span class="flag">${esc(flag)}</span>` : ""}<button class="star" data-fav="${esc(c.key)}" aria-pressed="${!!c.favourite}" aria-label="${c.favourite ? "Remove from favourites" : "Add to favourites"}" title="${c.favourite ? "Remove from favourites" : "Add to favourites"}">${c.favourite ? "★" : "☆"}</button></div>
     <p class="feature">${esc(c.title)}</p>
     ${branch ? `<div class="branch">${esc(branch)}</div>` : ""}
     ${sub ? `<div class="s">${esc(sub)}</div>` : ""}
@@ -371,7 +402,11 @@ function stepsHtml(c) {
 
 function render() {
   if (!state) return;
-  const cols = STAGES.map(s => ({...s, cards: state.cards.filter(c => stageOf(c) === s.key).sort((a, b) => rank(a) - rank(b) || b.updated - a.updated)}));
+  const sw = document.getElementById("favsw");
+  sw.setAttribute("aria-checked", String(favOnly));
+  sw.lastChild.textContent = `Favourites only (${state.cards.filter(c => c.favourite).length})`;
+  const cards = favOnly ? state.cards.filter(c => c.favourite) : state.cards;
+  const cols = STAGES.map(s => ({...s, cards: cards.filter(c => stageOf(c) === s.key).sort((a, b) => rank(a) - rank(b) || b.updated - a.updated)}));
   document.getElementById("main").innerHTML = `<div class="board">${cols.map(s => {
     const loud = s.cards.filter(c => rank(c) < 3), quiet = s.cards.filter(c => rank(c) === 3);
     const open = expanded.has(s.key), shown = loud.concat(open ? quiet : quiet.slice(0, SHOWN));
@@ -385,6 +420,10 @@ function render() {
     el.onkeydown = e => { if ((e.key === "Enter" || e.key === " ") && e.target === el) { e.preventDefault(); openCard(el.dataset.key); } };
   });
   document.querySelectorAll("[data-dismiss]").forEach(el => el.onclick = ev => dismiss(el.dataset.dismiss, ev));
+  document.querySelectorAll("[data-fav]").forEach(el => {
+    el.onclick = ev => toggleFavourite(el.dataset.fav, ev);
+    el.onkeydown = ev => ev.stopPropagation();
+  });
   document.querySelectorAll("[data-agent]").forEach(el => {
     el.onclick = ev => { ev.stopPropagation(); openAgent(el.dataset.asid, el.dataset.agent); };
     el.onkeydown = ev => ev.stopPropagation();
@@ -686,6 +725,12 @@ function notify() {
   document.title = n ? `(${n}) Agents` : "Agents";
 }
 
+
+document.getElementById("favsw").onclick = () => {
+  favOnly = !favOnly;
+  try { localStorage.setItem("fsa-fav-only", favOnly ? "1" : "0"); } catch (e) {}
+  render();
+};
 
 async function load() {
   try {

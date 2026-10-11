@@ -111,6 +111,7 @@ class Repo:
         self.state.mkdir(exist_ok=True)
         self.board = self.state / "board.json"
         self.dismissed = self.state / "dashboard-dismissed.json"
+        self.favourites = self.state / "dashboard-favourites.json"
         self.runs = Path(runs or os.environ.get("FSA_CODEX_RUNS_DIR") or self.binding_runs()
                          or Path.home() / ".codex" / "fsa-runs")
         bases = projects or [os.environ.get("CLAUDE_CONFIG_DIR"), "~/.claude", "~/.claude-anthropic"]
@@ -842,6 +843,7 @@ def build_state(repo, gc):
     sessions = collect_sessions(repo, trees, now, names, board.get("waits") or {})
     deployed_shas = [m.group(1) for e in board.get("events", []) for m in [DEPLOYED_RE.search(e.get("text", ""))] if m]
     dismissed = load_json(repo.dismissed) or {}
+    favourites = load_json(repo.favourites) or {}
     main_root = str(repo.root)
 
     groups, old = {}, []
@@ -909,7 +911,8 @@ def build_state(repo, gc):
         impl = [r for r in g["runs"] if r["mode"] == "implement"]
         card["outside"] = impl[-1]["outside"] if impl and "out_of_scope" in card["needs_you"] else []
         card["updated"] = max([r["updated"] for r in g["runs"]] + [s["updated"] for s in g["sessions"]] + [0])
-        if card["phase"] == "idle" and now - card["updated"] > IDLE_DROP_S:
+        card["favourite"] = any(k in favourites for k in [key] + [f"session:{s['id']}" for s in g["sessions"]])
+        if card["phase"] == "idle" and now - card["updated"] > IDLE_DROP_S and not card["favourite"]:
             continue
         if dismissed.get(key, 0) < card["updated"]:
             cards.append(card)
@@ -1036,17 +1039,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         url = urllib.parse.urlparse(self.path)
-        if not self.authorised({}) or url.path != "/api/dismiss":
+        if not self.authorised({}) or url.path not in ("/api/dismiss", "/api/favourite"):
             return self.send(403, b"forbidden", "text/plain")
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
-            key = str(body["key"])[:512]
+            raw = body["keys"] if url.path == "/api/favourite" else [body["key"]]
+            if not isinstance(raw, list):
+                raise TypeError("keys must be a list")
+            keys = [str(k)[:512] for k in raw][:64]
+            on = bool(body.get("on", True))
         except (ValueError, KeyError, TypeError):
             return self.send(400, b"bad request", "text/plain")
-        path = self.server.repo.dismissed
+        repo = self.server.repo
+        path = repo.favourites if url.path == "/api/favourite" else repo.dismissed
         with self.server.lock:
             data = load_json(path) or {}
-            data[key] = time.time()
+            for key in keys:
+                if on:
+                    data[key] = time.time()
+                else:
+                    data.pop(key, None)
             tmp = path.with_suffix(".tmp")
             tmp.write_text(json.dumps(data))
             tmp.replace(path)
