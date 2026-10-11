@@ -72,6 +72,29 @@ traffic. Verify plans with the real parameterised statements (`PREPARE` / `EXPLA
 with `plan_cache_mode = force_generic_plan`) for a global and a scoped user. Running the old count
 queries in parallel shortens one request while multiplying concurrent DB load; it is not a fix.
 
+## 7. Sweep the whole app, never page by page
+
+A slow page reported by a user means the pattern exists elsewhere. Before fixing it, sweep every
+surface by contract, not by traffic: an endpoint nobody hit this week is still a page someone opens.
+
+1. **Enumerate every endpoint.** Grep server fetchers (`serverApiFetch`, `*.server.ts`) and client
+   fetchers (`api.get`, query `queryFn`s); call each once read-only, and templated paths with one
+   real id. Record status, time and bytes.
+2. **Write the thresholds into the plan** (default: p50 > 500 ms after three calls, or a response
+   > 200 KB). Re-run every offender as the cheapest scope (global admin) *and* a scoped user — scope
+   predicates change plans. Anything under both thresholds is left alone, and the plan says so.
+3. **Rank by frequency × cost, not one call.** Join the access log (calls per minute) with the
+   slow-statement log; sample `pg_stat_activity` (active queries, every 300 ms for 10 minutes, in
+   working hours) to catch frequent queries that never cross the slow threshold — dispatch,
+   recovery sweeps, polling.
+4. **Fix shared sources once.** Several endpoints with the same size usually share one builder.
+   Before trimming a payload, read every consumer: a client that aggregates the array would
+   silently change its numbers.
+5. **Unbounded history is the usual root cause.** A list, facet or sweep that reads every row ever
+   written (all batches, all outbox commands) when it needs only the live or recent ones. Scope it
+   by a predicate that is provably equivalent (drive from the live set) before reaching for a time
+   window; a time window in recovery code can skip a stuck row.
+
 ## Review checklist
 
 - [ ] List response = rows + `total` (+ only measured-cheap counts)

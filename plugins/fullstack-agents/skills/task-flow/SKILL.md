@@ -175,6 +175,10 @@ On list endpoints and table pages, audit against `data-table/references/list-loa
 wait for costly counts, no option list ships unbounded, paged sorts end with a unique tie-breaker,
 and live events refresh rows and total only.
 
+A performance complaint about one page starts an app-wide sweep, not a one-page fix: follow
+`data-table/references/list-loading.md` §7 (every endpoint by contract, written thresholds, admin and
+scoped user, frequency × cost from logs and `pg_stat_activity` sampling, shared sources fixed once).
+
 A frontend page diff is not audited until its first-paint trace is read: load the page in a real
 browser and list the `/api/` requests after hydration (`nextjs/references/client-performance.md` §0).
 Any request for content the user already sees is a defect to re-brief, not a note to the report.
