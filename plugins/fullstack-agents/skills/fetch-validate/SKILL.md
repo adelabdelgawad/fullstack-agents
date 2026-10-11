@@ -139,6 +139,21 @@ Grep pattern="from ['\"]swr['\"]|useSWR" path="components/" glob="*.{ts,tsx}"
 → Should return ZERO results
 ```
 
+### Check 6: First Paint Is Server-Owned (any client data library)
+
+A page that paints, then loads its list/thread/side panels, fetches on the client what the server
+page should have sent (`nextjs` skill, Principle 0).
+
+```
+Grep pattern="useQuery\(|useInfiniteQuery\(|useSWR\(" path="features/" glob="*.tsx"
+→ For every container reachable from a page.tsx: each primary-content query must have initialData
+  (SWR: fallbackData + revalidateOnMount:false) AND a staleTime; list the ones that do not.
+```
+
+Then prove it in a browser, not by reading: load the route with Playwright, list `/api/` requests
+after hydration (`nextjs/references/client-performance.md` §0). Any data request for content the
+user already sees is a FAIL; list it as `file:line — query key — missing server seed`.
+
 ---
 
 ## Report Format

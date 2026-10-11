@@ -44,6 +44,30 @@ reject() {
     fi
 }
 
+route_all() {
+    python3 -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1], "transcript_path": sys.argv[2]}))' "$1" "$2" | bash "$hook"
+}
+
+check() {
+    local name="$1" cond="$2"
+    if [ "$cond" = 1 ]; then echo "ok   ${name}"; else echo "FAIL ${name}"; fail=1; fi
+}
+
+tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"no skills yet"}]}}' > "$tmp/empty.jsonl"
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"fullstack-agents:nextjs"}}]}}' > "$tmp/loaded.jsonl"
+fe="the conversation page shows the list after the page paints"
+
+out="$(route_all "$fe" "$tmp/empty.jsonl")"
+check "lane skill missing -> NOT LOADED line" "$(printf '%s' "$out" | grep -qF 'LANE SKILL NOT LOADED THIS SESSION: nextjs' && echo 1 || echo 0)"
+out="$(route_all "$fe" "$tmp/loaded.jsonl")"
+check "lane skill loaded -> no NOT LOADED line" "$(printf '%s' "$out" | grep -qF 'NOT LOADED' && echo 0 || echo 1)"
+check "lane skill loaded -> no repeated 'load these NOW'" "$(printf '%s' "$out" | grep -qF 'load these NOW' && echo 0 || echo 1)"
+out="$(route_all "<system-reminder>
+[SYSTEM NOTIFICATION - NOT USER INPUT]
+Monitor event: build progress" "$tmp/empty.jsonl")"
+check "automated notification -> silent" "$([ -z "$out" ] && echo 1 || echo 0)"
+
 reject "change the campaign form label"
 reject "add a feature flag for exports"
 reject "fix the uploading of lead files"

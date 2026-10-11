@@ -93,6 +93,24 @@ lib/
 
 ## Core Principles
 
+### 0. First paint is server-owned (hard rule, every client library)
+
+Whatever the user sees without acting — list rows, thread/detail content, side panels, counts — is
+fetched by the server page in one parallel `Promise.all` and handed to the client container as props.
+A client query/SWR key/`useEffect` fetch that fills **primary content after hydration** is a defect,
+whatever library issues it.
+
+- `useQuery`/`useInfiniteQuery` seeded with `initialData` **and** a `staleTime` (a seeded query with
+  the default `staleTime: 0` refetches on mount anyway — the page still fires the request). SWR:
+  `fallbackData` + `revalidateOnMount: false`. Keep the query key identical so stream invalidation works.
+- Each secondary seed has its own `.catch(() => null)`: a failed side fetch never fails the page; the
+  client falls back to fetching only that piece.
+- Only genuinely optional UI (dialogs, tabs not shown, below-the-fold panels, on-demand pickers) may
+  fetch on the client, lazily and on demand.
+- **Prove it with a trace, never by reading code:** load the page in a real browser and list the
+  `/api/` requests after hydration (recipe: [references/client-performance.md](references/client-performance.md) §0).
+  The budget for primary content is **zero** requests; list each remaining one and say why it is optional.
+
 ### 1. Data Fetching Strategy
 
 Choose the appropriate pattern based on requirements. See [references/data-fetching-strategy.md](references/data-fetching-strategy.md) for the decision framework.

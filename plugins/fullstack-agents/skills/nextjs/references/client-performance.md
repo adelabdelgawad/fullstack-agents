@@ -4,6 +4,23 @@ Read this before diagnosing any "the page shows a skeleton for N seconds", "navi
 "the UI freezes" report, and before writing or reviewing tables, data fetching, mutations,
 filters, live data, or navigation/prefetch changes.
 
+## 0. First-paint budget: no primary content fetched after hydration
+
+Rule: [SKILL.md](../SKILL.md) Principle 0. A page whose content "loads, then the rest loads" is
+fetching on the client what the server should have sent. Check it on every page you build, change or
+review that renders a list, a thread, a detail or side panels:
+
+1. Open the route in Playwright/Chromium with a valid session (`waitUntil: "domcontentloaded"`;
+   SSE streams never go idle, so never wait for `networkidle`).
+2. Record `request`/`response` events for URLs containing `/api/` (and `/backend/`) with their
+   offset from navigation start; wait a few seconds.
+3. Every data request that starts after hydration for content the user can already see is a defect.
+   Expected leftovers are the app shell's own calls and the live stream. Anything else is either
+   moved to the server page (`initialData` + `staleTime`, see Principle 0) or justified in the report
+   as optional UI that opens on demand.
+4. Report the before/after request list. A page built only from reading code, with no trace, is not
+   verified.
+
 ## 1. Measure first: server time vs browser time
 
 A skeleton that lasts seconds is either a slow server response or a busy browser. Split them
@@ -93,6 +110,8 @@ when they are imported statically into the page.
 
 ## 6. Review checklist
 
+- [ ] First paint is server-owned: a browser request trace shows zero primary-content requests after
+      hydration (§0); every seeded query has `initialData` and a `staleTime`.
 - [ ] Every `<Link>` rendered per row/card/list item has `prefetch={false}`, or a measured reason.
 - [ ] The [data-freshness.md](data-freshness.md) checklist passes for every list, mutation and
       `router.refresh()` the change touches.

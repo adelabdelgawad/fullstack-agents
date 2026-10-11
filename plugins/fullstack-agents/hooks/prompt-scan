@@ -7,6 +7,18 @@ source "$(dirname "$0")/lib.sh"
 HOOK_INPUT="$(cat)"
 prompt="$(json_get_field "prompt" "$HOOK_INPUT")"
 [ -n "$prompt" ] || exit 0
+case "$prompt" in *"SYSTEM NOTIFICATION - NOT USER INPUT"*) exit 0 ;; esac
+
+transcript_path="$(json_get_field "transcript_path" "$HOOK_INPUT")"
+skill_loaded() { session_has_skill "$transcript_path" "fullstack-agents:$1"; }
+lane_core_skill() {
+    case "$1" in
+        frontend) echo nextjs ;;
+        rust)     echo rust-correctness ;;
+        infra)    echo docker ;;
+        *)        echo "" ;;
+    esac
+}
 
 routed=""
 if [ "${FSA_ROUTER:-haiku}" != "regex" ]; then
@@ -16,8 +28,9 @@ fi
 prompt_lower="$(printf '%s' "$prompt" | tr '[:upper:]' '[:lower:]')"
 has() { printf '%s' "$prompt_lower" | grep -qE "$1"; }
 
+out_line=""
 if [ -n "$routed" ]; then
-    printf '%s\n' "$routed" | sed -n 1p
+    out_line="$(printf '%s\n' "$routed" | sed -n 1p)"
     lane="$(printf '%s\n' "$routed" | sed -n 2p)"
 else
 # Intent: the first match wins, most specific first; stems tolerate common typos.
@@ -74,8 +87,19 @@ esac
 
 line="[fullstack-agents] intent: ${intent:-general}, lane: ${lane:-any} -> invoke via the Skill tool (fullstack-agents:*): ${skills}"
 [ -n "$lane_skills" ] && line="${line}; lane: ${lane_skills} — load these NOW, before the root cause, the plan or any code"
-printf '%s. Take the cheapest rung that answers it; the conclusion, plan and audit stay yours.\n' "$line"
+out_line="${line}. Take the cheapest rung that answers it; the conclusion, plan and audit stay yours."
 fi
+
+core_skill="$(lane_core_skill "$lane")"
+if [ -n "$core_skill" ]; then
+    if skill_loaded "$core_skill"; then
+        out_line="$(printf '%s' "$out_line" | sed 's/; lane: .* — load these NOW[^.]*//')"
+    else
+        out_line="${out_line}
+[fullstack-agents] LANE SKILL NOT LOADED THIS SESSION: ${core_skill} — invoke it with the Skill tool before the next brief, edit, plan or conclusion."
+    fi
+fi
+printf '%s\n' "$out_line"
 
 # The full stack doctrine goes in once per session, only when code in a lane is in play.
 [ -n "$lane" ] || exit 0

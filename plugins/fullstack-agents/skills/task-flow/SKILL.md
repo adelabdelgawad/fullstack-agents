@@ -62,6 +62,13 @@ a page and what it shows. Someone holding only the repository must be able to ru
 a loose "tests that prove the fix" list. It is for the orchestrator's audit, not for the
 implementer to run. A behaviour with no check you can name is not understood well enough to delegate.
 
+A brief for a frontend page or container also states its **first-paint contract**: which data the
+server page fetches and seeds (list, thread, side panels), and the request budget after hydration
+(zero for primary content). A brief that only lists screens and features gets a client that fetches
+everything after paint — the implementer builds what was asked. The lead loads the lane skill
+(`nextjs`) itself before writing such a brief; naming it in `SKILLS:` loads it for the implementer
+only, never for the lead.
+
 The orchestrator already located every change site with grep while planning, so the brief hands
 those locations over: each site as `file:line` (or a line range) with what changes there — for a
 SQL site, the placeholder numbers already taken and the free one to use. The implementer then
@@ -163,6 +170,10 @@ automatic violation: the plan or the brief states why it is needed and the evide
 stream or poll, the measured input delay for a debounce, the measured chunk cost for an import
 (`nextjs/references/data-freshness.md`, `live-updates.md`, `client-performance.md`). Scale the
 justification to the impact; a one-line reason covers a low-traffic admin page.
+
+A frontend page diff is not audited until its first-paint trace is read: load the page in a real
+browser and list the `/api/` requests after hydration (`nextjs/references/client-performance.md` §0).
+Any request for content the user already sees is a defect to re-brief, not a note to the report.
 
 Auditing is reading and testing. A fix the orchestrator spots goes back as a re-brief, never into
 the file — otherwise the diff under review no longer matches what was delegated.
