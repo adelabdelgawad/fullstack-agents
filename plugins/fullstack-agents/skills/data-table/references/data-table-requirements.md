@@ -189,4 +189,6 @@ interface EntityListResponse {
 ```
 
 Counts are computed server-side over the full filtered set — never derived
-client-side from the current page.
+client-side from the current page. This in-envelope form is for measured-cheap counts
+only; costly or unbounded facets use a separate counts request that never blocks the
+rows ([list-loading.md](list-loading.md)).

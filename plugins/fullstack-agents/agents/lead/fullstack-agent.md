@@ -87,7 +87,7 @@ diagnose, and a root cause reached without it is a guess.
 |---|---|
 | Any bug, error, unexpected behaviour, slow page or latency | `debug` (+ the lane skill) |
 | Next.js page, layout, router, prefetch, render/latency, server action | `nextjs` |
-| List page with a data table, table columns, cell links | `data-table` |
+| List page with a data table, table columns, cell links, a list endpoint, facet counts or filter options | `data-table` (`references/list-loading.md`) |
 | Fetch layer: server actions, API routes, client calls | `fetch-architecture` / `fetch-plan` / `fetch-implement` / `fetch-validate` |
 | Porting a frontend or a backend | `frontend-transformation` / `backend-migration-from-frontend` |
 | FastAPI entity, router, SQLAlchemy | `fastapi` (new service with DDD: `python-clean-architecture`) |

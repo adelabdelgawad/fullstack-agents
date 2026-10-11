@@ -67,6 +67,10 @@ pub struct Page<T> {
 }
 ```
 
+Facet counts that cost more than the page query, and any option list that can grow
+without bound, are not part of this envelope: they get their own counts/options
+endpoint with the same filter params (`data-table/references/list-loading.md`).
+
 If the existing FastAPI endpoint nests differently (e.g. entity-named key or a
 `success/data/error` envelope), replicate THAT — verify, don't assume.
 
@@ -120,6 +124,7 @@ for Rust-served entities — drift becomes a CI failure, not a runtime bug.
 
 - [ ] JSON keys camelCase; query param names snake_case
 - [ ] List response carries `total` and matches the FastAPI envelope verbatim
+- [ ] Costly facet counts and unbounded option lists live outside the list response
 - [ ] `limit`/`skip` honored with the same defaults as FastAPI
 - [ ] `search` and `is_active` filter the same fields/semantics
 - [ ] Same status codes per operation and per error class

@@ -171,6 +171,10 @@ stream or poll, the measured input delay for a debounce, the measured chunk cost
 (`nextjs/references/data-freshness.md`, `live-updates.md`, `client-performance.md`). Scale the
 justification to the impact; a one-line reason covers a low-traffic admin page.
 
+On list endpoints and table pages, audit against `data-table/references/list-loading.md`: rows never
+wait for costly counts, no option list ships unbounded, paged sorts end with a unique tie-breaker,
+and live events refresh rows and total only.
+
 A frontend page diff is not audited until its first-paint trace is read: load the page in a real
 browser and list the `/api/` requests after hydration (`nextjs/references/client-performance.md` §0).
 Any request for content the user already sees is a defect to re-brief, not a note to the report.

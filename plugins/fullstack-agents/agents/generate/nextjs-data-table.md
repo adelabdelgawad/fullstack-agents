@@ -144,7 +144,8 @@ actions: actions (view, edit, delete)
   - One list coordinator (`refreshList`) that every trigger calls; after a create, and after an edit
     that changes a filtered, sorted or counted field, it reloads the list (SSR source)
   - Row patch from the backend response only when filter, sort, pagination and counts stay correct
-  - Rules: `skills/nextjs/references/data-freshness.md`
+  - Rules: `skills/nextjs/references/data-freshness.md`; list loading, counts and option lists:
+    `skills/data-table/references/list-loading.md`
   - No SWR dependency, no polling, no automatic refetch
   - Lower complexity, easier to maintain
 

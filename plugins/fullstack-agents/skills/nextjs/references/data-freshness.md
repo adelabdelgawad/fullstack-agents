@@ -26,7 +26,8 @@ Never:
   it corrupts sort, page size and pagination (inserting is fine when the response or a
   client-complete dataset tells you its position and the new counts);
 - recompute aggregate counts (`activeCount`, facet counts, `total`) from the rows of the current
-  page; on a server-paginated table those counts come from the server envelope, so update them
+  page; on a server-paginated table those counts come from the server (the list response or its
+  counts request, [list-loading.md](../../data-table/references/list-loading.md)), so update them
   from a server response or refetch them;
 - leave an edited row visible when it no longer matches the active filter, without either
   refetching or deliberately keeping it with a visible "no longer matches" state.

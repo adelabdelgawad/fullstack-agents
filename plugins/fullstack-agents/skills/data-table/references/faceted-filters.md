@@ -19,8 +19,10 @@ Several faceted filters side by side give the multi-dimension "levels" of filter
 
 ## Where counts come from (server-provided)
 
-Counts are **computed by the backend and returned in the list envelope**, not
-derived client-side from the current page. The list response carries one field per
+Counts are **computed by the backend**, never derived client-side from the current
+page. Small, measured-cheap counts may ride in the list response, as below; costly or
+unbounded facets move to a separate counts request and server-searched options
+([list-loading.md](list-loading.md)). The cheap in-envelope shape is one field per
 facet option, e.g.:
 
 ```typescript

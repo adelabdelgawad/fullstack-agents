@@ -78,6 +78,8 @@ A local mutation usually comes back as a realtime event about the same row. Hand
   than the state already applied.
 - Otherwise do not discard: coalesce. The event triggers the coordinator's refetch, which merges
   with any refetch the mutation already started; the newest server state wins.
+- On a paginated table the event refetch covers rows and `total` only; facet counts and option
+  lists refresh on filter change or manual refresh (`data-table/references/list-loading.md` §5).
 - Handle: an echo arriving **before** the mutation response, duplicate echoes, out-of-order
   events, and another user's update to the same row immediately after yours.
 - Do not add a backend protocol (mutation ids, versions) only so a client template can skip a

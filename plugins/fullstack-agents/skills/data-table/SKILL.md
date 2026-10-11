@@ -168,9 +168,11 @@ const { activeFilterCount, handleReset } = useUrlFilterCount(FILTER_PARAM_KEYS);
 />
 ```
 
-Counts are computed **server-side** and returned in the list envelope (one field per
-facet option, e.g. `availableCount`, `busyCount`), so they stay correct under
-pagination. See [references/faceted-filters.md](references/faceted-filters.md) (the
+Counts are computed **server-side** over the full filtered set, so they stay correct
+under pagination. Only measured-cheap counts ride in the list response; the rest come
+from a separate counts request that never blocks the rows, and large option lists are
+searched on the server — see [references/list-loading.md](references/list-loading.md).
+See [references/faceted-filters.md](references/faceted-filters.md) (the
 `Faceted` component + `sortFacetedOptions` + per-option counts) and
 [references/filter-pane.md](references/filter-pane.md) (the `DataTableController` +
 `useUrlFilterCount` + active-count badge + clear-all).
@@ -215,7 +217,8 @@ import { SelectionDisplay, EnableButton, DisableButton, ExportButton, PrintButto
 - **Required reading** before writing or reviewing a table: [data-freshness.md](../nextjs/references/data-freshness.md) (mutation updates, the one refresh coordinator, `router.refresh()` fan-out) and [client-performance.md](../nextjs/references/client-performance.md) (prefetch, responsiveness, optional UI). They override any example below that disagrees.
 - **Prompt controls.** Only free-text search is debounced (300 ms is a default, not a rule). Facets, selects, sort, tabs and pagination apply on change; see [client-performance.md](../nextjs/references/client-performance.md) §4.
 - **Cell links default to no prefetch.** A `<Link>` in a column cell takes `prefetch={false}` unless a measured high-intent case says otherwise ([client-performance.md](../nextjs/references/client-performance.md) §2).
-- **Server-owned counts.** Facet counts, `total` and status counts come from the list envelope; never recompute them from the current page's rows.
+- **Required reading for list loading:** [references/list-loading.md](references/list-loading.md) — rows + `total` first, counts in their own request, large option lists searched on the server, a unique sort tie-breaker, live events refresh rows only.
+- **Server-owned counts.** Facet counts, `total` and status counts come from the server (the list response or its counts request); never recompute them from the current page's rows.
 
 1. **URL-Driven State**: Search, filter, sort, pagination ALL sync to URL params
 2. **Generic `<TData>`**: All components use TypeScript generics
@@ -464,6 +467,7 @@ Ensure project has:
 ## References
 
 - [references/select-in-tables.md](references/select-in-tables.md) - SingleSelect in toolbar filters, MultiSelect in edit sheets
+- [references/list-loading.md](references/list-loading.md) - Rows first, counts in a separate request, server-searched option lists, stable sort, refresh and cancellation rules
 - [references/faceted-filters.md](references/faceted-filters.md) - Faceted single/multi filters with per-option server counts, `sortFacetedOptions`, active-selection chips
 - [references/filter-pane.md](references/filter-pane.md) - Collapsible `DataTableController` filter pane: active-filter-count badge, clear-all, multi-dimension layout, `useUrlFilterCount`
 - [references/form-sheet-guard.md](references/form-sheet-guard.md) - Unsaved-changes guard for Sheet/Dialog close (X, Escape, overlay click)

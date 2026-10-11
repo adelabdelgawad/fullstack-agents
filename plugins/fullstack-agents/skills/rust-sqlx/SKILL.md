@@ -135,3 +135,5 @@ Map at the RepoError boundary; never let `sqlx::Error` escape infrastructure:
 | Row structs exported or serialized | Private to infrastructure; DTOs are separate |
 | Stale `.sqlx/` cache committed | `cargo sqlx prepare --check` in the gate |
 | Unbounded pool / hardcoded connection limits | Configure from `AppConfig` |
+| Paged `ORDER BY` without a unique tie-breaker | Rows sharing the sort value repeat or vanish across pages — end with `, id` |
+| Facet counts and unbounded option lists computed inside the list query path | Rows wait on every count; see `data-table/references/list-loading.md` |
