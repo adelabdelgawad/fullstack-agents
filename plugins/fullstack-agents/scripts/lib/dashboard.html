@@ -57,6 +57,7 @@ main { padding: 0; }
 .col .none { color: var(--faint); font-size: 12px; padding: 4px 2px; }
 .more { width: 100%; border: 1px dashed var(--line); background: none; color: var(--muted); border-radius: 8px; padding: 6px; font: inherit; font-size: 12px; cursor: pointer; }
 .more:hover { color: var(--ink); border-color: var(--muted); }
+.board .card { display: flex; flex-direction: column; height: 250px; overflow: hidden; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px 9px; margin-bottom: 10px; cursor: pointer; transition: background .15s, border-color .15s, transform .15s; }
 .card:hover { background: var(--card-hover); transform: translateY(-1px); }
 .card:focus-visible { outline: 2px solid var(--active); outline-offset: 2px; }
@@ -74,7 +75,10 @@ main { padding: 0; }
 .flag { margin-left: auto; flex: none; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--human); white-space: nowrap; }
 .card .t { font-size: 13px; font-weight: 600; line-height: 1.4; word-break: break-word; }
 .card .s { color: var(--muted); font-size: 12px; margin-top: 2px; word-break: break-word; }
-.feature { font-size: 13px; line-height: 1.4; margin: 0 0 4px; word-break: break-word; }
+.feature { font-size: 13px; line-height: 1.4; margin: 0 0 4px; word-break: break-word; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; flex: none; }
+.cbody { flex: 1; min-height: 0; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); }
+.cbody > .s { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.card > .cardhint, .card > .foot { flex: none; }
 .branch { font: 11px var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rounds { margin-top: 10px; display: grid; gap: 5px; }
 .round { display: grid; gap: 2px; }
@@ -229,6 +233,7 @@ aside .gcol pre.diff { margin: 0; border-radius: 0; background: none; padding: 0
 </dialog>
 <div id="ctx" role="menu" aria-label="Card actions" hidden>
   <button role="menuitem" data-act="open">Open</button>
+  <button role="menuitem" data-act="fav">Mark favourite</button>
   <button role="menuitem" data-act="copy">Copy session id</button>
   <button role="menuitem" data-act="dismiss">Dismiss</button>
 </div>
@@ -346,13 +351,13 @@ function cardHtml(c) {
     <div class="card-top">${live ? '<span class="blink" aria-label="running"></span>' : ""}<span class="num">${esc(c.key.startsWith("session:") ? "session " + c.key.slice(8, 16) : c.key.split("/").pop())}</span>${flag ? `<span class="flag">${esc(flag)}</span>` : ""}<button class="star" data-fav="${esc(c.key)}" aria-pressed="${!!c.favourite}" aria-label="${c.favourite ? "Remove from favourites" : "Add to favourites"}" title="${c.favourite ? "Remove from favourites" : "Add to favourites"}">${c.favourite ? "★" : "☆"}</button></div>
     <p class="feature">${esc(c.title)}</p>
     ${branch ? `<div class="branch">${esc(branch)}</div>` : ""}
-    ${sub ? `<div class="s">${esc(sub)}</div>` : ""}
+    <div class="cbody">${sub ? `<div class="s">${esc(sub)}</div>` : ""}
     ${roundsHtml(c)}
     <div class="chips">${chips}</div>
     ${cardNow(c)}
     ${paths}
+    ${agentTiles(c)}</div>
     ${human && sid ? `<div class="cardhint">claude --resume ${esc((sessionOf(sid) || {}).title ? `"${sessionOf(sid).title}"` : sid)}</div>` : ""}
-    ${agentTiles(c)}
     <div class="foot"><span>${ago(c.updated)} ago</span><button class="dismiss" data-dismiss="${esc(c.key)}">Dismiss</button></div></div>`;
 }
 
@@ -829,6 +834,9 @@ function openCtx(card, x, y) {
   ctxCard = card;
   const m = ctx(), d = card.querySelector("[data-dismiss]");
   m.querySelector('[data-act="open"]').disabled = !card.dataset.key;
+  const fav = card.querySelector("[data-fav]");
+  m.querySelector('[data-act="fav"]').disabled = !fav;
+  m.querySelector('[data-act="fav"]').textContent = fav && fav.getAttribute("aria-pressed") === "true" ? "Unmark favourite" : "Mark favourite";
   m.querySelector('[data-act="copy"]').disabled = !card.dataset.sid;
   m.querySelector('[data-act="dismiss"]').disabled = !d;
   m.hidden = false;
@@ -860,6 +868,7 @@ ctx().addEventListener("click", e => {
   const card = ctxCard, act = b.dataset.act;
   closeCtx();
   if (act === "open") openCard(card.dataset.key);
+  else if (act === "fav") toggleFavourite(card.dataset.key);
   else if (act === "copy") copyText(card.dataset.sid).then(() => toast(`<b>Copied</b> ${esc(card.dataset.sid)}`, "blue"), () => toast("<b>Copy failed</b>", "red"));
   else dismiss(card.querySelector("[data-dismiss]").dataset.dismiss);
 });
