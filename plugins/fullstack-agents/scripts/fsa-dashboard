@@ -1080,13 +1080,29 @@ def host_ip():
     return next((ip for ip in out if not ip.startswith(("172.", "127."))), out[0] if out else "localhost")
 
 
-def running_pid(repo):
-    try:
-        pid = int((repo.state / "dashboard.pid").read_text())
-        os.kill(pid, 0)
-        return pid
-    except (OSError, ValueError):
-        return None
+def running_pid(port):
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit() or int(proc.name) == os.getpid():
+            continue
+        try:
+            argv = (proc / "cmdline").read_bytes().decode(errors="replace").split("\0")
+        except OSError:
+            continue
+        if not any(a.endswith("fsa-dashboard") for a in argv) or "serve" not in argv:
+            continue
+        given = argv[argv.index("--port") + 1] if "--port" in argv[:-1] else "8766"
+        if given == str(port):
+            return int(proc.name)
+    return None
+
+
+def stop_server(pid):
+    os.kill(pid, signal.SIGTERM)
+    for _ in range(30):
+        if not Path(f"/proc/{pid}").exists():
+            return
+        time.sleep(0.1)
+    os.kill(pid, signal.SIGKILL)
 
 
 def main():
@@ -1101,7 +1117,7 @@ def main():
     repo = Repo(args.repo, args.runs, args.projects)
     token = token_for(repo)
     url = f"http://{host_ip()}:{args.port}/?t={token}"
-    pid = running_pid(repo)
+    pid = running_pid(args.port)
 
     if args.cmd == "state":
         st = build_state(repo, GitCache(repo))
@@ -1109,7 +1125,6 @@ def main():
         print(json.dumps(st, indent=1))
     elif args.cmd == "serve":
         srv = Server((args.host, args.port), repo, token)
-        (repo.state / "dashboard.pid").write_text(str(os.getpid()))
         signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
         srv.serve_forever()
     elif args.cmd == "start":
@@ -1121,12 +1136,12 @@ def main():
                 cmd += ["--projects", p]
             subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
             time.sleep(1.5)
-            if not running_pid(repo):
+            if not running_pid(args.port):
                 sys.exit(f"fsa-dashboard: failed to start; see {repo.state / 'dashboard.log'}")
         print(url)
     elif args.cmd == "stop":
         if pid:
-            os.kill(pid, signal.SIGTERM)
+            stop_server(pid)
         print("stopped" if pid else "not running")
     else:
         print(url if pid else "not running")
