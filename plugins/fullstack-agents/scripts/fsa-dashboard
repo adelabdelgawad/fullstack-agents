@@ -6,6 +6,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import signal
 import subprocess
 import sys
@@ -30,6 +31,7 @@ STILL_OPEN_S = 900
 SUBAGENT_BUSY_S = 120
 TAIL_BYTES = 262144
 STATE_TTL_S = 3
+HERDR_TTL_S = 2
 GIT_TTL_S = 30
 EDIT_FRESH_S = 600
 MAX_FILES = 400
@@ -62,6 +64,69 @@ OUTPUT_CHARS = 60000
 AGENT_STALE_S = 3600
 JUDGE_WINDOW_S = 7200
 JUDGED = {}
+HERDR_KEYS = {"enter", "esc", "ctrl+c", "up", "down", "left", "right", "tab", "backspace", "1", "2", "3", "y", "n"}
+
+
+def run_herdr(*args):
+    command = shutil.which("herdr")
+    if not command:
+        return None
+    try:
+        return subprocess.run([command, *args], capture_output=True, timeout=5)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def normalize_herdr_snapshot(raw):
+    snap = raw["result"]["snapshot"]
+    return {
+        "running": True,
+        "workspaces": [{k: x.get(k) for k in ("workspace_id", "label")} for x in snap.get("workspaces", [])],
+        "tabs": [{k: x.get(k) for k in ("tab_id", "workspace_id", "label", "number", "agent_status")} for x in snap.get("tabs", [])],
+        "panes": [{
+            "pane_id": x.get("pane_id"), "tab_id": x.get("tab_id"), "workspace_id": x.get("workspace_id"),
+            "title": x.get("terminal_title_stripped") or "", "status": x.get("agent_status") or "unknown",
+            "cwd": x.get("cwd") or "", "agent": x.get("agent") or "",
+        } for x in snap.get("panes", [])],
+        "focused_pane_id": snap.get("focused_pane_id"),
+    }
+
+
+def read_herdr_snapshot():
+    result = run_herdr("api", "snapshot")
+    if result is None or result.returncode:
+        return {"running": False, "workspaces": [], "tabs": [], "panes": [], "focused_pane_id": None}
+    try:
+        return normalize_herdr_snapshot(json.loads(result.stdout))
+    except (KeyError, TypeError, ValueError):
+        return {"running": False, "workspaces": [], "tabs": [], "panes": [], "focused_pane_id": None}
+
+
+def herdr_screen(pane, source):
+    args = ["pane", "read", pane, "--source", source, "--format", "ansi"]
+    if source == "recent":
+        args += ["--lines", "400"]
+    result = run_herdr(*args)
+    return result.stdout if result is not None and result.returncode == 0 else None
+
+
+def herdr_send_args(body, pane_ids):
+    if not isinstance(body, dict):
+        raise TypeError("body must be an object")
+    pane, kind = body.get("pane"), body.get("kind")
+    if pane not in pane_ids:
+        raise LookupError("unknown pane")
+    if kind in ("prompt", "text"):
+        text = body.get("text")
+        if not isinstance(text, str) or not 1 <= len(text) <= 8000 or "\x00" in text:
+            raise ValueError("bad text")
+        return ["agent", "prompt", pane, text] if kind == "prompt" else ["pane", "send-text", pane, text]
+    if kind == "keys":
+        keys = body.get("keys")
+        if not isinstance(keys, list) or not 1 <= len(keys) <= 10 or any(not isinstance(k, str) or k not in HERDR_KEYS for k in keys):
+            raise ValueError("bad keys")
+        return ["pane", "send-keys", pane, *keys]
+    raise ValueError("bad kind")
 
 
 def load_json(path):
@@ -1047,6 +1112,7 @@ class Server(http.server.ThreadingHTTPServer):
         super().__init__(addr, Handler)
         self.repo, self.token, self.gc = repo, token, GitCache(repo)
         self.lock, self.cached, self.cached_at, self.sources, self.docs = threading.Lock(), None, 0.0, {}, {}
+        self.herdr_lock, self.herdr_cached, self.herdr_cached_at = threading.Lock(), None, 0.0
 
     def state(self):
         with self.lock:
@@ -1056,6 +1122,18 @@ class Server(http.server.ThreadingHTTPServer):
                 self.cached = json.dumps(st).encode()
                 self.cached_at = time.time()
             return self.cached
+
+    def herdr_state(self):
+        with self.herdr_lock:
+            if self.herdr_cached is None or time.time() - self.herdr_cached_at > HERDR_TTL_S:
+                self.herdr_cached = read_herdr_snapshot()
+                self.herdr_cached_at = time.time()
+            return self.herdr_cached
+
+    def invalidate_herdr(self):
+        with self.herdr_lock:
+            self.herdr_cached_at = 0
+            self.herdr_cached = None
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -1092,6 +1170,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(200, HTML.read_bytes(), "text/html; charset=utf-8", {"Set-Cookie": cookie})
         if url.path == "/api/state":
             return self.send(200, self.server.state())
+        if url.path == "/api/herdr":
+            return self.send(200, json.dumps(self.server.herdr_state()).encode())
+        if url.path == "/api/herdr/screen":
+            source = (q.get("source") or ["visible"])[0]
+            if source not in ("visible", "recent"):
+                return self.send(400, b"bad source", "text/plain")
+            pane = (q.get("pane") or [""])[0]
+            if pane not in {x["pane_id"] for x in self.server.herdr_state()["panes"]}:
+                return self.send(404, b"unknown pane", "text/plain")
+            screen = herdr_screen(pane, source)
+            if screen is None:
+                return self.send(503, b"herdr is not running", "text/plain")
+            return self.send(200, screen, "text/plain; charset=utf-8")
         if url.path == "/api/log":
             rid = (q.get("id") or [""])[0]
             if not RUN_ID_RE.match(rid):
@@ -1138,8 +1229,33 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         url = urllib.parse.urlparse(self.path)
-        if not self.authorised({}) or url.path not in ("/api/dismiss", "/api/favourite"):
+        if not self.authorised({}) or url.path not in ("/api/dismiss", "/api/favourite", "/api/herdr/send"):
             return self.send(403, b"forbidden", "text/plain")
+        if url.path == "/api/herdr/send":
+            length_header = self.headers.get("Content-Length")
+            if length_header is None or not re.fullmatch(r"\d+", length_header):
+                return self.send(413, b"invalid Content-Length", "text/plain")
+            normalized_length = length_header.lstrip("0") or "0"
+            if len(normalized_length) > 5 or int(normalized_length) > 65536:
+                return self.send(413, b"invalid Content-Length", "text/plain")
+            length = int(normalized_length)
+            if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
+                return self.send(415, b"Content-Type must be application/json", "text/plain")
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+                args = herdr_send_args(body, {x["pane_id"] for x in self.server.herdr_state()["panes"]})
+            except LookupError:
+                return self.send(404, b"unknown pane", "text/plain")
+            except (ValueError, TypeError):
+                return self.send(400, b"bad request", "text/plain")
+            result = run_herdr(*args)
+            self.server.invalidate_herdr()
+            if result is not None and result.returncode == 0:
+                reply = {"ok": True, "error": ""}
+            else:
+                output = b"" if result is None else result.stdout + result.stderr
+                reply = {"ok": False, "error": output.decode("utf-8", "replace")[-2000:].strip() or "herdr is not running"}
+            return self.send(200, json.dumps(reply).encode())
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
             raw = body["keys"] if url.path == "/api/favourite" else [body["key"]]

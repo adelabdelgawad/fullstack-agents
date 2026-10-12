@@ -26,6 +26,9 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 -appl
 .dismiss:hover { color: var(--ink); border-color: var(--muted); }
 header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 24px 32px 4px; }
 header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.viewtabs { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.viewtab { border: 0; border-radius: 5px; padding: 4px 11px; background: none; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
+.viewtab[aria-selected="true"] { background: var(--chip); color: var(--ink); }
 .status { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .status .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--pass); margin-right: 6px; vertical-align: 1px; }
 .status.error { color: var(--human); }
@@ -197,6 +200,26 @@ aside .gcol pre.diff { margin: 0; border-radius: 0; background: none; padding: 0
 .diff .d { color: var(--red); background: var(--red-bg); }
 .diff .h { color: var(--blue); }
 .hint { color: var(--muted); padding: 14px 10px; font-size: 12px; }
+.herdr-view { display: grid; grid-template-columns: minmax(240px, 28%) 1fr; gap: 16px; height: calc(100vh - 75px); padding: 18px 32px 32px; }
+.herdr-list, .herdr-detail { min-height: 0; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.herdr-list { padding: 10px; }
+.herdr-list h2 { margin: 8px 6px 4px; font-size: 13px; }
+.herdr-tab-label { margin: 8px 6px 3px; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.herdr-pane { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; text-align: left; border: 0; border-radius: 7px; background: none; color: var(--ink); padding: 7px 8px; cursor: pointer; }
+.herdr-pane:hover, .herdr-pane[aria-selected="true"] { background: var(--chip); }
+.herdr-pane .pn, .herdr-pane .pc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.herdr-pane .pc { grid-column: 1 / -1; color: var(--muted); font: 10px var(--mono); }
+.herdr-detail { display: flex; flex-direction: column; padding: 12px; }
+#card-terminal { flex: 1; }
+.terminal { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.terminal-head, .terminal-actions, .terminal-keys { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.terminal-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: auto; }
+.terminal button, .terminal select { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); padding: 4px 8px; font: inherit; font-size: 12px; cursor: pointer; }
+.terminal button[aria-pressed="true"] { border-color: var(--blue); color: var(--blue); }
+.terminal-screen, aside pre.terminal-screen { flex: 1; min-height: 180px; max-height: none; margin: 0; overflow: auto; white-space: pre; word-break: normal; background: #101218; color: #e8e8e8; border: 1px solid #30333d; border-radius: 8px; padding: 10px; font: 12px/1.35 var(--mono); tab-size: 4; }
+.terminal textarea { width: 100%; min-height: 58px; resize: vertical; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--ink); padding: 8px; font: 13px/1.4 var(--mono); }
+.terminal-error { min-height: 1.4em; color: var(--red); font-size: 12px; }
+.terminal-pick { padding: 8px 0; color: var(--muted); }
 .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--blue); margin-right: 6px; animation: pulse 1.2s ease-in-out infinite; }
 #toasts { position: fixed; top: 64px; right: 16px; display: grid; gap: 8px; z-index: 20; width: min(360px, calc(100% - 32px)); }
 .toast { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--amber); border-radius: 10px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18); cursor: pointer; animation: slide .2s ease-out; }
@@ -224,13 +247,16 @@ aside .gcol pre.diff { margin: 0; border-radius: 0; background: none; padding: 0
 #ctx button:disabled { color: var(--muted); cursor: default; }
 @keyframes slide { from { transform: translateX(30px); opacity: 0; } }
 @media (max-width: 1100px) { .board { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 28px; } .col.flow .col-head::after { display: none; } }
-@media (max-width: 640px) { header { padding: 18px 16px 4px; } .board { grid-template-columns: 1fr; padding: 14px 16px 32px; } }
+@media (max-width: 640px) { header { padding: 18px 16px 4px; } .board { grid-template-columns: 1fr; padding: 14px 16px 32px; } .herdr-view { grid-template-columns: 1fr; height: auto; padding: 14px 16px 24px; } .herdr-list { max-height: 34vh; } .herdr-detail { min-height: 62vh; } .terminal-actions button { flex: 1; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .card:hover { transform: none; } }
 </style>
 </head>
 <body>
 <header>
-  <h1>Agents</h1>
+  <div class="viewtabs" role="tablist" aria-label="Dashboard view">
+    <button class="viewtab" id="view-agents" role="tab" data-view="agents">Agents</button>
+    <button class="viewtab" id="view-herdr" role="tab" data-view="herdr">Herdr</button>
+  </div>
   <div class="hright">
     <button class="favsw" id="favsw" role="switch" aria-checked="false"><span class="track" aria-hidden="true"></span>Favourites only</button>
     <div class="status" id="meta"><span class="dot"></span>loading…</div>
@@ -268,9 +294,230 @@ let expanded = new Set();
 try { expanded = new Set(JSON.parse(localStorage.getItem("fsa-expanded") || "[]")); } catch (e) {}
 let favOnly = false;
 try { favOnly = localStorage.getItem("fsa-fav-only") === "1"; } catch (e) {}
-let uiSeen = null, state = null, seen = null;
+let view = "agents";
+try { view = localStorage.getItem("fsa-view") === "herdr" ? "herdr" : "agents"; } catch (e) {}
+let uiSeen = null, state = null, seen = null, herdrData = null, herdrLoading = null, selectedHerdrPane = null;
+let terminal = null, terminalTimer = null;
+const cardPaneChoice = new Map();
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function ansiHtml(input) {
+  const basic = ["#000000", "#aa0000", "#00aa00", "#aa5500", "#0000aa", "#aa00aa", "#00aaaa", "#aaaaaa"];
+  const bright = ["#555555", "#ff5555", "#55ff55", "#ffff55", "#5555ff", "#ff55ff", "#55ffff", "#ffffff"];
+  const indexed = n => {
+    if (n < 8) return basic[n];
+    if (n < 16) return bright[n - 8];
+    if (n < 232) { const x = n - 16, v = z => z ? 55 + z * 40 : 0; return `rgb(${v(Math.floor(x / 36))},${v(Math.floor(x / 6) % 6)},${v(x % 6)})`; }
+    const v = 8 + (n - 232) * 10;
+    return `rgb(${v},${v},${v})`;
+  };
+  const s = {bold: false, dim: false, italic: false, underline: false, inverse: false, fg: "", bg: ""};
+  const reset = () => Object.assign(s, {bold: false, dim: false, italic: false, underline: false, inverse: false, fg: "", bg: ""});
+  const style = () => {
+    let fg = s.fg, bg = s.bg;
+    if (s.inverse) [fg, bg] = [bg || "#e8e8e8", fg || "#101218"];
+    return [s.bold && "font-weight:bold", s.dim && "opacity:.65", s.italic && "font-style:italic", s.underline && "text-decoration:underline", fg && `color:${fg}`, bg && `background-color:${bg}`].filter(Boolean).join(";");
+  };
+  const sgr = raw => {
+    const codes = raw === "" ? [0] : raw.split(";").map(x => Number(x || 0));
+    for (let i = 0; i < codes.length; i++) {
+      const c = codes[i];
+      if (c === 0) reset();
+      else if (c === 1) s.bold = true;
+      else if (c === 2) s.dim = true;
+      else if (c === 3) s.italic = true;
+      else if (c === 4) s.underline = true;
+      else if (c === 7) s.inverse = true;
+      else if (c === 22) s.bold = s.dim = false;
+      else if (c === 23) s.italic = false;
+      else if (c === 24) s.underline = false;
+      else if (c === 27) s.inverse = false;
+      else if (c >= 30 && c <= 37) s.fg = basic[c - 30];
+      else if (c >= 90 && c <= 97) s.fg = bright[c - 90];
+      else if (c >= 40 && c <= 47) s.bg = basic[c - 40];
+      else if (c >= 100 && c <= 107) s.bg = bright[c - 100];
+      else if (c === 39) s.fg = "";
+      else if (c === 49) s.bg = "";
+      else if ((c === 38 || c === 48) && codes[i + 1] === 5 && Number.isInteger(codes[i + 2])) { s[c === 38 ? "fg" : "bg"] = indexed(Math.max(0, Math.min(255, codes[i + 2]))); i += 2; }
+      else if ((c === 38 || c === 48) && codes[i + 1] === 2 && i + 4 < codes.length && codes.slice(i + 2, i + 5).every(Number.isFinite)) { s[c === 38 ? "fg" : "bg"] = `rgb(${codes.slice(i + 2, i + 5).map(x => Math.max(0, Math.min(255, x))).join(",")})`; i += 4; }
+    }
+  };
+  const text = String(input ?? "").replace(/\x1b\][\s\S]*?(?:\x07|\x1b\\|$)/g, "");
+  const csi = /\x1b\[([0-?]*)([ -\/]*)([@-~])/g;
+  let out = "", at = 0, m;
+  const add = part => { if (!part) return; const css = style(); out += css ? `<span style="${css}">${esc(part)}</span>` : esc(part); };
+  while ((m = csi.exec(text))) { add(text.slice(at, m.index)); if (m[3] === "m" && !m[2]) sgr(m[1]); at = csi.lastIndex; }
+  add(text.slice(at));
+  return out.replace(/\x1b/g, "");
+}
+
+function terminalHtml(pane, panes, pickMessage) {
+  const options = (panes || []).map(x => `<option value="${esc(x.pane_id)}" ${pane && x.pane_id === pane.pane_id ? "selected" : ""}>${esc(x.title || x.pane_id)}</option>`).join("");
+  const pick = pickMessage ? `<div class="terminal-pick">${esc(pickMessage)} ${options ? `<label>Pick a pane <select data-pane-pick><option value="">—</option>${options}</select></label>` : ""}</div>` : "";
+  if (!pane) return `<div class="terminal">${pick || '<div class="hint">No Herdr panes are available.</div>'}</div>`;
+  return `<div class="terminal" data-terminal-pane="${esc(pane.pane_id)}">${pick}
+    <div class="terminal-head"><strong>${esc(pane.title || pane.pane_id)}</strong><span class="chip st-${esc(pane.status)}">${esc(pane.status)}</span><button data-source="visible" aria-pressed="true">Visible</button><button data-source="recent" aria-pressed="false">Recent</button></div>
+    <pre class="terminal-screen" tabindex="0">loading…</pre>
+    <textarea data-terminal-input placeholder="Send a prompt or type text into this pane" aria-label="Terminal input"></textarea>
+    <div class="terminal-actions"><button data-send="prompt">Send prompt</button><button data-send="text">Type</button><span class="terminal-keys"><button data-term-key="enter">Enter</button><button data-term-key="esc">Esc</button><button data-term-key="ctrl+c">Ctrl+C</button><button data-term-key="up">Up</button><button data-term-key="down">Down</button><button data-term-key="tab">Tab</button></span></div>
+    <div class="terminal-error" aria-live="polite"></div></div>`;
+}
+
+function stopTerminal() {
+  clearInterval(terminalTimer);
+  terminalTimer = null;
+  terminal = null;
+}
+
+function terminalSnapshot() {
+  if (!terminal || !document.contains(terminal.root)) return null;
+  const pre = terminal.root.querySelector(".terminal-screen");
+  return {pane: terminal.pane, source: terminal.source, text: terminal.text, input: terminal.root.querySelector("[data-terminal-input]").value,
+    scroll: pre.scrollTop, atEnd: pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40};
+}
+
+const paneAvailability = panes => JSON.stringify((panes || []).map(x => x.pane_id).sort());
+
+function terminalCanStay(pane, panes) {
+  return pane && terminal && terminal.pane === pane.pane_id && terminal.availability === paneAvailability(panes) && document.contains(terminal.root);
+}
+
+function updateTerminalStatus(pane) {
+  const chip = terminal && terminal.root.querySelector(".terminal-head .chip");
+  if (!chip || !pane) return;
+  chip.className = `chip st-${pane.status}`;
+  chip.textContent = pane.status;
+}
+
+async function pollTerminal() {
+  const current = terminal;
+  if (!current || document.hidden || !document.contains(current.root)) return;
+  try {
+    const r = await fetch(`/api/herdr/screen?pane=${enc(current.pane)}&source=${enc(current.source)}`, {cache: "no-store"});
+    const text = await r.text();
+    if (terminal !== current || !document.contains(current.root)) return;
+    if (!r.ok) throw new Error(text || `screen error ${r.status}`);
+    if (text === current.text) return;
+    const pre = current.root.querySelector(".terminal-screen");
+    const atEnd = current.text === null || pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
+    current.text = text;
+    pre.innerHTML = ansiHtml(text) || "&nbsp;";
+    if (atEnd) pre.scrollTop = pre.scrollHeight;
+  } catch (e) {
+    if (terminal === current) current.root.querySelector(".terminal-error").textContent = e.message || "Could not read the pane";
+  }
+}
+
+async function sendTerminal(kind, keys) {
+  const current = terminal;
+  if (!current) return;
+  const input = current.root.querySelector("[data-terminal-input]"), error = current.root.querySelector(".terminal-error");
+  const body = {pane: current.pane, kind};
+  if (kind === "keys") body.keys = keys;
+  else body.text = input.value;
+  error.textContent = "";
+  try {
+    const r = await fetch("/api/herdr/send", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    const data = r.headers.get("Content-Type")?.includes("application/json") ? await r.json() : {ok: false, error: await r.text()};
+    if (!r.ok || !data.ok) throw new Error(data.error || `send error ${r.status}`);
+    if (kind === "prompt") input.value = "";
+    setTimeout(pollTerminal, 100);
+    loadHerdr();
+  } catch (e) {
+    if (terminal === current) error.textContent = e.message || "Could not send to the pane";
+  }
+}
+
+function mountTerminal(container, pane, panes, restore) {
+  stopTerminal();
+  const root = container.querySelector(".terminal[data-terminal-pane]");
+  if (!root || !pane) return;
+  const old = restore && restore.pane === pane.pane_id ? restore : null;
+  terminal = {root, pane: pane.pane_id, availability: paneAvailability(panes), source: old ? old.source : "visible", text: old ? old.text : null};
+  if (old) {
+    root.querySelector("[data-terminal-input]").value = old.input;
+    const pre = root.querySelector(".terminal-screen");
+    pre.innerHTML = ansiHtml(old.text) || "&nbsp;";
+    pre.scrollTop = old.atEnd ? pre.scrollHeight : old.scroll;
+    root.querySelectorAll("[data-source]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.source === old.source)));
+  }
+  root.querySelectorAll("[data-source]").forEach(b => b.onclick = () => {
+    if (!terminal || terminal.root !== root) return;
+    terminal.source = b.dataset.source;
+    terminal.text = null;
+    root.querySelectorAll("[data-source]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    pollTerminal();
+  });
+  root.querySelectorAll("[data-send]").forEach(b => b.onclick = () => sendTerminal(b.dataset.send));
+  root.querySelectorAll("[data-term-key]").forEach(b => b.onclick = () => sendTerminal("keys", [b.dataset.termKey]));
+  root.querySelector("[data-terminal-input]").onkeydown = e => { if (e.key === "Enter" && e.ctrlKey) { e.preventDefault(); sendTerminal("prompt"); } };
+  pollTerminal();
+  terminalTimer = setInterval(pollTerminal, 1500);
+}
+
+async function loadHerdr() {
+  if (herdrLoading) return herdrLoading;
+  herdrLoading = fetch("/api/herdr", {cache: "no-store"}).then(r => {
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  }).then(data => { herdrData = data; }).catch(() => {
+    herdrData = {running: false, workspaces: [], tabs: [], panes: [], focused_pane_id: null};
+  }).finally(() => {
+    herdrLoading = null;
+    if (view === "herdr") renderHerdrPage();
+    if (openKey && tab2 === "terminal") paintPanel();
+  });
+  return herdrLoading;
+}
+
+function renderHerdrPage() {
+  if (view !== "herdr") return;
+  const main = document.getElementById("main");
+  if (!herdrData) {
+    stopTerminal();
+    main.innerHTML = '<div class="hint">Loading Herdr…</div>';
+    loadHerdr();
+    return;
+  }
+  if (!herdrData.running) {
+    stopTerminal();
+    main.innerHTML = '<div class="empty" style="padding:24px 32px">herdr is not running on this server</div>';
+    return;
+  }
+  const panes = herdrData.panes || [];
+  if (!panes.some(x => x.pane_id === selectedHerdrPane)) selectedHerdrPane = herdrData.focused_pane_id || (panes[0] || {}).pane_id || null;
+  const groups = (herdrData.workspaces || []).map(w => {
+    const tabs = (herdrData.tabs || []).filter(t => t.workspace_id === w.workspace_id).map(t => {
+      const items = panes.filter(p => p.tab_id === t.tab_id).map(p => `<button class="herdr-pane" data-herdr-pane="${esc(p.pane_id)}" aria-selected="${p.pane_id === selectedHerdrPane}"><span class="pn">${esc(p.title || p.pane_id)}</span><span class="chip st-${esc(p.status)}">${esc(p.status)}</span><span class="pc">${esc(p.cwd)}</span></button>`).join("");
+      return `<div class="herdr-tab-label">${esc(t.label || `Tab ${t.number}`)}</div>${items}`;
+    }).join("");
+    return `<section><h2>${esc(w.label || w.workspace_id)}</h2>${tabs}</section>`;
+  }).join("");
+  const pane = panes.find(x => x.pane_id === selectedHerdrPane) || null;
+  const list = main.querySelector(".herdr-list");
+  if (list && terminalCanStay(pane, panes) && main.querySelector(".herdr-detail")?.contains(terminal.root)) {
+    list.innerHTML = groups || '<div class="hint">No panes.</div>';
+    main.querySelectorAll("[data-herdr-pane]").forEach(b => b.onclick = () => { selectedHerdrPane = b.dataset.herdrPane; renderHerdrPage(); });
+    updateTerminalStatus(pane);
+    return;
+  }
+  const restore = terminalSnapshot();
+  stopTerminal();
+  main.innerHTML = `<div class="herdr-view"><nav class="herdr-list" aria-label="Herdr panes">${groups || '<div class="hint">No panes.</div>'}</nav><section class="herdr-detail">${terminalHtml(pane, panes)}</section></div>`;
+  main.querySelectorAll("[data-herdr-pane]").forEach(b => b.onclick = () => { selectedHerdrPane = b.dataset.herdrPane; renderHerdrPage(); });
+  mountTerminal(main.querySelector(".herdr-detail"), pane, panes, restore);
+}
+
+function setView(next) {
+  view = next === "herdr" ? "herdr" : "agents";
+  try { localStorage.setItem("fsa-view", view); } catch (e) {}
+  document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === view)));
+  document.getElementById("favsw").hidden = view !== "agents";
+  stopTerminal();
+  closePanel();
+  if (view === "herdr") renderHerdrPage(); else render();
+}
 const ago = t => { const s = Math.max(0, Date.now()/1000 - t); return s < 90 ? `${Math.round(s)}s` : s < 5400 ? `${Math.round(s/60)}m` : s < 172800 ? `${Math.round(s/3600)}h` : `${Math.round(s/86400)}d`; };
 const chip = c => { const good = /^(GREEN|PASS)$/.test(c.verdict), bad = /^(RED|CHANGES)$/.test(c.verdict); return `<span class="chip ${good ? "ok" : bad ? "bad" : ""}" title="${esc(c.label)}">${esc(c.kind)} ${esc(c.verdict)}</span>`; };
 
@@ -507,7 +754,7 @@ function stepsHtml(c) {
 
 
 function render() {
-  if (!state) return;
+  if (view !== "agents" || !state) return;
   const sw = document.getElementById("favsw");
   sw.setAttribute("aria-checked", String(favOnly));
   sw.lastChild.textContent = `Favourites only (${state.cards.filter(c => c.favourite).length})`;
@@ -586,7 +833,8 @@ const paneHead = c => `<button class="dismiss close" id="close">Close</button>
   <div class="s">${esc(c.phase)}${c.tree ? ` · ${c.tree.ahead} ahead · ${c.tree.dirty} uncommitted` : ""}</div>`;
 
 const tabsHtml = c => `<button class="tab2" role="tab" data-t="info" aria-selected="${tab2 === "info"}">Information</button>
-  <button class="tab2" role="tab" data-t="git" aria-selected="${tab2 === "git"}" ${c.tree ? "" : "disabled"}>Git changes${c.tree && c.tree.dirty ? ` <span class="badge">${c.tree.dirty}</span>` : ""}</button>`;
+  <button class="tab2" role="tab" data-t="git" aria-selected="${tab2 === "git"}" ${c.tree ? "" : "disabled"}>Git changes${c.tree && c.tree.dirty ? ` <span class="badge">${c.tree.dirty}</span>` : ""}</button>
+  <button class="tab2" role="tab" data-t="terminal" aria-selected="${tab2 === "terminal"}">Terminal</button>`;
 
 function detailHtml(r) {
   const live = LIVE(r);
@@ -713,6 +961,40 @@ function paintGit(c) {
   if (changed.some(Boolean)) wireGit(c);
 }
 
+function matchedCardPane(c) {
+  if (!herdrData) return null;
+  const names = [...(c.now || []).flatMap(x => [x.title, x.name]), ...(c.sessions || []).map(x => x.name)].filter(Boolean);
+  return (herdrData.panes || []).find(p => names.includes(p.title)) || null;
+}
+
+function paintCardTerminal(c) {
+  stopLog();
+  ensureBody("terminal", '<div id="card-terminal" class="herdr-detail"></div>');
+  const host = document.getElementById("card-terminal");
+  if (!herdrData) {
+    host.innerHTML = '<div class="hint">Loading Herdr…</div>';
+    loadHerdr();
+    return;
+  }
+  if (!herdrData.running) {
+    stopTerminal();
+    host.innerHTML = '<div class="empty">herdr is not running on this server</div>';
+    return;
+  }
+  const match = matchedCardPane(c), chosen = cardPaneChoice.get(c.key);
+  const pane = match || (herdrData.panes || []).find(x => x.pane_id === chosen) || null;
+  const missing = match ? "" : "No pane matches this card's session title or name.";
+  if (terminalCanStay(pane, herdrData.panes || []) && host.contains(terminal.root)) {
+    updateTerminalStatus(pane);
+    return;
+  }
+  const restore = terminalSnapshot();
+  host.innerHTML = terminalHtml(pane, herdrData.panes || [], missing);
+  const pick = host.querySelector("[data-pane-pick]");
+  if (pick) pick.onchange = () => { if (pick.value) cardPaneChoice.set(c.key, pick.value); else cardPaneChoice.delete(c.key); paintCardTerminal(c); };
+  mountTerminal(host, pane, herdrData.panes || [], restore);
+}
+
 async function getJson(url) { return (await fetch(url, {cache: "no-store"})).json(); }
 
 async function loadChanges(c, force) {
@@ -778,11 +1060,15 @@ function paintPanel() {
   }
   if (setIfChanged("phead", paneHead(c))) document.getElementById("close").onclick = closePanel;
   if (setIfChanged("ptabs", tabsHtml(c))) document.querySelectorAll("#ptabs [data-t]").forEach(b => b.onclick = () => { tab2 = b.dataset.t; paintPanel(); });
-  if (tab2 === "git" && c.tree) {
+  if (tab2 === "terminal") {
+    paintCardTerminal(c);
+  } else if (tab2 === "git" && c.tree) {
+    stopTerminal();
     stopLog();
     paintGit(c);
     loadChanges(c, false);
   } else {
+    stopTerminal();
     paintInfo(c);
   }
 }
@@ -802,6 +1088,7 @@ function openCard(key) {
 }
 
 function closePanel() {
+  stopTerminal();
   stopLog();
   openKey = openRun = null;
   showLog = false;
@@ -853,6 +1140,7 @@ async function load() {
     notify();
     render();
     if (openKey) paintPanel();
+    if (view === "herdr" || openKey && tab2 === "terminal") loadHerdr();
   } catch (e) {
     const meta = document.getElementById("meta");
     meta.className = "status error";
@@ -975,8 +1263,10 @@ ctx().addEventListener("click", e => {
   else dismiss(card.querySelector("[data-dismiss]").dataset.dismiss);
 });
 
-document.addEventListener("keydown", e => { if (e.key !== "Escape" || out) return; if (closeCtx()) return; if (openRun) toggleTask(openRun); else closePanel(); });
-document.addEventListener("visibilitychange", () => { if (!document.hidden && openRun) pollLog(openRun); });
+document.addEventListener("keydown", e => { if (e.key !== "Escape" || out || e.target.closest?.(".terminal")) return; if (closeCtx()) return; if (openRun) toggleTask(openRun); else closePanel(); });
+document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => setView(b.dataset.view));
+document.addEventListener("visibilitychange", () => { if (!document.hidden && openRun) pollLog(openRun); if (!document.hidden && terminal) pollTerminal(); });
+setView(view);
 load();
 setInterval(load, 4000);
 </script>
