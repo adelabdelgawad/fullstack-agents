@@ -629,6 +629,27 @@ async function attachLiveFiles(current, files) {
   }
 }
 
+function mountTerminalCopy(current) {
+  const host = current.root.querySelector(".terminal-live"), history = current.root.querySelector(".terminal-screen");
+  const copy = async (text, restore) => {
+    if (!text || !text.trim()) return;
+    let ok = false;
+    try { ok = await writeClipboard(text); } catch (err) { ok = false; }
+    restore();
+    showHerdrToast(ok ? "Copied" : "Copy failed");
+  };
+  host.addEventListener("mouseup", () => setTimeout(() => {
+    if (terminal !== current || !current.term?.hasSelection()) return;
+    copy(current.term.getSelection(), () => current.term.focus());
+  }));
+  history.addEventListener("mouseup", () => setTimeout(() => {
+    const selection = getSelection();
+    if (!selection.rangeCount || !history.contains(selection.anchorNode)) return;
+    const range = selection.getRangeAt(0).cloneRange();
+    copy(selection.toString(), () => { selection.removeAllRanges(); selection.addRange(range); });
+  }));
+}
+
 function mountTerminalFiles(current) {
   const host = current.root.querySelector(".terminal-live"), history = current.root.querySelector(".terminal-screen"), box = current.root.querySelector(".terminal-screen-box");
   const picker = current.root.querySelector("[data-attach-input]");
@@ -894,6 +915,7 @@ function mountTerminal(container, pane, panes, restore) {
   root.querySelector("[data-reconnect]").onclick = () => { if (terminal?.root !== root || !terminal.term) return; terminal.autoRetried = true; openLiveStream(terminal); terminal.term.focus(); };
   root.querySelectorAll("[data-takeover]").forEach(button => button.onclick = () => { if (terminal?.root !== root || !terminal.term) return; terminal.autoRetried = true; openLiveStream(terminal, true); terminal.term.focus(); });
   mountTerminalFiles(terminal);
+  mountTerminalCopy(terminal);
   switchTerminalMode(terminal, terminal.mode, old?.focus === "live");
   if (old?.focus && old.focus !== "live") root.querySelector(old.focus)?.focus();
 }
