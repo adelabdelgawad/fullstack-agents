@@ -248,6 +248,8 @@ html.herdr-page .herdr-view { height: 100%; }
 .herdr-tab[aria-selected="true"] { background: var(--herdr-accent); color: var(--herdr-panel-bg); }
 .herdr-tabs-overflow { position: absolute; top: 0; right: 0; width: 2ch; height: 1lh; display: flex; align-items: center; justify-content: flex-end; background: var(--herdr-panel-bg); color: var(--herdr-overlay0); }
 .herdr-tabs-overflow[hidden] { display: none; }
+.herdr-tab-new { flex: none; height: 1lh; border: 0; border-radius: 0; padding: 0 1ch; background: transparent; color: var(--herdr-overlay1); font: inherit; cursor: pointer; }
+.herdr-tab-new:hover, .herdr-tab-new:focus-visible { color: var(--herdr-accent); }
 .terminal-source { display: flex; gap: 1ch; margin-left: auto; white-space: nowrap; }
 .terminal-head .chip { display: none; }
 .terminal button:not(.herdr-tab), .terminal select { border: 0; border-radius: 0; background: transparent; color: var(--herdr-overlay1); padding: 0; font: inherit; cursor: pointer; }
@@ -1113,7 +1115,8 @@ function herdrTabsHtml(data, panes, selectedPane) {
     const first = panes.find(item => item.tab_id === tab.tab_id);
     return `<button class="herdr-tab" role="tab" data-herdr-pane="${esc((first || {}).pane_id || "")}" data-herdr-context="tab" data-herdr-tab-id="${esc(tab.tab_id)}" aria-selected="${tab.tab_id === pane.tab_id}" ${first ? "" : "disabled"}>${esc(tab.label || `Tab ${tab.number}`)}</button>`;
   }).join("");
-  return `<div class="herdr-tabs" role="tablist" aria-label="Workspace tabs">${tabs}<span class="herdr-tabs-overflow" aria-hidden="true" hidden>…</span></div>`;
+  const add = pane ? `<button class="herdr-tab-new" data-herdr-new-tab="${esc(pane.workspace_id)}" aria-label="New tab" title="New tab">+</button>` : "";
+  return `<div class="herdr-tabs" role="tablist" aria-label="Workspace tabs">${tabs}${add}<span class="herdr-tabs-overflow" aria-hidden="true" hidden>…</span></div>`;
 }
 
 function updateHerdrTabOverflow(root) {
@@ -1124,7 +1127,7 @@ function updateHerdrTabOverflow(root) {
   overflow.hidden = true;
   if (tabs.scrollWidth <= tabs.clientWidth) return;
   overflow.hidden = false;
-  const cutoff = tabs.clientWidth - overflow.offsetWidth;
+  const cutoff = tabs.clientWidth - overflow.offsetWidth - (tabs.querySelector(".herdr-tab-new")?.offsetWidth || 0);
   let clipped = false;
   buttons.forEach(button => {
     if (clipped || button.offsetLeft + button.offsetWidth > cutoff) button.hidden = clipped = true;
@@ -1167,6 +1170,10 @@ function wireHerdrPicks(root) {
     renderHerdrPage();
   });
   root.querySelector('[data-herdr-action="workspace.create"]')?.addEventListener("click", event => herdrAction("workspace.create"));
+  root.querySelectorAll("[data-herdr-new-tab]").forEach(button => button.onclick = () => {
+    const workspace = button.dataset.herdrNewTab, number = (herdrData.tabs || []).filter(x => x.workspace_id === workspace).length + 1;
+    openHerdrPrompt("new tab", String(number), "tab.create", {workspace_id: workspace}, button);
+  });
   const globalMenu = root.querySelector("[data-herdr-global-menu]");
   if (globalMenu) globalMenu.onclick = () => openHerdrGlobalMenu(globalMenu);
   root.querySelectorAll("[data-herdr-context]").forEach(target => target.oncontextmenu = event => {
@@ -1178,11 +1185,6 @@ function wireHerdrPicks(root) {
         ? (herdrData.tabs || []).find(x => x.tab_id === target.dataset.herdrTabId)
         : (herdrData.panes || []).find(x => x.pane_id === target.dataset.herdrPane);
     if (record) openHerdrContextMenu(kind, record, event.clientX, event.clientY, target);
-  });
-  root.querySelectorAll("[data-herdr-pane-context]").forEach(target => target.oncontextmenu = event => {
-    event.preventDefault();
-    const pane = (herdrData.panes || []).find(x => x.pane_id === target.dataset.herdrPaneContext);
-    if (pane) openHerdrContextMenu("pane", pane, event.clientX, event.clientY, target);
   });
   const divider = root.querySelector(".herdr-sidebar-divider"), list = root.querySelector(".herdr-list");
   if (divider && list) divider.onpointerdown = event => {
@@ -2030,6 +2032,13 @@ function openCtx(card, x, y) {
 }
 
 document.addEventListener("contextmenu", e => {
+  const box = e.target.closest("[data-herdr-pane-context]");
+  const pane = box && herdrData && (herdrData.panes || []).find(x => x.pane_id === box.dataset.herdrPaneContext);
+  if (pane) {
+    e.preventDefault();
+    closeCtx();
+    return openHerdrContextMenu("pane", pane, e.clientX, e.clientY, box);
+  }
   const card = e.target.closest("#main .card");
   if (!card) return closeCtx();
   e.preventDefault();
