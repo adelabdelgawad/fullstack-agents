@@ -495,17 +495,27 @@ def prompt_text(msg):
     return "" if text.startswith(("<", "Caveat:", "[Request interrupted")) else text
 
 
+SERVER_TOOL_TEXT = {"advisor": "Advisor: a stronger model is reviewing the work"}
+
+
 def tool_action(msg):
-    uses = [c for c in msg.get("content") or [] if isinstance(c, dict) and c.get("type") == "tool_use"]
+    uses = [c for c in msg.get("content") or [] if isinstance(c, dict) and c.get("type") in ("tool_use", "server_tool_use")]
     if not uses:
-        return ""
-    name, inp = uses[-1].get("name", ""), uses[-1].get("input") or {}
+        return "", ""
+    name, inp, uid = uses[-1].get("name", ""), uses[-1].get("input") or {}, uses[-1].get("id", "")
+    if name in SERVER_TOOL_TEXT:
+        return SERVER_TOOL_TEXT[name], uid
     detail = inp.get("description") or inp.get("skill") or inp.get("file_path") or inp.get("pattern") \
-        or inp.get("command") or inp.get("prompt") or ""
+        or inp.get("command") or inp.get("prompt") or inp.get("query") or inp.get("url") or ""
     if name in ("Read", "Edit", "Write") and detail:
         detail = Path(str(detail)).name
     detail = " ".join(str(detail).split())
-    return f"{name}: {detail[:160]}" if detail else name
+    return (f"{name}: {detail[:160]}" if detail else name), uid
+
+
+def result_ids(msg):
+    content = msg.get("content")
+    return {c["tool_use_id"] for c in content if isinstance(c, dict) and c.get("tool_use_id")} if isinstance(content, list) else set()
 
 
 def ask_of(d):
@@ -694,8 +704,8 @@ def read_session(path, now, wt_re, names, waits):
     mtime = path.stat().st_mtime
     sid = path.stem
     last, cwd, branch, title, text = None, "", "", "", ""
-    action, action_at, seen_at, turn_at = "", "", "", ""
-    mentions, briefs = {}, set()
+    action, action_at, action_id, said_at, seen_at, turn_at = "", "", "", "", "", ""
+    mentions, briefs, answered = {}, set(), set()
     finished = {}
     for line in tail_lines(path):
         for m in NOTE_RE.finditer(line):
@@ -711,11 +721,14 @@ def read_session(path, now, wt_re, names, waits):
             continue
         cwd, branch = d.get("cwd") or cwd, d.get("gitBranch") or branch
         msg = d.get("message") or {}
+        answered |= result_ids(msg)
         if d["type"] == "assistant":
-            text = final_text(msg) or text
-            done = tool_action(msg)
+            said = final_text(msg)
+            if said:
+                text, said_at = said, d.get("timestamp") or said_at
+            done, uid = tool_action(msg)
             if done:
-                action, action_at = done, d.get("timestamp") or action_at
+                action, action_at, action_id = done, d.get("timestamp") or action_at, uid
         last = (d["type"], msg.get("stop_reason"), d.get("timestamp"))
         if last[:2] == ("assistant", "end_turn"):
             turn_at = last[2] or turn_at
@@ -755,6 +768,7 @@ def read_session(path, now, wt_re, names, waits):
         "idle": idle, "snippet": snippet(text) if state in ("waiting", "still_open", "idle") else "",
         "briefs": sorted(briefs), "chips": chips,
         "ask": snippet(ask, 600), "need": need, "action": action, "action_at": iso_epoch(action_at),
+        "action_running": state == "working" and bool(action_id) and action_id not in answered, "said_at": iso_epoch(said_at),
         "said": snippet(text, 600),
     }
 
@@ -901,7 +915,7 @@ def build_state(repo, gc):
         steps = [(board.get("steps") or {}).get(s["id"]) for s in g["sessions"]]
         card["steps"] = max([x for x in steps if isinstance(x, dict) and isinstance(x.get("items"), list)],
                             key=lambda x: x.get("at", ""), default={"items": []})["items"]
-        card["now"] = [{**{k: s[k] for k in ("id", "name", "title", "state", "updated", "ask", "need", "action", "action_at", "said")},
+        card["now"] = [{**{k: s[k] for k in ("id", "name", "title", "state", "updated", "ask", "need", "action", "action_at", "action_running", "said", "said_at")},
                         "agents": [{f: x[f] for f in ("id", "label", "state", "at")} for x in s["agents"]]}
                        for s in sorted(g["sessions"], key=lambda s: -s["updated"])]
         card["declared"] = max((declared[s["id"]] for s in g["sessions"] if s["id"] in declared),

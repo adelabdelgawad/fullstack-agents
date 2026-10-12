@@ -142,6 +142,8 @@ aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-sp
 .now { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 4px; margin-bottom: 8px; }
 .now .lbl { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
 .card .act { font: 11px/1.4 var(--mono); color: var(--muted); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .act.run { color: var(--ink); }
+.card .say { font-size: 12px; line-height: 1.4; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .task .th { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .task .caret { margin-left: auto; color: var(--muted); }
 .task .tg { cursor: pointer; }
@@ -374,9 +376,22 @@ function agentTiles(c) {
   }).join("")}</div>`;
 }
 
+function toolLine(s) {
+  if (!s.action) return "";
+  return s.action_running ? `Running ${ago(s.action_at)} · ${s.action}` : `Done ${ago(s.action_at)} ago · ${s.action}`;
+}
+
+function lastPara(text) {
+  return (text || "").replace(/^… /, "").trim().split(/\n\s*\n/).pop().replace(/\s+/g, " ");
+}
+
 function cardNow(c) {
   const step = activeStep(c), s = (c.now || [])[0], wait = (c.now || []).find(x => x.state === "waiting" && x.need);
-  const line = wait ? `Needs you: ${wait.need}` : step ? `▸ ${step.text}` : s && s.action && s.state === "working" ? s.action : s && s.ask ? `“${s.ask}”` : "";
+  if (!wait && s && s.state === "working") {
+    const top = step ? `▸ ${step.text}` : lastPara(s.said), tool = toolLine(s);
+    return (top ? `<div class="say" title="${esc(top)}">${esc(top)}</div>` : "") + (tool ? `<div class="act${s.action_running ? " run" : ""}" title="${esc(tool)}">${esc(tool)}</div>` : "");
+  }
+  const line = wait ? `Needs you: ${wait.need}` : step ? `▸ ${step.text}` : s && s.ask ? `“${s.ask}”` : "";
   return line ? `<div class="act" title="${esc(line)}">${esc(line)}</div>` : "";
 }
 
@@ -385,7 +400,7 @@ function nowHtml(s) {
     <div><b>${esc(s.name)}</b> <span class="chip ${s.state === "waiting" ? "st-waiting" : s.state === "working" ? "st-working" : ""}">${esc(STATE_TEXT[s.state] || s.state)}</span> <span class="s">last activity ${ago(s.updated)} ago</span></div>
     ${s.state === "waiting" && s.need ? `<div class="lbl">Needs from you</div><div class="snip" style="margin:0"><b>${esc(s.need)}</b></div>` : ""}
     ${s.ask ? `<div class="lbl">Latest request</div><div class="snip" style="margin:0">${esc(s.ask)}</div>` : ""}
-    ${s.action ? `<div class="lbl">${s.state === "working" ? "Doing now" : "Last action"}</div><div class="s">${esc(s.action)}${s.action_at ? ` · ${ago(s.action_at)} ago` : ""}</div>` : ""}
+    ${s.action ? `<div class="lbl">${s.action_running ? "Running now" : "Last tool"}</div><div class="s">${esc(s.action)}${s.action_at ? (s.action_running ? ` · for ${ago(s.action_at)}` : ` · ${ago(s.action_at)} ago`) : ""}</div>` : ""}
     ${s.said ? `<div class="lbl">Last message from Claude</div><div class="snip" style="margin:0">${esc(s.said)}</div>` : ""}
   </div>`;
 }
