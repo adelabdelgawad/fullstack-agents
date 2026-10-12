@@ -116,10 +116,12 @@ main { padding: 0; }
 .said-full .mdh { font-weight: 600; margin-top: 8px; }
 .said-full .mdgap { height: 6px; }
 .said-full code { font: 12px var(--mono); }
-.docs { max-height: 152px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
-.doc { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 4px 8px; min-height: 30px; border-bottom: 1px solid var(--line); }
-.doc:last-child { border-bottom: 0; }
-.doc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; min-width: 0; }
+.docs { max-height: calc(5 * 26px); overflow-y: auto; font-size: 12px; }
+.doc { line-height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.doc .s { margin-left: 4px; }
+.copy-ico { vertical-align: middle; margin-left: 4px; padding: 2px 4px; border: 1px solid transparent; border-radius: 4px; background: none; color: var(--muted); cursor: pointer; line-height: 0; }
+.copy-ico:hover, .copy-ico:focus-visible { color: var(--ink); border-color: var(--line); }
+.copy-ico.ok { color: #2e8b57; }
 .said-full { font-size: 13px; line-height: 1.45; margin: 0; max-height: 60vh; overflow: auto; overflow-wrap: anywhere; border-left: 2px solid var(--line); padding-left: 8px; }
 .mono { font: 12px ui-monospace, monospace; user-select: all; word-break: break-all; }
 .empty { color: var(--muted); padding: 20px 0; }
@@ -441,22 +443,28 @@ function saidHtml(s) {
   return `<div class="now"><div><b>${esc(s.name)}</b>${s.said_at ? ` <span class="s">sent ${ago(s.said_at)} ago</span>` : ""}</div><div class="said-full">${mdHtml(text)}</div>${docsHtml(s)}</div>`;
 }
 
+const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+const CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
 const kb = n => n < 1024 ? `${n} B` : `${Math.round(n / 1024)} KB`;
 
 function docsHtml(s) {
   const docs = s.docs || [];
   if (!docs.length) return "";
-  return `<div class="lbl">Files in this message · ${docs.length}</div><div class="docs">${docs.map(d => `<div class="doc">
-    <span class="doc-name" title="${esc(d.path)}"><b>${esc(d.name)}</b> <span class="s">${esc(d.shown)} · ${kb(d.size)}</span></span>
-    <button class="dismiss" data-doc-sid="${esc(s.id)}" data-doc="${esc(d.path)}">Copy</button></div>`).join("")}</div>`;
+  return `<div class="lbl">Files in this message · ${docs.length}</div><div class="docs">${docs.map(d => `<div class="doc" title="${esc(d.path)}"><b>${esc(d.name)}</b><button class="copy-ico" data-doc-sid="${esc(s.id)}" data-doc="${esc(d.path)}" aria-label="Copy ${esc(d.name)}" title="Copy file content">${COPY_ICON}</button><span class="s">${esc(d.shown)} · ${kb(d.size)}</span></div>`).join("")}</div>`;
+}
+
+function saidText(sid) {
+  for (const c of (state && state.cards) || []) for (const x of c.now || []) if (x.id === sid) return x.said_full || x.said || null;
+  return null;
 }
 
 async function copyDoc(btn) {
   let ok = false;
+  const title = btn.dataset.title || (btn.dataset.title = btn.title);
   try {
-    const r = await fetch(`/api/doc?sid=${enc(btn.dataset.docSid)}&path=${enc(btn.dataset.doc)}`);
-    if (r.ok) {
-      const text = await r.text();
+    const r = btn.dataset.said ? null : await fetch(`/api/doc?sid=${enc(btn.dataset.docSid)}&path=${enc(btn.dataset.doc)}`);
+    const text = btn.dataset.said ? saidText(btn.dataset.said) : r.ok ? await r.text() : null;
+    if (text !== null) {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(text);
         ok = true;
@@ -472,12 +480,14 @@ async function copyDoc(btn) {
   } catch (err) {
     ok = false;
   }
-  btn.textContent = ok ? "Copied" : "Copy failed";
-  setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+  btn.innerHTML = ok ? CHECK_ICON : "✕";
+  btn.classList.toggle("ok", ok);
+  btn.title = ok ? "Copied" : "Copy failed";
+  setTimeout(() => { btn.innerHTML = COPY_ICON; btn.classList.remove("ok"); btn.title = title; }, 1500);
 }
 
 document.addEventListener("click", e => {
-  const b = e.target.closest("[data-doc]");
+  const b = e.target.closest("[data-doc], [data-said]");
   if (b) { e.stopPropagation(); copyDoc(b); }
 });
 
@@ -605,7 +615,7 @@ function infoHtml(c) {
   const steps = stepsHtml(c);
   return `${c.now && c.now.length ? `<h4>Session id</h4>${c.now.map(resumeHtml).join("")}` : ""}
     ${c.now && c.now.length ? `<h4>Session</h4>${c.now.map(nowHtml).join("")}` : ""}
-    ${c.now && c.now.some(x => x.said_full || x.said) ? `<h4>Last message from Claude</h4>${c.now.map(saidHtml).join("")}` : ""}
+    ${c.now && c.now.some(x => x.said_full || x.said) ? `<h4>Last message from Claude<button class="copy-ico" data-said="${esc(c.now.find(x => x.said_full || x.said).id)}" aria-label="Copy the last message" title="Copy the message as Markdown">${COPY_ICON}</button></h4>${c.now.map(saidHtml).join("")}` : ""}
     ${steps ? `<h4>Steps${c.steps.length ? ` · ${stepsDone(c)}/${c.steps.length}` : ""}</h4>${steps}` : ""}
     ${c.declared && c.declared.note ? `<h4>Phase note</h4><div class="snip">${esc(c.declared.note)}</div>` : ""}
     ${desc ? `<h4>Brief</h4><div class="snip">${esc(desc)}</div>` : ""}
