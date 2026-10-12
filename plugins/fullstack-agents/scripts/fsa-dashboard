@@ -53,6 +53,8 @@ ACTIVITY_KEEP_S = 900
 ACTIVITY_MAX = 6
 OUTPUT_CHARS = 60000
 AGENT_STALE_S = 3600
+JUDGE_WINDOW_S = 7200
+JUDGED = {}
 
 
 def load_json(path):
@@ -797,6 +799,40 @@ def collect_sessions(repo, trees, now, names, waits):
     return out
 
 
+def reply_logged(config, sid, turn_at):
+    for line in reversed(tail_lines(config / "fullstack-agents" / "classifier.jsonl", 131072)):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if iso_epoch(d.get("at") or "") < turn_at - 2:
+            return False
+        if d.get("mode") == "reply" and d.get("session") == sid:
+            return True
+    return False
+
+
+def run_classifier(path, session):
+    hook = {"session_id": session["id"], "transcript_path": str(path), "cwd": session["cwd"]}
+    try:
+        subprocess.run([sys.executable, str(HERE / "fsa-classify"), "reply"], input=json.dumps(hook), text=True,
+                       capture_output=True, timeout=90, env={**os.environ, "CLAUDE_CONFIG_DIR": str(path.parents[2])})
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+
+
+def judge_turns(repo, sessions, now):
+    for s in sessions:
+        turn = s["turn_at"]
+        if s["state"] not in ("idle", "still_open") or s["need"] or not turn or JUDGED.get(s["id"]) == turn \
+                or not WAIT_MIN_S <= now - turn <= JUDGE_WINDOW_S:
+            continue
+        JUDGED[s["id"]] = turn
+        path = session_transcript(repo.projects, s["id"])
+        if path and not reply_logged(path.parents[2], s["id"], turn):
+            threading.Thread(target=run_classifier, args=(path, s), daemon=True).start()
+
+
 def iso_epoch(ts):
     try:
         return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
@@ -855,6 +891,7 @@ def build_state(repo, gc):
     names.update({k: v.get("name") for k, v in (board.get("claims") or {}).items()})
     runs = collect_runs(repo, now)
     sessions = collect_sessions(repo, trees, now, names, board.get("waits") or {})
+    judge_turns(repo, sessions, now)
     deployed_shas = [m.group(1) for e in board.get("events", []) for m in [DEPLOYED_RE.search(e.get("text", ""))] if m]
     dismissed = load_json(repo.dismissed) or {}
     favourites = load_json(repo.favourites) or {}

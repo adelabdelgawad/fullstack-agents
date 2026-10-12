@@ -19,7 +19,7 @@ MIN_WAIT_CONF = float(os.environ.get("FSA_WAIT_MIN_CONFIDENCE", "0.6"))
 INTENTS = ["question", "investigate", "debug", "performance", "plan", "implement", "review", "deploy", "other"]
 LANES = ["rust", "python", "frontend", "infra", "docs", "plugin", "none"]
 WORKERS = ["none", "bounded-extractor", "test-runner", "diff-reviewer", "implementer"]
-AWAITING = ["approval", "decision", "answer", "action", "none"]
+AWAITING = ["approval", "decision", "answer", "action", "review", "none"]
 LOG = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "fullstack-agents" / "classifier.jsonl"
 
 ROUTE_SYSTEM = """You route a developer's prompt for a Claude Code session lead in a fullstack repository.
@@ -32,13 +32,21 @@ database path of a Rust backend is the rust lane even when the prompt does not s
 confidence: 0.9 when the prompt clearly names the work, 0.75 when you infer the lane from the
 project, 0.5 or less when the request itself is unclear."""
 
-WAIT_SYSTEM = """You read the final message an AI coding assistant sent to its user and decide whether the
-assistant is now waiting on the user. approval: it asks the user to approve a plan or a risky step.
-decision: it asks the user to choose between options. answer: it asks a question it needs answered.
-action: it needs the user to do something outside the session (send a message, change a permission,
-log in). none: it reports finished work or progress and needs nothing. A mention that something
-happens later "with the user's go-ahead" inside a plan is not a request unless the message ends by
-asking for it. need is one short line saying what the user must do; empty for none."""
+WAIT_SYSTEM = """You read the final message an AI coding assistant sent to its user when its turn ended,
+and decide whether the work now waits on the user. The assistant has stopped: nothing moves until the
+user replies, so judge what the user must do next, not whether the message ends with a question.
+approval: it needs a go-ahead for a plan, a risky step, or work it says it will do once authorised.
+decision: it lists open decisions, options or recommended defaults for the user to confirm or change.
+answer: it asks a question it needs answered.
+action: the user must do something outside the session (send a message, change a permission, log in,
+copy a file somewhere permanent).
+review: it delivers findings, an investigation, a design, a review or an answer the user asked for,
+and the next step depends on the user reading it.
+none: only an interim progress note, an acknowledgement, or work completed end to end (shipped,
+verified) with nothing left for the user to decide or do.
+When the message is long, the PART markers show its opening and its ending; both count.
+need is one short line saying what the user must do; empty for none. confidence: 0.9 when the
+category is plain, 0.7 when you infer it, 0.5 or less only when the message is truly ambiguous."""
 
 
 def skill_catalogue():
@@ -84,7 +92,11 @@ def last_assistant_text(transcript, limit=1500):
         texts = [c.get("text", "") for c in (d.get("message") or {}).get("content") or []
                  if isinstance(c, dict) and c.get("type") == "text"]
         if texts and texts[-1].strip():
-            return texts[-1].strip()[-limit:]
+            text = texts[-1].strip()
+            if len(text) <= limit:
+                return text
+            head = limit // 3
+            return f"[PART: opening]\n{text[:head]}\n[PART: ending]\n{text[head - limit:]}"
     return ""
 
 
@@ -156,7 +168,7 @@ def route(hook):
 def wait(hook):
     if hook.get("stop_hook_active"):
         return 0
-    text = last_assistant_text(hook.get("transcript_path") or "", 2500)
+    text = last_assistant_text(hook.get("transcript_path") or "", 4000)
     sid = hook.get("session_id") or ""
     if not text or not sid:
         return 0

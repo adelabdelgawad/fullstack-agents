@@ -307,7 +307,7 @@ function roundsHtml(c) {
   if (!runs.length) {
     const scan = agents.filter(a => a.label.startsWith("bounded-extractor"));
     const lead = c.sessions.some(s => s.state === "working") ? "live" : c.sessions.some(s => s.state === "waiting") ? "bad" : c.sessions.length ? "done" : "";
-    return `<div class="rounds"><div class="round"><div class="cells">${cell(lead, "lead", "lead (opus): " + (lead || "no session"))}${cell(scan.some(a => a.state === "running") ? "live" : scan.length ? "done" : "skip", "haiku", `bounded-extractor (haiku): ${scan.length ? scan.length + " scan(s)" : "not used"}`)}</div></div></div>`;
+    return `<div class="rounds"><div class="round"><div class="cells">${cell(lead, "lead · opus", "lead (opus): " + (lead || "no session"))}${scan.length ? cell(scan.some(a => a.state === "running") ? "live" : "done", "haiku scan", `bounded-extractor (haiku): ${scan.length} scan(s)`) : ""}</div></div></div>`;
   }
   const last = runs.length - 1, stage = stageOf(c), prefix = unitPrefix(runs.map(r => r.unit).filter(Boolean));
   const rows = runs.map((r, n) => {
