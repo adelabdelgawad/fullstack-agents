@@ -76,13 +76,8 @@ JUDGED = {}
 HERDR_KEYS = {"enter", "esc", "ctrl+c", "up", "down", "left", "right", "tab", "backspace", "1", "2", "3", "y", "n"}
 HERDR_AGENT_KINDS = ("claude", "codex", "grok", "gemini", "opencode", "cursor", "copilot", "amp", "qwen", "kimi")
 HERDR_LIVE_MAX = 6
-HERDR_IMAGE_MAX = 10 * 1024 * 1024
-HERDR_IMAGE_TYPES = {
-    "image/png": ("png", lambda data: data.startswith(b"\x89PNG\r\n\x1a\n")),
-    "image/jpeg": ("jpg", lambda data: data.startswith(b"\xff\xd8\xff")),
-    "image/gif": ("gif", lambda data: data.startswith((b"GIF87a", b"GIF89a"))),
-    "image/webp": ("webp", lambda data: len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP"),
-}
+HERDR_UPLOAD_MAX = 50 * 1024 * 1024
+UNSAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 XTERM_FILES = {
     "/static/xterm/xterm.js": (HERE / "lib" / "vendor" / "xterm" / "xterm.js", "application/javascript"),
     "/static/xterm/addon-fit.js": (HERE / "lib" / "vendor" / "xterm" / "addon-fit.js", "application/javascript"),
@@ -1546,7 +1541,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send(400, b"bad request", "text/plain")
             return False, None
 
-    def herdr_image_body(self):
+    def herdr_upload_body(self):
         length_header = self.headers.get("Content-Length")
         if length_header is None or not re.fullmatch(r"\d+", length_header):
             self.send(413, b"invalid Content-Length", "text/plain")
@@ -1556,30 +1551,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send(413, b"invalid Content-Length", "text/plain")
             return None, None
         length = int(normalized_length)
-        if not 1 <= length <= HERDR_IMAGE_MAX:
+        if not 1 <= length <= HERDR_UPLOAD_MAX:
             self.send(413, b"invalid Content-Length", "text/plain")
-            return None, None
-        image_type = HERDR_IMAGE_TYPES.get(self.headers.get("Content-Type", ""))
-        if image_type is None:
-            self.send(415, b"unsupported image type", "text/plain")
-            return None, None
+            return None
         chunks, remaining = [], length
         while remaining:
             chunk = self.rfile.read(min(65536, remaining))
             if not chunk:
-                self.send(400, b"incomplete image body", "text/plain")
-                return None, None
+                self.send(400, b"incomplete upload body", "text/plain")
+                return None
             chunks.append(chunk)
             remaining -= len(chunk)
-        body = b"".join(chunks)
-        extension, matches = image_type
-        if not matches(body):
-            self.send(400, b"image content does not match Content-Type", "text/plain")
-            return None, None
-        return body, extension
+        return b"".join(chunks)
 
-    def stage_herdr_image(self, body, extension):
-        directory = Path(tempfile.gettempdir()) / f"fsa-dashboard-images-{os.geteuid()}"
+    def stage_herdr_upload(self, body, original):
+        directory = Path(tempfile.gettempdir()) / f"fsa-dashboard-uploads-{os.geteuid()}"
         try:
             directory.mkdir(mode=0o700)
         except FileExistsError:
@@ -1588,7 +1574,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             info = os.fstat(directory_fd)
             if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid():
-                raise OSError("unsafe image directory")
+                raise OSError("unsafe upload directory")
             os.fchmod(directory_fd, 0o700)
             cutoff = time.time() - 24 * 3600
             with os.scandir(directory_fd) as entries:
@@ -1602,7 +1588,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             os.unlink(entry.name, dir_fd=directory_fd)
                         except FileNotFoundError:
                             pass
-            name = f"image-{secrets.token_hex(8)}-{time.time_ns()}.{extension}"
+            safe = UNSAFE_NAME_RE.sub("_", Path(original).name).lstrip("._")[-120:] or "file"
+            name = f"{secrets.token_hex(4)}-{safe}"
             path = directory / name
             flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
             fd = os.open(name, flags, 0o600, dir_fd=directory_fd)
@@ -1615,9 +1602,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             try:
                 os.fchmod(fd, 0o600)
-                with os.fdopen(fd, "wb") as image:
+                with os.fdopen(fd, "wb") as upload:
                     fd = -1
-                    image.write(body)
+                    upload.write(body)
             except BaseException:
                 if fd >= 0:
                     os.close(fd)
@@ -1630,7 +1617,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise
             if not stat.S_ISDIR(current.st_mode) or (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino):
                 remove_staged()
-                raise OSError("image directory changed")
+                raise OSError("upload directory changed")
             return path
         finally:
             os.close(directory_fd)
@@ -1822,22 +1809,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         url = urllib.parse.urlparse(self.path)
         if not self.authorised({}) or url.path not in ("/api/dismiss", "/api/favourite", "/api/herdr/send", "/api/herdr/action",
-                                                          "/api/herdr/live/input", "/api/herdr/live/image"):
+                                                          "/api/herdr/live/input", "/api/herdr/live/file"):
             return self.send(403, b"forbidden", "text/plain")
-        if url.path == "/api/herdr/live/image":
+        if url.path == "/api/herdr/live/file":
             q = urllib.parse.parse_qs(url.query)
             session_id = (q.get("session") or [""])[0]
             with self.server.herdr_live_lock:
                 live = self.server.herdr_live.get(session_id)
             if live is None:
                 return self.send(404, b"unknown session", "text/plain")
-            body, extension = self.herdr_image_body()
+            body = self.herdr_upload_body()
             if body is None:
                 return
             try:
-                path = self.stage_herdr_image(body, extension)
+                path = self.stage_herdr_upload(body, (q.get("name") or ["file"])[0])
             except OSError:
-                return self.send(500, b"failed to stage image", "text/plain")
+                return self.send(500, b"failed to stage file", "text/plain")
             return self.send(200, json.dumps({"ok": True, "path": str(path)}).encode())
         if url.path in ("/api/herdr/send", "/api/herdr/action", "/api/herdr/live/input"):
             valid, body = self.herdr_json_body()

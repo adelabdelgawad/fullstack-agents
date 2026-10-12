@@ -255,7 +255,10 @@ html.herdr-page .herdr-view { height: 100%; }
 .terminal button:not(.herdr-tab), .terminal select { border: 0; border-radius: 0; background: transparent; color: var(--herdr-overlay1); padding: 0; font: inherit; cursor: pointer; }
 .terminal button[aria-pressed="true"] { color: var(--herdr-accent); }
 .terminal-screen-box { flex: 1; min-height: 180px; position: relative; display: flex; margin: 0 1ch; border: 1px solid var(--herdr-accent); }
-.terminal-screen-box.image-drag-over { outline: 2px dashed var(--herdr-accent); outline-offset: -4px; }
+.terminal-screen-box.file-drag-over { outline: 2px dashed var(--herdr-accent); outline-offset: -4px; }
+.terminal-drop { position: absolute; inset: 0; z-index: 3; display: none; flex-direction: column; align-items: center; justify-content: center; gap: .5lh; pointer-events: none; background: color-mix(in srgb, var(--herdr-panel-bg) 70%, transparent); color: var(--herdr-accent); }
+.terminal-drop span { display: grid; place-items: center; width: 4em; height: 4em; border: 2px dashed currentColor; border-radius: 50%; font-size: 2em; line-height: 1; }
+.file-drag-over .terminal-drop { display: flex; }
 .terminal-pane-title { flex: 1; min-width: 0; overflow: hidden; color: var(--herdr-accent); font-weight: 700; line-height: 1lh; text-overflow: ellipsis; white-space: nowrap; }
 .terminal-screen, aside pre.terminal-screen { flex: 1; min-height: 0; max-height: none; margin: 0; overflow: auto; white-space: pre; word-break: normal; background: var(--herdr-panel-bg); color: var(--herdr-text); border: 0; border-radius: 0; padding: 1lh 1ch; font: inherit; tab-size: 4; scrollbar-color: var(--herdr-overlay1) var(--herdr-overlay0); scrollbar-width: thin; }
 .terminal-screen[hidden], .terminal-live[hidden], .terminal-disconnected[hidden], .terminal-caption [hidden] { display: none; }
@@ -447,8 +450,8 @@ function terminalHtml(pane, panes, pickMessage) {
   const pick = pickMessage ? `<div class="terminal-pick">${esc(pickMessage)} ${options ? `<label>Pick a pane <select data-pane-pick><option value="">—</option>${options}</select></label>` : ""}</div>` : "";
   if (!pane) return `<div class="terminal">${pick || '<div class="hint">No Herdr panes are available.</div>'}</div>`;
   return `<div class="terminal" data-terminal-pane="${esc(pane.pane_id)}">${pick}
-    <div class="terminal-head"><span class="terminal-pane-title"> ${esc(pane.title || pane.pane_id)} </span><span class="chip st-${esc(pane.status)}">${esc(pane.status)}</span><div class="terminal-source"><button data-mode="live" aria-pressed="true">Live</button><button data-mode="history" aria-pressed="false">History</button></div></div>
-    <div class="terminal-screen-box" data-herdr-pane-context="${esc(pane.pane_id)}"><div class="terminal-live"></div><div class="terminal-disconnected" hidden></div><pre class="terminal-screen" tabindex="0" hidden>loading…</pre><button class="terminal-jump" hidden>New output — jump to latest</button></div>
+    <div class="terminal-head"><span class="terminal-pane-title"> ${esc(pane.title || pane.pane_id)} </span><span class="chip st-${esc(pane.status)}">${esc(pane.status)}</span><div class="terminal-source"><button data-mode="live" aria-pressed="true">Live</button><button data-mode="history" aria-pressed="false">History</button><button data-attach aria-label="Attach files" title="Attach files: their paths are typed into the session">+</button><input type="file" multiple hidden data-attach-input></div></div>
+    <div class="terminal-screen-box" data-herdr-pane-context="${esc(pane.pane_id)}"><div class="terminal-live"></div><div class="terminal-drop" aria-hidden="true"><span>+</span><b>Drop to attach</b></div><div class="terminal-disconnected" hidden></div><pre class="terminal-screen" tabindex="0" hidden>loading…</pre><button class="terminal-jump" hidden>New output — jump to latest</button></div>
     <div class="terminal-caption"><span data-terminal-status>live · connecting</span><span data-terminal-reconnect hidden><button data-reconnect>reconnect</button><button data-takeover>take over</button></span></div>
     <div class="terminal-error" aria-live="polite"></div></div>`;
 }
@@ -551,15 +554,14 @@ const terminalBytes64 = bytes => {
 
 const terminalBase64Bytes = value => Uint8Array.from(atob(value), c => c.charCodeAt(0));
 
-const LIVE_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
-const LIVE_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+const LIVE_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 
-function focusTerminalAfterImage(current) {
+function focusTerminalAfterAttach(current) {
   if (terminal !== current || !document.contains(current.root)) return;
   (current.mode === "live" ? current.term : current.root.querySelector(".terminal-screen"))?.focus();
 }
 
-function showTerminalImageStatus(current, message, resetAfter = 0) {
+function showTerminalStatus(current, message, resetAfter = 0) {
   if (terminal !== current || !document.contains(current.root)) return;
   clearTimeout(current.imageStatusTimer);
   current.imageStatus = message;
@@ -573,80 +575,77 @@ function showTerminalImageStatus(current, message, resetAfter = 0) {
   }, resetAfter);
 }
 
-function liveImageError(file) {
-  if (!LIVE_IMAGE_TYPES.has(file.type)) return "only images can be dropped";
-  if (file.size > LIVE_IMAGE_MAX_BYTES) return "image is too large (10 MB maximum)";
-  return "";
-}
-
-async function attachLiveImages(current, files) {
+async function attachLiveFiles(current, files) {
   if (terminal !== current || current.mode !== "live" || !current.session || !current.term) {
-    showTerminalImageStatus(current, "connect live to paste images");
-    focusTerminalAfterImage(current);
+    showTerminalStatus(current, "connect live to attach files");
+    focusTerminalAfterAttach(current);
     return;
   }
-  const error = files.map(liveImageError).find(Boolean);
-  if (error) { showTerminalImageStatus(current, error); focusTerminalAfterImage(current); return; }
+  if (files.some(file => file.size > LIVE_UPLOAD_MAX_BYTES)) {
+    showTerminalStatus(current, "file is too large (50 MB maximum)");
+    focusTerminalAfterAttach(current);
+    return;
+  }
   const session = current.session, paths = [];
-  showTerminalImageStatus(current, "uploading image…");
+  showTerminalStatus(current, files.length === 1 ? `uploading ${files[0].name}…` : `uploading ${files.length} files…`);
   try {
     for (const file of files) {
-      const response = await fetch(`/api/herdr/live/image?session=${enc(session)}`, {method: "POST", headers: {"Content-Type": file.type}, body: file});
-      if (!response.ok) throw new Error((await response.text()) || `image upload failed (${response.status})`);
+      const response = await fetch(`/api/herdr/live/file?session=${enc(session)}&name=${enc(file.name || "file")}`, {method: "POST", headers: {"Content-Type": "application/octet-stream"}, body: file});
+      if (!response.ok) throw new Error((await response.text()) || `upload failed (${response.status})`);
       const data = await response.json();
-      if (!data.ok || typeof data.path !== "string") throw new Error("invalid image upload response");
+      if (!data.ok || typeof data.path !== "string") throw new Error("invalid upload response");
       paths.push(data.path);
     }
     if (terminal !== current || current.mode !== "live" || current.session !== session || !current.term) {
-      showTerminalImageStatus(current, "connect live to paste images");
+      showTerminalStatus(current, "connect live to attach files");
       return;
     }
-    current.term.paste(paths.join(" "));
-    showTerminalImageStatus(current, "image attached", 2000);
+    current.term.paste(paths.join(" ") + " ");
+    showTerminalStatus(current, paths.length === 1 ? "file attached" : `${paths.length} files attached`, 2000);
   } catch (error) {
     if (terminal !== current || current.mode !== "live" || current.session !== session || !current.term)
-      showTerminalImageStatus(current, "connect live to paste images");
-    else showTerminalImageStatus(current, error.message || "image upload failed");
+      showTerminalStatus(current, "connect live to attach files");
+    else showTerminalStatus(current, error.message || "upload failed");
   } finally {
-    focusTerminalAfterImage(current);
+    focusTerminalAfterAttach(current);
   }
 }
 
-function mountTerminalImages(current) {
+function mountTerminalFiles(current) {
   const host = current.root.querySelector(".terminal-live"), history = current.root.querySelector(".terminal-screen"), box = current.root.querySelector(".terminal-screen-box");
-  const pasteImage = event => {
-    const item = [...(event.clipboardData?.items || [])].find(entry => entry.kind === "file" && LIVE_IMAGE_TYPES.has(entry.type));
-    if (!item) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const file = item.getAsFile();
-    if (file) attachLiveImages(current, [file]);
-  };
-  host.addEventListener("paste", pasteImage, true);
-  history.addEventListener("paste", pasteImage, true);
-  box.addEventListener("dragover", event => {
-    const files = [...(event.dataTransfer?.items || [])].filter(item => item.kind === "file");
+  const picker = current.root.querySelector("[data-attach-input]");
+  const pasteFile = event => {
+    const files = [...(event.clipboardData?.items || [])].filter(entry => entry.kind === "file").map(entry => entry.getAsFile()).filter(Boolean);
     if (!files.length) return;
     event.preventDefault();
-    const acceptsImages = files.every(item => LIVE_IMAGE_TYPES.has(item.type));
-    event.dataTransfer.dropEffect = acceptsImages ? "copy" : "none";
-    box.classList.toggle("image-drag-over", acceptsImages);
+    event.stopPropagation();
+    attachLiveFiles(current, files);
+  };
+  host.addEventListener("paste", pasteFile, true);
+  history.addEventListener("paste", pasteFile, true);
+  current.root.querySelector("[data-attach]").onclick = () => picker.click();
+  picker.onchange = () => {
+    const files = [...picker.files];
+    picker.value = "";
+    if (files.length) attachLiveFiles(current, files);
+  };
+  const hasFiles = event => [...(event.dataTransfer?.types || [])].includes("Files");
+  box.addEventListener("dragover", event => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    box.classList.add("file-drag-over");
   });
   box.addEventListener("dragleave", event => {
-    if (!event.relatedTarget || !box.contains(event.relatedTarget)) box.classList.remove("image-drag-over");
+    if (!event.relatedTarget || !box.contains(event.relatedTarget)) box.classList.remove("file-drag-over");
   });
   box.addEventListener("drop", event => {
-    box.classList.remove("image-drag-over");
+    box.classList.remove("file-drag-over");
     const files = [...(event.dataTransfer?.files || [])];
     if (!files.length) return;
     event.preventDefault();
     event.stopPropagation();
-    if (files.some(file => !LIVE_IMAGE_TYPES.has(file.type))) {
-      showTerminalImageStatus(current, "only images can be dropped");
-      focusTerminalAfterImage(current);
-      return;
-    }
-    attachLiveImages(current, files);
+    attachLiveFiles(current, files);
   });
 }
 
@@ -862,7 +861,7 @@ function mountTerminal(container, pane, panes, restore) {
   root.querySelectorAll("[data-mode]").forEach(button => button.onclick = () => switchTerminalMode(terminal, button.dataset.mode, true));
   root.querySelector("[data-reconnect]").onclick = () => { if (terminal?.root !== root || !terminal.term) return; terminal.autoRetried = true; openLiveStream(terminal); terminal.term.focus(); };
   root.querySelector("[data-takeover]").onclick = () => { if (terminal?.root !== root || !terminal.term) return; terminal.autoRetried = true; openLiveStream(terminal, true); terminal.term.focus(); };
-  mountTerminalImages(terminal);
+  mountTerminalFiles(terminal);
   switchTerminalMode(terminal, terminal.mode, old?.focus === "live");
   if (old?.focus && old.focus !== "live") root.querySelector(old.focus)?.focus();
 }
@@ -1481,7 +1480,7 @@ function paneSaid(paneId) {
 async function copyPaneSaid(paneId) {
   let ok = false;
   try { ok = await writeClipboard(paneSaid(paneId) || ""); } catch (err) { ok = false; }
-  if (terminal && terminal.pane === paneId) showTerminalImageStatus(terminal, ok ? "Last message copied" : "Copy failed", 2000);
+  if (terminal && terminal.pane === paneId) showTerminalStatus(terminal, ok ? "Last message copied" : "Copy failed", 2000);
 }
 
 async function copyDoc(btn) {
