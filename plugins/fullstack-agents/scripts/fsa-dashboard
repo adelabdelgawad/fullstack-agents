@@ -25,7 +25,7 @@ STALL_S = 300
 IDLE_DROP_S = 12 * 3600
 ABANDON_S = 24 * 3600
 LOOSE_RUN_S = 12 * 3600
-WAIT_MIN_S = 60
+WAIT_MIN_S = 30
 STILL_OPEN_S = 900
 SUBAGENT_BUSY_S = 120
 TAIL_BYTES = 262144
@@ -46,6 +46,10 @@ DEPLOYED_RE = re.compile(r"\bDEPLOYED\b.*?\b([0-9a-f]{9,40})\b")
 ROOT_RE = re.compile(r"(?:--cd|-C|\bcd) '([^']+)'")
 COMMAND_RE = re.compile(r"<command-name>([^<]+)</command-name>")
 ARGS_RE = re.compile(r"<command-args>([^<]*)</command-args>")
+PASTED_RE = re.compile(r"</?pasted_content[^>]*>")
+CONTROL_COMMANDS = {"/clear", "/compact", "/model", "/resume", "/exit", "/rename", "/config", "/status", "/cost", "/context",
+                    "/help", "/login", "/logout", "/memory", "/permissions", "/plugin", "/mcp", "/hooks", "/theme", "/usage"}
+SAID_MAX = 20000
 PHASES = ("investigate", "plan", "audit", "review")
 NOTE_RE = re.compile(r"<task-id>([\w-]+)</task-id>.*?<status>(\w+)</status>")
 SOURCE_ID_RE = re.compile(r"^[\w-]{1,80}$")
@@ -490,10 +494,11 @@ def prompt_text(msg):
         if any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
             return ""
         content = " ".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
-    text = " ".join(str(content or "").split())
+    text = " ".join(PASTED_RE.sub(" ", str(content or "")).split())
     cmd = COMMAND_RE.search(text)
     if cmd:
-        return " ".join(x for x in (cmd.group(1), (ARGS_RE.search(text) or [None, ""])[1]) if x)
+        args = (ARGS_RE.search(text) or [None, ""])[1].strip()
+        return "" if cmd.group(1).strip() in CONTROL_COMMANDS and not args else " ".join(x for x in (cmd.group(1), args) if x)
     return "" if text.startswith(("<", "Caveat:", "[Request interrupted")) else text
 
 
@@ -771,7 +776,7 @@ def read_session(path, now, wt_re, names, waits):
         "briefs": sorted(briefs), "chips": chips,
         "ask": snippet(ask, 600), "need": need, "action": action, "action_at": iso_epoch(action_at),
         "action_running": state == "working" and bool(action_id) and action_id not in answered, "said_at": iso_epoch(said_at),
-        "said": snippet(text, 600),
+        "said": snippet(text, 600), "said_full": text[-SAID_MAX:],
     }
 
 
@@ -824,7 +829,7 @@ def run_classifier(path, session):
 def judge_turns(repo, sessions, now):
     for s in sessions:
         turn = s["turn_at"]
-        if s["state"] not in ("idle", "still_open") or s["need"] or not turn or JUDGED.get(s["id"]) == turn \
+        if s["state"] not in ("idle", "still_open", "waiting") or s["need"] or not turn or JUDGED.get(s["id"]) == turn \
                 or not WAIT_MIN_S <= now - turn <= JUDGE_WINDOW_S:
             continue
         JUDGED[s["id"]] = turn
@@ -952,7 +957,7 @@ def build_state(repo, gc):
         steps = [(board.get("steps") or {}).get(s["id"]) for s in g["sessions"]]
         card["steps"] = max([x for x in steps if isinstance(x, dict) and isinstance(x.get("items"), list)],
                             key=lambda x: x.get("at", ""), default={"items": []})["items"]
-        card["now"] = [{**{k: s[k] for k in ("id", "name", "title", "state", "updated", "ask", "need", "action", "action_at", "action_running", "said", "said_at")},
+        card["now"] = [{**{k: s[k] for k in ("id", "name", "title", "state", "updated", "ask", "need", "action", "action_at", "action_running", "said", "said_at", "said_full")},
                         "agents": [{f: x[f] for f in ("id", "label", "state", "at")} for x in s["agents"]]}
                        for s in sorted(g["sessions"], key=lambda s: -s["updated"])]
         card["declared"] = max((declared[s["id"]] for s in g["sessions"] if s["id"] in declared),

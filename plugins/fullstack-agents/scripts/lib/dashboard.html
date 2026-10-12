@@ -110,6 +110,13 @@ main { padding: 0; }
 .list { display: grid; gap: 10px; max-width: 980px; }
 .list .card { cursor: default; }
 .snip { white-space: pre-wrap; margin-top: 6px; font-size: 13px; }
+.said-full table.md { border-collapse: collapse; margin: 6px 0; font-size: 12px; }
+.said-full table.md th, .said-full table.md td { border: 1px solid var(--line); padding: 3px 6px; text-align: left; vertical-align: top; }
+.said-full table.md th { white-space: nowrap; }
+.said-full .mdh { font-weight: 600; margin-top: 8px; }
+.said-full .mdgap { height: 6px; }
+.said-full code { font: 12px var(--mono); }
+.said-full { font-size: 13px; line-height: 1.45; margin: 0; max-height: 60vh; overflow: auto; overflow-wrap: anywhere; border-left: 2px solid var(--line); padding-left: 8px; }
 .mono { font: 12px ui-monospace, monospace; user-select: all; word-break: break-all; }
 .empty { color: var(--muted); padding: 20px 0; }
 aside { position: fixed; top: 0; right: 0; bottom: 0; width: min(1280px, 96vw); background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; transform: translateX(100%); transition: transform .18s, width .18s; z-index: 10; }
@@ -391,7 +398,8 @@ function cardNow(c) {
     const top = step ? `▸ ${step.text}` : lastPara(s.said), tool = toolLine(s);
     return (top ? `<div class="say" title="${esc(top)}">${esc(top)}</div>` : "") + (tool ? `<div class="act${s.action_running ? " run" : ""}" title="${esc(tool)}">${esc(tool)}</div>` : "");
   }
-  const line = wait ? `Needs you: ${wait.need}` : step ? `▸ ${step.text}` : s && s.ask ? `“${s.ask}”` : "";
+  const asking = !wait && (c.now || []).find(x => x.state === "waiting");
+  const line = wait ? `Needs you: ${wait.need}` : asking && asking.said ? `Needs you: ${lastPara(asking.said)}` : step ? `▸ ${step.text}` : s && s.ask ? `“${s.ask}”` : "";
   return line ? `<div class="act" title="${esc(line)}">${esc(line)}</div>` : "";
 }
 
@@ -401,8 +409,32 @@ function nowHtml(s) {
     ${s.state === "waiting" && s.need ? `<div class="lbl">Needs from you</div><div class="snip" style="margin:0"><b>${esc(s.need)}</b></div>` : ""}
     ${s.ask ? `<div class="lbl">Latest request</div><div class="snip" style="margin:0">${esc(s.ask)}</div>` : ""}
     ${s.action ? `<div class="lbl">${s.action_running ? "Running now" : "Last tool"}</div><div class="s">${esc(s.action)}${s.action_at ? (s.action_running ? ` · for ${ago(s.action_at)}` : ` · ${ago(s.action_at)} ago`) : ""}</div>` : ""}
-    ${s.said ? `<div class="lbl">Last message from Claude</div><div class="snip" style="margin:0">${esc(s.said)}</div>` : ""}
   </div>`;
+}
+
+const mdInline = t => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<i>$2</i>");
+const mdCells = l => l.trim().replace(/^\||\|$/g, "").split("|").map(x => x.trim());
+
+function mdHtml(text) {
+  const out = [], lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (/^\s*\|.*\|\s*$/.test(l) && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1] || "")) {
+      const head = mdCells(l), rows = [];
+      for (i += 2; i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i]); i++) rows.push(mdCells(lines[i]));
+      i--;
+      out.push(`<table class="md"><tr>${head.map(h => `<th>${mdInline(h)}</th>`).join("")}</tr>${rows.map(r => `<tr>${r.map(c => `<td>${mdInline(c)}</td>`).join("")}</tr>`).join("")}</table>`);
+    } else if (/^#{1,6} /.test(l)) out.push(`<div class="mdh">${mdInline(l.replace(/^#+ /, ""))}</div>`);
+    else if (/^\s*([-*]|\d+\.) /.test(l)) out.push(`<div class="mdli" style="padding-left:${12 + l.search(/\S/) * 6}px">${/^\s*\d/.test(l) ? esc(l.trim().split(" ")[0]) : "•"} ${mdInline(l.trim().replace(/^([-*]|\d+\.) /, ""))}</div>`);
+    else out.push(l.trim() ? `<div>${mdInline(l)}</div>` : '<div class="mdgap"></div>');
+  }
+  return out.join("");
+}
+
+function saidHtml(s) {
+  const text = s.said_full || s.said;
+  if (!text) return "";
+  return `<div class="now"><div><b>${esc(s.name)}</b>${s.said_at ? ` <span class="s">sent ${ago(s.said_at)} ago</span>` : ""}</div><div class="said-full">${mdHtml(text)}</div></div>`;
 }
 
 function resumeHtml(s) {
@@ -529,6 +561,7 @@ function infoHtml(c) {
   const steps = stepsHtml(c);
   return `${c.now && c.now.length ? `<h4>Session id</h4>${c.now.map(resumeHtml).join("")}` : ""}
     ${c.now && c.now.length ? `<h4>Session</h4>${c.now.map(nowHtml).join("")}` : ""}
+    ${c.now && c.now.some(x => x.said_full || x.said) ? `<h4>Last message from Claude</h4>${c.now.map(saidHtml).join("")}` : ""}
     ${steps ? `<h4>Steps${c.steps.length ? ` · ${stepsDone(c)}/${c.steps.length}` : ""}</h4>${steps}` : ""}
     ${c.declared && c.declared.note ? `<h4>Phase note</h4><div class="snip">${esc(c.declared.note)}</div>` : ""}
     ${desc ? `<h4>Brief</h4><div class="snip">${esc(desc)}</div>` : ""}
