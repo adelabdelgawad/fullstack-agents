@@ -1030,7 +1030,7 @@ async function openNewSession(returnFocus) {
   const focused = (herdrData.panes || []).find(x => x.pane_id === herdrData.focused_pane_id);
   const current = (focused || {}).workspace_id || workspaces[0].workspace_id;
   const options = workspaces.map(x => `<option value="${esc(x.workspace_id)}" ${x.workspace_id === current ? "selected" : ""}>${esc(x.label || x.workspace_id)}</option>`).join("");
-  const root = herdrModal(`<form><h2>new session</h2><label>name<input name="name" maxlength="80" autocomplete="off" required></label><label>space<select name="space">${options}</select></label><p class="herdr-modal-note">Opens a new tab in the space and runs cc '&lt;name&gt;'</p><div class="herdr-modal-error" aria-live="polite"></div><div class="herdr-modal-actions"><button type="button" data-herdr-cancel>cancel</button><button type="submit" class="primary">start</button></div></form>`, returnFocus, async form => {
+  const root = herdrModal(`<form><h2>new session</h2><label>name<input name="name" maxlength="80" autocomplete="off" required></label><label>space<select name="space">${options}</select></label><p class="herdr-modal-note">Opens a new tab in the space and runs cc -n '&lt;name&gt;'</p><div class="herdr-modal-error" aria-live="polite"></div><div class="herdr-modal-actions"><button type="button" data-herdr-cancel>cancel</button><button type="submit" class="primary">start</button></div></form>`, returnFocus, async form => {
     const name = form.elements.name.value.trim();
     if (!name || name.length > 80 || name.startsWith("-")) { setHerdrError('Name must be 1–80 characters and not start with "-"', root); return; }
     const button = form.querySelector('[type="submit"]');
@@ -1328,7 +1328,7 @@ async function dismiss(key, ev) {
 }
 
 const gitBadge = c => !c.tree ? 0 : typeof c.tree.own === "number" ? c.tree.own : c.tree.dirty;
-const rank = c => c.sessions.some(s => s.state === "working") || c.runs.some(r => r.state === "running") ? 0 : needsHuman(c) ? 1 : QUIET.has(c.phase) ? 3 : 2;
+const rank = c => c.fresh ? -1 : c.sessions.some(s => s.state === "working") || c.runs.some(r => r.state === "running") ? 0 : needsHuman(c) ? 1 : QUIET.has(c.phase) ? 3 : 2;
 
 const needsHuman = c => c.phase === "review" || c.needs_you.length > 0 || c.sessions.some(s => s.state === "waiting");
 const stageOf = c => needsHuman(c) ? "human" : (STAGES.find(s => s.phases.includes(c.phase)) || STAGES[0]).key;

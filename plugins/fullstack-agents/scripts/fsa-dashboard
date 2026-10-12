@@ -412,7 +412,7 @@ def start_claude_session(created, name):
     pane = ((created or {}).get("root_pane") or {}).get("pane_id")
     if not isinstance(pane, str) or not pane:
         return None
-    typed = run_herdr("pane", "send-text", pane, f"cc {shlex.quote(name)}")
+    typed = run_herdr("pane", "send-text", pane, f"cc -n {shlex.quote(name)}")
     return run_herdr("pane", "send-keys", pane, "enter") if typed is not None and typed.returncode == 0 else typed
 
 
@@ -728,6 +728,7 @@ def read_allow(runs, rid):
 LEAD_EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 OUTSIDE_CACHE = {}
 EDIT_CACHE = {}
+FRESH_NOTE = "New session: send the first message"
 OWN_CACHE = {}
 BRANCH_COMMIT_RE = re.compile(r"^(?:commit(?: \(amend\)| \(initial\))?|cherry-pick): (.*)$")
 SHELL_PREFIX = "\0bash:"
@@ -1276,6 +1277,28 @@ def run_classifier(path, session):
         pass
 
 
+def fresh_sessions(repo, trees, now):
+    roots, out, seen = {str(repo.root), *trees}, [], set()
+    for base in repo.projects:
+        for f in (base.parent / "sessions").glob("*.json"):
+            info = load_json(f) or {}
+            sid, cwd = info.get("sessionId"), info.get("cwd") or ""
+            if not sid or sid in seen or info.get("kind") != "interactive" or cwd not in roots \
+                    or not Path(f"/proc/{f.stem}").exists() or session_transcript(repo.projects, sid):
+                continue
+            seen.add(sid)
+            started = (info.get("startedAt") or 0) / 1000 or now
+            name = info.get("name") or f"session {sid[:8]}"
+            out.append({
+                "id": sid, "name": name, "named": True, "title": name, "fresh": True,
+                "cwd": cwd, "branch": "", "worktree": cwd if cwd != str(repo.root) else "", "state": "waiting",
+                "updated": started, "turn_at": started, "agents": [], "idle": now - started,
+                "snippet": FRESH_NOTE, "briefs": [], "chips": [], "ask": FRESH_NOTE, "need": FRESH_NOTE,
+                "action": "", "action_at": 0, "action_running": False, "said_at": 0, "said": "", "said_full": "", "docs": [],
+            })
+    return out
+
+
 def judge_turns(repo, sessions, now):
     for s in sessions:
         turn = s["turn_at"]
@@ -1296,6 +1319,8 @@ def iso_epoch(ts):
 
 
 def phase_of(card, runs, sessions, board, gc, repo, deployed_shas):
+    if sessions and not runs and all(s.get("fresh") for s in sessions):
+        return "review"
     tree = card.get("tree")
     impl = [r for r in runs if r["mode"] == "implement"]
     latest = impl[-1] if impl else None
@@ -1347,6 +1372,7 @@ def build_state(repo, gc):
     runs = collect_runs(repo, now)
     sessions = collect_sessions(repo, trees, now, names, board.get("waits") or {})
     judge_turns(repo, sessions, now)
+    sessions += fresh_sessions(repo, trees, now)
     deployed_shas = [m.group(1) for e in board.get("events", []) for m in [DEPLOYED_RE.search(e.get("text", ""))] if m]
     dismissed = load_json(repo.dismissed) or {}
     favourites = load_json(repo.favourites) or {}
@@ -1403,7 +1429,8 @@ def build_state(repo, gc):
                 "sessions": [{k: s[k] for k in ("id", "name", "state", "updated", "branch")} for s in g["sessions"]],
                 "runs": g["runs"][-6:],
                 "rounds": round_list(sorted((r for r in g["runs"] if r["mode"] == "implement"), key=lambda r: r["started"] or r["updated"])),
-                "chips": [c for s in g["sessions"] for c in s["chips"]][-6:]}
+                "chips": [c for s in g["sessions"] for c in s["chips"]][-6:],
+                "fresh": bool(g["sessions"]) and not g["runs"] and all(s.get("fresh") for s in g["sessions"])}
         brief = newest_brief(repo, {b for x in g["sessions"] for b in by_id[x["id"]]["briefs"]}, key)
         if brief and brief[0] > (latest_run or {}).get("updated", 0):
             card["desc"] = brief[1]
