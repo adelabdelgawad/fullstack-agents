@@ -1076,6 +1076,7 @@ function openHerdrContextMenu(kind, record, x, y, returnFocus) {
   } else {
     const focused = herdrData.focused_pane_id;
     items = [
+      ...(paneSaid(record.pane_id) ? [{label: "Copy last message", run: () => copyPaneSaid(record.pane_id)}] : []),
       {label: "Rename pane", run: () => openHerdrPrompt("rename pane", record.title || record.agent || record.pane_id, "pane.rename", {pane_id: record.pane_id}, returnFocus)},
       {label: "Clear pane name", run: () => herdrAction("pane.clear_name", {pane_id: record.pane_id})},
       ...(focused && focused !== record.pane_id ? [{label: "Swap with focused pane", run: () => herdrAction("pane.swap", {source_pane_id: record.pane_id, target_pane_id: focused})}] : []),
@@ -1456,25 +1457,38 @@ function saidText(sid) {
   return null;
 }
 
+async function writeClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  const ta = Object.assign(document.createElement("textarea"), {value: text});
+  ta.style.cssText = "position:fixed;opacity:0;top:0";
+  document.body.appendChild(ta);
+  ta.select();
+  const ok = document.execCommand("copy");
+  ta.remove();
+  return ok;
+}
+
+function paneSaid(paneId) {
+  const sid = Object.keys((state && state.session_panes) || {}).find(id => state.session_panes[id] === paneId);
+  return sid ? saidText(sid) : null;
+}
+
+async function copyPaneSaid(paneId) {
+  let ok = false;
+  try { ok = await writeClipboard(paneSaid(paneId) || ""); } catch (err) { ok = false; }
+  if (terminal && terminal.pane === paneId) showTerminalImageStatus(terminal, ok ? "Last message copied" : "Copy failed", 2000);
+}
+
 async function copyDoc(btn) {
   let ok = false;
   const title = btn.dataset.title || (btn.dataset.title = btn.title);
   try {
     const r = btn.dataset.said ? null : await fetch(`/api/doc?sid=${enc(btn.dataset.docSid)}&path=${enc(btn.dataset.doc)}`);
     const text = btn.dataset.said ? saidText(btn.dataset.said) : r.ok ? await r.text() : null;
-    if (text !== null) {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(text);
-        ok = true;
-      } else {
-        const ta = Object.assign(document.createElement("textarea"), {value: text});
-        ta.style.cssText = "position:fixed;opacity:0;top:0";
-        document.body.appendChild(ta);
-        ta.select();
-        ok = document.execCommand("copy");
-        ta.remove();
-      }
-    }
+    if (text !== null) ok = await writeClipboard(text);
   } catch (err) {
     ok = false;
   }
