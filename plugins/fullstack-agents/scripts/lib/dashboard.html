@@ -665,12 +665,16 @@ function postLiveTerminal(current, body) {
 
 function flushTerminalInput(current) {
   current.inputFrame = 0;
-  if (!current.session || !current.inputQueue.length) return;
+  if (!current.session || !current.inputQueue.length || current.inputSending) return;
   const size = current.inputQueue.reduce((sum, bytes) => sum + bytes.length, 0), joined = new Uint8Array(size);
   let offset = 0;
   current.inputQueue.forEach(bytes => { joined.set(bytes, offset); offset += bytes.length; });
   current.inputQueue.length = 0;
-  postLiveTerminal(current, {type: "input", bytes: terminalBytes64(joined)});
+  current.inputSending = true;
+  postLiveTerminal(current, {type: "input", bytes: terminalBytes64(joined)}).finally(() => {
+    current.inputSending = false;
+    if (current.inputQueue.length) flushTerminalInput(current);
+  });
 }
 
 function queueTerminalInput(current, bytes) {
