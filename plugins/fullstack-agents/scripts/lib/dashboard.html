@@ -132,6 +132,10 @@ main { padding: 0; }
 aside { position: fixed; top: 0; right: 0; bottom: 0; width: min(1280px, 96vw); background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; transform: translateX(100%); transition: transform .18s, width .18s; z-index: 10; }
 aside.open { transform: none; }
 html.lock, html.lock body { overflow: hidden; }
+html.herdr-page, html.herdr-page body { height: 100%; overflow: hidden; }
+html.herdr-page body { display: flex; flex-direction: column; }
+html.herdr-page header { flex: none; }
+html.herdr-page main { flex: 1; min-height: 0; }
 aside h3 { margin: 0 0 4px; font-size: 16px; }
 aside h4 { margin: 14px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 360px; overflow: auto; }
@@ -209,12 +213,17 @@ aside .gcol pre.diff { margin: 0; border-radius: 0; background: none; padding: 0
   --herdr-blue: #61afef; --herdr-teal: #56b6c2; --herdr-peach: #d19a66;
   color: var(--herdr-text); background: var(--herdr-panel-bg); font-family: var(--mono); font-size: 12px; line-height: 1.35;
 }
-.herdr-view { display: grid; grid-template-columns: 26ch minmax(0, 1fr); height: calc(100vh - 57px); }
-.herdr-list { position: relative; min-height: 0; overflow: auto; padding: 1lh 1ch; background: var(--herdr-sidebar-bg); }
+.herdr-view { position: relative; display: grid; grid-template-columns: 26ch minmax(0, 1fr); height: calc(100vh - 57px); overflow: hidden; }
+html.herdr-page .herdr-view { height: 100%; }
+.herdr-list { position: relative; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr); overflow: hidden; padding: 0 1ch; background: var(--herdr-sidebar-bg); }
 .herdr-sidebar-edge { position: absolute; z-index: 1; top: 0; right: 0; bottom: 0; width: 1ch; overflow: hidden; border-right: 1px solid var(--herdr-surface-dim); color: var(--herdr-surface-dim); line-height: 1lh; pointer-events: none; }
+.herdr-sidebar-section { min-height: 0; display: flex; flex-direction: column; padding-top: 1lh; }
+.herdr-sidebar-rows { flex: 1; min-height: 0; overflow: auto; padding-top: 1lh; scrollbar-color: var(--herdr-overlay1) var(--herdr-overlay0); scrollbar-width: thin; }
 .herdr-section-title { display: flex; justify-content: space-between; height: 1lh; color: var(--herdr-overlay0); font-weight: 700; white-space: pre; }
-.herdr-sidebar-blank { height: 1lh; }
-.herdr-sidebar-divider { height: 1lh; overflow: hidden; color: var(--herdr-surface-dim); white-space: nowrap; }
+.herdr-sidebar-footer { flex: none; height: 2lh; display: flex; align-items: flex-start; justify-content: space-between; padding: .5lh 1ch 0; }
+.herdr-sidebar-footer button { border: 0; background: transparent; color: var(--herdr-overlay0); padding: 0; font: inherit; cursor: pointer; }
+.herdr-sidebar-footer button:hover, .herdr-sidebar-footer button:focus-visible { color: var(--herdr-text); outline: none; }
+.herdr-sidebar-divider { height: 1lh; overflow: hidden; color: var(--herdr-surface-dim); white-space: nowrap; cursor: row-resize; user-select: none; touch-action: none; }
 .herdr-workspace, .herdr-agent { width: calc(100% - 1ch); border: 0; border-radius: 0; background: transparent; color: var(--herdr-subtext0); padding: 0 1ch; font: inherit; text-align: left; cursor: pointer; }
 .herdr-workspace { display: flex; align-items: center; gap: 1ch; height: 1lh; }
 .herdr-agent { display: grid; grid-template-columns: minmax(0, 1fr); height: 2lh; padding-top: 0; padding-bottom: 0; }
@@ -257,6 +266,29 @@ aside .gcol pre.diff { margin: 0; border-radius: 0; background: none; padding: 0
 .terminal-actions button { color: var(--herdr-overlay0); }
 .terminal-actions .key-word { color: var(--herdr-accent); font-weight: 700; }
 .terminal-error { flex: none; min-height: 1lh; padding: 0 1ch; color: var(--herdr-red); }
+.herdr-page-error { position: absolute; z-index: 3; right: 1ch; bottom: 1lh; max-width: min(60ch, calc(100% - 28ch)); padding: .35lh 1ch; background: var(--herdr-panel-bg); border: 1px solid var(--herdr-red); color: var(--herdr-red); }
+.herdr-page-error:empty { display: none; }
+.herdr-menu, .herdr-modal, .herdr-copy-toast { --herdr-panel-bg: #282c34; --herdr-selection-bg: #334659; --herdr-overlay0: #5c6370; --herdr-overlay1: #737a87; --herdr-text: #abb2bf; --herdr-green: #98c379; --herdr-red: #e06c75; font: 12px/1.35 var(--mono); color: var(--herdr-text); }
+.herdr-menu { position: fixed; z-index: 60; min-width: 22ch; padding: .35lh 0; background: var(--herdr-panel-bg); border: 1px solid var(--herdr-overlay0); box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+.herdr-menu[hidden] { display: none; }
+.herdr-menu button { display: block; width: 100%; border: 0; border-radius: 0; background: transparent; color: var(--herdr-text); padding: .35lh 1ch; font: inherit; text-align: left; cursor: pointer; }
+.herdr-menu button:hover:not(:disabled), .herdr-menu button:focus-visible, .herdr-menu button.herdr-menu-selected { background: var(--herdr-selection-bg); outline: none; }
+.herdr-menu button:disabled { color: var(--herdr-overlay0); cursor: default; }
+.herdr-modal-backdrop { position: fixed; z-index: 61; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.45); }
+.herdr-modal { width: min(44ch, calc(100vw - 4ch)); padding: 1lh 2ch; background: var(--herdr-panel-bg); border: 1px solid var(--herdr-overlay0); box-shadow: 0 8px 30px rgba(0,0,0,.45); }
+.herdr-modal h2 { margin: 0 0 1lh; color: var(--herdr-text); font: 700 12px/1.35 var(--mono); }
+.herdr-modal label { display: grid; gap: .35lh; margin-bottom: 1lh; color: var(--herdr-overlay1); }
+.herdr-modal input, .herdr-modal select { width: 100%; border: 1px solid var(--herdr-overlay0); border-radius: 0; outline: 0; background: var(--herdr-selection-bg); color: var(--herdr-text); padding: .4lh 1ch; font: inherit; }
+.herdr-modal input:focus, .herdr-modal select:focus { border-color: var(--herdr-text); }
+.herdr-modal-detail, .herdr-modal-note { margin: 0 0 1lh; color: var(--herdr-overlay1); }
+.herdr-modal-error { min-height: 1lh; margin-bottom: .5lh; color: var(--herdr-red); }
+.herdr-modal-actions { display: flex; justify-content: flex-end; gap: 2ch; }
+.herdr-modal-actions button { border: 0; background: transparent; color: var(--herdr-text); padding: 0; font: inherit; cursor: pointer; }
+.herdr-modal-actions .danger { color: var(--herdr-red); font-weight: 700; }
+.herdr-modal-actions .primary { color: var(--herdr-green); font-weight: 700; }
+.herdr-modal-actions button:disabled { color: var(--herdr-overlay0); cursor: default; }
+.herdr-copy-toast { position: fixed; z-index: 62; right: 2ch; bottom: 2lh; padding: .5lh 1ch; background: var(--herdr-panel-bg); border: 1px solid var(--herdr-overlay0); }
+.herdr-copy-toast .dot { color: var(--herdr-green); margin-right: 1ch; }
 .terminal-pick { flex: none; padding: .5lh 1ch; color: var(--herdr-overlay0); }
 #card-terminal .terminal-head { justify-content: flex-end; padding-left: 0; padding-right: 0; }
 #card-terminal .terminal-screen-box, #card-terminal .terminal-compose { margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0; }
@@ -337,6 +369,8 @@ try { favOnly = localStorage.getItem("fsa-fav-only") === "1"; } catch (e) {}
 let view = "agents";
 try { view = localStorage.getItem("fsa-view") === "herdr" ? "herdr" : "agents"; } catch (e) {}
 let uiSeen = null, state = null, seen = null, herdrData = null, herdrLoading = null, selectedHerdrPane = null;
+let herdrSidebarRatio = .5, herdrOverlay = null, herdrDragging = false, herdrActionError = "";
+try { const storedRatio = localStorage.getItem("fsa-herdr-sidebar-ratio"), value = Number(storedRatio); if (storedRatio !== null && Number.isFinite(value)) herdrSidebarRatio = Math.max(.1, Math.min(.9, value)); } catch (e) {}
 let terminal = null, terminalTimer = null;
 const cardPaneChoice = new Map();
 
@@ -408,7 +442,7 @@ function terminalHtml(pane, panes, pickMessage) {
   if (!pane) return `<div class="terminal">${pick || '<div class="hint">No Herdr panes are available.</div>'}</div>`;
   return `<div class="terminal" data-terminal-pane="${esc(pane.pane_id)}">${pick}
     <div class="terminal-head"><span class="terminal-pane-title"> ${esc(pane.title || pane.pane_id)} </span><span class="chip st-${esc(pane.status)}">${esc(pane.status)}</span><div class="terminal-source"><button data-source="recent" aria-pressed="true">History</button><button data-source="visible" aria-pressed="false">Mirror herdr</button></div></div>
-    <div class="terminal-screen-box"><pre class="terminal-screen" tabindex="0">loading…</pre><button class="terminal-jump" hidden>New output — jump to latest</button></div>
+    <div class="terminal-screen-box" data-herdr-pane-context="${esc(pane.pane_id)}"><pre class="terminal-screen" tabindex="0">loading…</pre><button class="terminal-jump" hidden>New output — jump to latest</button></div>
     <div class="terminal-caption">Showing the last 1000 lines from herdr</div>
     <div class="terminal-compose"><span class="terminal-send-badge"> SEND </span><textarea data-terminal-input placeholder="Send a prompt or type text into this pane" aria-label="Terminal input"></textarea></div>
     <div class="terminal-actions"><button data-send="prompt"><span class="key-word">ctrl+enter</span> prompt</button><button data-send="text"><span class="key-word">type</span></button><span class="terminal-keys"><button data-term-key="enter"><span class="key-word">enter</span></button><button data-term-key="esc"><span class="key-word">esc</span></button><button data-term-key="ctrl+c"><span class="key-word">ctrl+c</span></button><button data-term-key="up"><span class="key-word">↑</span></button><button data-term-key="down"><span class="key-word">↓</span></button><button data-term-key="tab"><span class="key-word">tab</span></button></span></div>
@@ -564,8 +598,11 @@ function mountTerminal(container, pane, panes, restore) {
   terminalTimer = setInterval(pollTerminal, 1500);
 }
 
-async function loadHerdr() {
-  if (herdrLoading) return herdrLoading;
+async function loadHerdr(force = false) {
+  if (herdrLoading) {
+    if (!force) return herdrLoading;
+    await herdrLoading;
+  }
   herdrLoading = fetch("/api/herdr", {cache: "no-store"}).then(r => {
     if (!r.ok) throw new Error(r.status);
     return r.json();
@@ -584,28 +621,229 @@ const workspaceStatus = panes => {
   return (panes || []).reduce((best, pane) => (priority[pane.status] ?? 0) > priority[best] ? pane.status : best, "unknown");
 };
 
+function herdrErrorMessage(error) {
+  const text = typeof error === "string" ? error : JSON.stringify(error || "");
+  try {
+    const parsed = JSON.parse(text);
+    return parsed?.error?.message || parsed?.message || text || "Herdr action failed";
+  } catch (e) {
+    return text || "Herdr action failed";
+  }
+}
+
+function setHerdrError(message, ownerRoot = null) {
+  herdrActionError = herdrErrorMessage(message);
+  document.querySelectorAll(".herdr-page-error").forEach(x => x.textContent = herdrActionError);
+  ownerRoot?.querySelectorAll(".herdr-modal-error").forEach(x => x.textContent = herdrActionError);
+}
+
+async function herdrAction(action, params = {}, ownerRoot = null) {
+  herdrActionError = "";
+  document.querySelectorAll(".herdr-page-error").forEach(x => x.textContent = "");
+  ownerRoot?.querySelectorAll(".herdr-modal-error").forEach(x => x.textContent = "");
+  let data;
+  try {
+    const response = await fetch("/api/herdr/action", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({action, ...params})});
+    data = response.headers.get("Content-Type")?.includes("application/json") ? await response.json() : {ok: false, error: await response.text()};
+    if (!response.ok || !data.ok) setHerdrError(data.error || `Herdr action failed (${response.status})`, ownerRoot);
+  } catch (error) {
+    data = {ok: false, error: error.message || "Herdr action failed"};
+    setHerdrError(data.error, ownerRoot);
+  }
+  await loadHerdr(true);
+  return data;
+}
+
+function closeHerdrOverlay(restoreFocus = true) {
+  if (!herdrOverlay) return false;
+  const {root, returnFocus} = herdrOverlay;
+  herdrOverlay = null;
+  root.remove();
+  if (restoreFocus && returnFocus && document.contains(returnFocus)) returnFocus.focus();
+  return true;
+}
+
+function positionHerdrMenu(menu, x, y) {
+  menu.style.left = Math.max(8, Math.min(x, innerWidth - menu.offsetWidth - 8)) + "px";
+  menu.style.top = Math.max(8, Math.min(y, innerHeight - menu.offsetHeight - 8)) + "px";
+}
+
+function openHerdrMenu(items, x, y, returnFocus, above = false) {
+  closeHerdrOverlay(false);
+  const menu = document.createElement("div");
+  menu.className = "herdr-menu";
+  menu.setAttribute("role", "menu");
+  menu.innerHTML = items.map((item, index) => `<button role="menuitem" data-herdr-menu-item="${index}" ${item.disabled ? `disabled title="${esc(item.title || "")}"` : ""}>${esc(item.label)}</button>`).join("");
+  document.body.appendChild(menu);
+  herdrOverlay = {root: menu, type: "menu", returnFocus};
+  positionHerdrMenu(menu, x, above ? y - menu.offsetHeight : y);
+  const enabled = () => [...menu.querySelectorAll("button:not(:disabled)")];
+  const select = button => {
+    menu.querySelectorAll("button").forEach(x => x.classList.toggle("herdr-menu-selected", x === button));
+    button?.focus();
+  };
+  menu.onclick = event => {
+    const button = event.target.closest("[data-herdr-menu-item]");
+    if (!button || button.disabled) return;
+    const item = items[Number(button.dataset.herdrMenuItem)];
+    closeHerdrOverlay(false);
+    item.run();
+  };
+  menu.onkeydown = event => {
+    const buttons = enabled();
+    if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeHerdrOverlay(); return; }
+    if (event.key === "Enter") { event.preventDefault(); document.activeElement?.click(); return; }
+    if (!buttons.length || !["ArrowDown", "ArrowUp"].includes(event.key)) return;
+    event.preventDefault();
+    const at = buttons.indexOf(document.activeElement);
+    select(buttons[(at + (event.key === "ArrowDown" ? 1 : buttons.length - 1)) % buttons.length]);
+  };
+  select(enabled()[0]);
+}
+
+function herdrModal(html, returnFocus, onSubmit) {
+  closeHerdrOverlay(false);
+  const backdrop = document.createElement("div");
+  backdrop.className = "herdr-modal-backdrop";
+  backdrop.innerHTML = `<div class="herdr-modal" role="dialog" aria-modal="true">${html}</div>`;
+  document.body.appendChild(backdrop);
+  herdrOverlay = {root: backdrop, type: "modal", returnFocus};
+  const form = backdrop.querySelector("form");
+  form.onsubmit = event => { event.preventDefault(); onSubmit(form); };
+  backdrop.querySelector("[data-herdr-cancel]").onclick = () => closeHerdrOverlay();
+  backdrop.querySelector("input, select, button")?.focus();
+  return backdrop;
+}
+
+function openHerdrPrompt(title, value, action, params, returnFocus) {
+  const root = herdrModal(`<form><h2>${esc(title)}</h2><label>name<input name="label" value="${esc(value)}" maxlength="80" autocomplete="off"></label><div class="herdr-modal-error" aria-live="polite"></div><div class="herdr-modal-actions"><button type="button" data-herdr-cancel>cancel</button><button type="submit" class="primary">save</button></div></form>`, returnFocus, async form => {
+    const label = form.elements.label.value;
+    if (!label || label.length > 80 || label.startsWith("-")) { setHerdrError('Name must be 1–80 characters and not start with "-"', root); return; }
+    const button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    const result = await herdrAction(action, {...params, label}, root);
+    button.disabled = false;
+    if (result.ok && herdrOverlay?.root === root) { closeHerdrOverlay(false); renderHerdrPage(); }
+  });
+  const input = root.querySelector("input");
+  input.select();
+}
+
+function openHerdrConfirm(title, detail, action, params, returnFocus) {
+  const root = herdrModal(`<form><h2>${esc(title)}</h2><p class="herdr-modal-detail">${esc(detail)}</p><div class="herdr-modal-error" aria-live="polite"></div><div class="herdr-modal-actions"><button type="submit" class="danger">close</button><button type="button" data-herdr-cancel>cancel</button></div></form>`, returnFocus, async form => {
+    const button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    const result = await herdrAction(action, params, root);
+    button.disabled = false;
+    if (result.ok && herdrOverlay?.root === root) { closeHerdrOverlay(false); renderHerdrPage(); }
+  });
+}
+
+function openStartAgent(pane, returnFocus) {
+  const kinds = herdrData.agent_kinds || [];
+  const kind = kinds.includes("claude") ? "claude" : kinds[0] || "claude";
+  const options = (kinds.length ? kinds : [kind]).map(x => `<option value="${esc(x)}" ${x === kind ? "selected" : ""}>${esc(x)}</option>`).join("");
+  const root = herdrModal(`<form><h2>start agent</h2><label>kind<select name="kind">${options}</select></label><label>name<input name="name" value="${esc(kind)}" maxlength="80" autocomplete="off"></label><p class="herdr-modal-note">The pane must be at a shell prompt</p><div class="herdr-modal-error" aria-live="polite"></div><div class="herdr-modal-actions"><button type="button" data-herdr-cancel>cancel</button><button type="submit" class="primary">start</button></div></form>`, returnFocus, async form => {
+    const button = form.querySelector('[type="submit"]');
+    const name = form.elements.name.value;
+    if (!name || name.length > 80 || name.startsWith("-")) { setHerdrError('Name must be 1–80 characters and not start with "-"', root); return; }
+    button.disabled = true;
+    button.textContent = "starting…";
+    const selectedKind = form.elements.kind.value;
+    const result = await herdrAction("agent.start", {pane_id: pane.pane_id, kind: selectedKind, name}, root);
+    button.disabled = false;
+    button.textContent = "start";
+    if (result.ok && herdrOverlay?.root === root) { closeHerdrOverlay(false); renderHerdrPage(); }
+    else {
+      const errorText = typeof result.error === "string" ? result.error : JSON.stringify(result.error || "");
+      if (errorText.includes("agent_not_ready") && herdrOverlay?.root === root) {
+        herdrActionError = "";
+        document.querySelectorAll(".herdr-page-error").forEach(x => x.textContent = "");
+        closeHerdrOverlay(false);
+        selectedHerdrPane = pane.pane_id;
+        renderHerdrPage();
+        showHerdrToast(`${selectedKind} started — waiting for input in the pane`);
+      }
+    }
+  });
+  const select = root.querySelector("select"), input = root.querySelector("input");
+  select.onchange = () => { if (!input.value || input.value === kind || kinds.includes(input.value)) input.value = select.value; };
+}
+
+function showHerdrToast(message) {
+  document.querySelector(".herdr-copy-toast")?.remove();
+  const toast = document.createElement("div");
+  toast.className = "herdr-copy-toast";
+  toast.innerHTML = `<span class="dot">●</span><b>${esc(message)}</b>`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 1800);
+}
+
+function openHerdrGlobalMenu(button) {
+  const rect = button.getBoundingClientRect();
+  openHerdrMenu([
+    {label: "settings", disabled: true, title: "Available in the herdr terminal"},
+    {label: "keybinds", disabled: true, title: "Available in the herdr terminal"},
+    {label: "reload config", run: async () => { const result = await herdrAction("server.reload_config"); if (result.ok) showHerdrToast("config reloaded"); }},
+    {label: "detach", disabled: true, title: "Available in the herdr terminal"},
+  ], rect.left, rect.top, button, true);
+}
+
+function openHerdrContextMenu(kind, record, x, y, returnFocus) {
+  const panes = herdrData.panes || [], tabs = herdrData.tabs || [];
+  let items;
+  if (kind === "workspace") {
+    const count = panes.filter(x => x.workspace_id === record.workspace_id).length;
+    items = [
+      {label: "Rename", run: () => openHerdrPrompt("rename workspace", record.label || record.workspace_id, "workspace.rename", {workspace_id: record.workspace_id}, returnFocus)},
+      {label: "Close", run: () => openHerdrConfirm("Close workspace?", `${record.label || record.workspace_id} — ${count} ${count === 1 ? "pane" : "panes"}`, "workspace.close", {workspace_id: record.workspace_id}, returnFocus)},
+    ];
+  } else if (kind === "tab") {
+    const count = panes.filter(x => x.tab_id === record.tab_id).length;
+    const number = tabs.filter(x => x.workspace_id === record.workspace_id).length + 1;
+    items = [
+      {label: "New tab", run: () => openHerdrPrompt("new tab", String(number), "tab.create", {workspace_id: record.workspace_id}, returnFocus)},
+      {label: "Rename", run: () => openHerdrPrompt("rename tab", record.label || `Tab ${record.number}`, "tab.rename", {tab_id: record.tab_id}, returnFocus)},
+      {label: "Close", run: () => openHerdrConfirm("Close tab?", `${record.label || `Tab ${record.number}`} — ${count} ${count === 1 ? "pane" : "panes"}`, "tab.close", {tab_id: record.tab_id}, returnFocus)},
+    ];
+  } else {
+    const focused = herdrData.focused_pane_id;
+    items = [
+      {label: "Rename pane", run: () => openHerdrPrompt("rename pane", record.title || record.agent || record.pane_id, "pane.rename", {pane_id: record.pane_id}, returnFocus)},
+      {label: "Clear pane name", run: () => herdrAction("pane.clear_name", {pane_id: record.pane_id})},
+      ...(focused && focused !== record.pane_id ? [{label: "Swap with focused pane", run: () => herdrAction("pane.swap", {source_pane_id: record.pane_id, target_pane_id: focused})}] : []),
+      {label: "Split right", run: () => herdrAction("pane.split", {pane_id: record.pane_id, direction: "right"})},
+      {label: "Split down", run: () => herdrAction("pane.split", {pane_id: record.pane_id, direction: "down"})},
+      {label: "Zoom", run: () => herdrAction("pane.zoom", {pane_id: record.pane_id})},
+      {label: "Start agent…", run: () => openStartAgent(record, returnFocus)},
+      {label: "Close pane", run: () => openHerdrConfirm("Close pane?", record.title || record.agent || record.pane_id, "pane.close", {pane_id: record.pane_id}, returnFocus)},
+    ];
+  }
+  openHerdrMenu(items, x, y, returnFocus);
+}
+
 function herdrSidebarHtml(data, panes, selectedPane) {
   const tabs = data.tabs || [], focused = data.focused_pane_id;
   const workspaces = (data.workspaces || []).map(workspace => {
     const items = panes.filter(pane => pane.workspace_id === workspace.workspace_id);
     const target = items.find(pane => pane.pane_id === focused) || items[0];
     const selected = items.some(pane => pane.pane_id === selectedPane);
-    return `<button class="herdr-workspace" data-herdr-pane="${esc((target || {}).pane_id || "")}" aria-selected="${selected}" ${target ? "" : "disabled"}>${statusHtml(workspaceStatus(items))}<span class="workspace-label">${esc(workspace.label || workspace.workspace_id)}</span></button>`;
+    return `<button class="herdr-workspace" data-herdr-pane="${esc((target || {}).pane_id || "")}" data-herdr-context="workspace" data-herdr-workspace-id="${esc(workspace.workspace_id)}" aria-selected="${selected}">${statusHtml(workspaceStatus(items))}<span class="workspace-label">${esc(workspace.label || workspace.workspace_id)}</span></button>`;
   }).join("");
   const agents = panes.filter(pane => pane.agent).map(pane => {
     const workspace = (data.workspaces || []).find(item => item.workspace_id === pane.workspace_id);
     const tab = tabs.find(item => item.tab_id === pane.tab_id);
     const meta = statusMeta(pane.status);
-    return `<button class="herdr-agent" data-herdr-pane="${esc(pane.pane_id)}" aria-selected="${pane.pane_id === selectedPane}" title="${esc(meta.word)}"><span class="agent-context">${statusHtml(pane.status)} <span>${esc((workspace || {}).label || pane.workspace_id)}</span><span class="agent-separator"> · </span><span class="agent-tab">${esc((tab || {}).label || `Tab ${(tab || {}).number || ""}`.trim())}</span></span><span class="agent-name">${esc(pane.title || pane.agent)}</span></button>`;
+    return `<button class="herdr-agent" data-herdr-pane="${esc(pane.pane_id)}" data-herdr-context="pane" aria-selected="${pane.pane_id === selectedPane}" title="${esc(meta.word)}"><span class="agent-context">${statusHtml(pane.status)} <span>${esc((workspace || {}).label || pane.workspace_id)}</span><span class="agent-separator"> · </span><span class="agent-tab">${esc((tab || {}).label || `Tab ${(tab || {}).number || ""}`.trim())}</span></span><span class="agent-name">${esc(pane.title || pane.agent)}</span></button>`;
   }).join("");
-  return `<div class="herdr-sidebar-edge" aria-hidden="true">│</div><div class="herdr-section-title"><span> spaces</span></div><div class="herdr-sidebar-blank"></div>${workspaces}<div class="herdr-sidebar-divider" aria-hidden="true">${"─".repeat(25)}</div><div class="herdr-section-title"><span> agents</span><span>grouped </span></div><div class="herdr-sidebar-blank"></div>${agents}`;
+  return `<div class="herdr-sidebar-edge" aria-hidden="true">│</div><section class="herdr-sidebar-section herdr-spaces"><div class="herdr-section-title"><span> spaces</span></div><div class="herdr-sidebar-rows">${workspaces}</div><footer class="herdr-sidebar-footer"><button data-herdr-action="workspace.create"> new</button><button data-herdr-global-menu>menu</button></footer></section><div class="herdr-sidebar-divider" role="separator" aria-label="Resize spaces and agents">${"─".repeat(25)}</div><section class="herdr-sidebar-section herdr-agents"><div class="herdr-section-title"><span> agents</span><span>grouped </span></div><div class="herdr-sidebar-rows">${agents}</div></section>`;
 }
 
 function herdrTabsHtml(data, panes, selectedPane) {
   const pane = panes.find(item => item.pane_id === selectedPane);
   const tabs = (data.tabs || []).filter(tab => pane && tab.workspace_id === pane.workspace_id).map(tab => {
     const first = panes.find(item => item.tab_id === tab.tab_id);
-    return `<button class="herdr-tab" role="tab" data-herdr-pane="${esc((first || {}).pane_id || "")}" aria-selected="${tab.tab_id === pane.tab_id}" ${first ? "" : "disabled"}>${esc(tab.label || `Tab ${tab.number}`)}</button>`;
+    return `<button class="herdr-tab" role="tab" data-herdr-pane="${esc((first || {}).pane_id || "")}" data-herdr-context="tab" data-herdr-tab-id="${esc(tab.tab_id)}" aria-selected="${tab.tab_id === pane.tab_id}" ${first ? "" : "disabled"}>${esc(tab.label || `Tab ${tab.number}`)}</button>`;
   }).join("");
   return `<div class="herdr-tabs" role="tablist" aria-label="Workspace tabs">${tabs}<span class="herdr-tabs-overflow" aria-hidden="true" hidden>…</span></div>`;
 }
@@ -625,12 +863,78 @@ function updateHerdrTabOverflow(root) {
   });
 }
 
+function applyHerdrSidebarRatio(root) {
+  const list = root.querySelector(".herdr-list");
+  if (list) list.style.gridTemplateRows = `minmax(0, ${herdrSidebarRatio}fr) auto minmax(0, ${1 - herdrSidebarRatio}fr)`;
+}
+
+function herdrChromeSnapshot(root) {
+  const active = document.activeElement;
+  let focus = null;
+  if (root.contains(active)) {
+    if (active.matches(".herdr-workspace")) focus = ["workspace", active.dataset.herdrWorkspaceId];
+    else if (active.matches(".herdr-agent")) focus = ["pane", active.dataset.herdrPane];
+    else if (active.matches(".herdr-tab")) focus = ["tab", active.dataset.herdrTabId];
+    else if (active.matches('[data-herdr-action="workspace.create"]')) focus = ["new", ""];
+    else if (active.matches("[data-herdr-global-menu]")) focus = ["menu", ""];
+  }
+  return {scroll: [...root.querySelectorAll(".herdr-sidebar-rows")].map(x => x.scrollTop), focus};
+}
+
+function restoreHerdrChrome(root, snapshot) {
+  root.querySelectorAll(".herdr-sidebar-rows").forEach((x, index) => { x.scrollTop = snapshot.scroll[index] || 0; });
+  if (!snapshot.focus) return;
+  const [kind, id] = snapshot.focus;
+  const target = kind === "workspace" ? [...root.querySelectorAll(".herdr-workspace")].find(x => x.dataset.herdrWorkspaceId === id)
+    : kind === "pane" ? [...root.querySelectorAll(".herdr-agent")].find(x => x.dataset.herdrPane === id)
+      : kind === "tab" ? [...root.querySelectorAll(".herdr-tab")].find(x => x.dataset.herdrTabId === id)
+        : root.querySelector(kind === "new" ? '[data-herdr-action="workspace.create"]' : "[data-herdr-global-menu]");
+  target?.focus();
+}
+
 function wireHerdrPicks(root) {
   root.querySelectorAll("[data-herdr-pane]").forEach(button => button.onclick = () => {
     if (!button.dataset.herdrPane) return;
     selectedHerdrPane = button.dataset.herdrPane;
     renderHerdrPage();
   });
+  root.querySelector('[data-herdr-action="workspace.create"]')?.addEventListener("click", event => herdrAction("workspace.create"));
+  const globalMenu = root.querySelector("[data-herdr-global-menu]");
+  if (globalMenu) globalMenu.onclick = () => openHerdrGlobalMenu(globalMenu);
+  root.querySelectorAll("[data-herdr-context]").forEach(target => target.oncontextmenu = event => {
+    event.preventDefault();
+    const kind = target.dataset.herdrContext;
+    const record = kind === "workspace"
+      ? (herdrData.workspaces || []).find(x => x.workspace_id === target.dataset.herdrWorkspaceId)
+      : kind === "tab"
+        ? (herdrData.tabs || []).find(x => x.tab_id === target.dataset.herdrTabId)
+        : (herdrData.panes || []).find(x => x.pane_id === target.dataset.herdrPane);
+    if (record) openHerdrContextMenu(kind, record, event.clientX, event.clientY, target);
+  });
+  root.querySelectorAll("[data-herdr-pane-context]").forEach(target => target.oncontextmenu = event => {
+    event.preventDefault();
+    const pane = (herdrData.panes || []).find(x => x.pane_id === target.dataset.herdrPaneContext);
+    if (pane) openHerdrContextMenu("pane", pane, event.clientX, event.clientY, target);
+  });
+  const divider = root.querySelector(".herdr-sidebar-divider"), list = root.querySelector(".herdr-list");
+  if (divider && list) divider.onpointerdown = event => {
+    event.preventDefault();
+    herdrDragging = true;
+    divider.setPointerCapture?.(event.pointerId);
+    const move = pointer => {
+      const rect = list.getBoundingClientRect(), usable = Math.max(1, rect.height - divider.offsetHeight);
+      herdrSidebarRatio = Math.max(.1, Math.min(.9, (pointer.clientY - rect.top - divider.offsetHeight / 2) / usable));
+      applyHerdrSidebarRatio(root);
+    };
+    const done = () => {
+      herdrDragging = false;
+      divider.onpointermove = divider.onpointerup = divider.onpointercancel = null;
+      try { localStorage.setItem("fsa-herdr-sidebar-ratio", String(herdrSidebarRatio)); } catch (e) {}
+    };
+    divider.onpointermove = move;
+    divider.onpointerup = divider.onpointercancel = done;
+  };
+  applyHerdrSidebarRatio(root);
 }
 
 function renderHerdrPage() {
@@ -653,25 +957,33 @@ function renderHerdrPage() {
   const sidebar = herdrSidebarHtml(herdrData, panes, selectedHerdrPane);
   const tabs = herdrTabsHtml(herdrData, panes, selectedHerdrPane);
   const list = main.querySelector(".herdr-list");
+  if (list && (herdrOverlay || herdrDragging)) {
+    updateTerminalStatus(pane);
+    return;
+  }
   if (list && terminalCanStay(pane, panes) && main.querySelector(".herdr-detail")?.contains(terminal.root)) {
+    const chrome = herdrChromeSnapshot(main);
     list.innerHTML = sidebar;
     const tabsRoot = main.querySelector(".herdr-tabs");
     if (tabsRoot) tabsRoot.outerHTML = tabs;
     wireHerdrPicks(main);
     updateHerdrTabOverflow(main);
+    restoreHerdrChrome(main, chrome);
     updateTerminalStatus(pane);
     return;
   }
   const restore = terminalSnapshot();
   stopTerminal();
-  main.innerHTML = `<div class="herdr-view"><nav class="herdr-list" aria-label="Herdr panes">${sidebar}</nav><section class="herdr-main">${tabs}<div class="herdr-detail">${terminalHtml(pane, panes, "")}</div></section></div>`;
+  main.innerHTML = `<div class="herdr-view"><nav class="herdr-list" aria-label="Herdr panes">${sidebar}</nav><section class="herdr-main">${tabs}<div class="herdr-detail">${terminalHtml(pane, panes, "")}</div></section><div class="herdr-page-error" aria-live="polite">${esc(herdrActionError)}</div></div>`;
   wireHerdrPicks(main);
   updateHerdrTabOverflow(main);
   mountTerminal(main.querySelector(".herdr-detail"), pane, panes, restore);
 }
 
 function setView(next) {
+  closeHerdrOverlay(false);
   view = next === "herdr" ? "herdr" : "agents";
+  document.documentElement.classList.toggle("herdr-page", view === "herdr");
   try { localStorage.setItem("fsa-view", view); } catch (e) {}
   document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === view)));
   document.getElementById("favsw").hidden = view !== "agents";
@@ -679,6 +991,16 @@ function setView(next) {
   closePanel();
   if (view === "herdr") renderHerdrPage(); else render();
 }
+document.addEventListener("pointerdown", event => {
+  if (herdrOverlay?.type === "menu" && !herdrOverlay.root.contains(event.target)) closeHerdrOverlay(false);
+}, true);
+document.addEventListener("keydown", event => {
+  if (event.key !== "Escape" || !herdrOverlay) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  closeHerdrOverlay();
+}, true);
+addEventListener("resize", () => closeHerdrOverlay(false));
 const ago = t => { const s = Math.max(0, Date.now()/1000 - t); return s < 90 ? `${Math.round(s)}s` : s < 5400 ? `${Math.round(s/60)}m` : s < 172800 ? `${Math.round(s/3600)}h` : `${Math.round(s/86400)}d`; };
 const chip = c => { const good = /^(GREEN|PASS)$/.test(c.verdict), bad = /^(RED|CHANGES)$/.test(c.verdict); return `<span class="chip ${good ? "ok" : bad ? "bad" : ""}" title="${esc(c.label)}">${esc(c.kind)} ${esc(c.verdict)}</span>`; };
 
