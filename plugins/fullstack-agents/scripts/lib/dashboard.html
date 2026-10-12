@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agents</title>
+<link rel="stylesheet" href="/static/xterm/xterm.css">
 <style>
 :root {
   --bg: #f4f5f8; --panel: #ffffff; --card: #ffffff; --card-hover: #f7f8fb; --ink: #1b1d26; --muted: #5d6273; --faint: #8b90a3; --line: #dfe2ea;
@@ -254,18 +255,18 @@ html.herdr-page .herdr-view { height: 100%; }
 .terminal-screen-box { flex: 1; min-height: 180px; position: relative; display: flex; margin: 0 1ch; border: 1px solid var(--herdr-accent); }
 .terminal-pane-title { flex: 1; min-width: 0; overflow: hidden; color: var(--herdr-accent); font-weight: 700; line-height: 1lh; text-overflow: ellipsis; white-space: nowrap; }
 .terminal-screen, aside pre.terminal-screen { flex: 1; min-height: 0; max-height: none; margin: 0; overflow: auto; white-space: pre; word-break: normal; background: var(--herdr-panel-bg); color: var(--herdr-text); border: 0; border-radius: 0; padding: 1lh 1ch; font: inherit; tab-size: 4; scrollbar-color: var(--herdr-overlay1) var(--herdr-overlay0); scrollbar-width: thin; }
+.terminal-screen[hidden], .terminal-live[hidden], .terminal-disconnected[hidden], .terminal-caption [hidden] { display: none; }
+.terminal-live { flex: 1; min-width: 0; min-height: 0; padding: .5lh .5ch; background: var(--herdr-panel-bg); }
+.terminal-live .xterm { height: 100%; }
+.terminal-live .xterm-viewport { overflow: hidden !important; }
+.terminal-disconnected { position: absolute; z-index: 2; inset: 0; background: color-mix(in srgb, var(--herdr-panel-bg) 72%, transparent); pointer-events: none; }
 .terminal-screen::-webkit-scrollbar { width: 8px; height: 8px; } .terminal-screen::-webkit-scrollbar-track { background: var(--herdr-overlay0); } .terminal-screen::-webkit-scrollbar-thumb { background: var(--herdr-overlay1); }
 .terminal .terminal-jump { position: absolute; left: 50%; bottom: 1lh; transform: translateX(-50%); border: 1px solid var(--herdr-accent); background: var(--herdr-selection-bg); color: var(--herdr-text); padding: .35lh 1ch; box-shadow: 0 3px 12px rgba(0,0,0,.35); }
 .terminal .terminal-jump[hidden] { display: none; }
 .terminal-caption { flex: none; min-height: 1lh; padding: 0 1ch; color: var(--herdr-overlay0); }
-.terminal-compose { flex: none; display: flex; align-items: stretch; padding: 0 1ch; background: var(--herdr-panel-bg); }
-.terminal-send-badge { display: flex; align-items: center; background: var(--herdr-accent); color: var(--herdr-panel-bg); padding: 0 1ch; font-weight: 700; }
-.terminal textarea { flex: 1; width: auto; min-height: 3lh; resize: vertical; border: 0; border-radius: 0; outline-color: var(--herdr-accent); background: var(--herdr-surface0); color: var(--herdr-text); padding: .5lh 1ch; font: inherit; }
-.terminal-actions, .terminal-keys { display: flex; align-items: center; gap: 2ch; }
-.terminal-actions { flex: none; min-height: 2lh; padding: .35lh 1ch; flex-wrap: wrap; }
-.terminal-actions button { color: var(--herdr-overlay0); }
-.terminal-actions .key-word { color: var(--herdr-accent); font-weight: 700; }
+.terminal-caption button { margin-left: 2ch; }
 .terminal-error { flex: none; min-height: 1lh; padding: 0 1ch; color: var(--herdr-red); }
+.terminal-error:empty { display: none; }
 .herdr-page-error { position: absolute; z-index: 3; right: 1ch; bottom: 1lh; max-width: min(60ch, calc(100% - 28ch)); padding: .35lh 1ch; background: var(--herdr-panel-bg); border: 1px solid var(--herdr-red); color: var(--herdr-red); }
 .herdr-page-error:empty { display: none; }
 .herdr-menu, .herdr-modal, .herdr-copy-toast { --herdr-panel-bg: #282c34; --herdr-selection-bg: #334659; --herdr-overlay0: #5c6370; --herdr-overlay1: #737a87; --herdr-text: #abb2bf; --herdr-green: #98c379; --herdr-red: #e06c75; font: 12px/1.35 var(--mono); color: var(--herdr-text); }
@@ -291,7 +292,7 @@ html.herdr-page .herdr-view { height: 100%; }
 .herdr-copy-toast .dot { color: var(--herdr-green); margin-right: 1ch; }
 .terminal-pick { flex: none; padding: .5lh 1ch; color: var(--herdr-overlay0); }
 #card-terminal .terminal-head { justify-content: flex-end; padding-left: 0; padding-right: 0; }
-#card-terminal .terminal-screen-box, #card-terminal .terminal-compose { margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0; }
+#card-terminal .terminal-screen-box { margin-left: 0; margin-right: 0; }
 .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--blue); margin-right: 6px; animation: pulse 1.2s ease-in-out infinite; }
 #toasts { position: fixed; top: 64px; right: 16px; display: grid; gap: 8px; z-index: 20; width: min(360px, calc(100% - 32px)); }
 .toast { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--amber); border-radius: 10px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18); cursor: pointer; animation: slide .2s ease-out; }
@@ -350,6 +351,8 @@ html.herdr-page .herdr-view { height: 100%; }
   <button role="menuitem" data-act="copy">Copy session id</button>
   <button role="menuitem" data-act="dismiss">Dismiss</button>
 </div>
+<script src="/static/xterm/xterm.js"></script>
+<script src="/static/xterm/addon-fit.js"></script>
 <script>
 const STAGES = [
   {key: "investigate", label: "Investigate", who: "lead · opus · haiku scan", phases: ["idle", "investigate"], flow: true},
@@ -441,26 +444,26 @@ function terminalHtml(pane, panes, pickMessage) {
   const pick = pickMessage ? `<div class="terminal-pick">${esc(pickMessage)} ${options ? `<label>Pick a pane <select data-pane-pick><option value="">—</option>${options}</select></label>` : ""}</div>` : "";
   if (!pane) return `<div class="terminal">${pick || '<div class="hint">No Herdr panes are available.</div>'}</div>`;
   return `<div class="terminal" data-terminal-pane="${esc(pane.pane_id)}">${pick}
-    <div class="terminal-head"><span class="terminal-pane-title"> ${esc(pane.title || pane.pane_id)} </span><span class="chip st-${esc(pane.status)}">${esc(pane.status)}</span><div class="terminal-source"><button data-source="recent" aria-pressed="true">History</button><button data-source="visible" aria-pressed="false">Mirror herdr</button></div></div>
-    <div class="terminal-screen-box" data-herdr-pane-context="${esc(pane.pane_id)}"><pre class="terminal-screen" tabindex="0">loading…</pre><button class="terminal-jump" hidden>New output — jump to latest</button></div>
-    <div class="terminal-caption">Showing the last 1000 lines from herdr</div>
-    <div class="terminal-compose"><span class="terminal-send-badge"> SEND </span><textarea data-terminal-input placeholder="Send a prompt or type text into this pane" aria-label="Terminal input"></textarea></div>
-    <div class="terminal-actions"><button data-send="prompt"><span class="key-word">ctrl+enter</span> prompt</button><button data-send="text"><span class="key-word">type</span></button><span class="terminal-keys"><button data-term-key="enter"><span class="key-word">enter</span></button><button data-term-key="esc"><span class="key-word">esc</span></button><button data-term-key="ctrl+c"><span class="key-word">ctrl+c</span></button><button data-term-key="up"><span class="key-word">↑</span></button><button data-term-key="down"><span class="key-word">↓</span></button><button data-term-key="tab"><span class="key-word">tab</span></button></span></div>
+    <div class="terminal-head"><span class="terminal-pane-title"> ${esc(pane.title || pane.pane_id)} </span><span class="chip st-${esc(pane.status)}">${esc(pane.status)}</span><div class="terminal-source"><button data-mode="live" aria-pressed="true">Live</button><button data-mode="history" aria-pressed="false">History</button></div></div>
+    <div class="terminal-screen-box" data-herdr-pane-context="${esc(pane.pane_id)}"><div class="terminal-live"></div><div class="terminal-disconnected" hidden></div><pre class="terminal-screen" tabindex="0" hidden>loading…</pre><button class="terminal-jump" hidden>New output — jump to latest</button></div>
+    <div class="terminal-caption"><span data-terminal-status>live · connecting</span><span data-terminal-reconnect hidden><button data-reconnect>reconnect</button><button data-takeover>take over</button></span></div>
     <div class="terminal-error" aria-live="polite"></div></div>`;
 }
 
 function stopTerminal() {
   clearInterval(terminalTimer);
   terminalTimer = null;
+  if (terminal) disposeLiveTerminal(terminal);
   terminal = null;
 }
 
 function terminalFocusSelector(root) {
   const active = document.activeElement;
   if (!active || !root.contains(active)) return null;
-  for (const selector of ["[data-terminal-input]", ".terminal-screen", ".terminal-jump", "[data-pane-pick]"])
+  if (terminal && terminal.root === root && terminal.term?.textarea === active) return "live";
+  for (const selector of [".terminal-screen", ".terminal-jump", "[data-pane-pick]"])
     if (active.matches(selector)) return selector;
-  for (const attr of ["source", "send", "term-key"]) {
+  for (const attr of ["mode"]) {
     const value = active.getAttribute(`data-${attr}`);
     if (value !== null) return `[data-${attr}="${value}"]`;
   }
@@ -470,15 +473,12 @@ function terminalFocusSelector(root) {
 function terminalSnapshot() {
   if (!terminal || !document.contains(terminal.root)) return null;
   const pre = terminal.root.querySelector(".terminal-screen");
-  return {pane: terminal.pane, source: terminal.source, text: terminal.text, hash: terminal.hash, pending: terminal.pending,
-    input: terminal.root.querySelector("[data-terminal-input]").value, scroll: pre.scrollTop,
+  return {pane: terminal.pane, mode: terminal.mode, text: terminal.text, hash: terminal.hash, pending: terminal.pending, scroll: pre.scrollTop,
     atEnd: pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40, focus: terminalFocusSelector(terminal.root)};
 }
 
-const paneAvailability = panes => JSON.stringify((panes || []).map(x => x.pane_id).sort());
-
 function terminalCanStay(pane, panes) {
-  return pane && terminal && terminal.pane === pane.pane_id && terminal.availability === paneAvailability(panes) && document.contains(terminal.root);
+  return pane && terminal && terminal.pane === pane.pane_id && document.contains(terminal.root);
 }
 
 function updateTerminalStatus(pane) {
@@ -504,59 +504,227 @@ function applyTerminalText(current, text) {
 }
 
 function updateTerminalCaption(current) {
-  current.root.querySelector(".terminal-caption").textContent = current.source === "recent"
-    ? "Showing the last 1000 lines from herdr" : "Mirroring herdr's current view";
+  if (current.mode === "history") current.root.querySelector("[data-terminal-status]").textContent = "Showing the last 1000 lines from herdr";
 }
 
 async function pollTerminal() {
   const current = terminal;
   if (!current || document.hidden || !document.contains(current.root)) return;
+  if (current.mode !== "history") return;
   if (current.polling) { current.pollAgain = true; return; }
   current.polling = true;
-  const source = current.source;
+  const source = "recent";
   try {
     const since = current.hash ? `&since=${enc(current.hash)}` : "";
     const r = await fetch(`/api/herdr/screen?pane=${enc(current.pane)}&source=${enc(source)}${since}`, {cache: "no-store"});
-    if (terminal !== current || current.source !== source || !document.contains(current.root)) return;
+    if (terminal !== current || current.mode !== "history" || !document.contains(current.root)) return;
     const hash = r.headers.get("X-Screen-Hash");
     if (hash) current.hash = hash;
     if (r.status === 204) return;
     const text = await r.text();
-    if (terminal !== current || current.source !== source || !document.contains(current.root)) return;
+    if (terminal !== current || current.mode !== "history" || !document.contains(current.root)) return;
     if (!r.ok) throw new Error(text || `screen error ${r.status}`);
+    current.root.querySelector(".terminal-error").textContent = "";
     const pre = current.root.querySelector(".terminal-screen");
     if (text === current.text && current.pending === null) return;
     if (current.text === null || terminalAtEnd(pre)) applyTerminalText(current, text);
     else setTerminalPending(current, text);
   } catch (e) {
-    if (terminal === current && current.source === source && document.contains(current.root))
+    if (terminal === current && current.mode === "history" && document.contains(current.root))
       current.root.querySelector(".terminal-error").textContent = e.message || "Could not read the pane";
   } finally {
     if (terminal === current) {
       current.polling = false;
-      if (current.pollAgain || current.source !== source) { current.pollAgain = false; pollTerminal(); }
+      if (current.pollAgain) { current.pollAgain = false; pollTerminal(); }
     }
   }
 }
 
-async function sendTerminal(kind, keys) {
-  const current = terminal;
-  if (!current) return;
-  const input = current.root.querySelector("[data-terminal-input]"), error = current.root.querySelector(".terminal-error");
-  const body = {pane: current.pane, kind};
-  if (kind === "keys") body.keys = keys;
-  else body.text = input.value;
-  error.textContent = "";
-  try {
-    const r = await fetch("/api/herdr/send", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
-    const data = r.headers.get("Content-Type")?.includes("application/json") ? await r.json() : {ok: false, error: await r.text()};
-    if (!r.ok || !data.ok) throw new Error(data.error || `send error ${r.status}`);
-    if (kind === "prompt") input.value = "";
-    setTimeout(pollTerminal, 100);
-    loadHerdr();
-  } catch (e) {
-    if (terminal === current) error.textContent = e.message || "Could not send to the pane";
+const terminalBytes64 = bytes => {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+};
+
+const terminalBase64Bytes = value => Uint8Array.from(atob(value), c => c.charCodeAt(0));
+
+function postLiveTerminal(current, body) {
+  if (!current.session || terminal !== current) return Promise.resolve();
+  const session = current.session, epoch = current.liveEpoch;
+  current.postChain = current.postChain.then(async () => {
+    if (current.liveEpoch !== epoch || terminal !== current) return;
+    const response = await fetch("/api/herdr/live/input", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({session, ...body}), signal: current.postAbort?.signal});
+    if (!response.ok) throw new Error((await response.text()) || `terminal input error ${response.status}`);
+    if (terminal === current && current.liveEpoch === epoch) current.root.querySelector(".terminal-error").textContent = "";
+  }).catch(error => {
+    if (error.name !== "AbortError" && terminal === current && current.liveEpoch === epoch) current.root.querySelector(".terminal-error").textContent = error.message || "Could not write to the pane";
+  });
+  return current.postChain;
+}
+
+function flushTerminalInput(current) {
+  current.inputFrame = 0;
+  if (!current.session || !current.inputQueue.length) return;
+  const size = current.inputQueue.reduce((sum, bytes) => sum + bytes.length, 0), joined = new Uint8Array(size);
+  let offset = 0;
+  current.inputQueue.forEach(bytes => { joined.set(bytes, offset); offset += bytes.length; });
+  current.inputQueue.length = 0;
+  postLiveTerminal(current, {type: "input", bytes: terminalBytes64(joined)});
+}
+
+function queueTerminalInput(current, bytes) {
+  current.inputQueue.push(bytes);
+  if (!current.inputFrame) current.inputFrame = requestAnimationFrame(() => flushTerminalInput(current));
+}
+
+function liveTerminalStatus(current, reason) {
+  const status = current.root.querySelector("[data-terminal-status]"), actions = current.root.querySelector("[data-terminal-reconnect]");
+  if (reason === null) {
+    status.textContent = `live · ${current.term.cols}×${current.term.rows}`;
+    actions.hidden = true;
+    current.root.querySelector(".terminal-disconnected").hidden = true;
+  } else {
+    status.textContent = `${reason} · ${current.term.cols}×${current.term.rows}`;
+    actions.hidden = false;
+    current.root.querySelector(".terminal-disconnected").hidden = false;
   }
+}
+
+function closeLiveStream(current) {
+  current.liveEpoch += 1;
+  current.postAbort?.abort();
+  current.postAbort = null;
+  clearTimeout(current.reconnectTimer);
+  current.reconnectTimer = null;
+  if (current.stream) current.stream.close();
+  current.stream = null;
+  current.session = null;
+}
+
+function disposeLiveTerminal(current) {
+  closeLiveStream(current);
+  clearTimeout(current.resizeTimer);
+  if (current.inputFrame) cancelAnimationFrame(current.inputFrame);
+  current.inputFrame = 0;
+  current.inputQueue.length = 0;
+  current.postChain = Promise.resolve();
+  current.resizeObserver?.disconnect();
+  current.liveDisposables?.forEach(disposable => disposable.dispose());
+  current.liveDisposables = [];
+  current.term?.dispose();
+  current.term = current.fit = null;
+}
+
+function openLiveStream(current, takeover = false) {
+  closeLiveStream(current);
+  current.postAbort = new AbortController();
+  current.postChain = Promise.resolve();
+  const cols = current.term.cols, rows = current.term.rows;
+  current.root.querySelector("[data-terminal-status]").textContent = `live · connecting · ${cols}×${rows}`;
+  current.root.querySelector("[data-terminal-reconnect]").hidden = true;
+  current.root.querySelector(".terminal-disconnected").hidden = false;
+  const stream = new EventSource(`/api/herdr/live?pane=${enc(current.pane)}&cols=${cols}&rows=${rows}${takeover ? "&takeover=1" : ""}`);
+  current.stream = stream;
+  stream.addEventListener("ready", event => {
+    if (terminal !== current || current.stream !== stream) return;
+    try { current.session = JSON.parse(event.data).session; } catch (e) { return liveTerminalClosed(current, "Invalid terminal session"); }
+    liveTerminalStatus(current, null);
+    flushTerminalInput(current);
+  });
+  stream.addEventListener("frame", event => {
+    if (terminal !== current || current.stream !== stream) return;
+    try { current.term.write(terminalBase64Bytes(JSON.parse(event.data).bytes)); }
+    catch (e) { liveTerminalClosed(current, "Invalid terminal frame"); }
+  });
+  stream.addEventListener("closed", event => {
+    if (terminal !== current || current.stream !== stream) return;
+    let reason = "Terminal closed";
+    try { reason = JSON.parse(event.data).reason || reason; } catch (e) {}
+    liveTerminalClosed(current, reason);
+  });
+  stream.onerror = () => {
+    if (terminal === current && current.stream === stream) liveTerminalClosed(current, "Connection closed");
+  };
+}
+
+function liveTerminalClosed(current, reason) {
+  closeLiveStream(current);
+  liveTerminalStatus(current, reason);
+  if (!current.autoRetried && !/ownership|owner|conflict|already.*control|in use/i.test(reason)) {
+    current.autoRetried = true;
+    current.reconnectTimer = setTimeout(() => { if (terminal === current && current.mode === "live") openLiveStream(current); }, 2000);
+  }
+}
+
+function startLiveTerminal(current, restoreFocus = false) {
+  const host = current.root.querySelector(".terminal-live"), box = current.root.querySelector(".terminal-screen-box");
+  current.root.querySelector(".terminal-screen").hidden = true;
+  current.root.querySelector(".terminal-jump").hidden = true;
+  host.hidden = false;
+  current.autoRetried = false;
+  if (!window.Terminal || !window.FitAddon?.FitAddon) return liveTerminalStatus(current, "Terminal assets unavailable");
+  const css = getComputedStyle(current.root), colour = name => css.getPropertyValue(name).trim();
+  current.term = new window.Terminal({scrollback: 0, fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--mono").trim(), fontSize: 12, cursorBlink: true, theme: {
+    background: colour("--herdr-panel-bg"), foreground: colour("--herdr-text"), cursor: colour("--herdr-accent"), selectionBackground: colour("--herdr-selection-bg"),
+    black: "#282c34", red: "#e06c75", green: "#98c379", yellow: "#e5c07b", blue: "#61afef", magenta: "#c678dd", cyan: "#56b6c2", white: "#abb2bf",
+    brightBlack: "#5c6370", brightRed: "#e06c75", brightGreen: "#98c379", brightYellow: "#e5c07b", brightBlue: "#61afef", brightMagenta: "#c678dd", brightCyan: "#56b6c2", brightWhite: "#ffffff"
+  }});
+  current.fit = new window.FitAddon.FitAddon();
+  current.term.loadAddon(current.fit);
+  current.term.open(host);
+  current.fit.fit();
+  current.liveDisposables = [
+    current.term.onData(data => queueTerminalInput(current, new TextEncoder().encode(data))),
+    current.term.onBinary(data => queueTerminalInput(current, Uint8Array.from(data, char => char.charCodeAt(0) & 255)))
+  ];
+  current.term.attachCustomWheelEventHandler(event => {
+    if (!event.deltaY) return false;
+    postLiveTerminal(current, {type: "scroll", direction: event.deltaY < 0 ? "up" : "down", lines: Math.max(1, Math.round(Math.abs(event.deltaY) / 40))});
+    return false;
+  });
+  let dimensions = `${current.term.cols}x${current.term.rows}`;
+  current.resizeObserver = new ResizeObserver(() => {
+    if (terminal !== current || current.mode !== "live") return;
+    current.fit.fit();
+    const next = `${current.term.cols}x${current.term.rows}`;
+    if (next === dimensions) return;
+    dimensions = next;
+    if (current.session) liveTerminalStatus(current, null);
+    else current.root.querySelector("[data-terminal-status]").textContent = `live · connecting · ${current.term.cols}×${current.term.rows}`;
+    clearTimeout(current.resizeTimer);
+    current.resizeTimer = setTimeout(() => postLiveTerminal(current, {type: "resize", cols: current.term.cols, rows: current.term.rows}), 100);
+  });
+  current.resizeObserver.observe(box);
+  box.onclick = () => { if (terminal === current && current.mode === "live") current.term.focus(); };
+  openLiveStream(current);
+  if (restoreFocus) current.term.focus();
+}
+
+function switchTerminalMode(current, mode, restoreFocus = false) {
+  if (terminal !== current) return;
+  if (current.started && current.mode === mode) {
+    if (restoreFocus) (mode === "live" ? current.term : current.root.querySelector(".terminal-screen"))?.focus();
+    return;
+  }
+  clearInterval(terminalTimer);
+  terminalTimer = null;
+  if (current.mode === "live" && mode !== "live") disposeLiveTerminal(current);
+  current.mode = mode;
+  current.root.querySelectorAll("[data-mode]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.mode === mode)));
+  const history = current.root.querySelector(".terminal-screen"), host = current.root.querySelector(".terminal-live");
+  if (mode === "live") {
+    startLiveTerminal(current, restoreFocus);
+  } else {
+    host.hidden = true;
+    history.hidden = false;
+    current.root.querySelector(".terminal-disconnected").hidden = true;
+    current.root.querySelector("[data-terminal-reconnect]").hidden = true;
+    updateTerminalCaption(current);
+    pollTerminal();
+    terminalTimer = setInterval(pollTerminal, 1500);
+    if (restoreFocus) history.focus();
+  }
+  current.started = true;
 }
 
 function mountTerminal(container, pane, panes, restore) {
@@ -564,38 +732,26 @@ function mountTerminal(container, pane, panes, restore) {
   const root = container.querySelector(".terminal[data-terminal-pane]");
   if (!root || !pane) return;
   const old = restore && restore.pane === pane.pane_id ? restore : null;
-  terminal = {root, pane: pane.pane_id, availability: paneAvailability(panes), source: old ? old.source : "recent",
-    text: old ? old.text : null, hash: old ? old.hash : null, pending: old ? old.pending : null, polling: false, pollAgain: false};
+  terminal = {root, pane: pane.pane_id, mode: old ? old.mode : "live",
+    text: old ? old.text : null, hash: old ? old.hash : null, pending: old ? old.pending : null, polling: false, pollAgain: false,
+    term: null, fit: null, stream: null, session: null, resizeObserver: null, resizeTimer: null, reconnectTimer: null,
+    autoRetried: false, inputQueue: [], inputFrame: 0, postChain: Promise.resolve(), postAbort: null, liveEpoch: 0, liveDisposables: [], started: false};
   if (old) {
-    root.querySelector("[data-terminal-input]").value = old.input;
     const pre = root.querySelector(".terminal-screen");
     pre.innerHTML = ansiHtml(old.text) || "&nbsp;";
     pre.scrollTop = old.atEnd ? pre.scrollHeight : old.scroll;
-    root.querySelectorAll("[data-source]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.source === old.source)));
     root.querySelector(".terminal-jump").hidden = old.pending === null;
   }
-  updateTerminalCaption(terminal);
   const pre = root.querySelector(".terminal-screen");
   const jump = root.querySelector(".terminal-jump");
   const applyPending = () => { if (terminal && terminal.root === root && terminal.pending !== null) applyTerminalText(terminal, terminal.pending); };
   jump.onclick = applyPending;
   pre.onscroll = () => { if (terminal && terminal.root === root && terminal.pending !== null && terminalAtEnd(pre)) applyPending(); };
-  root.querySelectorAll("[data-source]").forEach(b => b.onclick = () => {
-    if (!terminal || terminal.root !== root) return;
-    terminal.source = b.dataset.source;
-    terminal.text = null;
-    terminal.hash = null;
-    setTerminalPending(terminal, null);
-    updateTerminalCaption(terminal);
-    root.querySelectorAll("[data-source]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
-    pollTerminal();
-  });
-  root.querySelectorAll("[data-send]").forEach(b => b.onclick = () => sendTerminal(b.dataset.send));
-  root.querySelectorAll("[data-term-key]").forEach(b => b.onclick = () => sendTerminal("keys", [b.dataset.termKey]));
-  root.querySelector("[data-terminal-input]").onkeydown = e => { if (e.key === "Enter" && e.ctrlKey) { e.preventDefault(); sendTerminal("prompt"); } };
-  if (old && old.focus) root.querySelector(old.focus)?.focus();
-  pollTerminal();
-  terminalTimer = setInterval(pollTerminal, 1500);
+  root.querySelectorAll("[data-mode]").forEach(button => button.onclick = () => switchTerminalMode(terminal, button.dataset.mode, true));
+  root.querySelector("[data-reconnect]").onclick = () => { if (terminal?.root !== root || !terminal.term) return; terminal.autoRetried = true; openLiveStream(terminal); terminal.term.focus(); };
+  root.querySelector("[data-takeover]").onclick = () => { if (terminal?.root !== root || !terminal.term) return; terminal.autoRetried = true; openLiveStream(terminal, true); terminal.term.focus(); };
+  switchTerminalMode(terminal, terminal.mode, old?.focus === "live");
+  if (old?.focus && old.focus !== "live") root.querySelector(old.focus)?.focus();
 }
 
 async function loadHerdr(force = false) {
@@ -1468,6 +1624,20 @@ function paintCardTerminal(c) {
   const pane = match || (herdrData.panes || []).find(x => x.pane_id === chosen) || null;
   const missing = match ? "" : "No pane matches this card's session title or name.";
   if (terminalCanStay(pane, herdrData.panes || []) && host.contains(terminal.root)) {
+    const pick = host.querySelector("[data-pane-pick]");
+    if (pick) {
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "—";
+      const options = (herdrData.panes || []).map(item => {
+        const option = document.createElement("option");
+        option.value = item.pane_id;
+        option.textContent = item.title || item.pane_id;
+        return option;
+      });
+      pick.replaceChildren(empty, ...options);
+      pick.value = pane.pane_id;
+    }
     updateTerminalStatus(pane);
     return;
   }
@@ -1750,6 +1920,12 @@ ctx().addEventListener("click", e => {
 document.addEventListener("keydown", e => { if (e.key !== "Escape" || out || e.target.closest?.(".terminal")) return; if (closeCtx()) return; if (openRun) toggleTask(openRun); else closePanel(); });
 document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => setView(b.dataset.view));
 document.addEventListener("visibilitychange", () => { if (!document.hidden && openRun) pollLog(openRun); if (!document.hidden && terminal) pollTerminal(); });
+addEventListener("pagehide", stopTerminal);
+addEventListener("pageshow", event => {
+  if (!event.persisted || terminal) return;
+  if (view === "herdr") renderHerdrPage();
+  else if (openKey && tab2 === "terminal") paintPanel();
+});
 setView(view);
 load();
 setInterval(load, 4000);

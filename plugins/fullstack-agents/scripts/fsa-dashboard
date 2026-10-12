@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """Read-only board of a repository's agent sessions, implementer runs and worktrees; no model runs here."""
 import argparse
+import base64
+import binascii
 import hashlib
 import http.server
 import json
 import os
+import queue
 import re
 import secrets
+import select
 import shutil
+import socket
 import signal
 import subprocess
 import sys
@@ -68,6 +73,12 @@ JUDGE_WINDOW_S = 7200
 JUDGED = {}
 HERDR_KEYS = {"enter", "esc", "ctrl+c", "up", "down", "left", "right", "tab", "backspace", "1", "2", "3", "y", "n"}
 HERDR_AGENT_KINDS = ("claude", "codex", "grok", "gemini", "opencode", "cursor", "copilot", "amp", "qwen", "kimi")
+HERDR_LIVE_MAX = 6
+XTERM_FILES = {
+    "/static/xterm/xterm.js": (HERE / "lib" / "vendor" / "xterm" / "xterm.js", "application/javascript"),
+    "/static/xterm/addon-fit.js": (HERE / "lib" / "vendor" / "xterm" / "addon-fit.js", "application/javascript"),
+    "/static/xterm/xterm.css": (HERE / "lib" / "vendor" / "xterm" / "xterm.css", "text/css"),
+}
 
 
 def run_herdr(*args, timeout=5):
@@ -143,6 +154,142 @@ def has_nul(value):
     if isinstance(value, dict):
         return any(has_nul(k) or has_nul(v) for k, v in value.items())
     return False
+
+
+def herdr_live_command(body):
+    if not isinstance(body, dict) or has_nul(body):
+        raise TypeError("body must be an object without NULs")
+    session, kind = body.get("session"), body.get("type")
+    if not isinstance(session, str) or not session:
+        raise ValueError("bad session")
+    if kind == "input":
+        if set(body) != {"session", "type", "bytes"} or not isinstance(body.get("bytes"), str):
+            raise ValueError("bad input")
+        try:
+            decoded = base64.b64decode(body["bytes"], validate=True)
+        except (binascii.Error, ValueError):
+            raise ValueError("bad input") from None
+        if not 1 <= len(decoded) <= 65536:
+            raise ValueError("bad input")
+        return {"type": "terminal.input", "bytes": body["bytes"]}
+    if kind == "resize":
+        if set(body) != {"session", "type", "cols", "rows"}:
+            raise ValueError("bad resize")
+        cols, rows = body["cols"], body["rows"]
+        if isinstance(cols, bool) or isinstance(rows, bool) or not isinstance(cols, int) or not isinstance(rows, int) \
+                or not 10 <= cols <= 500 or not 5 <= rows <= 200:
+            raise ValueError("bad resize")
+        return {"type": "terminal.resize", "cols": cols, "rows": rows}
+    if kind == "scroll":
+        if set(body) != {"session", "type", "direction", "lines"}:
+            raise ValueError("bad scroll")
+        direction, lines = body["direction"], body["lines"]
+        if direction not in ("up", "down") or isinstance(lines, bool) or not isinstance(lines, int) \
+                or not 1 <= lines <= 100:
+            raise ValueError("bad scroll")
+        return {"type": "terminal.scroll", "direction": direction, "lines": lines}
+    raise ValueError("bad type")
+
+
+class HerdrLiveSession:
+    def __init__(self, process):
+        self.process = process
+        self.write_lock = threading.Lock()
+        self.error_lock = threading.Lock()
+        self.stopped = threading.Event()
+        self.error_done = threading.Event()
+        self.output = queue.Queue(maxsize=64)
+        self.error = bytearray()
+        os.set_blocking(self.process.stdin.fileno(), False)
+        threading.Thread(target=self._read_output, daemon=True).start()
+        threading.Thread(target=self._read_error, daemon=True).start()
+
+    def _queue_output(self, line):
+        while not self.stopped.is_set():
+            try:
+                self.output.put(line, timeout=0.1)
+                return
+            except queue.Full:
+                pass
+
+    def _read_output(self):
+        try:
+            for line in iter(self.process.stdout.readline, b""):
+                self._queue_output(line.rstrip(b"\r\n"))
+                if self.stopped.is_set():
+                    return
+        except (OSError, ValueError):
+            pass
+        finally:
+            self._queue_output(None)
+
+    def _read_error(self):
+        try:
+            for chunk in iter(lambda: self.process.stderr.read(4096), b""):
+                with self.error_lock:
+                    self.error.extend(chunk)
+                    if len(self.error) > 8192:
+                        del self.error[:-8192]
+        except (OSError, ValueError):
+            pass
+        finally:
+            self.error_done.set()
+
+    def error_text(self):
+        with self.error_lock:
+            return bytes(self.error).decode("utf-8", "replace").strip()
+
+    def wait_for_error(self, timeout):
+        self.error_done.wait(timeout)
+
+    def write(self, command, timeout=0.25):
+        data = json.dumps(command, separators=(",", ":")).encode() + b"\n"
+        deadline = time.monotonic() + timeout
+        if not self.write_lock.acquire(timeout=timeout):
+            raise TimeoutError("terminal input is busy")
+        try:
+            fd = self.process.stdin.fileno()
+            view = memoryview(data)
+            while view:
+                try:
+                    written = os.write(fd, view)
+                except BlockingIOError:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0 or not select.select([], [fd], [], remaining)[1]:
+                        raise TimeoutError("terminal input timed out")
+                    continue
+                if not written:
+                    raise BrokenPipeError("terminal input closed")
+                view = view[written:]
+        finally:
+            self.write_lock.release()
+
+    def release(self):
+        try:
+            if self.process.poll() is None:
+                try:
+                    self.write({"type": "terminal.release"}, timeout=0.1)
+                except (BrokenPipeError, OSError, ValueError):
+                    pass
+                try:
+                    self.process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    try:
+                        self.process.kill()
+                    except OSError:
+                        pass
+                    try:
+                        self.process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        pass
+        finally:
+            self.stopped.set()
+            self.error_done.wait(2)
+            for pipe in (self.process.stdin, self.process.stdout, self.process.stderr):
+                try:
+                    pipe.close()
+                except (OSError, ValueError):
+                    pass
 
 
 def herdr_label(value):
@@ -1237,6 +1384,7 @@ class Server(http.server.ThreadingHTTPServer):
         self.repo, self.token, self.gc = repo, token, GitCache(repo)
         self.lock, self.cached, self.cached_at, self.sources, self.docs = threading.Lock(), None, 0.0, {}, {}
         self.herdr_lock, self.herdr_cached, self.herdr_cached_at = threading.Lock(), None, 0.0
+        self.herdr_live_lock, self.herdr_live = threading.Lock(), {}
 
     def state(self):
         with self.lock:
@@ -1302,6 +1450,105 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send(400, b"bad request", "text/plain")
             return False, None
 
+    def live_client_closed(self):
+        try:
+            readable, _, _ = select.select([self.connection], [], [], 0)
+            return bool(readable) and self.connection.recv(1, socket.MSG_PEEK) == b""
+        except (ConnectionError, OSError, ValueError):
+            return True
+
+    def live_event(self, event, data):
+        try:
+            self.wfile.write(b"event: " + event + b"\ndata: " + data + b"\n\n")
+            self.wfile.flush()
+            return True
+        except (ConnectionError, OSError, ValueError):
+            return False
+
+    def live_stream(self, q):
+        pane = (q.get("pane") or [""])[0]
+        if pane not in {x["pane_id"] for x in self.server.herdr_state()["panes"]}:
+            return self.send(404, b"unknown pane", "text/plain")
+        try:
+            cols, rows = int((q.get("cols") or [""])[0]), int((q.get("rows") or [""])[0])
+        except (TypeError, ValueError):
+            return self.send(400, b"bad terminal size", "text/plain")
+        if not 10 <= cols <= 500 or not 5 <= rows <= 200:
+            return self.send(400, b"bad terminal size", "text/plain")
+        takeover = (q.get("takeover") or [""])[0]
+        if takeover not in ("", "1"):
+            return self.send(400, b"bad takeover", "text/plain")
+        executable = shutil.which("herdr")
+        if not executable:
+            return self.send(503, b"herdr is not running", "text/plain")
+        session_id = secrets.token_urlsafe(18)
+        with self.server.herdr_live_lock:
+            if len(self.server.herdr_live) >= HERDR_LIVE_MAX:
+                return self.send(429, b"too many live terminal sessions", "text/plain")
+            args = [executable, "terminal", "session", "control", pane, "--cols", str(cols), "--rows", str(rows)]
+            if takeover == "1":
+                args.append("--takeover")
+            try:
+                process = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                           bufsize=0)
+            except (OSError, ValueError):
+                return self.send(503, b"herdr is not running", "text/plain")
+            live = HerdrLiveSession(process)
+            self.server.herdr_live[session_id] = live
+        closed_reason = ""
+        released = False
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "keep-alive")
+            self.end_headers()
+            if not self.live_event(b"ready", json.dumps({"session": session_id}, separators=(",", ":")).encode()):
+                return
+            keepalive_at = time.monotonic() + 15
+            while True:
+                if self.live_client_closed():
+                    return
+                try:
+                    line = live.output.get(timeout=0.25)
+                except queue.Empty:
+                    if time.monotonic() >= keepalive_at:
+                        try:
+                            self.wfile.write(b": keepalive\n\n")
+                            self.wfile.flush()
+                        except (ConnectionError, OSError, ValueError):
+                            return
+                        keepalive_at = time.monotonic() + 15
+                    continue
+                if line is None:
+                    break
+                try:
+                    message = json.loads(line)
+                except (TypeError, ValueError):
+                    continue
+                if isinstance(message, dict) and message.get("type") == "terminal.closed":
+                    reason = message.get("reason")
+                    closed_reason = reason if isinstance(reason, str) else ""
+                    break
+                if isinstance(message, dict) and message.get("type") == "terminal.frame":
+                    if not self.live_event(b"frame", line):
+                        return
+            live.release()
+            released = True
+            live.wait_for_error(2)
+            reason = closed_reason or live.error_text() or "terminal session closed"
+            self.live_event(b"closed", json.dumps({"reason": reason}, separators=(",", ":")).encode())
+        except (ConnectionError, OSError, ValueError):
+            pass
+        finally:
+            try:
+                if not released:
+                    live.release()
+            finally:
+                with self.server.herdr_live_lock:
+                    if self.server.herdr_live.get(session_id) is live:
+                        self.server.herdr_live.pop(session_id, None)
+
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(url.query)
@@ -1314,6 +1561,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(200, self.server.state())
         if url.path == "/api/herdr":
             return self.send(200, json.dumps(self.server.herdr_state()).encode())
+        if url.path == "/api/herdr/live":
+            return self.live_stream(q)
         if url.path == "/api/herdr/screen":
             source = (q.get("source") or ["visible"])[0]
             if source not in ("visible", "recent"):
@@ -1329,6 +1578,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if (q.get("since") or [""])[0] == screen_hash:
                 return self.send(204, b"", "text/plain; charset=utf-8", extra)
             return self.send(200, screen, "text/plain; charset=utf-8", extra)
+        if url.path in XTERM_FILES:
+            path, ctype = XTERM_FILES[url.path]
+            try:
+                return self.send(200, path.read_bytes(), ctype)
+            except OSError:
+                return self.send(404, b"not found", "text/plain")
         if url.path == "/api/log":
             rid = (q.get("id") or [""])[0]
             if not RUN_ID_RE.match(rid):
@@ -1375,12 +1630,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         url = urllib.parse.urlparse(self.path)
-        if not self.authorised({}) or url.path not in ("/api/dismiss", "/api/favourite", "/api/herdr/send", "/api/herdr/action"):
+        if not self.authorised({}) or url.path not in ("/api/dismiss", "/api/favourite", "/api/herdr/send", "/api/herdr/action",
+                                                          "/api/herdr/live/input"):
             return self.send(403, b"forbidden", "text/plain")
-        if url.path in ("/api/herdr/send", "/api/herdr/action"):
+        if url.path in ("/api/herdr/send", "/api/herdr/action", "/api/herdr/live/input"):
             valid, body = self.herdr_json_body()
             if not valid:
                 return
+        if url.path == "/api/herdr/live/input":
+            try:
+                command = herdr_live_command(body)
+            except (TypeError, ValueError):
+                return self.send(400, b"bad request", "text/plain")
+            with self.server.herdr_live_lock:
+                live = self.server.herdr_live.get(body["session"])
+            if live is None:
+                return self.send(404, b"unknown session", "text/plain")
+            try:
+                live.write(command)
+            except (BrokenPipeError, OSError, ValueError):
+                return self.send(503, b"terminal session is closed", "text/plain")
+            return self.send(200, b'{"ok":true}')
         if url.path == "/api/herdr/send":
             try:
                 args = herdr_send_args(body, {x["pane_id"] for x in self.server.herdr_state()["panes"]})
