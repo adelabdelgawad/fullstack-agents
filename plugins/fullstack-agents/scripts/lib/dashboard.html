@@ -279,7 +279,10 @@ html.herdr-page .herdr-view { height: 100%; }
 .terminal-live { flex: 1; min-width: 0; min-height: 0; padding: .5lh .5ch; background: var(--herdr-panel-bg); }
 .terminal-live .xterm { height: 100%; }
 .terminal-live .xterm-viewport { overflow: hidden !important; }
-.terminal-disconnected { position: absolute; z-index: 2; inset: 0; background: color-mix(in srgb, var(--herdr-panel-bg) 72%, transparent); pointer-events: none; }
+.terminal-disconnected { position: absolute; z-index: 2; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--herdr-panel-bg) 72%, transparent); pointer-events: none; }
+.terminal-blocked { display: flex; flex-direction: column; align-items: center; gap: .6lh; max-width: 80%; text-align: center; color: var(--herdr-text); }
+.terminal .terminal-blocked button { pointer-events: auto; border: 1px solid var(--herdr-accent); padding: .3lh 2ch; color: var(--herdr-accent); }
+.terminal .terminal-blocked button:hover { background: var(--herdr-accent); color: var(--herdr-panel-bg); }
 .terminal-screen::-webkit-scrollbar { width: 8px; height: 8px; } .terminal-screen::-webkit-scrollbar-track { background: var(--herdr-overlay0); } .terminal-screen::-webkit-scrollbar-thumb { background: var(--herdr-overlay1); }
 .terminal .terminal-jump { position: absolute; left: 50%; bottom: 1lh; transform: translateX(-50%); border: 1px solid var(--herdr-accent); background: var(--herdr-selection-bg); color: var(--herdr-text); padding: .35lh 1ch; box-shadow: 0 3px 12px rgba(0,0,0,.35); }
 .terminal .terminal-jump[hidden] { display: none; }
@@ -466,7 +469,7 @@ function terminalHtml(pane, panes, pickMessage) {
   if (!pane) return `<div class="terminal">${pick || '<div class="hint">No Herdr panes are available.</div>'}</div>`;
   return `<div class="terminal" data-terminal-pane="${esc(pane.pane_id)}">${pick}
     <div class="terminal-head"><span class="terminal-pane-title"> ${esc(pane.title || pane.pane_id)} </span><span class="chip st-${esc(pane.status)}">${esc(pane.status)}</span><div class="terminal-source"><button data-mode="live" aria-pressed="true">Live</button><button data-mode="history" aria-pressed="false">History</button><button data-attach aria-label="Attach files" title="Attach files: their paths are typed into the session">+</button><input type="file" multiple hidden data-attach-input></div></div>
-    <div class="terminal-screen-box" data-herdr-pane-context="${esc(pane.pane_id)}"><div class="terminal-live"></div><div class="terminal-drop" aria-hidden="true"><span>+</span><b>Drop to attach</b></div><div class="terminal-disconnected" hidden></div><pre class="terminal-screen" tabindex="0" hidden>loading…</pre><button class="terminal-jump" hidden>New output — jump to latest</button></div>
+    <div class="terminal-screen-box" data-herdr-pane-context="${esc(pane.pane_id)}"><div class="terminal-live"></div><div class="terminal-drop" aria-hidden="true"><span>+</span><b>Drop to attach</b></div><div class="terminal-disconnected" hidden><div class="terminal-blocked"><span data-terminal-reason></span><button data-takeover>take over</button></div></div><pre class="terminal-screen" tabindex="0" hidden>loading…</pre><button class="terminal-jump" hidden>New output — jump to latest</button></div>
     <div class="terminal-caption"><span data-terminal-status>live · connecting</span><span data-terminal-reconnect hidden><button data-reconnect>reconnect</button><button data-takeover>take over</button></span></div>
     <div class="terminal-error" aria-live="polite"></div></div>`;
 }
@@ -708,6 +711,8 @@ function liveTerminalStatus(current, reason) {
     current.imageStatus = "";
     current.imageStatusTimer = null;
     status.textContent = `${reason} · ${current.term.cols}×${current.term.rows}`;
+    current.root.querySelector("[data-terminal-reason]").textContent = /already has an attached client/.test(reason)
+      ? "This pane is open live in another view" : reason;
     actions.hidden = false;
     current.root.querySelector(".terminal-disconnected").hidden = false;
   }
@@ -756,6 +761,8 @@ function openLiveStream(current, takeover = false) {
     try { current.session = JSON.parse(event.data).session; } catch (e) { return liveTerminalClosed(current, "Invalid terminal session"); }
     liveTerminalStatus(current, null);
     flushTerminalInput(current);
+    const active = document.activeElement;
+    if (!active || active === document.body || active.matches(".tab2, [data-pane-pick], .herdr-tab, .herdr-agent, [data-mode]")) current.term.focus();
   });
   stream.addEventListener("frame", event => {
     if (terminal !== current || current.stream !== stream) return;
@@ -885,7 +892,7 @@ function mountTerminal(container, pane, panes, restore) {
   pre.onscroll = () => { if (terminal && terminal.root === root && terminal.pending !== null && terminalAtEnd(pre)) applyPending(); };
   root.querySelectorAll("[data-mode]").forEach(button => button.onclick = () => switchTerminalMode(terminal, button.dataset.mode, true));
   root.querySelector("[data-reconnect]").onclick = () => { if (terminal?.root !== root || !terminal.term) return; terminal.autoRetried = true; openLiveStream(terminal); terminal.term.focus(); };
-  root.querySelector("[data-takeover]").onclick = () => { if (terminal?.root !== root || !terminal.term) return; terminal.autoRetried = true; openLiveStream(terminal, true); terminal.term.focus(); };
+  root.querySelectorAll("[data-takeover]").forEach(button => button.onclick = () => { if (terminal?.root !== root || !terminal.term) return; terminal.autoRetried = true; openLiveStream(terminal, true); terminal.term.focus(); });
   mountTerminalFiles(terminal);
   switchTerminalMode(terminal, terminal.mode, old?.focus === "live");
   if (old?.focus && old.focus !== "live") root.querySelector(old.focus)?.focus();
