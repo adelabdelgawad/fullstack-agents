@@ -1539,7 +1539,7 @@ function render() {
   });
 }
 
-const freshGit = () => ({sig: "", at: 0, items: null, open: {unc: true, com: true}, item: null, files: null, file: null, diff: ""});
+const freshGit = () => ({sig: "", at: 0, items: null, open: {unc: true, com: true, other: false}, item: null, files: null, file: null, diff: ""});
 let openKey = null, openRun = null, showLog = false, tab2 = "info", bodyKind = "", logSeen = "", logTimer = null, wasLive = false;
 let git = {...freshGit(), hide1: false, hide2: false};
 const LIVE = r => r.state === "running" || r.state === "stalled";
@@ -1672,7 +1672,8 @@ function col1Html(c) {
   const it = git.items, unc = it ? it.dirty : c.tree ? c.tree.dirty : 0, n = it ? it.commits.length : 0;
   let h = '<div class="gh"><span class="gt">Changes</span><button class="dismiss" data-hide="1" title="Hide changes">Hide «</button></div><div class="gb">';
   h += `<button class="grp" data-g="unc">${git.open.unc ? "▾" : "▸"} Uncommitted changes <span class="badge">${unc}</span></button>`;
-  if (git.open.unc) h += unc ? `<button class="gi${git.item === "WORKTREE" ? " on" : ""}" data-ref="WORKTREE"><b>Working tree</b><span class="sub">${unc} file${unc === 1 ? "" : "s"} · not committed yet</span></button>` : '<div class="hint">Working tree is clean.</div>';
+  const own = it && typeof it.own === "number" ? ` · ${it.own} from this task, ${unc - it.own} other` : "";
+  if (git.open.unc) h += unc ? `<button class="gi${git.item === "WORKTREE" ? " on" : ""}" data-ref="WORKTREE"><b>Working tree</b><span class="sub">${unc} file${unc === 1 ? "" : "s"} · not committed yet${own}</span></button>` : '<div class="hint">Working tree is clean.</div>';
   h += `<button class="grp" data-g="com">${git.open.com ? "▾" : "▸"} ${it && it.recent ? "Recent commits" : "Commits ahead of main"} <span class="badge">${n}</span></button>`;
   if (git.open.com) h += !it ? '<div class="hint">Loading…</div>' : n ? it.commits.map(m => `<button class="gi${git.item === m.sha ? " on" : ""}" data-ref="${esc(m.sha)}"><span class="sha">${esc(m.sha)}</span>${esc(m.subject)}<span class="sub">${ago(m.at)} ago</span></button>`).join("") : '<div class="hint">No commits.</div>';
   return h + "</div>";
@@ -1684,10 +1685,18 @@ function col2Html() {
   if (!git.item) h += '<div class="hint">Pick a change on the left.</div>';
   else if (!git.files) h += '<div class="hint">Loading…</div>';
   else if (!git.files.length) h += '<div class="hint">No files.</div>';
-  else h += git.files.map(f => {
-    const i = f.path.lastIndexOf("/");
-    return `<button class="gf${git.file === f.path ? " on" : ""}" data-file="${esc(f.path)}"><span class="st st-${esc(stc(f.status))}">${esc(f.status)}</span><span class="fn">${esc(f.path.slice(i + 1))}</span><span class="fd">${esc(i < 0 ? "" : f.path.slice(0, i))}</span></button>`;
-  }).join("");
+  else {
+    const row = f => {
+      const i = f.path.lastIndexOf("/");
+      return `<button class="gf${git.file === f.path ? " on" : ""}" data-file="${esc(f.path)}"><span class="st st-${esc(stc(f.status))}">${esc(f.status)}</span><span class="fn">${esc(f.path.slice(i + 1))}</span><span class="fd">${esc(i < 0 ? "" : f.path.slice(0, i))}</span></button>`;
+    };
+    const scoped = git.files.some(f => "own" in f), mine = scoped ? git.files.filter(f => f.own) : git.files, rest = scoped ? git.files.filter(f => !f.own) : [];
+    h += mine.length ? mine.map(row).join("") : '<div class="hint">No uncommitted files from this task.</div>';
+    if (rest.length) {
+      h += `<button class="grp" data-g="other">${git.open.other ? "▾" : "▸"} Not from this task <span class="badge">${rest.length}</span></button>`;
+      if (git.open.other) h += rest.map(row).join("");
+    }
+  }
   return h + "</div>";
 }
 
@@ -1713,8 +1722,12 @@ function paintGit(c) {
 
 function matchedCardPane(c) {
   if (!herdrData) return null;
+  const owned = (state && state.session_panes) || {}, panes = herdrData.panes || [];
+  const ids = [...(c.now || []), ...(c.sessions || [])].map(x => owned[x.id]).filter(Boolean);
+  const byId = panes.find(p => ids.includes(p.pane_id));
+  if (byId) return byId;
   const names = [...(c.now || []).flatMap(x => [x.title, x.name]), ...(c.sessions || []).map(x => x.name)].filter(Boolean);
-  return (herdrData.panes || []).find(p => names.includes(p.title)) || null;
+  return panes.find(p => names.includes(p.title)) || null;
 }
 
 function paintCardTerminal(c) {
@@ -1789,7 +1802,8 @@ async function loadFiles(c) {
   try { git.files = await getJson(`/api/files?key=${enc(c.key)}&ref=${enc(ref)}`); } catch (e) { return; }
   if (git.item !== ref || openKey !== c.key) return;
   if (git.file && !git.files.some(f => f.path === git.file)) git.file = null;
-  if (!git.file && git.files.length) return pickFile(c, git.files[0].path);
+  const first = git.files.find(f => f.own !== false);
+  if (!git.file && first) return pickFile(c, first.path);
   paintGit(c);
   if (git.file) loadGitDiff(c);
 }

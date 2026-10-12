@@ -630,6 +630,11 @@ def status_files(root):
     return out
 
 
+def scoped_files(repo, root, scope, files):
+    own = card_scope(repo, root, scope, files)
+    return sorted(({**f, "own": f["path"] in own} for f in files), key=lambda f: not f["own"])
+
+
 def commit_files(root, sha):
     out = []
     for line in (git(root, "show", "--name-status", "--format=", "-M", sha) or "").splitlines()[:MAX_FILES]:
@@ -697,6 +702,9 @@ def read_allow(runs, rid):
 
 LEAD_EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 OUTSIDE_CACHE = {}
+EDIT_CACHE = {}
+SHELL_PREFIX = "\0bash:"
+SHELL_WRITE_RE = re.compile(r"(?<![0-9&])>>?\s*[^&\s>]|\btee\b|\bsed\s+-i|\bperl\s+-i|\.write\(|write_text\(|\b(?:mv|cp|rm|touch)\s")
 
 
 def session_transcript(projects, session):
@@ -706,11 +714,18 @@ def session_transcript(projects, session):
     return None
 
 
-def lead_edits(projects, session, root, window):
+def session_edits(projects, session):
     path = session_transcript(projects, session)
-    if not path or not window or not root:
-        return set()
-    out = set()
+    try:
+        size = path.stat().st_size if path else -1
+    except OSError:
+        size = -1
+    if size < 0:
+        return []
+    hit = EDIT_CACHE.get(path)
+    if hit and hit[0] == size:
+        return hit[1]
+    out = []
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             if '"tool_use"' not in line:
@@ -719,14 +734,46 @@ def lead_edits(projects, session, root, window):
                 d = json.loads(line)
             except ValueError:
                 continue
-            if d.get("type") != "assistant" or not window[0] <= iso_epoch(d.get("timestamp") or "") <= window[1]:
+            if d.get("type") != "assistant":
                 continue
+            at = iso_epoch(d.get("timestamp") or "")
             for b in (d.get("message") or {}).get("content") or []:
-                if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") in LEAD_EDIT_TOOLS:
+                if not isinstance(b, dict) or b.get("type") != "tool_use":
+                    continue
+                if b.get("name") in LEAD_EDIT_TOOLS:
                     target = (b.get("input") or {}).get("file_path") or (b.get("input") or {}).get("notebook_path") or ""
-                    if target.startswith(root + "/"):
-                        out.add(target[len(root) + 1:])
+                    if target:
+                        out.append((at, target))
+                elif b.get("name") == "Bash":
+                    cmd = str((b.get("input") or {}).get("command") or "")
+                    if SHELL_WRITE_RE.search(cmd):
+                        out.append((at, SHELL_PREFIX + cmd))
+    EDIT_CACHE[path] = (size, out)
     return out
+
+
+def under(root, targets):
+    return {t[len(root) + 1:] for t in targets if t.startswith(root + "/")}
+
+
+def lead_edits(projects, session, root, window):
+    if not window or not root:
+        return set()
+    return under(root, (t for at, t in session_edits(projects, session) if window[0] <= at <= window[1]))
+
+
+def card_scope(repo, root, scope, files):
+    own, shell = set(), []
+    for rid in scope["runs"]:
+        own |= read_allow(repo.runs, rid) or set(touched_paths(repo.runs, rid) or [])
+        brief = (load_json(repo.runs / f"{rid}.meta.json") or {}).get("brief", "")
+        own |= under(root, [brief])
+    for sid in scope["sessions"]:
+        edits = [t for _, t in session_edits(repo.projects, sid)]
+        own |= under(root, edits)
+        shell += [t[len(SHELL_PREFIX):] for t in edits if t.startswith(SHELL_PREFIX)]
+    named = lambda p, cmd: p in cmd or root in cmd and p.rsplit("/", 1)[-1] in cmd
+    return own | {f["path"] for f in files if any(named(f["path"], cmd) for cmd in shell)}
 
 
 def claimed_paths(runs, rid, meta, projects):
@@ -1313,9 +1360,11 @@ def build_state(repo, gc):
             key = own
         groups.setdefault(key, {"runs": [], "sessions": []})["sessions"].append(s)
 
-    cards = []
+    cards, scopes = [], {}
     for key, g in groups.items():
         tree = gc.detail(key) if key in trees else None
+        if tree and (g["sessions"] or g["runs"]):
+            scopes[key] = {"sessions": [s["id"] for s in g["sessions"]], "runs": [r["id"] for r in g["runs"]]}
         latest_run = g["runs"][-1] if g["runs"] else None
         owner = by_id.get((latest_run or {}).get("session")) \
             or max(g["sessions"], key=lambda s: (s["named"], s["updated"]), default=None)
@@ -1372,9 +1421,26 @@ def build_state(repo, gc):
         "waiting": attention("waiting"), "still_open": attention("still_open"),
         "_sources": output_sources(sessions),
         "_docs": {s["id"]: {d["path"] for d in s["docs"]} for s in sessions},
+        "_scopes": scopes,
+        "session_panes": session_panes(repo),
         "abandoned": sorted(old, key=lambda r: -r["updated"])[:30],
         "locks": board.get("locks") or {}, "events": (board.get("events") or [])[-12:],
     }
+
+
+def session_panes(repo):
+    out = {}
+    for base in repo.projects:
+        for f in (base.parent / "sessions").glob("*.json"):
+            sid = (load_json(f) or {}).get("sessionId")
+            try:
+                env = Path(f"/proc/{f.stem}/environ").read_bytes().split(b"\0")
+            except OSError:
+                continue
+            pane = next((e[len(b"HERDR_PANE_ID="):].decode() for e in env if e.startswith(b"HERDR_PANE_ID=")), "")
+            if sid and pane:
+                out[sid] = pane
+    return out
 
 
 def output_sources(sessions):
@@ -1391,7 +1457,7 @@ class Server(http.server.ThreadingHTTPServer):
     def __init__(self, addr, repo, token):
         super().__init__(addr, Handler)
         self.repo, self.token, self.gc = repo, token, GitCache(repo)
-        self.lock, self.cached, self.cached_at, self.sources, self.docs = threading.Lock(), None, 0.0, {}, {}
+        self.lock, self.cached, self.cached_at, self.sources, self.docs, self.scopes = threading.Lock(), None, 0.0, {}, {}, {}
         self.herdr_lock, self.herdr_cached, self.herdr_cached_at = threading.Lock(), None, 0.0
         self.herdr_live_lock, self.herdr_live = threading.Lock(), {}
 
@@ -1399,7 +1465,7 @@ class Server(http.server.ThreadingHTTPServer):
         with self.lock:
             if time.time() - self.cached_at > STATE_TTL_S:
                 st = build_state(self.repo, self.gc)
-                self.sources, self.docs = st.pop("_sources"), st.pop("_docs")
+                self.sources, self.docs, self.scopes = st.pop("_sources"), st.pop("_docs"), st.pop("_scopes")
                 self.cached = json.dumps(st).encode()
                 self.cached_at = time.time()
             return self.cached
@@ -1712,12 +1778,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             key = (q.get("key") or [""])[0]
             if key not in set(self.server.gc.worktrees(time.time())) | {str(self.server.repo.root)}:
                 return self.send(404, b"unknown worktree", "text/plain")
+            scope = self.server.scopes.get(key)
             if url.path == "/api/changes":
-                return self.send(200, json.dumps(change_items(key, self.server.repo.main)).encode())
+                items = change_items(key, self.server.repo.main)
+                if scope:
+                    items["own"] = sum(f["own"] for f in scoped_files(self.server.repo, key, scope, status_files(key)))
+                return self.send(200, json.dumps(items).encode())
             ref = (q.get("ref") or [""])[0]
             if ref != WORKTREE_REF and not SHA_RE.match(ref):
                 return self.send(400, b"bad ref", "text/plain")
             files = status_files(key) if ref == WORKTREE_REF else commit_files(key, ref)
+            if ref == WORKTREE_REF and scope:
+                files = scoped_files(self.server.repo, key, scope, files)
             if url.path == "/api/files":
                 return self.send(200, json.dumps(files).encode())
             path = (q.get("path") or [""])[0]
@@ -1882,7 +1954,7 @@ def main():
 
     if args.cmd == "state":
         st = build_state(repo, GitCache(repo))
-        st.pop("_sources"), st.pop("_docs")
+        st.pop("_sources"), st.pop("_docs"), st.pop("_scopes")
         print(json.dumps(st, indent=1))
     elif args.cmd == "serve":
         srv = Server((args.host, args.port), repo, token)
