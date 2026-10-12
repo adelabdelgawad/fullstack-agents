@@ -646,12 +646,21 @@ def commit_files(root, sha):
 
 def change_items(root, main):
     ahead = int((git(root, "rev-list", "--count", f"{main}..HEAD") or "0").strip() or 0)
-    args = ["log", "--no-color", "--format=%h\t%s\t%at", "-n", "60"] + ([f"{main}..HEAD"] if ahead else [])
+    own = set() if ahead else branch_subjects(root)
+    args = ["log", "--no-color", "--format=%h\t%s\t%at", "-n", "60" if ahead else "1000"] + ([f"{main}..HEAD"] if ahead else [])
     commits = []
-    for line in (git(root, *args) or "").splitlines():
+    for line in (git(root, *args) or "").splitlines() if ahead or own else []:
         sha, subject, at = (line.split("\t") + ["", "0"])[:3]
-        commits.append({"sha": sha, "subject": subject, "at": int(at or 0)})
-    return {"ahead": ahead, "recent": not ahead, "dirty": len(status_files(root)), "commits": commits}
+        if ahead or subject in own:
+            own.discard(subject)
+            commits.append({"sha": sha, "subject": subject, "at": int(at or 0)})
+    return {"ahead": ahead, "recent": not ahead, "dirty": len(status_files(root)), "commits": commits[:60]}
+
+
+def branch_subjects(root):
+    branch = (git(root, "symbolic-ref", "--short", "-q", "HEAD") or "").strip()
+    log = git(root, "reflog", "show", "--format=%gs", f"refs/heads/{branch}") if branch else ""
+    return {m.group(1) for m in map(BRANCH_COMMIT_RE.match, (log or "").splitlines()) if m}
 
 
 def ref_diff(root, ref, path):
@@ -703,6 +712,7 @@ def read_allow(runs, rid):
 LEAD_EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 OUTSIDE_CACHE = {}
 EDIT_CACHE = {}
+BRANCH_COMMIT_RE = re.compile(r"^(?:commit(?: \(amend\)| \(initial\))?|cherry-pick): (.*)$")
 SHELL_PREFIX = "\0bash:"
 SHELL_WRITE_RE = re.compile(r"(?<![0-9&])>>?\s*[^&\s>]|\btee\b|\bsed\s+-i|\bperl\s+-i|\.write\(|write_text\(|\b(?:mv|cp|rm|touch)\s")
 

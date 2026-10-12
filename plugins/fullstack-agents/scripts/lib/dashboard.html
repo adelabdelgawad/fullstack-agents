@@ -1674,8 +1674,8 @@ function col1Html(c) {
   h += `<button class="grp" data-g="unc">${git.open.unc ? "▾" : "▸"} Uncommitted changes <span class="badge">${unc}</span></button>`;
   const own = it && typeof it.own === "number" ? ` · ${it.own} from this task, ${unc - it.own} other` : "";
   if (git.open.unc) h += unc ? `<button class="gi${git.item === "WORKTREE" ? " on" : ""}" data-ref="WORKTREE"><b>Working tree</b><span class="sub">${unc} file${unc === 1 ? "" : "s"} · not committed yet${own}</span></button>` : '<div class="hint">Working tree is clean.</div>';
-  h += `<button class="grp" data-g="com">${git.open.com ? "▾" : "▸"} ${it && it.recent ? "Recent commits" : "Commits ahead of main"} <span class="badge">${n}</span></button>`;
-  if (git.open.com) h += !it ? '<div class="hint">Loading…</div>' : n ? it.commits.map(m => `<button class="gi${git.item === m.sha ? " on" : ""}" data-ref="${esc(m.sha)}"><span class="sha">${esc(m.sha)}</span>${esc(m.subject)}<span class="sub">${ago(m.at)} ago</span></button>`).join("") : '<div class="hint">No commits.</div>';
+  h += `<button class="grp" data-g="com">${git.open.com ? "▾" : "▸"} ${it && it.recent ? "This task's commits" : "Commits ahead of main"} <span class="badge">${n}</span></button>`;
+  if (git.open.com) h += !it ? '<div class="hint">Loading…</div>' : n ? it.commits.map(m => `<button class="gi${git.item === m.sha ? " on" : ""}" data-ref="${esc(m.sha)}"><span class="sha">${esc(m.sha)}</span>${esc(m.subject)}<span class="sub">${ago(m.at)} ago</span></button>`).join("") : `<div class="hint">${it.recent ? "No commits from this task." : "No commits."}</div>`;
   return h + "</div>";
 }
 
