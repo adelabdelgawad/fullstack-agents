@@ -116,6 +116,10 @@ main { padding: 0; }
 .said-full .mdh { font-weight: 600; margin-top: 8px; }
 .said-full .mdgap { height: 6px; }
 .said-full code { font: 12px var(--mono); }
+.docs { max-height: 152px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.doc { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 4px 8px; min-height: 30px; border-bottom: 1px solid var(--line); }
+.doc:last-child { border-bottom: 0; }
+.doc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; min-width: 0; }
 .said-full { font-size: 13px; line-height: 1.45; margin: 0; max-height: 60vh; overflow: auto; overflow-wrap: anywhere; border-left: 2px solid var(--line); padding-left: 8px; }
 .mono { font: 12px ui-monospace, monospace; user-select: all; word-break: break-all; }
 .empty { color: var(--muted); padding: 20px 0; }
@@ -434,8 +438,48 @@ function mdHtml(text) {
 function saidHtml(s) {
   const text = s.said_full || s.said;
   if (!text) return "";
-  return `<div class="now"><div><b>${esc(s.name)}</b>${s.said_at ? ` <span class="s">sent ${ago(s.said_at)} ago</span>` : ""}</div><div class="said-full">${mdHtml(text)}</div></div>`;
+  return `<div class="now"><div><b>${esc(s.name)}</b>${s.said_at ? ` <span class="s">sent ${ago(s.said_at)} ago</span>` : ""}</div><div class="said-full">${mdHtml(text)}</div>${docsHtml(s)}</div>`;
 }
+
+const kb = n => n < 1024 ? `${n} B` : `${Math.round(n / 1024)} KB`;
+
+function docsHtml(s) {
+  const docs = s.docs || [];
+  if (!docs.length) return "";
+  return `<div class="lbl">Files in this message · ${docs.length}</div><div class="docs">${docs.map(d => `<div class="doc">
+    <span class="doc-name" title="${esc(d.path)}"><b>${esc(d.name)}</b> <span class="s">${esc(d.shown)} · ${kb(d.size)}</span></span>
+    <button class="dismiss" data-doc-sid="${esc(s.id)}" data-doc="${esc(d.path)}">Copy</button></div>`).join("")}</div>`;
+}
+
+async function copyDoc(btn) {
+  let ok = false;
+  try {
+    const r = await fetch(`/api/doc?sid=${enc(btn.dataset.docSid)}&path=${enc(btn.dataset.doc)}`);
+    if (r.ok) {
+      const text = await r.text();
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        ok = true;
+      } else {
+        const ta = Object.assign(document.createElement("textarea"), {value: text});
+        ta.style.cssText = "position:fixed;opacity:0;top:0";
+        document.body.appendChild(ta);
+        ta.select();
+        ok = document.execCommand("copy");
+        ta.remove();
+      }
+    }
+  } catch (err) {
+    ok = false;
+  }
+  btn.textContent = ok ? "Copied" : "Copy failed";
+  setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-doc]");
+  if (b) { e.stopPropagation(); copyDoc(b); }
+});
 
 function resumeHtml(s) {
   const cmd = s.title ? `claude --resume "${s.title}"` : `claude --resume ${s.id}`;

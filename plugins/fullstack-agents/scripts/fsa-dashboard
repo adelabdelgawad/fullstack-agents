@@ -50,6 +50,9 @@ PASTED_RE = re.compile(r"</?pasted_content[^>]*>")
 CONTROL_COMMANDS = {"/clear", "/compact", "/model", "/resume", "/exit", "/rename", "/config", "/status", "/cost", "/context",
                     "/help", "/login", "/logout", "/memory", "/permissions", "/plugin", "/mcp", "/hooks", "/theme", "/usage"}
 SAID_MAX = 20000
+MD_PATH_RE = re.compile(r"(?<![\w/.:~-])((?:~|\.{1,2})?/?[\w.-]+(?:/[\w.-]+)*\.md)(?![\w/])")
+DOCS_MAX = 30
+DOC_BYTES = 2_000_000
 PHASES = ("investigate", "plan", "audit", "review")
 NOTE_RE = re.compile(r"<task-id>([\w-]+)</task-id>.*?<status>(\w+)</status>")
 SOURCE_ID_RE = re.compile(r"^[\w-]{1,80}$")
@@ -776,7 +779,7 @@ def read_session(path, now, wt_re, names, waits):
         "briefs": sorted(briefs), "chips": chips,
         "ask": snippet(ask, 600), "need": need, "action": action, "action_at": iso_epoch(action_at),
         "action_running": state == "working" and bool(action_id) and action_id not in answered, "said_at": iso_epoch(said_at),
-        "said": snippet(text, 600), "said_full": text[-SAID_MAX:],
+        "said": snippet(text, 600), "said_full": text[-SAID_MAX:], "docs": message_docs(text, cwd),
     }
 
 
@@ -801,6 +804,34 @@ def collect_sessions(repo, trees, now, names, waits):
                     if Path(s["cwd"]) != repo.root and s["cwd"] in trees:
                         s["worktree"] = s["cwd"]
                     out.append(s)
+    return out
+
+
+def repo_top(cwd):
+    for d in [Path(cwd), *Path(cwd).parents] if cwd else []:
+        if (d / ".git").exists():
+            return d
+    return None
+
+
+def message_docs(text, cwd):
+    out, seen, top = [], set(), repo_top(cwd)
+    bases = list(dict.fromkeys(b for b in (Path(cwd) if cwd else None, top) if b))
+    for shown in dict.fromkeys(MD_PATH_RE.findall(text)):
+        raw = Path(shown).expanduser()
+        dirs = bases + ([Path(d["path"]).parent for d in out] if "/" not in shown else [])
+        for cand in [raw] if raw.is_absolute() else [b / raw for b in dict.fromkeys(dirs)]:
+            try:
+                real = cand.resolve()
+                if real.is_file():
+                    if real not in seen:
+                        seen.add(real)
+                        out.append({"name": real.name, "shown": shown, "path": str(real), "size": real.stat().st_size})
+                    break
+            except OSError:
+                continue
+        if len(out) >= DOCS_MAX:
+            break
     return out
 
 
@@ -957,7 +988,7 @@ def build_state(repo, gc):
         steps = [(board.get("steps") or {}).get(s["id"]) for s in g["sessions"]]
         card["steps"] = max([x for x in steps if isinstance(x, dict) and isinstance(x.get("items"), list)],
                             key=lambda x: x.get("at", ""), default={"items": []})["items"]
-        card["now"] = [{**{k: s[k] for k in ("id", "name", "title", "state", "updated", "ask", "need", "action", "action_at", "action_running", "said", "said_at", "said_full")},
+        card["now"] = [{**{k: s[k] for k in ("id", "name", "title", "state", "updated", "ask", "need", "action", "action_at", "action_running", "said", "said_at", "said_full", "docs")},
                         "agents": [{f: x[f] for f in ("id", "label", "state", "at")} for x in s["agents"]]}
                        for s in sorted(g["sessions"], key=lambda s: -s["updated"])]
         card["declared"] = max((declared[s["id"]] for s in g["sessions"] if s["id"] in declared),
@@ -995,6 +1026,7 @@ def build_state(repo, gc):
         "cards": sorted(cards, key=lambda c: -c["updated"]),
         "waiting": attention("waiting"), "still_open": attention("still_open"),
         "_sources": output_sources(sessions),
+        "_docs": {s["id"]: {d["path"] for d in s["docs"]} for s in sessions},
         "abandoned": sorted(old, key=lambda r: -r["updated"])[:30],
         "locks": board.get("locks") or {}, "events": (board.get("events") or [])[-12:],
     }
@@ -1014,13 +1046,13 @@ class Server(http.server.ThreadingHTTPServer):
     def __init__(self, addr, repo, token):
         super().__init__(addr, Handler)
         self.repo, self.token, self.gc = repo, token, GitCache(repo)
-        self.lock, self.cached, self.cached_at, self.sources = threading.Lock(), None, 0.0, {}
+        self.lock, self.cached, self.cached_at, self.sources, self.docs = threading.Lock(), None, 0.0, {}, {}
 
     def state(self):
         with self.lock:
             if time.time() - self.cached_at > STATE_TTL_S:
                 st = build_state(self.repo, self.gc)
-                self.sources = st.pop("_sources")
+                self.sources, self.docs = st.pop("_sources"), st.pop("_docs")
                 self.cached = json.dumps(st).encode()
                 self.cached_at = time.time()
             return self.cached
@@ -1075,6 +1107,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not path:
                 return self.send(404, b"unknown subagent", "text/plain")
             return self.send(200, render_transcript(path).encode(), "text/plain; charset=utf-8")
+        if url.path == "/api/doc":
+            sid, path = ((q.get(k) or [""])[0] for k in ("sid", "path"))
+            self.server.state()
+            if path not in self.server.docs.get(sid, ()):
+                return self.send(404, b"not a file named in that session's last message", "text/plain")
+            try:
+                with open(path, "rb") as fh:
+                    data = fh.read(DOC_BYTES)
+            except OSError:
+                return self.send(404, b"file unreadable", "text/plain")
+            return self.send(200, data, "text/plain; charset=utf-8")
         if url.path in ("/api/changes", "/api/files", "/api/diff"):
             key = (q.get("key") or [""])[0]
             if key not in set(self.server.gc.worktrees(time.time())) | {str(self.server.repo.root)}:
@@ -1177,7 +1220,7 @@ def main():
 
     if args.cmd == "state":
         st = build_state(repo, GitCache(repo))
-        st.pop("_sources")
+        st.pop("_sources"), st.pop("_docs")
         print(json.dumps(st, indent=1))
     elif args.cmd == "serve":
         srv = Server((args.host, args.port), repo, token)
