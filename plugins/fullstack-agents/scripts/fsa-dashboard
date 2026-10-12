@@ -635,6 +635,15 @@ def scoped_files(repo, root, scope, files):
     return sorted(({**f, "own": f["path"] in own} for f in files), key=lambda f: not f["own"])
 
 
+def own_count(repo, root, scope, now):
+    hit = OWN_CACHE.get(root)
+    if hit and now - hit[0] < GIT_TTL_S and hit[1] == scope:
+        return hit[2]
+    n = sum(f["own"] for f in scoped_files(repo, root, scope, status_files(root)))
+    OWN_CACHE[root] = (now, scope, n)
+    return n
+
+
 def commit_files(root, sha):
     out = []
     for line in (git(root, "show", "--name-status", "--format=", "-M", sha) or "").splitlines()[:MAX_FILES]:
@@ -712,6 +721,7 @@ def read_allow(runs, rid):
 LEAD_EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 OUTSIDE_CACHE = {}
 EDIT_CACHE = {}
+OWN_CACHE = {}
 BRANCH_COMMIT_RE = re.compile(r"^(?:commit(?: \(amend\)| \(initial\))?|cherry-pick): (.*)$")
 SHELL_PREFIX = "\0bash:"
 SHELL_WRITE_RE = re.compile(r"(?<![0-9&])>>?\s*[^&\s>]|\btee\b|\bsed\s+-i|\bperl\s+-i|\.write\(|write_text\(|\b(?:mv|cp|rm|touch)\s")
@@ -1375,6 +1385,7 @@ def build_state(repo, gc):
         tree = gc.detail(key) if key in trees else None
         if tree and (g["sessions"] or g["runs"]):
             scopes[key] = {"sessions": [s["id"] for s in g["sessions"]], "runs": [r["id"] for r in g["runs"]]}
+            tree = {**tree, "own": own_count(repo, key, scopes[key], now)}
         latest_run = g["runs"][-1] if g["runs"] else None
         owner = by_id.get((latest_run or {}).get("session")) \
             or max(g["sessions"], key=lambda s: (s["named"], s["updated"]), default=None)

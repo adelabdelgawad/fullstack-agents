@@ -1289,6 +1289,7 @@ async function dismiss(key, ev) {
   load();
 }
 
+const gitBadge = c => !c.tree ? 0 : typeof c.tree.own === "number" ? c.tree.own : c.tree.dirty;
 const rank = c => c.sessions.some(s => s.state === "working") || c.runs.some(r => r.state === "running") ? 0 : needsHuman(c) ? 1 : QUIET.has(c.phase) ? 3 : 2;
 
 const needsHuman = c => c.phase === "review" || c.needs_you.length > 0 || c.sessions.some(s => s.state === "waiting");
@@ -1355,7 +1356,7 @@ function cardHtml(c) {
     c.steps.length ? `<span class="chip" title="steps the lead listed">${stepsDone(c)}/${c.steps.length} steps</span>` : "",
     c.round > 1 ? `<span class="chip">round ${c.round}</span>` : "",
     ...c.needs_you.slice(1).map(f => `<span class="chip bad">${esc(FLAG_TEXT[f] || f)}</span>`),
-    c.tree && c.tree.dirty ? `<span class="chip">${c.tree.dirty} uncommitted</span>` : "",
+    gitBadge(c) ? `<span class="chip">${gitBadge(c)} uncommitted</span>` : "",
   ].join("");
   const paths = c.outside && c.outside.length ? `<div class="paths">${c.outside.slice(0, 4).map(esc).join("<br>")}${c.outside.length > 4 ? `<br>+${c.outside.length - 4} more` : ""}</div>` : "";
   const sid = ((c.now || [])[0] || c.sessions[0] || {}).id || "";
@@ -1580,10 +1581,10 @@ function ensureBody(kind, html, onNew) {
 const paneHead = c => `<button class="dismiss close" id="close">Close</button>
   <h3>${esc(c.title)}</h3>
   ${c.tree ? `<div style="font:12px ui-monospace,monospace;color:var(--blue)">${esc(c.tree.branch)}</div>` : ""}
-  <div class="s">${esc(c.phase)}${c.tree ? ` · ${c.tree.ahead} ahead · ${c.tree.dirty} uncommitted` : ""}</div>`;
+  <div class="s">${esc(c.phase)}${c.tree ? ` · ${c.tree.ahead} ahead · ${gitBadge(c)} uncommitted` : ""}</div>`;
 
 const tabsHtml = c => `<button class="tab2" role="tab" data-t="info" aria-selected="${tab2 === "info"}">Information</button>
-  <button class="tab2" role="tab" data-t="git" aria-selected="${tab2 === "git"}" ${c.tree ? "" : "disabled"}>Git changes${c.tree && c.tree.dirty ? ` <span class="badge">${c.tree.dirty}</span>` : ""}</button>
+  <button class="tab2" role="tab" data-t="git" aria-selected="${tab2 === "git"}" ${c.tree ? "" : "disabled"}>Git changes${gitBadge(c) ? ` <span class="badge">${gitBadge(c)}</span>` : ""}</button>
   <button class="tab2" role="tab" data-t="terminal" aria-selected="${tab2 === "terminal"}">Terminal</button>`;
 
 function detailHtml(r) {
