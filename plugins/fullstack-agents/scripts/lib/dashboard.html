@@ -245,13 +245,25 @@ html.herdr-page .herdr-view { height: 100%; }
 #card-terminal { flex: 1; overflow: hidden; padding: 1lh 1ch; }
 .terminal { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .terminal-head { flex: none; height: 1lh; display: flex; align-items: center; gap: 1ch; padding: 0 1ch; background: var(--herdr-panel-bg); }
-.herdr-tabs { position: relative; flex: none; min-width: 0; height: 1lh; display: flex; align-items: center; gap: 1ch; overflow: hidden; background: var(--herdr-panel-bg); }
-.herdr-tab { flex: none; min-width: 8ch; height: 1lh; border: 0; border-radius: 0; padding: 0 2ch; background: var(--herdr-surface0); color: var(--herdr-overlay0); font: inherit; text-align: center; cursor: pointer; }
-.herdr-tab[aria-selected="true"] { background: var(--herdr-accent); color: var(--herdr-panel-bg); }
-.herdr-tabs-overflow { position: absolute; top: 0; right: 0; width: 2ch; height: 1lh; display: flex; align-items: center; justify-content: flex-end; background: var(--herdr-panel-bg); color: var(--herdr-overlay0); }
-.herdr-tabs-overflow[hidden] { display: none; }
-.herdr-tab-new { flex: none; height: 1lh; border: 0; border-radius: 0; padding: 0 1ch; background: transparent; color: var(--herdr-overlay1); font: inherit; cursor: pointer; }
-.herdr-tab-new:hover, .herdr-tab-new:focus-visible { color: var(--herdr-accent); }
+.herdr-tabs { --strip: color-mix(in srgb, var(--herdr-panel-bg) 72%, #000); flex: none; min-width: 0; display: flex; align-items: flex-end; gap: 0; padding: 6px 8px 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; background: var(--strip); font: 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.herdr-tabs::-webkit-scrollbar { display: none; }
+.herdr-tab { position: relative; flex: 0 1 220px; min-width: 56px; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-radius: 8px 8px 0 0; color: var(--herdr-overlay1); cursor: pointer; user-select: none; outline: none; }
+.herdr-tab:not([aria-selected="true"]):hover { background: color-mix(in srgb, var(--herdr-panel-bg) 55%, var(--strip)); color: var(--herdr-text); }
+.herdr-tab[aria-selected="true"] { z-index: 1; background: var(--herdr-panel-bg); color: var(--herdr-text); }
+.herdr-tab[aria-selected="true"]::before, .herdr-tab[aria-selected="true"]::after { content: ""; position: absolute; bottom: 0; width: 8px; height: 8px; pointer-events: none; }
+.herdr-tab[aria-selected="true"]::before { left: -8px; background: radial-gradient(circle at 0 0, transparent 8px, var(--herdr-panel-bg) 8.5px); }
+.herdr-tab[aria-selected="true"]::after { right: -8px; background: radial-gradient(circle at 100% 0, transparent 8px, var(--herdr-panel-bg) 8.5px); }
+.herdr-tab:not([aria-selected="true"]) + .herdr-tab:not([aria-selected="true"]) .herdr-tab-sep { position: absolute; left: 0; top: 9px; bottom: 9px; width: 1px; background: var(--herdr-overlay0); opacity: .45; }
+.herdr-tab:hover .herdr-tab-sep, .herdr-tab:hover + .herdr-tab .herdr-tab-sep { opacity: 0 !important; }
+.herdr-tab:focus-visible { box-shadow: inset 0 0 0 2px var(--herdr-accent); }
+.herdr-tab[aria-disabled="true"] { opacity: .5; cursor: default; }
+.herdr-tab .herdr-status { flex: none; width: 10px; text-align: center; font-size: 11px; }
+.herdr-tab-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); }
+.herdr-tab-close { flex: none; width: 18px; height: 18px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: inherit; font: 14px/1 system-ui, sans-serif; cursor: pointer; visibility: hidden; padding: 0; }
+.herdr-tab:hover .herdr-tab-close, .herdr-tab[aria-selected="true"] .herdr-tab-close, .herdr-tab-close:focus-visible { visibility: visible; }
+.herdr-tab-close:hover { background: color-mix(in srgb, var(--herdr-text) 18%, transparent); }
+.herdr-tab-new { flex: none; align-self: center; width: 28px; height: 28px; margin: 0 0 2px 4px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--herdr-overlay1); font: 18px/1 system-ui, sans-serif; cursor: pointer; }
+.herdr-tab-new:hover, .herdr-tab-new:focus-visible { background: color-mix(in srgb, var(--herdr-text) 14%, transparent); color: var(--herdr-text); }
 .terminal-source { display: flex; gap: 1ch; margin-left: auto; white-space: nowrap; }
 .terminal-head .chip { display: none; }
 .terminal button:not(.herdr-tab), .terminal select { border: 0; border-radius: 0; background: transparent; color: var(--herdr-overlay1); padding: 0; font: inherit; cursor: pointer; }
@@ -1147,26 +1159,23 @@ function herdrSidebarHtml(data, panes, selectedPane) {
 function herdrTabsHtml(data, panes, selectedPane) {
   const pane = panes.find(item => item.pane_id === selectedPane);
   const tabs = (data.tabs || []).filter(tab => pane && tab.workspace_id === pane.workspace_id).map(tab => {
-    const first = panes.find(item => item.tab_id === tab.tab_id);
-    return `<button class="herdr-tab" role="tab" data-herdr-pane="${esc((first || {}).pane_id || "")}" data-herdr-context="tab" data-herdr-tab-id="${esc(tab.tab_id)}" aria-selected="${tab.tab_id === pane.tab_id}" ${first ? "" : "disabled"}>${esc(tab.label || `Tab ${tab.number}`)}</button>`;
+    const members = panes.filter(item => item.tab_id === tab.tab_id), first = members[0], label = tab.label || `Tab ${tab.number}`;
+    const selected = tab.tab_id === pane.tab_id;
+    return `<div class="herdr-tab" role="tab" tabindex="${selected ? 0 : -1}" title="${esc(label)}" data-herdr-pane="${esc((first || {}).pane_id || "")}" data-herdr-context="tab" data-herdr-tab-id="${esc(tab.tab_id)}" aria-selected="${selected}" ${first ? "" : 'aria-disabled="true"'}><span class="herdr-tab-sep" aria-hidden="true"></span>${statusHtml(workspaceStatus(members))}<span class="herdr-tab-title">${esc(label)}</span><button class="herdr-tab-close" data-herdr-close-tab="${esc(tab.tab_id)}" tabindex="-1" aria-label="Close ${esc(label)}" title="Close tab">×</button></div>`;
   }).join("");
   const add = pane ? `<button class="herdr-tab-new" data-herdr-new-tab="${esc(pane.workspace_id)}" aria-label="New tab" title="New tab">+</button>` : "";
-  return `<div class="herdr-tabs" role="tablist" aria-label="Workspace tabs">${tabs}${add}<span class="herdr-tabs-overflow" aria-hidden="true" hidden>…</span></div>`;
+  return `<div class="herdr-tabs" role="tablist" aria-label="Workspace tabs">${tabs}${add}</div>`;
 }
 
 function updateHerdrTabOverflow(root) {
-  const tabs = root.querySelector(".herdr-tabs");
-  if (!tabs) return;
-  const buttons = [...tabs.querySelectorAll(".herdr-tab")], overflow = tabs.querySelector(".herdr-tabs-overflow");
-  buttons.forEach(button => button.hidden = false);
-  overflow.hidden = true;
-  if (tabs.scrollWidth <= tabs.clientWidth) return;
-  overflow.hidden = false;
-  const cutoff = tabs.clientWidth - overflow.offsetWidth - (tabs.querySelector(".herdr-tab-new")?.offsetWidth || 0);
-  let clipped = false;
-  buttons.forEach(button => {
-    if (clipped || button.offsetLeft + button.offsetWidth > cutoff) button.hidden = clipped = true;
-  });
+  root.querySelector('.herdr-tab[aria-selected="true"]')?.scrollIntoView({block: "nearest", inline: "nearest"});
+}
+
+function closeHerdrTab(tabId, returnFocus) {
+  const tab = (herdrData.tabs || []).find(x => x.tab_id === tabId);
+  if (!tab) return;
+  const count = (herdrData.panes || []).filter(x => x.tab_id === tabId).length;
+  openHerdrConfirm("Close tab?", `${tab.label || `Tab ${tab.number}`} — ${count} ${count === 1 ? "pane" : "panes"}`, "tab.close", {tab_id: tabId}, returnFocus);
 }
 
 function applyHerdrSidebarRatio(root) {
@@ -1205,6 +1214,21 @@ function wireHerdrPicks(root) {
     renderHerdrPage();
   });
   root.querySelector('[data-herdr-action="workspace.create"]')?.addEventListener("click", event => herdrAction("workspace.create"));
+  root.querySelectorAll("[data-herdr-close-tab]").forEach(button => button.onclick = event => {
+    event.stopPropagation();
+    closeHerdrTab(button.dataset.herdrCloseTab, button.closest(".herdr-tab"));
+  });
+  root.querySelectorAll(".herdr-tab").forEach(tab => {
+    tab.onauxclick = event => { if (event.button === 1) { event.preventDefault(); closeHerdrTab(tab.dataset.herdrTabId, tab); } };
+    tab.onmousedown = event => { if (event.button === 1) event.preventDefault(); };
+    tab.onkeydown = event => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); tab.click(); return; }
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      const all = [...root.querySelectorAll(".herdr-tab")], next = all[(all.indexOf(tab) + (event.key === "ArrowRight" ? 1 : all.length - 1)) % all.length];
+      event.preventDefault();
+      next?.focus();
+    };
+  });
   root.querySelectorAll("[data-herdr-new-tab]").forEach(button => button.onclick = () => {
     const workspace = button.dataset.herdrNewTab, number = (herdrData.tabs || []).filter(x => x.workspace_id === workspace).length + 1;
     openHerdrPrompt("new tab", String(number), "tab.create", {workspace_id: workspace}, button);
