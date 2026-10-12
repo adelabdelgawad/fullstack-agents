@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read-only board of a repository's agent sessions, implementer runs and worktrees; no model runs here."""
 import argparse
+import hashlib
 import http.server
 import json
 import os
@@ -105,7 +106,7 @@ def read_herdr_snapshot():
 def herdr_screen(pane, source):
     args = ["pane", "read", pane, "--source", source, "--format", "ansi"]
     if source == "recent":
-        args += ["--lines", "400"]
+        args += ["--lines", "1000"]
     result = run_herdr(*args)
     return result.stdout if result is not None and result.returncode == 0 else None
 
@@ -1182,7 +1183,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             screen = herdr_screen(pane, source)
             if screen is None:
                 return self.send(503, b"herdr is not running", "text/plain")
-            return self.send(200, screen, "text/plain; charset=utf-8")
+            screen_hash = hashlib.sha1(screen).hexdigest()
+            extra = {"X-Screen-Hash": screen_hash}
+            if (q.get("since") or [""])[0] == screen_hash:
+                return self.send(204, b"", "text/plain; charset=utf-8", extra)
+            return self.send(200, screen, "text/plain; charset=utf-8", extra)
         if url.path == "/api/log":
             rid = (q.get("id") or [""])[0]
             if not RUN_ID_RE.match(rid):
