@@ -11,6 +11,7 @@ import queue
 import re
 import secrets
 import select
+import shlex
 import shutil
 import socket
 import signal
@@ -312,6 +313,7 @@ def herdr_action_args(body, snapshot):
         "workspace.rename": ({"workspace_id", "label"}, set()),
         "workspace.close": ({"workspace_id"}, set()),
         "tab.create": ({"workspace_id"}, {"label"}),
+        "session.create": ({"workspace_id", "name"}, set()),
         "tab.rename": ({"tab_id", "label"}, set()),
         "tab.close": ({"tab_id"}, set()),
         "pane.rename": ({"pane_id", "label"}, set()),
@@ -369,6 +371,8 @@ def herdr_action_args(body, snapshot):
         if "label" in body:
             args.extend(("--label", herdr_label(body["label"])))
         return [*args, "--no-focus"], 5
+    if action == "session.create":
+        return ["tab", "create", "--workspace", checked_id("workspace_id"), "--label", herdr_label(body["name"]), "--no-focus"], 5
     if action.startswith("tab."):
         tab = checked_id("tab_id")
         if action == "tab.rename":
@@ -402,6 +406,14 @@ def herdr_action_args(body, snapshot):
         raise ValueError("bad agent kind")
     return ["agent", "start", herdr_label(body["name"]), "--kind", kind, "--pane", pane,
             "--timeout", "30000"], 40
+
+
+def start_claude_session(created, name):
+    pane = ((created or {}).get("root_pane") or {}).get("pane_id")
+    if not isinstance(pane, str) or not pane:
+        return None
+    typed = run_herdr("pane", "send-text", pane, f"cc {shlex.quote(name)}")
+    return run_herdr("pane", "send-keys", pane, "enter") if typed is not None and typed.returncode == 0 else typed
 
 
 def load_json(path):
@@ -1879,7 +1891,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except (ValueError, TypeError):
                 return self.send(400, b"bad request", "text/plain")
             result = run_herdr(*args, timeout=timeout)
-            self.server.invalidate_herdr()
             parsed = None
             if result is not None:
                 try:
@@ -1887,6 +1898,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     parsed = output_json.get("result") if isinstance(output_json, dict) else None
                 except (TypeError, ValueError):
                     pass
+            if body.get("action") == "session.create" and result is not None and result.returncode == 0:
+                result = start_claude_session(parsed, body["name"])
+            self.server.invalidate_herdr()
             if result is not None and result.returncode == 0:
                 reply = {"ok": True, "error": "", "result": parsed}
             else:

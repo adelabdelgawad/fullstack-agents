@@ -37,7 +37,9 @@ header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01e
 .status .lock { color: var(--changes); }
 .hright { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .favsw { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; padding: 2px 0; }
-.favsw[hidden] { display: none; }
+.favsw[hidden], .newsess[hidden] { display: none; }
+.newsess { border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--ink); font: inherit; font-size: 12px; padding: 3px 10px; cursor: pointer; }
+.newsess:hover { border-color: var(--ink); }
 .favsw:hover { color: var(--ink); }
 .favsw:focus-visible { outline: 2px solid var(--active); outline-offset: 2px; border-radius: 4px; }
 .favsw .track { position: relative; width: 28px; height: 16px; border-radius: 8px; background: var(--line); transition: background .15s; }
@@ -337,6 +339,7 @@ html.herdr-page .herdr-view { height: 100%; }
     <button class="viewtab" id="view-herdr" role="tab" data-view="herdr">Herdr</button>
   </div>
   <div class="hright">
+    <button class="newsess" id="newsess" title="Open a new herdr tab and start Claude in it">+ New session</button>
     <button class="favsw" id="favsw" role="switch" aria-checked="false"><span class="track" aria-hidden="true"></span>Favourites only</button>
     <div class="status" id="meta"><span class="dot"></span>loading…</div>
   </div>
@@ -1017,6 +1020,29 @@ function openHerdrConfirm(title, detail, action, params, returnFocus) {
   });
 }
 
+async function openNewSession(returnFocus) {
+  if (!herdrData) await loadHerdr();
+  const workspaces = herdrData.workspaces || [];
+  if (!herdrData.running || !workspaces.length) {
+    herdrModal('<form><h2>new session</h2><p class="herdr-modal-note">herdr is not running or has no spaces</p><div class="herdr-modal-actions"><button type="button" data-herdr-cancel>close</button></div></form>', returnFocus, () => closeHerdrOverlay());
+    return;
+  }
+  const focused = (herdrData.panes || []).find(x => x.pane_id === herdrData.focused_pane_id);
+  const current = (focused || {}).workspace_id || workspaces[0].workspace_id;
+  const options = workspaces.map(x => `<option value="${esc(x.workspace_id)}" ${x.workspace_id === current ? "selected" : ""}>${esc(x.label || x.workspace_id)}</option>`).join("");
+  const root = herdrModal(`<form><h2>new session</h2><label>name<input name="name" maxlength="80" autocomplete="off" required></label><label>space<select name="space">${options}</select></label><p class="herdr-modal-note">Opens a new tab in the space and runs cc '&lt;name&gt;'</p><div class="herdr-modal-error" aria-live="polite"></div><div class="herdr-modal-actions"><button type="button" data-herdr-cancel>cancel</button><button type="submit" class="primary">start</button></div></form>`, returnFocus, async form => {
+    const name = form.elements.name.value.trim();
+    if (!name || name.length > 80 || name.startsWith("-")) { setHerdrError('Name must be 1–80 characters and not start with "-"', root); return; }
+    const button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    button.textContent = "starting…";
+    const result = await herdrAction("session.create", {workspace_id: form.elements.space.value, name}, root);
+    button.disabled = false;
+    button.textContent = "start";
+    if (result.ok && herdrOverlay?.root === root) closeHerdrOverlay();
+  });
+}
+
 function openStartAgent(pane, returnFocus) {
   const kinds = herdrData.agent_kinds || [];
   const kind = kinds.includes("claude") ? "claude" : kinds[0] || "claude";
@@ -1265,7 +1291,7 @@ function setView(next) {
   document.documentElement.classList.toggle("herdr-page", view === "herdr");
   try { localStorage.setItem("fsa-view", view); } catch (e) {}
   document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === view)));
-  document.getElementById("favsw").hidden = view !== "agents";
+  document.getElementById("favsw").hidden = document.getElementById("newsess").hidden = view !== "agents";
   stopTerminal();
   closePanel();
   if (view === "herdr") renderHerdrPage(); else render();
@@ -1924,6 +1950,7 @@ function notify() {
 }
 
 
+document.getElementById("newsess").onclick = event => openNewSession(event.currentTarget);
 document.getElementById("favsw").onclick = () => {
   favOnly = !favOnly;
   try { localStorage.setItem("fsa-fav-only", favOnly ? "1" : "0"); } catch (e) {}
