@@ -783,7 +783,7 @@ function startLiveTerminal(current, restoreFocus = false) {
   current.fit = new window.FitAddon.FitAddon();
   current.term.loadAddon(current.fit);
   current.term.attachCustomKeyEventHandler(event => {
-    if (event.code !== "KeyE" || !event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return true;
+    if (event.code !== "KeyX" || !event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return true;
     event.preventDefault();
     if (event.type === "keydown") queueTerminalInput(current, Uint8Array.of(0x17));
     return false;
