@@ -642,13 +642,7 @@ async function attachLiveFiles(current, files) {
 
 function mountTerminalCopy(current) {
   const host = current.root.querySelector(".terminal-live"), history = current.root.querySelector(".terminal-screen");
-  const copy = async (text, restore) => {
-    if (!text || !text.trim()) return;
-    let ok = false;
-    try { ok = await writeClipboard(text); } catch (err) { ok = false; }
-    restore();
-    showHerdrToast(ok ? "Copied" : "Copy failed");
-  };
+  const copy = (text, restore) => { if (text && text.trim()) copySelection(text, restore); };
   host.addEventListener("mouseup", () => setTimeout(() => {
     if (terminal !== current || !current.term?.hasSelection()) return;
     copy(current.term.getSelection(), () => current.term.focus());
@@ -659,6 +653,19 @@ function mountTerminalCopy(current) {
     const range = selection.getRangeAt(0).cloneRange();
     copy(selection.toString(), () => { selection.removeAllRanges(); selection.addRange(range); });
   }));
+}
+
+function terminalSelection(current) {
+  if (current.mode === "live") return current.term?.hasSelection() ? current.term.getSelection() : "";
+  const selection = getSelection(), history = current.root.querySelector(".terminal-screen");
+  return selection.rangeCount && history?.contains(selection.anchorNode) ? selection.toString() : "";
+}
+
+async function copySelection(text, restore) {
+  let ok = false;
+  try { ok = await writeClipboard(text); } catch (err) { ok = false; }
+  if (restore) restore();
+  showHerdrToast(ok ? "Copied" : "Copy failed");
 }
 
 function mountTerminalFiles(current) {
@@ -1172,7 +1179,9 @@ function openHerdrContextMenu(kind, record, x, y, returnFocus) {
     ];
   } else {
     const focused = herdrData.focused_pane_id;
+    const selected = terminal && terminal.pane === record.pane_id ? terminalSelection(terminal) : "";
     items = [
+      ...(selected ? [{label: "Copy", run: () => copySelection(selected)}] : []),
       ...(paneSaid(record.pane_id) ? [{label: "Copy last message", run: () => copyPaneSaid(record.pane_id)}] : []),
       {label: "Rename pane", run: () => openHerdrPrompt("rename pane", record.title || record.agent || record.pane_id, "pane.rename", {pane_id: record.pane_id}, returnFocus)},
       {label: "Clear pane name", run: () => herdrAction("pane.clear_name", {pane_id: record.pane_id})},
