@@ -319,6 +319,9 @@ html.herdr-page .herdr-view { height: 100%; }
 .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--blue); margin-right: 6px; animation: pulse 1.2s ease-in-out infinite; }
 #toasts { position: fixed; top: 64px; right: 16px; display: grid; gap: 8px; z-index: 20; width: min(360px, calc(100% - 32px)); }
 .toast { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--amber); border-radius: 10px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18); cursor: pointer; animation: slide .2s ease-out; }
+.toast { position: relative; padding-right: 34px; }
+.toast-x { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: var(--muted, inherit); font: 16px/1 system-ui, sans-serif; cursor: pointer; }
+.toast-x:hover, .toast-x:focus-visible { background: var(--line); color: inherit; }
 .toast.blue { border-left-color: var(--blue); }
 .toast.red { border-left-color: var(--red); }
 .agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 4px; margin-top: 9px; }
@@ -395,7 +398,7 @@ let favOnly = false;
 try { favOnly = localStorage.getItem("fsa-fav-only") === "1"; } catch (e) {}
 let view = "agents";
 try { view = localStorage.getItem("fsa-view") === "herdr" ? "herdr" : "agents"; } catch (e) {}
-let uiSeen = null, state = null, seen = null, herdrData = null, herdrLoading = null, selectedHerdrPane = null;
+let uiSeen = null, state = null, seen = null, herdrData = null, herdrLoading = null, selectedHerdrPane = null, herdrKnownTabs = null;
 let herdrSidebarRatio = .5, herdrOverlay = null, herdrDragging = false, herdrActionError = "";
 try { const storedRatio = localStorage.getItem("fsa-herdr-sidebar-ratio"), value = Number(storedRatio); if (storedRatio !== null && Number.isFinite(value)) herdrSidebarRatio = Math.max(.1, Math.min(.9, value)); } catch (e) {}
 let terminal = null, terminalTimer = null;
@@ -920,6 +923,14 @@ function mountTerminal(container, pane, panes, restore) {
   if (old?.focus && old.focus !== "live") root.querySelector(old.focus)?.focus();
 }
 
+function followNewHerdrTab(data) {
+  const panes = data.panes || [], seen = herdrKnownTabs;
+  const ready = (data.tabs || []).filter(tab => panes.some(pane => pane.tab_id === tab.tab_id));
+  herdrKnownTabs = data.running ? new Set(ready.map(tab => tab.tab_id)) : null;
+  const fresh = seen ? ready.filter(tab => !seen.has(tab.tab_id)).pop() : null;
+  if (fresh) selectedHerdrPane = panes.find(pane => pane.tab_id === fresh.tab_id).pane_id;
+}
+
 async function loadHerdr(force = false) {
   if (herdrLoading) {
     if (!force) return herdrLoading;
@@ -928,7 +939,7 @@ async function loadHerdr(force = false) {
   herdrLoading = fetch("/api/herdr", {cache: "no-store"}).then(r => {
     if (!r.ok) throw new Error(r.status);
     return r.json();
-  }).then(data => { herdrData = data; }).catch(() => {
+  }).then(data => { herdrData = data; followNewHerdrTab(data); }).catch(() => {
     herdrData = {running: false, workspaces: [], tabs: [], panes: [], focused_pane_id: null};
   }).finally(() => {
     herdrLoading = null;
@@ -1982,11 +1993,24 @@ function closePanel() {
   document.documentElement.classList.remove("lock");
 }
 
-function toast(text, tone, target) {
+function sessionHerdrPane(session) {
+  const panes = (herdrData && herdrData.panes) || [], owned = (state && state.session_panes) || {};
+  const card = (state && state.cards || []).find(c => c.key === session.card);
+  return panes.find(p => p.pane_id === owned[session.id]) || (card && matchedCardPane(card)) || panes.find(p => p.title === session.name) || null;
+}
+
+function openToastTarget(target, session) {
+  const pane = view === "herdr" && session ? sessionHerdrPane(session) : null;
+  if (pane) { selectedHerdrPane = pane.pane_id; renderHerdrPage(); }
+  else if (target) openCard(target);
+}
+
+function toast(text, tone, target, session) {
   const t = document.createElement("div");
   t.className = "toast " + tone;
-  t.innerHTML = text;
-  t.onclick = () => { if (target) openCard(target); t.remove(); };
+  t.innerHTML = `<button class="toast-x" aria-label="Dismiss notification" title="Dismiss">×</button>${text}`;
+  t.querySelector(".toast-x").onclick = event => { event.stopPropagation(); t.remove(); };
+  t.onclick = () => { openToastTarget(target, session); t.remove(); };
   document.getElementById("toasts").appendChild(t);
   setTimeout(() => t.remove(), 15000);
 }
@@ -1994,8 +2018,8 @@ function toast(text, tone, target) {
 function notify() {
   const ids = {waiting: new Set(state.waiting.map(s => s.key + s.updated)), still_open: new Set(state.still_open.map(s => s.key + s.updated))};
   if (seen) {
-    state.waiting.filter(s => !seen.waiting.has(s.key + s.updated)).forEach(s => toast(`<b>Needs you:</b> ${esc(s.name)}<div class="s">${esc(s.snippet.slice(-140))}</div>`, "", s.card));
-    state.still_open.filter(s => !seen.still_open.has(s.key + s.updated)).forEach(s => toast(`<b>Stopped:</b> ${esc(s.name)}`, "blue", s.card));
+    state.waiting.filter(s => !seen.waiting.has(s.key + s.updated)).forEach(s => toast(`<b>Needs you:</b> ${esc(s.name)}<div class="s">${esc(s.snippet.slice(-140))}</div>`, "", s.card, s));
+    state.still_open.filter(s => !seen.still_open.has(s.key + s.updated)).forEach(s => toast(`<b>Stopped:</b> ${esc(s.name)}`, "blue", s.card, s));
   }
   seen = ids;
   const n = state.cards.filter(needsHuman).length;
