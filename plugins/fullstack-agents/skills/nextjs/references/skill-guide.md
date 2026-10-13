@@ -1,0 +1,339 @@
+# Next.js Template Skill
+
+Generate production-ready Next.js pages with SSR initial load, flexible client-side data management, and server-response-based updates.
+
+## When to Use This Skill
+
+Use this skill when asked to:
+- Create a new Next.js page with data table
+- Add CRUD functionality to a Next.js application
+- Generate pages with server-side rendering and client-side updates
+- Build admin/settings pages with filtering, pagination, and bulk actions
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Browser Request                           │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  page.tsx (Server Component)                                 │
+│  • auth() check                                              │
+│  • await searchParams (Next.js 15+)                          │
+│  • Fetch initial data via server actions                     │
+│  • Pass initialData to client component                      │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  *-table.tsx (Client Component)                              │
+│  • useSWR with fallbackData: initialData                     │
+│  • Context Provider for actions                              │
+│  • updateItems() uses server response (NOT optimistic)       │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  API Routes (app/api/...)                                    │
+│  • withAuth() wrapper                                        │
+│  • Proxy to FastAPI backend                                  │
+│  • backendFetch() direct calls to FastAPI backend             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## File Structure
+
+```
+app/(pages)/setting/{entity}/
+├── page.tsx                    # SSR page (server component)
+├── context/
+│   └── {entity}-actions-context.tsx  # Actions provider
+└── _components/
+    ├── actions/
+    │   ├── add-{entity}-button.tsx
+    │   └── {entity}-actions-menu.tsx
+    ├── modal/
+    │   ├── add-{entity}-sheet.tsx
+    │   └── edit-{entity}-sheet.tsx
+    ├── sidebar/
+    │   └── status-panel.tsx
+    └── table/
+        ├── {entity}-table.tsx       # Main client component
+        ├── {entity}-table-body.tsx
+        └── {entity}-table-columns.tsx
+
+app/api/setting/{entity}/
+├── route.ts                    # GET (list), POST (create)
+└── [{entityId}]/
+    ├── route.ts                # GET, PUT, DELETE
+    └── status/
+        └── route.ts            # PUT (toggle status)
+
+lib/
+├── actions/
+│   └── {entity}.actions.ts     # Server actions
+└── fetch/
+    ├── client.ts               # Client-side fetch (api.get/post/put/delete)
+    ├── server.ts               # Server action fetch (serverGet/Post/Put/Delete)
+    ├── backend.ts              # backendFetch() for API routes
+    └── api-route-helper.ts     # withAuth() wrapper for API routes
+
+lib/
+├── types/
+│   └── api/
+│       └── {entity}.ts         # TypeScript types
+```
+
+## Core Principles
+
+### 0. First paint is server-owned (hard rule, every client library)
+
+Whatever the user sees without acting — list rows, thread/detail content, side panels, counts — is
+fetched by the server page in one parallel `Promise.all` and handed to the client container as props.
+A client query/SWR key/`useEffect` fetch that fills **primary content after hydration** is a defect,
+whatever library issues it.
+
+- `useQuery`/`useInfiniteQuery` seeded with `initialData` **and** a `staleTime` (a seeded query with
+  the default `staleTime: 0` refetches on mount anyway — the page still fires the request). SWR:
+  `fallbackData` + `revalidateOnMount: false`. Keep the query key identical so stream invalidation works.
+- Each secondary seed has its own `.catch(() => null)`: a failed side fetch never fails the page; the
+  client falls back to fetching only that piece.
+- Only genuinely optional UI (dialogs, tabs not shown, below-the-fold panels, on-demand pickers) may
+  fetch on the client, lazily and on demand.
+- **Prove it with a trace, never by reading code:** load the page in a real browser and list the
+  `/api/` requests after hydration (recipe: [references/client-performance.md](../references/client-performance.md) §0).
+  The budget for primary content is **zero** requests; list each remaining one and say why it is optional.
+
+### 1. Data Fetching Strategy
+
+Choose the appropriate pattern based on requirements. See [references/data-fetching-strategy.md](../references/data-fetching-strategy.md) for the decision framework.
+
+**Server Component (page.tsx) - Same for both strategies:**
+```tsx
+// NO "use client" - this is a server component
+import { auth } from "@/lib/auth/server-auth";
+import { getItems } from "@/lib/actions/items.actions";
+import { redirect } from "next/navigation";
+import ItemsTable from "./_components/table/items-table";
+
+export default async function ItemsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; limit?: string; search?: string }>;
+}) {
+  const session = await auth();
+  if (!session?.accessToken) redirect("/login");
+
+  const params = await searchParams;  // Next.js 15+ requires await
+  const page = Number(params.page) || 1;
+  const limit = Number(params.limit) || 10;
+
+  const items = await getItems(limit, (page - 1) * limit, params);
+
+  return <ItemsTable initialData={items} />;
+}
+```
+
+**Strategy A: Simple Fetching (Default)**
+```tsx
+"use client";
+
+import { useState } from "react";
+import { api } from "@/lib/fetch/client";
+
+function ItemsTable({ initialData }) {
+  const [data, setData] = useState(initialData);
+
+  // Update from server response
+  const updateItems = (serverResponse: Item[]) => {
+    setData(current => ({
+      ...current,
+      items: current.items.map(item => {
+        const updated = serverResponse.find(i => i.id === item.id);
+        return updated ?? item;
+      }),
+    }));
+  };
+  // ...
+}
+```
+See [references/simple-fetching-pattern.md](../references/simple-fetching-pattern.md).
+
+**Strategy B: SWR Fetching (When Justified)**
+```tsx
+"use client";
+
+import useSWR from "swr";
+import { api } from "@/lib/fetch/client";
+
+const fetcher = (url: string) => api.get(url);
+
+function ItemsTable({ initialData }) {
+  const searchParams = useSearchParams();
+  const page = Number(searchParams?.get("page") || "1");
+
+  /**
+   * SWR JUSTIFICATION:
+   * - Reason: [Document why revalidation needed]
+   * - Trigger: [Interval / Focus / Manual]
+   */
+  const { data, mutate, isLoading } = useSWR(
+    `/api/setting/items?page=${page}`,
+    fetcher,
+    {
+      fallbackData: initialData,
+      keepPreviousData: true,
+      revalidateOnMount: false,
+      revalidateOnFocus: false,  // Set true only if justified
+    }
+  );
+  // ...
+}
+```
+See [references/swr-fetching-pattern.md](../references/swr-fetching-pattern.md).
+
+### 2. Server Response Updates (NOT Optimistic)
+
+```tsx
+// ✅ CORRECT: Use server response to update cache
+const updateItems = async (serverResponse: Item[]) => {
+  const currentData = data;
+  if (!currentData) return;
+
+  const responseMap = new Map(serverResponse.map(i => [i.id, i]));
+
+  const updatedList = currentData.items.map(item =>
+    responseMap.has(item.id) ? responseMap.get(item.id)! : item
+  );
+
+  await mutate(
+    { ...currentData, items: updatedList },
+    { revalidate: false }
+  );
+};
+
+// In action handler:
+const updatedItem = await api.put<Item>(`/setting/items/${id}`, payload);
+await updateItems([updatedItem]);  // Use server response!
+```
+
+```tsx
+// ❌ WRONG: Optimistic update
+const updatedList = currentData.items.map(item =>
+  item.id === id ? { ...item, ...localChanges } : item  // Don't do this!
+);
+```
+
+A row patch is safe only when filter, sort, pagination and counts stay correct; creates, deletes
+and changes to filtered, sorted or counted fields reload the list unless the server response
+itself gives the row's position and the new counts. The full decision, refresh
+ownership and `router.refresh()` rules: [references/data-freshness.md](../references/data-freshness.md).
+
+### 3. Context Pattern for Actions
+
+```tsx
+// context/{entity}-actions-context.tsx
+"use client";
+
+import { createContext, useContext, ReactNode } from "react";
+
+interface ActionsContextType {
+  onToggleStatus: (id: string, isActive: boolean) => Promise<ActionResult>;
+  onUpdate: (id: string, data: UpdateData) => Promise<ActionResult>;
+  updateItems: (items: Item[]) => Promise<void>;
+  onRefresh: () => Promise<void>;
+}
+
+const ActionsContext = createContext<ActionsContextType | null>(null);
+
+export function ActionsProvider({ children, actions }: Props) {
+  return (
+    <ActionsContext.Provider value={actions}>
+      {children}
+    </ActionsContext.Provider>
+  );
+}
+
+export function useTableActions() {
+  const context = useContext(ActionsContext);
+  if (!context) {
+    throw new Error("useTableActions must be used within ActionsProvider");
+  }
+  return context;
+}
+```
+
+### 4. API Route Pattern
+
+```tsx
+// app/api/setting/items/route.ts
+import { NextRequest } from "next/server";
+import { withAuth } from "@/lib/fetch/api-route-helper";
+import { backendFetch } from "@/lib/fetch/backend";
+
+export async function GET(request: NextRequest) {
+  const params = request.nextUrl.searchParams.toString();
+  return withAuth((token) => backendFetch(`/setting/items/?${params}`, token));
+}
+
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  return withAuth((token, headers) =>
+    backendFetch('/setting/items/', token, { method: 'POST', body, headers })
+  );
+}
+```
+
+## Generation Order
+
+When creating a new entity page, generate files in this order:
+
+1. **Types** (lib/types/api/{entity}.ts)
+2. **Server Actions** (lib/actions/{entity}.actions.ts)
+3. **API Routes** (app/api/setting/{entity}/...)
+4. **Context** (app/(pages)/setting/{entity}/context/)
+5. **Components** (app/(pages)/setting/{entity}/_components/)
+6. **Page** (app/(pages)/setting/{entity}/page.tsx)
+
+## Quick Reference
+
+### Sheets (mandatory)
+Any add/edit/view sheet follows the restrictions in
+`data-table/references/edit-sheet-pattern.md` ("Sheet Layout and Behaviour Rules"): titled section
+per group when a tab has more than one group (none for a single group), successful save closes the
+sheet, edit prefills every stored non-secret value, secrets are write-only and a blank secret keeps
+the stored value.
+
+### Data Fetching Strategy
+- **Strategy A (Default)**: `useState` + server response updates
+- **Strategy B (Opt-in)**: `useSWR` with documented justification
+
+### SWR Configuration (Strategy B only)
+- `fallbackData` - SSR data for instant render
+- `keepPreviousData: true` - Smooth pagination
+- `revalidateOnMount: false` - Trust SSR data
+- `revalidateOnFocus: false` - Set true only if justified
+
+### Key Files
+- `lib/fetch/client.ts` - Client-side API calls (`api.get/post/put/delete`, auto-prefixes `/api/`)
+- `lib/fetch/server.ts` - Server action fetch (`serverGet/Post/Put/Delete` with `/backend/...` URLs)
+- `lib/fetch/backend.ts` - `backendFetch()` for API route handlers
+- `lib/fetch/api-route-helper.ts` - `withAuth()` wrapper for API routes
+
+## References
+
+See the `references/` directory for detailed patterns:
+- `data-fetching-strategy.md` - Decision framework for choosing strategy
+- `simple-fetching-pattern.md` - Strategy A implementation
+- `swr-fetching-pattern.md` - Strategy B implementation
+- `page-pattern.md` - SSR page structure
+- `table-pattern.md` - Table component patterns
+- `context-pattern.md` - Actions context
+- `api-route-pattern.md` - API routes
+- `fetch-pattern.md` - Fetch utilities
+- `select-components.md` - SingleSelect and MultiSelect component source and usage
+- `live-updates.md` - **Required** before adding, sharing or changing an SSE/WebSocket client or its proxy route: one owner per connection, reconnect, auth/forbidden handling, resync, mutation echoes
+- `data-freshness.md` - **Required** for any page that lists, mutates or filters data: mutation updates, the one refresh coordinator, `router.refresh()` fan-out, stale responses
+- `client-performance.md` - **Required** for tables, data fetching, mutations, filters, live data and navigation/prefetch changes: latency measurement, `<Link>` prefetch, refresh storms

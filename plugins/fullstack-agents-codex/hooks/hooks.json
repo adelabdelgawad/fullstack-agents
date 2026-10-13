@@ -1,0 +1,41 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/hook.py\" start",
+            "timeout": 30,
+            "statusMessage": "Fullstack Agents Codex: start"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/hook.py\" prompt",
+            "timeout": 30,
+            "statusMessage": "Fullstack Agents Codex: prompt"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/hook.py\" post",
+            "timeout": 30,
+            "statusMessage": "Fullstack Agents Codex: post"
+          }
+        ],
+        "matcher": "^apply_patch$"
+      }
+    ]
+  }
+}

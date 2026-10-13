@@ -1,0 +1,11 @@
+# Optional settings for the separate Codex-led edition.
+# The installer never overwrites an existing .codex/config.toml.
+# Keep your own model selection and approval policy.
+sandbox_mode = "workspace-write"
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 3
+
+# Lifecycle hooks live in .codex/hooks.json. Review/trust them using /hooks.
+# Custom roles live in .codex/agents/fullstack-agents-*.toml.

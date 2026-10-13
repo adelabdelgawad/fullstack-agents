@@ -12,13 +12,13 @@ stub() { printf '#!/usr/bin/env bash\ncat >/dev/null\necho %q\n' "$1" > "$TMP/st
 
 stub '{"is_error":false,"structured_output":{"intent":"debug","lanes":["rust"],"skills":["debug","rust-correctness"],"worker":"none","confidence":0.9,"reason":"a Rust bug"}}'
 out=$(echo '{"prompt":"the call ends twice"}' | python3 "$CL" prompt); rc=$?
-ok "$([ $rc -eq 0 ] && echo "$out" | head -1 | grep -q 'intent debug, lanes rust -> invoke via the Skill tool (fullstack-agents:\*): debug, rust-correctness' && echo true)" "a confident route prints the skills" "$out"
+ok "$([ $rc -eq 0 ] && echo "$out" | head -1 | grep -q 'intent debug, lanes rust -> invoke via the Skill tool (fullstack-agents:\*): task-flow, debug, rust-correctness' && echo true)" "a confident route includes the mandatory task flow and lane skills" "$out"
 ok "$([ "$(echo "$out" | sed -n 2p)" = rust ] && echo true)" "the second line names the primary lane" "$out"
 ok "$(grep -q '"mode": "prompt"' "$TMP/cfg/fullstack-agents/classifier.jsonl" && echo true)" "the decision is logged" ""
 
 stub '{"is_error":false,"structured_output":{"intent":"debug","lanes":["rust"],"skills":["not-a-skill"],"worker":"none","confidence":0.9,"reason":"x"}}'
 out=$(echo '{"prompt":"x"}' | python3 "$CL" prompt)
-ok "$(echo "$out" | head -1 | grep -q 'no skill needed' && echo true)" "an unknown skill name is dropped" "$out"
+ok "$(echo "$out" | head -1 | grep -q '): task-flow\.' && ! echo "$out" | grep -q 'not-a-skill' && echo true)" "an unknown skill is dropped while mandatory task flow remains" "$out"
 
 stub '{"is_error":false,"structured_output":{"intent":"debug","lanes":[],"skills":["debug"],"worker":"none","confidence":0.3,"reason":"unsure"}}'
 echo '{"prompt":"x"}' | python3 "$CL" prompt >/dev/null; ok "$([ $? -eq 1 ] && echo true)" "low confidence falls back" ""

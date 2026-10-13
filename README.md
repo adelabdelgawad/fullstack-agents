@@ -9,6 +9,22 @@ A Claude Code plugin that brings intelligent, pattern-aware code generation to p
 /plugin install fullstack-agents
 ```
 
+### Standalone Codex edition
+
+Codex leads investigation, planning and implementation; Claude audits a bounded
+diff and returns issues with repair scope. Install this edition separately:
+
+```bash
+codex plugin marketplace add adelabdelgawad/fullstack-agents
+codex plugin add fullstack-agents-codex@fullstack-agents-codex
+```
+
+For a project-local installation with native roles, use
+`bash install-codex.sh /path/to/project` instead. See [Codex setup and flow](docs/codex.md).
+The Claude integration retains its
+existing runtime configuration. Both editions use [progressive skill loading](docs/token-efficiency.md)
+to keep examples and detailed procedures out of context until needed.
+
 ## What You Get
 
 - **29 specialized agents** across generation, review, analysis, scaffolding, debug, and optimization

@@ -13,6 +13,14 @@ Detect project structure, conventions, and coding patterns to ensure generated c
 
 If you have already scanned this session and the results are still in context, skip re-scanning and use the cached profile.
 
+Keep a compact profile per service/lane, not a fresh scan per prompt or worker.
+Use `rg` to select representative files and read bounded ranges (200 lines by
+default; project limits win). Extract only patterns relevant to the current
+task: do not read frontend examples for backend-only work or Python examples for
+a Rust service. A worker receives the lead's profile and exact pattern paths;
+it does not repeat the scan. Re-scan only a changed assumption or after context
+loss; do not print the full profile again when reusing it.
+
 ## Phase 0: Constitution Load (~2 seconds)
 
 Check for a project constitution (NORMATIVE principles, vs this scan's
