@@ -86,6 +86,14 @@ main { padding: 0; }
 .cbody { flex: 1; min-height: 0; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); }
 .cbody > .s { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .card > .cardhint, .card > .foot { flex: none; }
+.wts { display: grid; gap: 4px; margin-top: 6px; }
+.wt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; width: 100%; min-width: 0; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; font: 11px var(--mono); text-align: left; cursor: pointer; }
+.wt:hover, .wt:focus-visible, .wt[aria-current="true"] { background: var(--card-hover); border-color: var(--blue); }
+.wt .wt-name { flex: 1 1 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt .chip { margin: 0; }
+.wtbar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.wtbar .wt { width: auto; max-width: 100%; flex-wrap: nowrap; }
+.wtbar .wt .wt-name { flex: 0 1 auto; }
 .branch { font: 11px var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rounds { margin-top: 10px; display: grid; gap: 5px; }
 .round { display: grid; gap: 2px; }
@@ -1476,6 +1484,44 @@ function cardHtml(c) {
     <div class="foot"><span>${ago(c.updated)} ago</span><button class="dismiss" data-dismiss="${esc(c.key)}">Dismiss</button></div></div>`;
 }
 
+const soleSid = c => c.tree && c.sessions.length === 1 ? c.sessions[0].id : "";
+const worktreesOf = c => { const sid = soleSid(c); return sid ? ((state && state.cards) || []).filter(x => soleSid(x) === sid).sort((a, b) => rank(a) - rank(b) || b.updated - a.updated) : []; };
+const lead = x => x.group ? x.primary : x;
+const STAGE_LABEL = c => (STAGES.find(s => s.key === stageOf(c)) || {}).label || c.phase;
+
+function groupBySession(cards) {
+  const bySid = new Map();
+  cards.forEach(c => { const sid = soleSid(c); if (sid) bySid.set(sid, [...(bySid.get(sid) || []), c]); });
+  const out = [], done = new Set();
+  for (const c of cards) {
+    const sid = soleSid(c), kids = sid ? bySid.get(sid) : null;
+    if (!kids || kids.length < 2) { out.push(c); continue; }
+    if (done.has(sid)) continue;
+    done.add(sid);
+    const children = [...kids].sort((a, b) => rank(a) - rank(b) || b.updated - a.updated);
+    out.push({group: true, sid, children, primary: children[0], key: children[0].key, updated: Math.max(...kids.map(k => k.updated))});
+  }
+  return out;
+}
+
+function wtRowHtml(c, current) {
+  const n = gitBadge(c);
+  return `<button class="wt" data-wt="${esc(c.key)}" aria-current="${c.key === current}" title="${esc(c.key)}"><span class="wt-name">${esc(c.tree.branch || c.key.split("/").pop())}</span>${n ? `<span class="chip">${n} uncommitted</span>` : ""}<span class="chip">${esc(STAGE_LABEL(c))}</span></button>`;
+}
+
+function groupHtml(g) {
+  const c = g.primary, kids = g.children;
+  const live = kids.some(k => k.sessions.some(s => s.state === "working") || k.runs.some(r => r.state === "running"));
+  const human = kids.some(needsHuman), name = c.sessions[0].name;
+  const flag = c.needs_you.length ? FLAG_TEXT[c.needs_you[0]] || c.needs_you[0] : human ? "your call" : "";
+  return `<div class="card group${live ? " live" : ""}${human ? " human" : ""}" tabindex="0" data-key="${esc(c.key)}" data-sid="${esc(g.sid)}">
+    <div class="card-top">${live ? '<span class="blink" aria-label="running"></span>' : ""}<span class="num">session ${esc(g.sid.slice(0, 8))} · ${kids.length} worktrees</span>${flag ? `<span class="flag">${esc(flag)}</span>` : ""}<button class="star" data-fav="${esc(c.key)}" aria-pressed="${!!c.favourite}" aria-label="${c.favourite ? "Remove from favourites" : "Add to favourites"}" title="${c.favourite ? "Remove from favourites" : "Add to favourites"}">${c.favourite ? "★" : "☆"}</button></div>
+    <p class="feature">${esc(name)}</p>
+    <div class="cbody"><div class="wts">${kids.map(k => wtRowHtml(k, "")).join("")}</div>
+    ${cardNow(c)}</div>
+    <div class="foot"><span>${ago(g.updated)} ago</span></div></div>`;
+}
+
 const sessionOf = sid => { for (const c of (state && state.cards) || []) for (const s of c.now || []) if (s.id === sid) return s; return null; };
 const AGENT_NAMES = {"bounded-extractor": "haiku scan", "test-runner": "test-runner", "diff-reviewer": "diff-review", "general-purpose": "general", "Explore": "explore"};
 
@@ -1624,19 +1670,23 @@ function render() {
   const sw = document.getElementById("favsw");
   sw.setAttribute("aria-checked", String(favOnly));
   sw.lastChild.textContent = `Favourites only (${state.cards.filter(c => c.favourite).length})`;
-  const cards = favOnly ? state.cards.filter(c => c.favourite) : state.cards;
-  const cols = STAGES.map(s => ({...s, cards: cards.filter(c => stageOf(c) === s.key).sort((a, b) => rank(a) - rank(b) || b.updated - a.updated)}));
+  const cards = groupBySession(favOnly ? state.cards.filter(c => c.favourite) : state.cards);
+  const cols = STAGES.map(s => ({...s, cards: cards.filter(c => stageOf(lead(c)) === s.key).sort((a, b) => rank(lead(a)) - rank(lead(b)) || b.updated - a.updated)}));
   document.getElementById("main").innerHTML = `<div class="board">${cols.map(s => {
-    const loud = s.cards.filter(c => rank(c) < 3), quiet = s.cards.filter(c => rank(c) === 3);
+    const loud = s.cards.filter(c => rank(lead(c)) < 3), quiet = s.cards.filter(c => rank(lead(c)) === 3);
     const open = expanded.has(s.key), shown = loud.concat(open ? quiet : quiet.slice(0, SHOWN));
     const more = quiet.length > SHOWN ? `<button class="more" data-more="${s.key}" aria-expanded="${open}">${open ? "Show fewer" : `Show all ${s.cards.length}`}</button>` : "";
     return `<section class="col ${s.key}${s.flow ? " flow" : ""}" aria-label="${s.label}">
       <div class="col-head"><h2>${s.label}</h2><span class="who" title="${esc(s.who)}">${esc(s.who)}</span><span class="count">${s.cards.length || ""}</span></div>
-      ${shown.map(cardHtml).join("") || '<div class="none">—</div>'}${more}</section>`;
+      ${shown.map(c => c.group ? groupHtml(c) : cardHtml(c)).join("") || '<div class="none">—</div>'}${more}</section>`;
   }).join("")}</div>`;
   document.querySelectorAll("[data-key]").forEach(el => {
     el.onclick = () => openCard(el.dataset.key);
     el.onkeydown = e => { if ((e.key === "Enter" || e.key === " ") && e.target === el) { e.preventDefault(); openCard(el.dataset.key); } };
+  });
+  document.querySelectorAll("#main [data-wt]").forEach(el => {
+    el.onclick = ev => { ev.stopPropagation(); openCard(el.dataset.wt); };
+    el.onkeydown = ev => ev.stopPropagation();
   });
   document.querySelectorAll("[data-dismiss]").forEach(el => el.onclick = ev => dismiss(el.dataset.dismiss, ev));
   document.querySelectorAll("[data-fav]").forEach(el => {
@@ -1696,7 +1746,8 @@ function ensureBody(kind, html, onNew) {
 const paneHead = c => `<button class="dismiss close" id="close">Close</button>
   <h3>${esc(c.title)}</h3>
   ${c.tree ? `<div style="font:12px ui-monospace,monospace;color:var(--blue)">${esc(c.tree.branch)}</div>` : ""}
-  <div class="s">${esc(c.phase)}${c.tree ? ` · ${c.tree.ahead} ahead · ${gitBadge(c)} uncommitted` : ""}</div>`;
+  <div class="s">${esc(c.phase)}${c.tree ? ` · ${c.tree.ahead} ahead · ${gitBadge(c)} uncommitted` : ""}</div>
+  ${worktreesOf(c).length > 1 ? `<div class="wtbar" role="group" aria-label="Worktrees of session ${esc(c.sessions[0].name)}">${worktreesOf(c).map(k => wtRowHtml(k, c.key)).join("")}</div>` : ""}`;
 
 const tabsHtml = c => `<button class="tab2" role="tab" data-t="info" aria-selected="${tab2 === "info"}">Information</button>
   <button class="tab2" role="tab" data-t="git" aria-selected="${tab2 === "git"}" ${c.tree ? "" : "disabled"}>Git changes${gitBadge(c) ? ` <span class="badge">${gitBadge(c)}</span>` : ""}</button>
@@ -1952,7 +2003,10 @@ function paintPanel() {
     p.innerHTML = '<div id="phead"></div><div class="ptabs" id="ptabs" role="tablist"></div><div class="pbody" id="pbody"></div>';
     bodyKind = "";
   }
-  if (setIfChanged("phead", paneHead(c))) document.getElementById("close").onclick = closePanel;
+  if (setIfChanged("phead", paneHead(c))) {
+    document.getElementById("close").onclick = closePanel;
+    document.querySelectorAll("#phead [data-wt]").forEach(b => b.onclick = () => { if (b.dataset.wt !== openKey) openCard(b.dataset.wt, true); });
+  }
   if (setIfChanged("ptabs", tabsHtml(c))) document.querySelectorAll("#ptabs [data-t]").forEach(b => b.onclick = () => { tab2 = b.dataset.t; paintPanel(); });
   if (tab2 === "terminal") {
     paintCardTerminal(c);
@@ -1967,13 +2021,13 @@ function paintPanel() {
   }
 }
 
-function openCard(key) {
+function openCard(key, keepTab = false) {
   if (openKey !== key) git = {...freshGit(), hide1: git.hide1, hide2: git.hide2};
   openKey = key;
   openRun = null;
   showLog = false;
   logSeen = "";
-  tab2 = "info";
+  if (!keepTab) tab2 = "info";
   bodyKind = "";
   panel().innerHTML = "";
   panel().classList.add("open");
