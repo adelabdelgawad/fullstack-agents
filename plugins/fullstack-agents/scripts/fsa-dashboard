@@ -1423,16 +1423,32 @@ def codex_turn_open(path):
     return False
 
 
+def proc_parent(pid):
+    try:
+        return int(Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[1])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
 def proc_children():
     kids = {}
     for proc in Path("/proc").iterdir():
         if proc.name.isdigit():
-            try:
-                ppid = int((proc / "stat").read_text().rsplit(")", 1)[1].split()[1])
-            except (OSError, ValueError, IndexError):
-                continue
-            kids.setdefault(ppid, []).append(int(proc.name))
+            ppid = proc_parent(proc.name)
+            if ppid is not None:
+                kids.setdefault(ppid, []).append(int(proc.name))
     return kids
+
+
+def nested_in(pid, others, parent=proc_parent):
+    """True when an ancestor process of `pid` is one of `others`."""
+    seen, pid = set(), parent(pid)
+    while pid and pid > 1 and pid not in seen:
+        if pid in others:
+            return True
+        seen.add(pid)
+        pid = parent(pid)
+    return False
 
 
 def proc_agents(pid, kids, now):
@@ -1586,13 +1602,17 @@ def proc_pane(pid):
 def herdr_agents(snapshot):
     """Session id -> (cwd, pane) for every herdr pane running a Claude or Codex agent with a transcript."""
     live = {p["pane_id"] for p in snapshot["panes"] if p.get("agent")}
-    out = {}
+    out, claude = {}, {}
     for base in dict.fromkeys(Path(b).expanduser() for b in CLAUDE_BASES if b):
         for f in (base / "sessions").glob("*.json"):
             info = load_json(f) or {}
             pane = proc_pane(f.stem) if info.get("sessionId") and info.get("kind") == "interactive" else ""
-            if pane in live:
-                out[info["sessionId"]] = (info.get("cwd") or "", pane)
+            if pane in live and f.stem.isdigit():
+                claude[int(f.stem)] = (info["sessionId"], info.get("cwd") or "", pane)
+    # A Claude started inside another agent's process tree (a dispatched implementer) belongs to that agent's card.
+    for pid, (sid, cwd, pane) in claude.items():
+        if not nested_in(pid, claude):
+            out[sid] = (cwd, pane)
     spawned = {c for kids in codex_children().values() for c, *_ in kids}
     for rollout, (pane, _, _) in codex_live().items():
         meta = codex_meta(Path(rollout))

@@ -214,7 +214,7 @@
   ],
   "source_hashes": {
     ".claude-plugin/marketplace.json": "88540c3d139cc6b4a0594b35273ad2fb90523eb0becec24146df9e130e0a19cb",
-    ".claude-plugin/plugin.json": "36c3b5316cd65f14367697954ca61e170b6cc82f4eb3074388fafdaf5cb91c62",
+    ".claude-plugin/plugin.json": "5d4e02cf26012e8f4c32469b15c677aa66524654783898cc7be0e50ed6a1f5cd",
     "README.md": "fd1720cf83e4793e30dc956d172603876932c1f3916ab7c5f2c9b61a307bd276",
     "agents/_core/AGENT_BASE.md": "c29fe50773b1f705354beadd48af6018d39bfb830599ff3190e26b6bd9188f1a",
     "agents/_core/detection-patterns.md": "5f4b2d3bf8a5e1559725f60a86d0fa9ea0d4df4ce2e1e622713c26a0a9639389",
@@ -282,7 +282,7 @@
     "scripts/codex-result.schema.json": "31546c15e65da0d17fe14f8602ef03882b2a9582698bb9d52782617e7902655c",
     "scripts/codex-task.sh": "cb083c3702684dcdb380b214f4ee63c5245601e1cf317360a9945fd58ce636f8",
     "scripts/fsa-classify": "64ee570f7c30c5bb5f913ce17843b25fe3fbbec1faebac48f64b9ec0ad779fee",
-    "scripts/fsa-dashboard": "9751b096cc025be979cd66881164099b06849096bbef723c900f2e36d3a7a8f7",
+    "scripts/fsa-dashboard": "31681039657374d5985e4df9ca46dbadb30bafca33394bece436ba4a61caa0e1",
     "scripts/herdr-watch.sh": "9fc0b48f11cec50d5f342331799fa28b83d97d2d173199e84264f2bab17f2973",
     "scripts/lib/dashboard.html": "fded4711edd173589be0f3dbf8ee4fc1fe492a7cc428db0d661c260fe67ab5db",
     "scripts/lib/extract-result.py": "d49fa538799f294b972db08cf556a0d9561e91ba3f831566ded9f88eab876640",

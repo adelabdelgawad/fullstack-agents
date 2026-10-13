@@ -1,11 +1,14 @@
 """The dashboard is built from herdr's agent panes, across repositories, whatever harness runs in them."""
 import importlib.util
+import json
+import os
 import subprocess
 import tempfile
 import time
 import unittest
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[2]
 _loader = SourceFileLoader("fsa_dashboard_herdr", str(REPO / "plugins/fullstack-agents/scripts/fsa-dashboard"))
@@ -59,6 +62,25 @@ class HerdrSessionTests(unittest.TestCase):
         st = self.build(snapshot(running=False))
         self.assertEqual(Path(st["repo"]).resolve(), self.home.resolve())
         self.assertNotIn("x9:p1", str(st["session_panes"]))
+
+    def test_claude_dispatched_by_another_agent_is_not_its_own_session(self):
+        base = Path(self.scratch.name) / "claude"
+        (base / "sessions").mkdir(parents=True)
+        child = subprocess.Popen(["sleep", "30"])
+        self.addCleanup(child.kill)
+        for pid, sid in ((os.getpid(), "lead"), (child.pid, "implementer")):
+            (base / "sessions" / f"{pid}.json").write_text(json.dumps(
+                {"pid": pid, "sessionId": sid, "cwd": str(self.home), "kind": "interactive"}))
+        with mock.patch.multiple(dash, CLAUDE_BASES=[str(base)], proc_pane=lambda pid: "x1:p1",
+                                 codex_live=dict, codex_children=dict):
+            agents = dash.herdr_agents(snapshot(("x1:p1", "claude", "working", self.home)))
+        self.assertEqual(agents, {"lead": (str(self.home), "x1:p1")})
+
+    def test_nested_in_walks_ancestors_and_stops_at_cycles(self):
+        parents = {5: 4, 4: 3, 3: 1, 7: 8, 8: 7}
+        self.assertTrue(dash.nested_in(5, {3}, parents.get))
+        self.assertFalse(dash.nested_in(5, {9}, parents.get))
+        self.assertFalse(dash.nested_in(7, {9}, parents.get))
 
     def test_pane_session_maps_herdr_status(self):
         now = time.time()
