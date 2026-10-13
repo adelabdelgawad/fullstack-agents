@@ -1473,6 +1473,7 @@ function cardHtml(c) {
   return `<div class="card${live ? " live" : ""}${human ? " human" : ""}${QUIET.has(c.phase) && !human ? " quiet" : ""}" tabindex="0" data-key="${esc(c.key)}" data-sid="${esc(sid)}">
     <div class="card-top">${live ? '<span class="blink" aria-label="running"></span>' : ""}<span class="num">${esc(c.key.startsWith("session:") ? "session " + c.key.slice(8, 16) : c.key.split("/").pop())}</span>${flag ? `<span class="flag">${esc(flag)}</span>` : ""}<button class="star" data-fav="${esc(c.key)}" aria-pressed="${!!c.favourite}" aria-label="${c.favourite ? "Remove from favourites" : "Add to favourites"}" title="${c.favourite ? "Remove from favourites" : "Add to favourites"}">${c.favourite ? "★" : "☆"}</button></div>
     <p class="feature">${esc(c.title)}</p>
+    ${c.repo && state && c.repo !== state.repo ? `<div class="branch">${esc(c.repo.split("/").pop())}</div>` : ""}
     ${branch ? `<div class="branch">${esc(branch)}</div>` : ""}
     <div class="cbody">${sub ? `<div class="s">${esc(sub)}</div>` : ""}
     ${roundsHtml(c)}
@@ -1650,7 +1651,11 @@ document.addEventListener("click", e => {
   if (b) { e.stopPropagation(); copyDoc(b); }
 });
 
-function resumeCmd(s) { return s.engine === "codex" ? `codex resume ${s.id}` : s.title ? `claude --resume "${s.title}"` : `claude --resume ${s.id}`; }
+function resumeCmd(s) {
+  if (s.engine === "codex") return `codex resume ${s.id}`;
+  if (s.engine && s.engine !== "claude") return `${s.engine} in herdr pane ${((state && state.session_panes) || {})[s.id] || ""}`;
+  return s.title ? `claude --resume "${s.title}"` : `claude --resume ${s.id}`;
+}
 
 function resumeHtml(s) {
   const cmd = resumeCmd(s);

@@ -66,8 +66,9 @@ $TB unlock deploy ; $TB release
 
 ## Dashboard
 
-`scripts/fsa-dashboard start` serves a read-only web board of every session, implementer run and
-worktree in the repository. It prints a URL that carries an access token, and `stop` and `status` manage it.
+`scripts/fsa-dashboard start` serves a read-only web board of every agent running in a herdr pane on
+this host, in any repository and whatever harness herdr reports (Claude, Codex, Grok, ...), with
+their implementer runs and worktrees; without herdr it shows the starting repository's sessions. It prints a URL that carries an access token, and `stop` and `status` manage it.
 It is a script, not an agent: it reads files sessions already write (transcripts, run files, the
 board) and costs no tokens. Never poll it from a session. It moves each task card through
 Investigate → Plan → Implement → Rework → Audit → Review → Merged → Deploying → Deployed; a session that stopped without a phase sits in Idle and leaves the board after 12 hours. It flags runs

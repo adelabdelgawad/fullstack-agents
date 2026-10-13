@@ -33,6 +33,7 @@ FIRST_PROMPTS = {}
 LAST_ASKS = {}
 CODEX_META = {}
 CODEX_HOME = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+CLAUDE_BASES = (os.environ.get("CLAUDE_CONFIG_DIR"), "~/.claude", "~/.claude-anthropic")
 RUN_WINDOW_S = 72 * 3600
 SESSION_WINDOW_S = 48 * 3600
 STALL_S = 300
@@ -478,7 +479,7 @@ class Repo:
         self.favourites = self.state / "dashboard-favourites.json"
         self.runs = Path(runs or os.environ.get("FSA_CODEX_RUNS_DIR") or self.binding_runs()
                          or Path.home() / ".codex" / "fsa-runs")
-        bases = projects or [os.environ.get("CLAUDE_CONFIG_DIR"), "~/.claude", "~/.claude-anthropic"]
+        bases = projects or CLAUDE_BASES
         self.projects = list(dict.fromkeys(Path(b).expanduser() / "projects" for b in bases if b))
         head = (git(self.root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD") or "").strip()
         self.main = head.split("/", 1)[1] if "/" in head else "main"
@@ -1359,11 +1360,7 @@ def codex_live():
         rollouts = [t for t in targets if "/sessions/" in t and Path(t).name.startswith("rollout-") and t.endswith(".jsonl")]
         if not rollouts:
             continue
-        try:
-            env = (proc / "environ").read_bytes().split(b"\0")
-        except OSError:
-            env = []
-        pane = next((e[len(b"HERDR_PANE_ID="):].decode() for e in env if e.startswith(b"HERDR_PANE_ID=")), "")
+        pane = proc_pane(proc.name)
         for t in rollouts:
             out[t] = pane or out.get(t, "")
     return out
@@ -1471,6 +1468,64 @@ def collect_codex_sessions(repo, trees, now, waits):
     return out
 
 
+def proc_pane(pid):
+    try:
+        env = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+    except OSError:
+        return ""
+    return next((e[len(b"HERDR_PANE_ID="):].decode() for e in env if e.startswith(b"HERDR_PANE_ID=")), "")
+
+
+def herdr_agents(snapshot):
+    """Session id -> (cwd, pane) for every herdr pane running a Claude or Codex agent with a transcript."""
+    live = {p["pane_id"] for p in snapshot["panes"] if p.get("agent")}
+    out = {}
+    for base in dict.fromkeys(Path(b).expanduser() for b in CLAUDE_BASES if b):
+        for f in (base / "sessions").glob("*.json"):
+            info = load_json(f) or {}
+            pane = proc_pane(f.stem) if info.get("sessionId") and info.get("kind") == "interactive" else ""
+            if pane in live:
+                out[info["sessionId"]] = (info.get("cwd") or "", pane)
+    for rollout, pane in codex_live().items():
+        meta = codex_meta(Path(rollout))
+        if pane in live and meta.get("id"):
+            out[meta["id"]] = (meta.get("cwd") or "", pane)
+    return out
+
+
+HERDR_STATES = {"working": "working", "blocked": "waiting"}
+
+
+def pane_session(pane, root, now):
+    """A card session for an agent pane herdr reports but whose harness keeps no transcript we read."""
+    cwd, agent = pane.get("cwd") or "", pane.get("agent") or "agent"
+    state = HERDR_STATES.get(pane.get("status"), "idle")
+    top = str(repo_top(cwd) or root)
+    return {
+        "id": f"herdr-{pane['pane_id']}", "engine": agent, "pane": pane["pane_id"],
+        "name": pane.get("title") or f"{agent} {Path(cwd).name}", "named": bool(pane.get("title")), "title": "",
+        "cwd": cwd, "branch": "", "worktree": top if top != root else "", "state": state, "updated": now,
+        "turn_at": 0, "agents": [], "idle": 0, "snippet": "", "briefs": [], "chips": [], "ask": "",
+        "need": f"{agent} is waiting in herdr pane {pane['pane_id']}" if state == "waiting" else "",
+        "action": "", "action_at": 0, "action_running": False, "said_at": 0, "said": "", "said_full": "", "docs": [],
+    }
+
+
+def merge_states(home, parts, now):
+    board = load_json(home.board) or {}
+    st = {"generated": now, "ui": int(HTML.stat().st_mtime), "repo": str(home.root), "main": home.main,
+          "cards": [], "waiting": [], "still_open": [], "_sources": {}, "_docs": {}, "_scopes": {},
+          "session_panes": {}, "abandoned": [],
+          "locks": board.get("locks") or {}, "events": (board.get("events") or [])[-12:]}
+    for p in parts:
+        for k in ("cards", "waiting", "still_open", "abandoned"):
+            st[k] += p[k]
+        for k in ("_sources", "_docs", "_scopes", "session_panes"):
+            st[k].update(p[k])
+    st["cards"].sort(key=lambda c: -c["updated"])
+    return st
+
+
 def judge_turns(repo, sessions, now):
     for s in sessions:
         turn = s["turn_at"]
@@ -1535,7 +1590,7 @@ def needs_you(card, runs):
     return flags
 
 
-def build_state(repo, gc):
+def build_state(repo, gc, only=None, extra=()):
     now = time.time()
     trees = gc.worktrees(now)
     board = load_json(repo.board) or {}
@@ -1546,6 +1601,9 @@ def build_state(repo, gc):
     judge_turns(repo, sessions, now)
     sessions += fresh_sessions(repo, trees, now)
     sessions += collect_codex_sessions(repo, trees, now, board.get("waits") or {})
+    sessions += extra
+    if only is not None:
+        sessions = [s for s in sessions if s["id"] in only]
     deployed_shas = [m.group(1) for e in board.get("events", []) for m in [DEPLOYED_RE.search(e.get("text", ""))] if m]
     dismissed = load_json(repo.dismissed) or {}
     favourites = load_json(repo.favourites) or {}
@@ -1588,6 +1646,8 @@ def build_state(repo, gc):
 
     cards, scopes = [], {}
     for key, g in groups.items():
+        if only is not None and not g["sessions"]:
+            continue
         tree = gc.detail(key) if key in trees else None
         if tree and (g["sessions"] or g["runs"]):
             scopes[key] = {"sessions": [s["id"] for s in g["sessions"]], "runs": [r["id"] for r in g["runs"]]}
@@ -1597,7 +1657,7 @@ def build_state(repo, gc):
             or max(g["sessions"], key=lambda s: (s["named"], s["updated"]), default=None)
         label = (latest_run or {}).get("unit") or (tree or {}).get("branch") or ""
         title = (owner or {}).get("name") or label or (latest_run or {}).get("goal", "")[:90] or key
-        card = {"key": key, "title": title, "label": label, "tree": tree, "worktree": key if tree else "",
+        card = {"key": key, "repo": main_root, "title": title, "label": label, "tree": tree, "worktree": key if tree else "",
                 "goal": (latest_run or {}).get("goal", ""), "desc": (latest_run or {}).get("desc", ""),
                 "sessions": [{k: s[k] for k in ("id", "name", "state", "updated", "branch")} for s in g["sessions"]],
                 "runs": g["runs"][-6:],
@@ -1693,12 +1753,55 @@ class Server(http.server.ThreadingHTTPServer):
         self.lock, self.cached, self.cached_at, self.sources, self.docs, self.scopes = threading.Lock(), None, 0.0, {}, {}, {}
         self.herdr_lock, self.herdr_cached, self.herdr_cached_at = threading.Lock(), None, 0.0
         self.herdr_live_lock, self.herdr_live = threading.Lock(), {}
+        self.roots, self.cwd_roots, self.card_roots = {str(repo.root): (repo, self.gc)}, {}, {}
+
+    def repo_at(self, cwd):
+        if cwd not in self.cwd_roots:
+            root = None
+            if repo_top(cwd):
+                common = (git(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir") or "").strip()
+                root = str(Path(common).parent) if common.endswith("/.git") else None
+                if root and root not in self.roots:
+                    r = Repo(root, None, None)
+                    self.roots[root] = (r, GitCache(r))
+            self.cwd_roots[cwd] = root
+        return self.roots.get(self.cwd_roots[cwd])
+
+    def owner_of(self, key):
+        """(Repo, GitCache) whose root or worktree is `key`, or the one that built card `key`."""
+        root = self.card_roots.get(key)
+        if root in self.roots:
+            return self.roots[root]
+        now = time.time()
+        return next(((r, gc) for root, (r, gc) in self.roots.items() if key == root or key in gc.worktrees(now)), None)
+
+    def build(self):
+        herdr = self.herdr_state()
+        if not herdr["running"]:
+            return build_state(self.repo, self.gc)
+        now, wanted, extra = time.time(), {}, {}
+        agents = herdr_agents(herdr)
+        for sid, (cwd, _) in agents.items():
+            owner = self.repo_at(cwd)
+            if owner:
+                wanted.setdefault(str(owner[0].root), set()).add(sid)
+        seen = {pane for _, pane in agents.values()}
+        for pane in herdr["panes"]:
+            owner = self.repo_at(pane["cwd"]) if pane.get("agent") and pane["pane_id"] not in seen else None
+            if owner:
+                s = pane_session(pane, str(owner[0].root), now)
+                wanted.setdefault(str(owner[0].root), set()).add(s["id"])
+                extra.setdefault(str(owner[0].root), []).append(s)
+        parts = [build_state(*self.roots[root], only=sids, extra=extra.get(root, [])) for root, sids in wanted.items()]
+        return merge_states(self.repo, parts, now)
 
     def state(self):
         with self.lock:
             if time.time() - self.cached_at > STATE_TTL_S:
-                st = build_state(self.repo, self.gc)
+                st = self.build()
                 self.sources, self.docs, self.scopes = st.pop("_sources"), st.pop("_docs"), st.pop("_scopes")
+                self.card_roots = {k: c["repo"] for c in st["cards"]
+                                   for k in [c["key"], *(f"session:{s['id']}" for s in c["now"])]}
                 self.cached = json.dumps(st).encode()
                 self.cached_at = time.time()
             return self.cached
@@ -1988,7 +2091,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             rid = (q.get("id") or [""])[0]
             if not RUN_ID_RE.match(rid):
                 return self.send(400, b"bad run id", "text/plain")
-            lines = tail_lines(self.server.repo.runs / f"{rid}.log", 12000)
+            runs = dict.fromkeys(r.runs for r, _ in self.server.roots.values())
+            log = next((d / f"{rid}.log" for d in runs if (d / f"{rid}.log").exists()), self.server.repo.runs / f"{rid}.log")
+            lines = tail_lines(log, 12000)
             return self.send(200, "\n".join(lines[-120:]).encode(), "text/plain; charset=utf-8")
         if url.path == "/api/output":
             sid, aid = ((q.get(k) or [""])[0] for k in ("sid", "id"))
@@ -2012,20 +2117,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(200, data, "text/plain; charset=utf-8")
         if url.path in ("/api/changes", "/api/files", "/api/diff"):
             key = (q.get("key") or [""])[0]
-            if key not in set(self.server.gc.worktrees(time.time())) | {str(self.server.repo.root)}:
+            owner = self.server.owner_of(key) if key else None
+            if not owner or key != str(owner[0].root) and key not in owner[1].worktrees(time.time()):
                 return self.send(404, b"unknown worktree", "text/plain")
+            repo = owner[0]
             scope = self.server.scopes.get(key)
             if url.path == "/api/changes":
-                items = change_items(key, self.server.repo.main)
+                items = change_items(key, repo.main)
                 if scope:
-                    items["own"] = sum(f["own"] for f in scoped_files(self.server.repo, key, scope, status_files(key)))
+                    items["own"] = sum(f["own"] for f in scoped_files(repo, key, scope, status_files(key)))
                 return self.send(200, json.dumps(items).encode())
             ref = (q.get("ref") or [""])[0]
             if ref != WORKTREE_REF and not SHA_RE.match(ref):
                 return self.send(400, b"bad ref", "text/plain")
             files = status_files(key) if ref == WORKTREE_REF else commit_files(key, ref)
             if ref == WORKTREE_REF and scope:
-                files = scoped_files(self.server.repo, key, scope, files)
+                files = scoped_files(repo, key, scope, files)
             if url.path == "/api/files":
                 return self.send(200, json.dumps(files).encode())
             path = (q.get("path") or [""])[0]
@@ -2124,7 +2231,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             on = bool(body.get("on", True))
         except (ValueError, KeyError, TypeError):
             return self.send(400, b"bad request", "text/plain")
-        repo = self.server.repo
+        repo = (self.server.owner_of(keys[0]) or (self.server.repo,))[0] if keys else self.server.repo
         path = repo.favourites if url.path == "/api/favourite" else repo.dismissed
         with self.server.lock:
             data = load_json(path) or {}
