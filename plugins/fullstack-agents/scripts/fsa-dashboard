@@ -23,6 +23,7 @@ import threading
 import time
 import unicodedata
 import urllib.parse
+from collections import Counter
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -1452,6 +1453,10 @@ def build_state(repo, gc):
             continue
         if dismissed.get(key, 0) < card["updated"]:
             cards.append(card)
+    shared = Counter(c["title"] for c in cards)
+    for c in cards:
+        if shared[c["title"]] > 1 and (c["tree"] or {}).get("branch"):
+            c["title"] = c["tree"]["branch"].rsplit("/", 1)[-1]
 
     def attention(state):
         out = []
