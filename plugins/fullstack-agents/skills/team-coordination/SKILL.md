@@ -1,6 +1,6 @@
 ---
 name: team-coordination
-description: Use whenever more than one Claude session works on the same repository or production — before a production deploy, a proxy reload, a migration, a default-branch merge or a shared cache clean. Lightweight protocol: each session works in its own worktree, merges only deployable work, and coordinates only the few actions that can actually collide.
+description: Use whenever more than one Claude session works on the same repository or production — before a production deploy, a proxy reload, a migration, a default-branch merge or a shared cache clean. Lightweight protocol: each session works in its own worktree, merges only deployable work, and coordinates only the few actions that can actually collide. On a bare-metal development host the project binds one dev branch instead: commits only, no worktrees or merges, and affected services are reloaded rather than deployed.
 ---
 
 # Team coordination
@@ -35,6 +35,22 @@ $TB note --name <name> "deployed <sha>; image <id>; migrations <v>"
 $TB phase <investigate|plan|implement|audit|review> [--worktree <path>] [--note "<one line>"]
 $TB unlock deploy ; $TB release
 ```
+
+## Bare-metal development
+
+When the project's `CLAUDE.md` binds **bare-metal** development (the code runs natively on the
+host, straight from one checkout), these replace "How sessions work" 1–2 and the deploy steps:
+
+1. **One dev branch, never the default branch.** Every session commits to the bound dev branch in
+   its bound checkout. No per-task worktree, no feature branch, no merge or fast-forward of the
+   default branch during development. Commits stay small and stage explicit paths; the checkout
+   is shared, so the working-tree rules apply in full.
+2. **Reload, not deploy.** There is no image build, deploy script or drain. After committing, the
+   session reloads only the services its change affects with the project's reload commands (the
+   bound aliases), then verifies them through their health checks and logs. A missing reload
+   command is added to the project's dev tooling, not worked around by hand.
+3. **Still coordinated.** Hold the `deploy` lock for the reload window, claim migration versions
+   with a board note, and write a reload note (commit, services reloaded, migrations).
 
 ## The four coordinated actions
 
@@ -82,4 +98,5 @@ merge, deploy lock or deploy note overrides it; `--worktree` places the session 
 
 The project's `CLAUDE.md` supplies, in its task-flow bindings: the deploy command pattern
 (also written to `.claude/fsa-team.conf` as `deploy_regex=`), the worktree approval rule, its
-own coordinated surfaces, and who may override the deploy gate.
+own coordinated surfaces, and who may override the deploy gate. A bare-metal project also binds
+its dev branch, the checkout it runs from, and its per-service reload commands.

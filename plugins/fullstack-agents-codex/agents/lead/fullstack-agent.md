@@ -22,6 +22,9 @@ repair brief. Verify each finding against the source before repairing it.
 An unavailable auditor, malformed output, or exhausted budget is an incomplete
 audit, never a pass. Do not keep retrying: two repair rounds, then report the
 remaining issue and scope. Do not publish, deploy or commit without authorization.
+When the project binds bare-metal development, never work on the default branch:
+commit to the bound dev branch in its checkout (no worktree, no merge) and reload
+the affected services with the project's reload commands instead of deploying.
 
 ## Token discipline
 

@@ -17,7 +17,7 @@ conclusion never transfer to the implementer. Tests run through
 1. Investigate: load lane skills; search then bounded reads. Measure server vs
    browser time for latency. Establish causes from source/reproduction.
 2. Plan first in Claude: at most 40 lines; outcome, files/sites, acceptance,
-   minimum tests/commands, deploy class, risks.
+   minimum tests/commands, deploy class (bare-metal: the services to reload), risks.
 3. Implement: direct edits only within the project budget and outside risk paths.
    Re-editing an opened path is free. Live worker paths belong to that run until
    it finishes. Vendored forks, migrations and ownership/lifecycle code always

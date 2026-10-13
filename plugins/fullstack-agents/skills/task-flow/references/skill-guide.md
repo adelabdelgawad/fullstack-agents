@@ -244,7 +244,9 @@ When other Claude sessions work on the same repository, follow `team-coordinatio
 protocol. Work in your own worktree, rebase and resolve your own conflicts, and merge only
 deployable work. Hold the `deploy` lock only for the production restart window, claim migration
 versions with a board note, and leave a deploy note (SHA, image, migrations). Never hold a deploy
-for a peer or wait on a peer's uncommitted files.
+for a peer or wait on a peer's uncommitted files. On a bare-metal project, commit to the bound dev
+branch in its checkout (never the default branch, no worktree, no merge) and reload the affected
+services instead of deploying; `team-coordination` "Bare-metal development" has the rules.
 
 ## Project bindings
 
