@@ -14,6 +14,7 @@ import select
 import shlex
 import shutil
 import socket
+import sqlite3
 import signal
 import stat
 import subprocess
@@ -34,6 +35,8 @@ LAST_ASKS = {}
 CODEX_META = {}
 CODEX_HOME = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
 CLAUDE_BASES = (os.environ.get("CLAUDE_CONFIG_DIR"), "~/.claude", "~/.claude-anthropic")
+CLAUDE_CONFIG = Path(os.environ.get("CLAUDE_CONFIG_DIR") or "~/.claude").expanduser()
+CODEX_JUDGE_S = 600
 RUN_WINDOW_S = 72 * 3600
 SESSION_WINDOW_S = 48 * 3600
 STALL_S = 300
@@ -69,7 +72,7 @@ SAID_MAX = 20000
 MD_PATH_RE = re.compile(r"(?<![\w/.:~-])((?:~|\.{1,2})?/?[\w.-]+(?:/[\w.-]+)*\.md)(?![\w/])")
 DOCS_MAX = 30
 DOC_BYTES = 2_000_000
-PHASES = ("investigate", "plan", "audit", "review")
+PHASES = ("investigate", "plan", "implement", "audit", "review")
 NOTE_RE = re.compile(r"<task-id>([\w-]+)</task-id>.*?<status>(\w+)</status>")
 SOURCE_ID_RE = re.compile(r"^[\w-]{1,80}$")
 ACTIVITY_KEEP_S = 900
@@ -1036,12 +1039,31 @@ def agent_items(session_dir, ended, now):
     return sorted(out, key=lambda x: -x["at"])[:ACTIVITY_MAX]
 
 
+def codex_transcript_lines(p):
+    kind = p.get("type")
+    if kind == "message" and p.get("role") in ("user", "assistant"):
+        text = codex_text(p)
+        if p["role"] == "assistant" and text:
+            return [f"\nCodex: {text}"]
+        return [f"\n› You: {' '.join(text.split())}"] if text and not text.startswith("<") else []
+    if kind in ("function_call", "custom_tool_call"):
+        return [f"  ⚙ {codex_action(p)}"]
+    if kind in ("function_call_output", "custom_tool_call_output"):
+        out = p.get("output")
+        text = " ".join(str(out.get("content") if isinstance(out, dict) else out or "").split())
+        return [f"    ↳ {text[:300]}{'…' if len(text) > 300 else ''}"] if text else []
+    return []
+
+
 def render_transcript(path):
     out = []
     for line in tail_lines(path, 400000):
         try:
             d = json.loads(line)
         except ValueError:
+            continue
+        if d.get("type") == "response_item":
+            out += codex_transcript_lines(d.get("payload") or {})
             continue
         if d.get("type") not in ("user", "assistant"):
             continue
@@ -1267,16 +1289,20 @@ def reply_logged(config, sid, turn_at):
             continue
         if iso_epoch(d.get("at") or "") < turn_at - 2:
             return False
-        if d.get("mode") == "reply" and d.get("session") == sid:
+        if d.get("mode") in ("reply", "phase") and d.get("session") == sid:
             return True
     return False
 
 
 def run_classifier(path, session):
     hook = {"session_id": session["id"], "transcript_path": str(path), "cwd": session["cwd"]}
+    run_mode("reply", hook, path.parents[2])
+
+
+def run_mode(mode, hook, config):
     try:
-        subprocess.run([sys.executable, str(HERE / "fsa-classify"), "reply"], input=json.dumps(hook), text=True,
-                       capture_output=True, timeout=90, env={**os.environ, "CLAUDE_CONFIG_DIR": str(path.parents[2])})
+        subprocess.run([sys.executable, str(HERE / "fsa-classify"), mode], input=json.dumps(hook), text=True,
+                       capture_output=True, timeout=90, env={**os.environ, "CLAUDE_CONFIG_DIR": str(config)})
     except (subprocess.TimeoutExpired, OSError):
         pass
 
@@ -1348,7 +1374,7 @@ def codex_thread_names():
 
 
 def codex_live():
-    """Rollout path -> herdr pane for every process holding a Codex transcript open (the live sessions)."""
+    """Rollout path -> (herdr pane, holder pid, rollouts that pid holds) for every open Codex transcript."""
     out = {}
     for proc in Path("/proc").iterdir():
         if not proc.name.isdigit():
@@ -1362,8 +1388,85 @@ def codex_live():
             continue
         pane = proc_pane(proc.name)
         for t in rollouts:
-            out[t] = pane or out.get(t, "")
+            out[t] = (pane or (out.get(t) or ("",))[0], int(proc.name), len(rollouts))
     return out
+
+
+def codex_children():
+    """Parent thread id -> [(child id, edge status, rollout, label)] from Codex's own state database."""
+    dbs = sorted(CODEX_HOME.glob("state_*.sqlite"), key=lambda p: int(re.sub(r"\D", "", p.stem) or 0))
+    if not dbs:
+        return {}
+    out = {}
+    try:
+        con = sqlite3.connect(f"file:{dbs[-1]}?mode=ro", uri=True, timeout=1)
+        try:
+            rows = con.execute(
+                "SELECT e.parent_thread_id, e.child_thread_id, e.status, t.rollout_path, "
+                "COALESCE(NULLIF(t.agent_nickname, ''), NULLIF(t.agent_role, ''), NULLIF(t.name, ''), t.title) "
+                "FROM thread_spawn_edges e JOIN threads t ON t.id = e.child_thread_id").fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return {}
+    for parent, child, status, rollout, label in rows:
+        out.setdefault(parent, []).append((child, status or "", rollout or "", label or ""))
+    return out
+
+
+def codex_turn_open(path):
+    for line in reversed(tail_lines(path, 65536)):
+        if '"task_complete"' in line:
+            return False
+        if '"task_started"' in line:
+            return True
+    return False
+
+
+def proc_children():
+    kids = {}
+    for proc in Path("/proc").iterdir():
+        if proc.name.isdigit():
+            try:
+                ppid = int((proc / "stat").read_text().rsplit(")", 1)[1].split()[1])
+            except (OSError, ValueError, IndexError):
+                continue
+            kids.setdefault(ppid, []).append(int(proc.name))
+    return kids
+
+
+def proc_agents(pid, kids, now):
+    """Agent CLIs (claude -p, codex exec, ...) running anywhere under process `pid`."""
+    out, todo = [], list(kids.get(pid, []))
+    while todo:
+        child = todo.pop()
+        todo += kids.get(child, [])
+        try:
+            argv = Path(f"/proc/{child}/cmdline").read_bytes().decode("utf-8", "replace").split("\0")
+        except OSError:
+            continue
+        name = Path(argv[0]).name
+        if name not in HERDR_AGENT_KINDS or name == "codex" and argv[1:2] == ["app-server"]:
+            continue
+        label = " ".join(a for a in argv[:6] if a and len(a) <= 40 and "\n" not in a)
+        out.append({"id": f"pid-{child}", "label": label, "state": "running", "at": now, "path": ""})
+    return out
+
+
+def codex_agent_items(sid, children, holder, kids, now):
+    out = []
+    for child, status, rollout, label in children.get(sid, []):
+        try:
+            at = Path(rollout).stat().st_mtime
+        except OSError:
+            continue
+        running = codex_turn_open(Path(rollout)) and now - at <= AGENT_STALE_S
+        if running or now - at <= ACTIVITY_KEEP_S:
+            out.append({"id": child, "label": " · ".join(x for x in ("codex", label) if x),
+                        "state": "running" if running else "completed", "at": at, "path": rollout})
+    if holder and holder[2] == 1:
+        out += proc_agents(holder[1], kids, now)
+    return sorted(out, key=lambda x: -x["at"])[:ACTIVITY_MAX]
 
 
 def codex_text(payload):
@@ -1382,7 +1485,7 @@ def codex_action(payload):
     return f"{name}: {detail[:160]}" if detail else name
 
 
-def read_codex_session(repo, path, meta, now, names, waits, pane, pane_status):
+def read_codex_session(repo, path, meta, now, names, waits, pane, pane_status, agents=()):
     sid = meta.get("id") or meta.get("session_id") or path.stem[-36:]
     cwd, branch = meta.get("cwd") or "", (meta.get("git") or {}).get("branch") or ""
     said = ask = action = action_id = ""
@@ -1438,7 +1541,7 @@ def read_codex_session(repo, path, meta, now, names, waits, pane, pane_status):
         "id": sid, "engine": "codex", "pane": pane or "",
         "name": title or f"codex {Path(cwd).name or 'session'} {sid[:8]}", "named": bool(title), "title": title,
         "cwd": cwd, "branch": branch, "worktree": cwd if cwd != str(repo.root) else "", "state": state,
-        "updated": updated, "turn_at": iso_epoch(turn_at), "agents": [], "idle": idle,
+        "updated": updated, "turn_at": iso_epoch(turn_at), "agents": list(agents), "idle": idle, "transcript": str(path),
         "snippet": snippet(said) if state in ("waiting", "still_open", "idle") else "",
         "briefs": sorted(briefs), "chips": [], "ask": snippet(ask, 600), "need": need,
         "action": action, "action_at": iso_epoch(action_at),
@@ -1453,16 +1556,20 @@ def collect_codex_sessions(repo, trees, now, waits):
     found = [(f, m) for f in codex_rollouts(now) for m in [codex_meta(f)] if m.get("cwd") in roots]
     if not found:
         return []
-    live = codex_live()
-    panes = {str(f): live.get(str(f)) for f, _ in found if str(f) in live}
+    live, children = codex_live(), codex_children()
+    spawned = {c for kids in children.values() for c, *_ in kids}
+    panes = {str(f): live[str(f)][0] for f, _ in found if str(f) in live}
     status = {}
     if any(panes.values()):
         status = {x["pane_id"]: x["status"] for x in read_herdr_snapshot()["panes"]}
-    names = codex_thread_names()
+    names, kids = codex_thread_names(), proc_children() if live else {}
     out = []
     for f, meta in found:
+        if meta.get("id") in spawned:
+            continue
         pane = panes.get(str(f))
-        s = read_codex_session(repo, f, meta, now, names, waits, pane, status.get(pane or ""))
+        agents = codex_agent_items(meta.get("id"), children, live.get(str(f)), kids, now)
+        s = read_codex_session(repo, f, meta, now, names, waits, pane, status.get(pane or ""), agents)
         if s:
             out.append(s)
     return out
@@ -1486,9 +1593,10 @@ def herdr_agents(snapshot):
             pane = proc_pane(f.stem) if info.get("sessionId") and info.get("kind") == "interactive" else ""
             if pane in live:
                 out[info["sessionId"]] = (info.get("cwd") or "", pane)
-    for rollout, pane in codex_live().items():
+    spawned = {c for kids in codex_children().values() for c, *_ in kids}
+    for rollout, (pane, _, _) in codex_live().items():
         meta = codex_meta(Path(rollout))
-        if pane in live and meta.get("id"):
+        if pane in live and meta.get("id") and meta["id"] not in spawned:
             out[meta["id"]] = (meta.get("cwd") or "", pane)
     return out
 
@@ -1526,8 +1634,29 @@ def merge_states(home, parts, now):
     return st
 
 
+def judge_codex(s, now):
+    """Haiku phase and wait verdict for a Codex session: once per finished turn, every CODEX_JUDGE_S while it works."""
+    path = Path(s.get("transcript") or "")
+    if s["state"] == "working" and now - s["updated"] < STALL_S:
+        key = f"w{int(s['updated'] // CODEX_JUDGE_S)}"
+    elif s["state"] in ("idle", "still_open", "waiting") and s["turn_at"] and now - s["turn_at"] <= JUDGE_WINDOW_S:
+        key = f"t{s['turn_at']}"
+    else:
+        return
+    if JUDGED.get(s["id"]) == key or not path.is_file():
+        return
+    JUDGED[s["id"]] = key
+    if key.startswith("t") and reply_logged(CLAUDE_CONFIG, s["id"], s["turn_at"]):
+        return
+    hook = {"session_id": s["id"], "transcript_path": str(path), "cwd": s["cwd"]}
+    threading.Thread(target=run_mode, args=("phase", hook, CLAUDE_CONFIG), daemon=True).start()
+
+
 def judge_turns(repo, sessions, now):
     for s in sessions:
+        if s.get("engine") == "codex":
+            judge_codex(s, now)
+            continue
         turn = s["turn_at"]
         if s["state"] not in ("idle", "still_open", "waiting") or s["need"] or not turn or JUDGED.get(s["id"]) == turn \
                 or not WAIT_MIN_S <= now - turn <= JUDGE_WINDOW_S:
@@ -1598,12 +1727,12 @@ def build_state(repo, gc, only=None, extra=()):
     names.update({k: v.get("name") for k, v in (board.get("claims") or {}).items()})
     runs = collect_runs(repo, now)
     sessions = collect_sessions(repo, trees, now, names, board.get("waits") or {})
-    judge_turns(repo, sessions, now)
     sessions += fresh_sessions(repo, trees, now)
     sessions += collect_codex_sessions(repo, trees, now, board.get("waits") or {})
     sessions += extra
     if only is not None:
         sessions = [s for s in sessions if s["id"] in only]
+    judge_turns(repo, sessions, now)
     deployed_shas = [m.group(1) for e in board.get("events", []) for m in [DEPLOYED_RE.search(e.get("text", ""))] if m]
     dismissed = load_json(repo.dismissed) or {}
     favourites = load_json(repo.favourites) or {}

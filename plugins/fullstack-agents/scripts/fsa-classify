@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Typed Haiku decisions for hooks: route a prompt to skills, or classify whether a reply waits on the user."""
+"""Typed Haiku decisions: route a prompt to skills, classify whether a reply waits on the user, or a Codex turn's phase."""
 import json
 import os
 import re
@@ -20,6 +20,7 @@ INTENTS = ["question", "investigate", "debug", "performance", "plan", "implement
 LANES = ["rust", "python", "frontend", "infra", "docs", "plugin", "none"]
 WORKERS = ["none", "bounded-extractor", "test-runner", "diff-reviewer", "implementer"]
 AWAITING = ["approval", "decision", "answer", "action", "review", "none"]
+PHASES = ["investigate", "plan", "implement", "audit", "review"]
 LOG = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "fullstack-agents" / "classifier.jsonl"
 
 ROUTE_SYSTEM = """You route a developer's prompt for a Claude Code session lead in a fullstack repository.
@@ -73,6 +74,55 @@ def project_profile(cwd):
     if found("docker-compose*.yml", "compose*.yml"):
         marks.append("Docker compose")
     return f"{root.name}: {', '.join(marks) or 'unknown stack'}"
+
+
+PHASE_SYSTEM = """You read the latest turn of an AI coding agent (Codex) working for a developer: the
+developer's last request, the agent's recent tool calls, and its latest message. Decide which phase the
+task is in and whether the work now waits on the developer.
+investigate: reading code, logs or data to understand or diagnose; no plan proposed yet.
+plan: proposing or writing a plan, brief or design that is not implemented yet.
+implement: editing files, writing code or migrations, or running the build for its own change.
+audit: the change is made and the agent is testing, reviewing or verifying it, or handed it to a reviewer.
+review: the agent has handed results, findings or finished work back for the developer to read or decide.
+awaiting follows the same rule as for any final message: approval, decision, answer, action or review
+when the developer must act before anything moves, none when the agent is still working or finished
+with nothing left for the developer. need is one short line saying what the developer must do; empty for
+none. confidence: 0.9 when the turn is plain, 0.7 when you infer it, 0.5 or less when it is ambiguous."""
+
+
+def codex_turn(transcript, limit=4000):
+    """The last request, recent tool calls and latest message of a Codex rollout, as classifier input."""
+    try:
+        with open(transcript, "rb") as fh:
+            fh.seek(max(0, os.path.getsize(transcript) - 400000))
+            lines = fh.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return ""
+    ask, said, calls = "", "", []
+    for line in lines:
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        p = d.get("payload") or {}
+        if d.get("type") != "response_item":
+            continue
+        if p.get("type") == "message":
+            text = "\n".join(c.get("text", "") for c in p.get("content") or []
+                             if isinstance(c, dict) and c.get("type") in ("input_text", "output_text")).strip()
+            if p.get("role") == "user" and text and not text.startswith("<"):
+                ask, calls = text, []
+            elif p.get("role") == "assistant" and text:
+                said = text
+        elif p.get("type") in ("function_call", "custom_tool_call"):
+            raw = " ".join(str(p.get("arguments") or p.get("input") or "").split())
+            calls.append(f"{p.get('name', '')}: {raw[:160]}")
+    if not ask and not said:
+        return ""
+    head = limit // 3
+    said = said if len(said) <= limit else f"[PART: opening]\n{said[:head]}\n[PART: ending]\n{said[head - limit:]}"
+    tools = "\n".join(calls[-12:]) or "(none)"
+    return f"REQUEST:\n{ask[-1500:]}\n\nRECENT TOOL CALLS:\n{tools}\n\nLATEST MESSAGE:\n{said}"
 
 
 def last_assistant_text(transcript, limit=1500):
@@ -185,14 +235,39 @@ def wait(hook):
     return 0
 
 
+def phase(hook):
+    text = codex_turn(hook.get("transcript_path") or "")
+    sid = hook.get("session_id") or ""
+    if not text or not sid:
+        return 0
+    schema = {"type": "object", "additionalProperties": False,
+              "required": ["phase", "awaiting", "need", "confidence"],
+              "properties": {"phase": {"type": "string", "enum": PHASES},
+                             "awaiting": {"type": "string", "enum": AWAITING},
+                             "need": {"type": "string", "maxLength": 200},
+                             "confidence": {"type": "number", "minimum": 0, "maximum": 1}}}
+    out, took = ask_haiku(PHASE_SYSTEM, text, schema)
+    log({"mode": "phase", "session": sid, "tail": text[-300:], "decision": out, "seconds": took})
+    if not out or out.get("confidence", 0) < MIN_WAIT_CONF:
+        return 0
+    board = [str(HERE / "team-board"), "--session", sid]
+    subprocess.run(board + ["phase", out["phase"], "--note", "classified"], capture_output=True, timeout=10,
+                   cwd=hook.get("cwd") or None)
+    if out.get("awaiting") != "none" and out.get("need", "").strip():
+        subprocess.run(board + ["wait", f"{out['awaiting']}: {out['need'].strip()}"], capture_output=True, timeout=10,
+                       cwd=hook.get("cwd") or None)
+    return 0
+
+
 def main():
-    if os.environ.get("FSA_CLASSIFIER_RUN") or len(sys.argv) != 2 or sys.argv[1] not in ("prompt", "reply"):
+    modes = {"prompt": route, "reply": wait, "phase": phase}
+    if os.environ.get("FSA_CLASSIFIER_RUN") or len(sys.argv) != 2 or sys.argv[1] not in modes:
         return 2
     try:
         hook = json.loads(sys.stdin.read() or "{}")
     except ValueError:
         return 2
-    return route(hook) if sys.argv[1] == "prompt" else wait(hook)
+    return modes[sys.argv[1]](hook)
 
 
 if __name__ == "__main__":

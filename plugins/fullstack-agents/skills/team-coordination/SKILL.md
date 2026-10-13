@@ -32,7 +32,7 @@ $TB status                              # claims, locks, recent events
 $TB claim --name <name> --task "<one line>" --scope "<paths / surfaces>"
 $TB lock deploy --name <name> --reason "<sha, migrations>"   # exit 3: a peer holds it
 $TB note --name <name> "deployed <sha>; image <id>; migrations <v>"
-$TB phase <investigate|plan|audit|review> [--worktree <path>] [--note "<one line>"]
+$TB phase <investigate|plan|implement|audit|review> [--worktree <path>] [--note "<one line>"]
 $TB unlock deploy ; $TB release
 ```
 
