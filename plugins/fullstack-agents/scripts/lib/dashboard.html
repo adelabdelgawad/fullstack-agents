@@ -8,7 +8,7 @@
 <style>
 :root {
   --bg: #f4f5f8; --panel: #ffffff; --card: #ffffff; --card-hover: #f7f8fb; --ink: #1b1d26; --muted: #5d6273; --faint: #8b90a3; --line: #dfe2ea;
-  --active: #0b7a99; --pass: #1d7f3e; --changes: #a85a00; --human: #b0246f; --merged: #6b44c2;
+  --active: #0b7a99; --pass: #1d7f3e; --changes: #a85a00; --human: #b0246f;
   --amber: #a85a00; --amber-bg: #fff1dd; --blue: #0b7a99; --blue-bg: #e2f3f8;
   --red: #b42318; --red-bg: #fde8e6; --green: #1d7f3e; --green-bg: #e2f4e8; --chip: #eef0f5; --yellow: #a85a00;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -16,15 +16,15 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #14151b; --panel: #1a1c24; --card: #20222c; --card-hover: #252835; --ink: #e4e5ea; --muted: #9da2b6; --faint: #6c7187; --line: #2b2e3b;
-    --active: #8be9fd; --pass: #50fa7b; --changes: #ffb86c; --human: #ff79c6; --merged: #bd93f9;
+    --active: #8be9fd; --pass: #50fa7b; --changes: #ffb86c; --human: #ff79c6;
     --amber: #ffb86c; --amber-bg: #3a2c16; --blue: #8be9fd; --blue-bg: #18303a;
     --red: #ff8a7f; --red-bg: #43201c; --green: #50fa7b; --green-bg: #173322; --chip: #2a2d3a; --yellow: #ffb86c;
   }
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
-.dismiss { margin-left: auto; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 6px; font-size: 11px; padding: 2px 8px; cursor: pointer; }
-.dismiss:hover { color: var(--ink); border-color: var(--muted); }
+.action-button { margin-left: auto; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 6px; font-size: 11px; padding: 2px 8px; cursor: pointer; }
+.action-button:hover { color: var(--ink); border-color: var(--muted); }
 header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 24px 32px 4px; }
 header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 .viewtabs { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
@@ -60,7 +60,6 @@ main { padding: 0; }
 .col.flow .col-head::after { content: "›"; position: absolute; right: -11px; top: -3px; color: var(--faint); font-size: 16px; }
 .col.human .col-head { border-bottom-color: color-mix(in srgb, var(--human) 55%, transparent); }
 .col.human h2 { color: var(--human); }
-.col.merged h2 { color: var(--merged); }
 .col .none { color: var(--faint); font-size: 12px; padding: 4px 2px; }
 .more { width: 100%; border: 1px dashed var(--line); background: none; color: var(--muted); border-radius: 8px; padding: 6px; font: inherit; font-size: 12px; cursor: pointer; }
 .more:hover { color: var(--ink); border-color: var(--muted); }
@@ -118,9 +117,9 @@ main { padding: 0; }
 .chip.st-working { background: color-mix(in srgb, var(--active) 14%, transparent); color: var(--active); }
 .chip.st-stopped { background: none; border: 1px solid var(--line); }
 .foot { display: flex; gap: 8px; align-items: center; margin-top: 9px; padding-top: 7px; border-top: 1px solid var(--line); font: 11px var(--mono); color: var(--muted); }
-.foot .dismiss { font-family: inherit; }
+.foot .action-button { font-family: inherit; }
 .paths { font: 11px/1.4 var(--mono); color: var(--human); margin-top: 6px; word-break: break-all; }
-@media (hover: hover) { .card .foot .dismiss { opacity: 0; } .card:hover .foot .dismiss, .card:focus-within .foot .dismiss { opacity: 1; } }
+@media (hover: hover) { .card .foot .action-button { opacity: 0; } .card:hover .foot .action-button, .card:focus-within .foot .action-button { opacity: 1; } }
 .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 .list { display: grid; gap: 10px; max-width: 980px; }
 .list .card { cursor: default; }
@@ -157,6 +156,16 @@ aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-sp
 .tab2[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--blue); }
 .tab2:disabled { opacity: .4; cursor: default; }
 .pbody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 12px; }
+.info-card { border: 1px solid var(--line); border-radius: 6px; padding: 12px; min-width: 0; }
+.info-card h4 { margin: 0 0 10px; }
+.info-card summary { cursor: pointer; font-weight: 600; }
+.info-card pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.info-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; }
+.info-facts dd { margin: 0; overflow-wrap: anywhere; }
+.info-timeline { padding-left: 20px; }
+.info-timeline time { font-size: 12px; }
+.info-run { margin-top: 12px; }
 #info { flex: 1; min-height: 0; overflow: auto; padding: 4px 18px 18px; }
 .tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .task { display: grid; grid-template-columns: 18px 1fr; gap: 2px 8px; align-items: start; padding: 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; background: var(--panel); }
@@ -186,7 +195,7 @@ aside .task .detail pre.log { max-height: 260px; font-size: 11px; }
 .endbar.ok { border-top-color: var(--green); }
 .endbar.bad { border-top-color: var(--red); }
 .endbar.live { border-top-color: var(--blue); }
-.endbar .dismiss { margin-left: 0; }
+.endbar .action-button { margin-left: 0; }
 .card .br { font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--blue); margin-top: 3px; word-break: break-all; }
 .gitview { flex: 1; min-height: 0; display: flex; }
 .gcol { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); }
@@ -195,7 +204,7 @@ aside .task .detail pre.log { max-height: 260px; font-size: 11px; }
 .g1.hid, .g2.hid { flex: 0 0 30px; }
 .gh { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .gh .gt { font-weight: 600; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.gh .dismiss { margin-left: 0; flex: none; }
+.gh .action-button { margin-left: 0; flex: none; }
 .gb { flex: 1; min-height: 0; overflow: auto; }
 .rail { flex: 1; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; }
 .rail:hover { background: var(--chip); color: var(--ink); }
@@ -375,8 +384,8 @@ html.herdr-page .herdr-view { height: 100%; }
 <div id="toasts" aria-live="polite"></div>
 <dialog id="out" aria-labelledby="out-title">
   <div class="oh"><h3 id="out-title"></h3><span class="s" id="out-meta"></span>
-    <button class="dismiss" id="out-copy" style="margin-left:0">Copy</button>
-    <button class="dismiss" id="out-close" style="margin-left:0">Close</button></div>
+    <button class="action-button" id="out-copy" style="margin-left:0">Copy</button>
+    <button class="action-button" id="out-close" style="margin-left:0">Close</button></div>
   <div class="items" id="out-items" role="group" aria-label="Choose output"></div>
   <pre id="out-pre" tabindex="0"></pre>
 </dialog>
@@ -384,20 +393,19 @@ html.herdr-page .herdr-view { height: 100%; }
   <button role="menuitem" data-act="open">Open</button>
   <button role="menuitem" data-act="fav">Mark favourite</button>
   <button role="menuitem" data-act="copy">Copy session id</button>
-  <button role="menuitem" data-act="dismiss">Dismiss</button>
 </div>
 <script src="/static/xterm/xterm.js"></script>
 <script src="/static/xterm/addon-fit.js"></script>
 <script>
 const STAGES = [
-  {key: "investigate", label: "Investigate", who: "lead · opus · haiku scan", phases: ["idle", "investigate"], flow: true},
-  {key: "plan", label: "Plan", who: "lead · opus", phases: ["plan"], flow: true},
+  {key: "investigate", label: "Investigate", who: "lead", phases: ["idle", "investigate"], flow: true},
+  {key: "plan", label: "Plan", who: "lead", phases: ["plan"], flow: true},
   {key: "build", label: "Build", who: "implementer", phases: ["implement", "rework"], flow: true},
-  {key: "review", label: "Review", who: "lead audit · test-runner · diff-reviewer", phases: ["audit"], flow: true},
-  {key: "merged", label: "Merged", who: "main · deploy", phases: ["merged", "deploying", "deployed"]},
+  {key: "review", label: "Review", who: "lead audit · test-runner · diff-reviewer", phases: ["audit", "validate"], flow: true},
+  {key: "complete", label: "Done", who: "lead", phases: ["complete"]},
   {key: "human", label: "Needs human", who: "you · approve · rework", phases: ["review"]},
 ];
-const QUIET = new Set(["idle", "merged", "deployed"]);
+const QUIET = new Set(["idle", "complete"]);
 const FLAG_TEXT = {failed:"run failed", stalled:"run stalled", out_of_scope:"edited files outside its brief", no_changes:"changed nothing", retries_exhausted:"retries used up"};
 const SHOWN = 3;
 let expanded = new Set();
@@ -1402,16 +1410,10 @@ async function toggleFavourite(key, ev) {
   load();
 }
 
-async function dismiss(key, ev) {
-  ev?.stopPropagation();
-  await fetch("/api/dismiss", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({key})});
-  load();
-}
-
 const gitBadge = c => !c.tree ? 0 : typeof c.tree.own === "number" ? c.tree.own : c.tree.dirty;
 const rank = c => c.fresh ? -1 : c.sessions.some(s => s.state === "working") || c.runs.some(r => r.state === "running") ? 0 : needsHuman(c) ? 1 : QUIET.has(c.phase) ? 3 : 2;
 
-const needsHuman = c => c.phase === "review" || c.needs_you.length > 0 || c.sessions.some(s => s.state === "waiting");
+const needsHuman = c => c.phase !== "complete" && (c.phase === "review" || c.needs_you.length > 0 || c.sessions.some(s => s.state === "waiting"));
 const stageOf = c => needsHuman(c) ? "human" : (STAGES.find(s => s.phases.includes(c.phase)) || STAGES[0]).key;
 
 const LENSES = [["security", "sec"], ["ux", "ux"], ["code", "code"]];
@@ -1437,7 +1439,9 @@ function roundsHtml(c) {
   if (!runs.length) {
     const scan = agents.filter(a => a.label.startsWith("bounded-extractor"));
     const lead = c.sessions.some(s => s.state === "working") ? "live" : c.sessions.some(s => s.state === "waiting") ? "bad" : c.sessions.length ? "done" : "";
-    return `<div class="rounds"><div class="round"><div class="cells">${cell(lead, "lead · opus", "lead (opus): " + (lead || "no session"))}${scan.length ? cell(scan.some(a => a.state === "running") ? "live" : "done", "haiku scan", `bounded-extractor (haiku): ${scan.length} scan(s)`) : ""}</div></div></div>`;
+    const session = c.sessions.find(s => s.engine === "codex") || c.sessions[0] || {};
+    const leadLabel = ["lead", session.engine || "claude", session.model || (session.engine === "codex" ? "" : "opus")].filter(Boolean).join(" · ");
+    return `<div class="rounds"><div class="round"><div class="cells">${cell(lead, leadLabel, leadLabel + ": " + (lead || "no session"))}${scan.length ? cell(scan.some(a => a.state === "running") ? "live" : "done", "haiku scan", `bounded-extractor (haiku): ${scan.length} scan(s)`) : ""}</div></div></div>`;
   }
   const last = runs.length - 1, stage = stageOf(c), prefix = unitPrefix(runs.map(r => r.unit).filter(Boolean));
   const rows = runs.map((r, n) => {
@@ -1452,7 +1456,7 @@ function roundsHtml(c) {
       if (ag.length) return cell("done", label, `${name}: ${ag.map(a => a.state).join(", ")}`);
       return cell(after ? "skip" : "", label, `${name}: ${after ? "not run" : "pending"}`);
     };
-    const lead = n < last ? (r.sent_back ? "CHANGES" : "PASS") : stage === "review" ? "wait" : ["human", "merged"].includes(stage) ? "PASS" : "";
+    const lead = n < last ? (r.sent_back ? "CHANGES" : "PASS") : stage === "review" ? "wait" : ["human", "complete"].includes(stage) ? "PASS" : "";
     const leadTitle = {CHANGES: "lead audit: sent back for a fix", PASS: "lead audit: accepted", wait: "lead audit: in progress", "": "lead audit: pending"}[lead];
     const label = r.unit ? r.unit.slice(prefix.length) || r.unit : "no brief recorded";
     return `<div class="round" title="${esc(r.unit || r.id)}"><div class="rl"><span>${n + 1}</span><b>${esc(label)}</b><span>${esc(r.model || r.engine)}</span></div><div class="cells">${cell(runTone, "run", `implementer ${r.engine} ${r.model || ""} · ${r.unit}: ${r.state}${r.flags.length ? " · " + r.flags.join(", ") : ""}`)}${party("test-runner", x => x.kind === "tests", "test", "test-runner")}${LENSES.map(([k, s]) => party("diff-reviewer", x => x.kind === k, s, "diff-reviewer " + k)).join("")}${cell(lead, "lead", leadTitle)}</div></div>`;
@@ -1486,12 +1490,13 @@ function cardHtml(c) {
     ${branch ? `<div class="branch">${esc(branch)}</div>` : ""}
     <div class="cbody">${sub ? `<div class="s">${esc(sub)}</div>` : ""}
     ${roundsHtml(c)}
+    ${c.sessions.filter(s => s.engine === "codex" && s.workflow_history?.length).map(s => `<div class="s" title="Recorded workflow progress for ${esc(s.name)}">${s.workflow_history.map(e => `<span title="${esc(new Date(e.timestamp * 1000).toLocaleString())}">${esc(e.phase)}</span>`).join(" → ")}</div>`).join("")}
     <div class="chips">${chips}</div>
     ${cardNow(c)}
     ${paths}
     ${agentTiles(c)}</div>
     ${human && sid ? `<div class="cardhint">${esc(resumeCmd(sessionOf(sid) || { id: sid }))}</div>` : ""}
-    <div class="foot"><span>${ago(c.updated)} ago</span><button class="dismiss" data-dismiss="${esc(c.key)}">Dismiss</button></div></div>`;
+    <div class="foot"><span>${ago(c.updated)} ago</span></div></div>`;
 }
 
 const soleSid = c => c.tree && c.sessions.length === 1 ? c.sessions[0].id : "";
@@ -1704,7 +1709,6 @@ function render() {
     el.onclick = ev => { ev.stopPropagation(); openCard(el.dataset.wt); };
     el.onkeydown = ev => ev.stopPropagation();
   });
-  document.querySelectorAll("[data-dismiss]").forEach(el => el.onclick = ev => dismiss(el.dataset.dismiss, ev));
   document.querySelectorAll("[data-fav]").forEach(el => {
     el.onclick = ev => toggleFavourite(el.dataset.fav, ev);
     el.onkeydown = ev => ev.stopPropagation();
@@ -1759,7 +1763,7 @@ function ensureBody(kind, html, onNew) {
   if (onNew) onNew();
 }
 
-const paneHead = c => `<button class="dismiss close" id="close">Close</button>
+const paneHead = c => `<button class="action-button close" id="close">Close</button>
   <h3>${esc(c.title)}</h3>
   ${c.tree ? `<div style="font:12px ui-monospace,monospace;color:var(--blue)">${esc(c.tree.branch)}</div>` : ""}
   <div class="s">${esc(c.phase)}${c.tree ? ` · ${c.tree.ahead} ahead · ${gitBadge(c)} uncommitted` : ""}</div>
@@ -1777,10 +1781,15 @@ function detailHtml(r) {
     <div><b>End of task</b> ${stateChip(r)} ${flags}</div>
     ${live ? '<div class="s">Still running — the result lands here when it finishes.</div>' : r.summary ? `<pre>${esc(r.summary)}</pre>` : '<div class="s">No result text was recorded.</div>'}
     ${r.open_risks.length ? `<div class="s"><b>Open risks:</b> ${esc(r.open_risks.join(" · "))}</div>` : ""}
-    <div class="row" style="margin:6px 0 0"><button class="dismiss" data-log="1" style="margin-left:0">${showLog ? "Hide log" : "Show log"}</button></div>
+    <div class="row" style="margin:6px 0 0"><button class="action-button" data-log="1" style="margin-left:0">${showLog ? "Hide log" : "Show log"}</button></div>
     ${showLog ? `<pre class="log" id="log">${esc(logSeen || "loading…")}</pre>` : ""}
-    <div class="endbar ${tone}"><button class="dismiss" data-collapse="1" title="Collapse this task">Hide ▴</button></div>
+    <div class="endbar ${tone}"><button class="action-button" data-collapse="1" title="Collapse this task">Hide ▴</button></div>
   </div>`;
+}
+
+const infoOpen = new Map();
+function infoDisclosure(c, key, title, body) {
+  return `<details class="info-card" data-info-section="${esc(key)}"${infoOpen.get(c.key)?.has(key) ? " open" : ""}><summary>${esc(title)}</summary>${body}</details>`;
 }
 
 function infoHtml(c) {
@@ -1792,15 +1801,30 @@ function infoHtml(c) {
       ${r.goal ? `<div class="snip tg">${esc(r.goal)}</div>` : ""}
       ${open ? detailHtml(r) : ""}</li>`;
   }).join("");
+  const sessions = c.sessions || [], now = c.now || [];
+  const lead = sessions.find(s => s.name === c.title) || sessions[0] || now[0] || {};
+  const engineName = e => e === "codex" ? "Codex" : e === "claude" ? "Claude" : e || "Agent";
+  const runs = [...(c.workflow_runs || [])].sort((a, b) => a.updated - b.updated);
+  const audit = runs.filter(r => r.role === "auditor").slice(-1)[0];
+  const activity = [...now].sort((a, b) => b.updated - a.updated)[0] || lead;
+  const message = [...now].filter(s => s.said_full || s.said).sort((a, b) => (b.said_at || b.updated) - (a.said_at || a.updated))[0];
+  const status = sessions.some(s => ["waiting", "blocked"].includes(s.state)) ? "blocked" : sessions.some(s => s.state === "working") ? "working" : c.phase === "complete" ? "done" : STATE_TEXT[activity.state] || activity.state || "unknown";
+  const stamp = t => t ? new Date(t * 1000).toLocaleString() : "Time not recorded";
+  const history = sessions.flatMap(s => s.workflow_history || []).sort((a, b) => a.timestamp - b.timestamp);
+  const auditor = audit ? [engineName(audit.engine), audit.model || "model not recorded"].join(" · ") : lead.workflow_auditor ? "Claude · " + lead.workflow_auditor + " (selected; no audit recorded)" : "No audit recorded";
+  const timeline = events => `<ol class="info-timeline">${events.map(e => `<li><b>${esc(e.phase)}</b> <time>${esc(stamp(e.timestamp))}</time>${e.note ? `<div class="s">${esc(e.note)}</div>` : ""}</li>`).join("")}</ol>`;
+  const leadChecks = (lead.workflow_checks || []).length ? `<div class="snip"><b>Lead-reported checks</b><pre>${esc(lead.workflow_checks.join("\n"))}</pre></div>` : "";
   const desc = c.desc || c.goal;
-  const steps = stepsHtml(c);
-  return `${c.now && c.now.length ? `<h4>Session id</h4>${c.now.map(resumeHtml).join("")}` : ""}
-    ${c.now && c.now.length ? `<h4>Session</h4>${c.now.map(nowHtml).join("")}` : ""}
-    ${c.now && c.now.some(x => x.said_full || x.said) ? `<h4>Last message from Claude<button class="copy-ico" data-said="${esc(c.now.find(x => x.said_full || x.said).id)}" aria-label="Copy the last message" title="Copy the message as Markdown">${COPY_ICON}</button></h4>${c.now.map(saidHtml).join("")}` : ""}
-    ${steps ? `<h4>Steps${c.steps.length ? ` · ${stepsDone(c)}/${c.steps.length}` : ""}</h4>${steps}` : ""}
-    ${c.declared && c.declared.note ? `<h4>Phase note</h4><div class="snip">${esc(c.declared.note)}</div>` : ""}
-    ${desc ? `<h4>Brief</h4><div class="snip">${esc(desc)}</div>` : ""}
-    <h4>Implementer runs</h4>${tasks ? `<ul class="tasks">${tasks}</ul>` : '<div class="s">None — no code has been handed to an implementer for this task.</div>'}`;
+  const registered = runs.map(r => `<article class="info-run"><b>${esc(r.role)}</b> · ${esc(engineName(r.engine))} · ${esc(r.model || "model not recorded")} <span class="chip">${esc(r.state)}</span>${r.verdict ? " · " + esc(r.verdict) : ""}<div class="s">${esc(stamp(r.updated))}</div>${r.summary ? `<div class="snip">${esc(r.summary.slice(0, 320))}</div>${infoDisclosure(c, "run-" + r.run_id, "Full run summary", `<pre>${esc(r.summary)}</pre>`)}` : ""}${r.brief ? infoDisclosure(c, "brief-" + r.run_id, "Brief", `<pre>${esc(r.brief)}</pre>`) : ""}<div class="s">Run ${esc(r.run_id)}</div></article>`).join("");
+  const checks = (c.chips || []).filter(x => x.kind === "tests").map(x => `<div class="snip"><b>Worker-reported checks</b> ${esc(x.verdict)}${x.label ? " · " + esc(x.label) : ""}</div>`).join("") + [...runs, ...(c.runs || [])].filter(r => r.tests?.length).map(r => `<div class="snip"><b>Worker-reported checks</b><pre>${esc(JSON.stringify(r.tests, null, 2))}</pre></div>`).join("");
+  const blockers = [...(c.needs_you || []).map(f => FLAG_TEXT[f] || f), ...now.filter(s => s.need).map(s => s.need), ...(c.runs || []).flatMap(r => r.open_risks || [])];
+  return `<div class="info-grid">
+    <section class="info-card"><h4>Summary</h4><b>${esc(c.title)}</b><dl class="info-facts"><dt>State</dt><dd>${esc(status)}</dd><dt>Phase</dt><dd>${esc(lead.workflow_phase || c.phase || "unknown")}</dd><dt>Lead</dt><dd>${esc(engineName(lead.engine))}${lead.model ? " · " + esc(lead.model) : ""}</dd><dt>Auditor</dt><dd>${esc(auditor)}</dd><dt>Latest activity</dt><dd>${esc(stamp(activity.updated || c.updated))}</dd></dl></section>
+    <section class="info-card"><h4>Progress</h4>${history.length ? timeline(history.slice(-8)) + (history.length > 8 ? infoDisclosure(c, "history", "Earlier phase history", timeline(history.slice(0, -8))) : "") : '<div class="s">No phase history recorded.</div>'}${activity.action ? `<div class="snip"><b>${activity.action_running ? "Running now" : "Latest action"}</b> ${esc(activity.action)}</div>` : ""}${c.steps?.length ? stepsHtml(c) : ""}${c.declared?.note ? `<div class="snip">${esc(c.declared.note)}</div>` : ""}</section>
+    <section class="info-card"><h4>Result</h4>${lead.workflow_summary ? `<div class="snip"><b>Lead-reported summary</b><pre>${esc(lead.workflow_summary)}</pre></div>` : message ? `<div class="snip">${esc(lastPara(message.said || message.said_full).slice(0, 400))}</div>${infoDisclosure(c, "message", "Full message from " + engineName(message.engine), `<button class="copy-ico" data-said="${esc(message.id)}" aria-label="Copy the last message">${COPY_ICON}</button>${saidHtml(message)}`)}` : '<div class="s">No agent update recorded.</div>'}<div class="snip"><b>Audit</b> ${audit ? esc(audit.state) + (audit.verdict ? " · " + esc(audit.verdict) : " · no verdict recorded") : "No registered audit result."}</div>${leadChecks}${checks}${blockers.length ? `<div class="snip"><b>Blockers / needs you</b><ul>${[...new Set(blockers)].map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}</section>
+    ${infoDisclosure(c, "session", "Session details", (now.length ? now : sessions).map(resumeHtml).join("") + runs.map(r => `<div class="mono">${esc(r.run_id)} · ${esc(r.root || "")} · ${esc(r.artifact || "")}</div>`).join("") + `<div class="mono">${esc(c.worktree || c.repo || "")}</div>` + now.map(s => `<div class="s">Pane: ${esc(((state && state.session_panes) || {})[s.id] || "not recorded")}</div>`).join(""))}
+    ${infoDisclosure(c, "runs", "Worker and audit runs", (desc ? infoDisclosure(c, "task-brief", "Task brief", `<pre>${esc(desc)}</pre>`) : "") + registered + (tasks ? `<ul class="tasks">${tasks}</ul>` : "") + (!runs.length && !tasks ? '<div class="s">No run records available.</div>' : ""))}
+  </div>`;
 }
 
 async function pollLog(id) {
@@ -1815,7 +1839,15 @@ async function pollLog(id) {
 
 function stopLog() { clearInterval(logTimer); logTimer = null; }
 
-function wireInfo() {
+function wireInfo(c) {
+  document.querySelectorAll("#info [data-info-section]").forEach(el => {
+    el.ontoggle = () => {
+      if (!el.isConnected) return;
+      const keys = infoOpen.get(c.key) || new Set();
+      el.open ? keys.add(el.dataset.infoSection) : keys.delete(el.dataset.infoSection);
+      infoOpen.set(c.key, keys);
+    };
+  });
   document.querySelectorAll("#info .task").forEach(li => li.onclick = ev => { if (!ev.target.closest(".detail")) toggleTask(li.dataset.run); });
   const lb = document.querySelector("#info [data-log]");
   if (lb) lb.onclick = ev => { ev.stopPropagation(); showLog = !showLog; logSeen = ""; stopLog(); paintPanel(); };
@@ -1826,7 +1858,12 @@ function wireInfo() {
 function paintInfo(c) {
   if (openRun && !c.runs.some(x => x.id === openRun)) { openRun = null; showLog = false; stopLog(); }
   ensureBody("info", '<div id="info"></div>');
-  if (setIfChanged("info", infoHtml(c))) wireInfo();
+  const currentInfo = document.getElementById("info");
+  if (currentInfo?.dataset.card === c.key) {
+    infoOpen.set(c.key, new Set([...currentInfo.querySelectorAll("[data-info-section]")].filter(el => el.open).map(el => el.dataset.infoSection)));
+  }
+  if (setIfChanged("info", infoHtml(c))) wireInfo(c);
+  if (currentInfo) currentInfo.dataset.card = c.key;
   const r = openRun && c.runs.find(x => x.id === openRun);
   if (!r || !showLog) return stopLog();
   if (LIVE(r)) {
@@ -1853,7 +1890,7 @@ const diffHtml = t => (t || "").split("\n").map(l => `<span class="${l.startsWit
 function col1Html(c) {
   if (git.hide1) return '<button class="rail" data-show="1" title="Show changes" aria-label="Show changes">»</button>';
   const it = git.items, unc = it ? it.dirty : c.tree ? c.tree.dirty : 0, n = it ? it.commits.length : 0;
-  let h = '<div class="gh"><span class="gt">Changes</span><button class="dismiss" data-hide="1" title="Hide changes">Hide «</button></div><div class="gb">';
+  let h = '<div class="gh"><span class="gt">Changes</span><button class="action-button" data-hide="1" title="Hide changes">Hide «</button></div><div class="gb">';
   h += `<button class="grp" data-g="unc">${git.open.unc ? "▾" : "▸"} Uncommitted changes <span class="badge">${unc}</span></button>`;
   const own = it && typeof it.own === "number" ? ` · ${it.own} from this task, ${unc - it.own} other` : "";
   if (git.open.unc) h += unc ? `<button class="gi${git.item === "WORKTREE" ? " on" : ""}" data-ref="WORKTREE"><b>Working tree</b><span class="sub">${unc} file${unc === 1 ? "" : "s"} · not committed yet${own}</span></button>` : '<div class="hint">Working tree is clean.</div>';
@@ -1864,7 +1901,7 @@ function col1Html(c) {
 
 function col2Html() {
   if (git.hide2) return '<button class="rail" data-show="2" title="Show files" aria-label="Show files">»</button>';
-  let h = '<div class="gh"><span class="gt">Files</span><button class="dismiss" data-hide="2" title="Hide files">Hide «</button></div><div class="gb">';
+  let h = '<div class="gh"><span class="gt">Files</span><button class="action-button" data-hide="2" title="Hide files">Hide «</button></div><div class="gb">';
   if (!git.item) h += '<div class="hint">Pick a change on the left.</div>';
   else if (!git.files) h += '<div class="hint">Loading…</div>';
   else if (!git.files.length) h += '<div class="hint">No files.</div>';
@@ -2203,13 +2240,12 @@ function closeCtx() {
 
 function openCtx(card, x, y) {
   ctxCard = card;
-  const m = ctx(), d = card.querySelector("[data-dismiss]");
+  const m = ctx();
   m.querySelector('[data-act="open"]').disabled = !card.dataset.key;
   const fav = card.querySelector("[data-fav]");
   m.querySelector('[data-act="fav"]').disabled = !fav;
   m.querySelector('[data-act="fav"]').textContent = fav && fav.getAttribute("aria-pressed") === "true" ? "Unmark favourite" : "Mark favourite";
   m.querySelector('[data-act="copy"]').disabled = !card.dataset.sid;
-  m.querySelector('[data-act="dismiss"]').disabled = !d;
   m.hidden = false;
   m.style.left = Math.max(8, Math.min(x, innerWidth - m.offsetWidth - 8)) + "px";
   m.style.top = Math.max(8, Math.min(y, innerHeight - m.offsetHeight - 8)) + "px";
@@ -2249,7 +2285,6 @@ ctx().addEventListener("click", e => {
   if (act === "open") openCard(card.dataset.key);
   else if (act === "fav") toggleFavourite(card.dataset.key);
   else if (act === "copy") copyText(card.dataset.sid).then(() => toast(`<b>Copied</b> ${esc(card.dataset.sid)}`, "blue"), () => toast("<b>Copy failed</b>", "red"));
-  else dismiss(card.querySelector("[data-dismiss]").dataset.dismiss);
 });
 
 document.addEventListener("keydown", e => { if (e.key !== "Escape" || out || e.target.closest?.(".terminal")) return; if (closeCtx()) return; if (openRun) toggleTask(openRun); else closePanel(); });

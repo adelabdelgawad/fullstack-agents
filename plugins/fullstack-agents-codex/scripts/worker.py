@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 from handoff import BUNDLE, git, repo_path
+from phase import start_run, publish_run, child_thread, configured_model
 
 
 def block(text, name):
@@ -70,6 +71,7 @@ def snapshot(root, content_paths=(), exclude=None):
 
 
 def worker(args):
+    session = os.environ.get("CODEX_THREAD_ID")
     root = args.root.resolve()
     text = args.brief.read_text()
     if len(text) > 16000:
@@ -123,6 +125,8 @@ def worker(args):
         command += ["--model", args.model]
     # Prevent nested workers; explicit CLI runtime overrides win over defaults.
     command += ["-c", "agents.enabled=false", "-"]
+    registration = start_run(session, run, root, "implementer" if args.mode == "implement" else "investigator",
+                             "codex", args.model or configured_model(root), str(args.brief), run / "events.jsonl")
     timed_out = False
     error = None
     with (run / "events.jsonl").open("w") as stdout, (run / "stderr.txt").open("w") as stderr:
@@ -136,27 +140,36 @@ def worker(args):
         except OSError as failure:
             error = str(failure)
             returncode = 2
-    after = snapshot(root, paths, exclude=run)
-    touched = sorted(name for name in set(before) | set(after) if before.get(name) != after.get(name))
-    outside = [name for name in touched if name not in (paths if args.mode == "implement" else [])]
-    valid_result = False
-    if returncode == 0 and output.is_file():
-        try:
-            result = json.loads(output.read_text())
-            valid_result = (isinstance(result, dict) and set(result) == {"summary", "files", "tests", "open_risks"}
-                            and isinstance(result["summary"], str)
-                            and all(isinstance(result[key], list) and all(isinstance(item, str) for item in result[key])
-                                    for key in ("files", "tests", "open_risks")))
-        except (ValueError, OSError):
-            pass
-    status = "OUT_OF_SCOPE" if outside else "INCOMPLETE" if returncode or not valid_result else "COMPLETE"
-    manifest = {"status": status, "mode": args.mode, "root": str(root), "paths": paths,
-                "touched": touched, "outside_scope": outside, "timed_out": timed_out,
-                "error": error, "exit_code": returncode, "run": str(run), "result": str(output)}
-    (run / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    print(json.dumps(manifest))
-    # Never restore somebody else's tree or pretend scope auditing blocked edits.
-    return 0 if status == "COMPLETE" else 3 if outside else 2
+    try:
+        after = snapshot(root, paths, exclude=run)
+        touched = sorted(name for name in set(before) | set(after) if before.get(name) != after.get(name))
+        outside = [name for name in touched if name not in (paths if args.mode == "implement" else [])]
+        valid_result = False
+        if returncode == 0 and output.is_file():
+            try:
+                result = json.loads(output.read_text())
+                valid_result = (isinstance(result, dict) and set(result) == {"summary", "files", "tests", "open_risks"}
+                                and isinstance(result["summary"], str)
+                                and all(isinstance(result[key], list) and all(isinstance(item, str) for item in result[key])
+                                        for key in ("files", "tests", "open_risks")))
+            except (ValueError, OSError):
+                pass
+        status = "OUT_OF_SCOPE" if outside else "INCOMPLETE" if returncode or not valid_result else "COMPLETE"
+        manifest = {"status": status, "mode": args.mode, "root": str(root), "paths": paths,
+                    "touched": touched, "outside_scope": outside, "timed_out": timed_out,
+                    "error": error, "exit_code": returncode, "run": str(run), "result": str(output)}
+        (run / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+        publish_run(registration, state="out_of_scope" if outside else "completed" if valid_result and not returncode else "incomplete" if timed_out or not returncode else "failed",
+                    summary=result["summary"] if valid_result else error or "Worker did not produce a validated result",
+                    tests=result["tests"] if valid_result else [],
+                    child_session_id=child_thread(run / "events.jsonl"))
+        print(json.dumps(manifest))
+        # Never restore somebody else's tree or pretend scope auditing blocked edits.
+        return 0 if status == "COMPLETE" else 3 if outside else 2
+    except (OSError, ValueError, subprocess.SubprocessError) as failure:
+        publish_run(registration, state="incomplete", summary=str(failure),
+                    child_session_id=child_thread(run / "events.jsonl"))
+        raise
 
 
 def main():

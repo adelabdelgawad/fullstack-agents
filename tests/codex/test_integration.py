@@ -74,6 +74,7 @@ class BundleTests(unittest.TestCase):
         self.assertFalse((self.bundle / "commands/dashboard.md").exists())
         self.assertFalse((self.bundle / "scripts/codex-task.sh").exists())
         self.assertTrue((self.bundle / "scripts/handoff.py").exists())
+        self.assertTrue((self.bundle / "scripts/phase.py").exists())
 
     def test_native_plugin_manifest_and_hooks_reference_bundled_resources(self):
         manifest = json.loads((self.bundle / ".codex-plugin/plugin.json").read_text())
@@ -200,6 +201,7 @@ for name, value in json.loads(os.environ.get("FSA_TEST_WRITES", "{}")).items():
     path.write_text(value)
 output = Path(sys.argv[sys.argv.index("--output-last-message") + 1])
 output.write_text(os.environ["FSA_TEST_RESPONSE"])
+print('{"type":"thread.started","thread_id":"worker-child"}')
 print('{"type":"thread.completed"}')
 sys.exit(int(os.environ.get("FSA_TEST_EXIT", "0")))
 '''
@@ -236,7 +238,8 @@ class CLITests(unittest.TestCase):
             path.write_text("#!" + sys.executable + "\n" + code)
             path.chmod(0o755)
         self.call = Path(self.scratch.name) / "call.json"
-        self.env = {**os.environ, "PATH": str(self.bin) + os.pathsep + os.environ["PATH"], "FSA_TEST_CALL": str(self.call)}
+        self.env = {**os.environ, "PATH": str(self.bin) + os.pathsep + os.environ["PATH"], "FSA_TEST_CALL": str(self.call),
+                    "CODEX_HOME": str(Path(self.scratch.name) / "codex-home"), "CODEX_THREAD_ID": "test-lead"}
         self.runs = Path(self.scratch.name) / "runs"
         self.runs.mkdir()
 
@@ -270,6 +273,69 @@ class CLITests(unittest.TestCase):
         self.assertIn("-value = 1", call["input"])
         self.assertIn("+value = 2", call["input"])
         self.assertEqual((self.root / "app.py").read_text(), "value = 2\n")
+
+    def test_audit_defaults_to_opus_and_preserves_overrides(self):
+        self.env.pop("FSA_CLAUDE_AUDIT_MODEL", None)
+        for env_model, extra, expected in (
+            (None, (), "opus"),
+            ("configured-auditor", (), "configured-auditor"),
+            ("configured-auditor", ("--model", "explicit-auditor"), "explicit-auditor"),
+        ):
+            with self.subTest(expected=expected):
+                if env_model:
+                    self.env["FSA_CLAUDE_AUDIT_MODEL"] = env_model
+                result = self.audit(extra=extra)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                args = json.loads(self.call.read_text())["args"]
+                self.assertEqual(args[args.index("--model") + 1], expected)
+
+    def test_phase_cli_records_complete_flow_without_calling_a_model(self):
+        state = Path(self.scratch.name) / "flow-state"
+        env = {**self.env, "CODEX_THREAD_ID": "lead-session"}
+        for phase in ("investigate", "plan", "implement", "validate", "audit", "complete"):
+            result = run([sys.executable, str(self.bundle / "scripts/phase.py"),
+                          "--root", str(self.root), "--phase", phase, "--state-dir", str(state)], env=env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+        record = json.loads((state / "lead-session.json").read_text())
+        self.assertEqual((record["lead"], record["auditor"], record["phase"]), ("codex", "opus", "complete"))
+        self.assertEqual([e["phase"] for e in record["history"]],
+                         ["investigate", "plan", "implement", "validate", "audit", "complete"])
+        self.assertFalse(self.call.exists())
+
+    def test_phase_cli_preserves_evidence_and_clears_it_for_new_task(self):
+        state = Path(self.scratch.name) / "evidence-state"
+        env = {**self.env, "FSA_CLAUDE_AUDIT_MODEL": "sonnet"}
+        command = [sys.executable, str(self.bundle / "scripts/phase.py"),
+                   "--root", str(self.root), "--session", "lead", "--state-dir", str(state)]
+        def report(phase, *extra):
+            result = run([*command, "--phase", phase, *extra], env=env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return json.loads((state / "lead.json").read_text())
+        record = report("validate", "--check", "unit checks passed", "--check", "diff clean",
+                        "--summary", "Finished", "--auditor-model", "custom-auditor")
+        self.assertEqual(record["auditor"], "custom-auditor")
+        record = report("complete")
+        self.assertEqual(record["checks"], ["unit checks passed", "diff clean"])
+        self.assertEqual(record["summary"], "Finished")
+        self.assertEqual(record["auditor"], "sonnet")
+        record = report("validate", "--check", "replacement")
+        self.assertEqual(record["checks"], ["replacement"])
+        record = report("investigate")
+        self.assertEqual((record["checks"], record["summary"]), ([], ""))
+        record = report("plan")
+        self.assertEqual((record["checks"], record["summary"]), ([], ""))
+
+    def test_phase_cli_rejects_unsafe_session_and_recovers_malformed_history(self):
+        state = Path(self.scratch.name) / "flow-state"
+        command = [sys.executable, str(self.bundle / "scripts/phase.py"), "--root", str(self.root),
+                   "--phase", "plan", "--state-dir", str(state)]
+        for session in ("../escape", "", "/absolute"):
+            result = run([*command, "--session", session], env=self.env)
+            self.assertNotEqual(result.returncode, 0)
+        write(state / "lead-session.json", "{broken")
+        result = run([*command, "--session", "lead-session"], env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(json.loads((state / "lead-session.json").read_text())["history"]), 1)
 
     def test_audit_changes_returns_issue_and_bounded_repair_brief(self):
         result = self.audit(self.issue())
@@ -346,6 +412,31 @@ class CLITests(unittest.TestCase):
         brief.write_text(brief_text or "PLAN: none: lead planned\nALLOWED_PATHS:\n- app.py\n\nSKILLS: fastapi\nTASK: change value\n")
         return run([sys.executable, str(self.bundle / "scripts/worker.py"), mode, str(brief),
                     "--root", str(self.root), "--runs-dir", str(runs_dir or self.runs)], env=self.env)
+
+    def test_run_records_own_worker_and_audit_results(self):
+        self.env.pop("FSA_CLAUDE_AUDIT_MODEL", None)
+        home = Path(self.env["CODEX_HOME"])
+        write(home / "config.toml", 'model = "configured-test-model"\n')
+        result = self.worker()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        directory = home / "fsa-flow/runs/test-lead"
+        record = json.loads(next(directory.glob("*.json")).read_text())
+        self.assertEqual((record["state"], record["model"], record["child_session_id"]),
+                         ("completed", "configured-test-model", "worker-child"))
+        self.assertEqual(record["session_id"], "test-lead")
+        result = self.audit()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        auditor = next(json.loads(p.read_text()) for p in directory.glob("*.json")
+                       if json.loads(p.read_text())["role"] == "auditor")
+        self.assertEqual((auditor["state"], auditor["verdict"], auditor["model"]),
+                         ("completed", "PASS", "opus"))
+        self.env["FSA_TEST_EXIT"] = "1"
+        result = self.audit()
+        self.assertNotEqual(result.returncode, 0)
+        auditors = [json.loads(p.read_text()) for p in directory.glob("*.json")
+                    if json.loads(p.read_text())["role"] == "auditor"]
+        failed = max(auditors, key=lambda r: r["started"])
+        self.assertEqual((failed["state"], failed["verdict"]), ("incomplete", None))
 
     def test_worker_tracks_changes_to_already_dirty_file_and_inherits_model(self):
         result = self.worker({"app.py": "value = 3\n"})

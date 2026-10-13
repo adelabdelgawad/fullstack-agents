@@ -1,9 +1,11 @@
 """Interactive Codex sessions become dashboard sessions, read from Codex's own rollout transcripts."""
 import json
+import sqlite3
 import tempfile
 import time
 import types
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 import importlib.util
 from importlib.machinery import SourceFileLoader
@@ -95,6 +97,167 @@ class CodexSessionTests(unittest.TestCase):
     def test_session_in_another_repo_is_not_collected(self):
         self.rollout("s-other", self.root.parent / "elsewhere", [event("task_complete", 10)])
         self.assertNotIn("s-other", self.collect())
+
+    def journal(self, sid, phase="plan", **overrides):
+        record = {"session_id": sid, "engine": "codex", "cwd": str(self.root),
+                  "phase": phase, "updated": self.now,
+                  "history": [{"phase": "investigate", "timestamp": self.now - 10},
+                              {"phase": phase, "timestamp": self.now}]}
+        record.update(overrides)
+        path = self.home / "fsa-flow" / f"{sid}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(record))
+        return path
+
+    def test_journal_and_turn_model_are_exposed(self):
+        self.rollout("s-flow", self.root, [
+            {"timestamp": stamp(20), "type": "turn_context",
+             "payload": {"cwd": str(self.root), "model": "configured-codex-model"}},
+            event("task_complete", 10),
+        ])
+        self.journal("s-flow", checks=["diff clean"], summary="Finished", auditor="sonnet")
+        session = self.collect()["s-flow"]
+        self.assertEqual(session["model"], "configured-codex-model")
+        self.assertEqual(session["workflow_checks"], ["diff clean"])
+        self.assertEqual(session["workflow_summary"], "Finished")
+        self.assertEqual(session["workflow_auditor"], "sonnet")
+        self.assertEqual(session["workflow_phase"], "plan")
+        self.assertEqual(session["workflow_at"], self.now)
+        self.assertEqual([e["phase"] for e in session["workflow_history"]], ["investigate", "plan"])
+
+    def test_model_database_fallback_is_exact_and_transcript_has_priority(self):
+        self.home.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(self.home / "state_5.sqlite") as con:
+            con.execute("CREATE TABLE threads (id TEXT PRIMARY KEY, model)")
+            con.executemany("INSERT INTO threads VALUES (?, ?)",
+                            [("s-model", "current-model"), ("other", "wrong-model"),
+                             ("invalid", 42), ("blank", " "), ("control", "bad\nmodel")])
+        # The old turn context is beyond both transcript windows.
+        self.rollout("s-model", self.root, [
+            {"timestamp": stamp(30), "type": "turn_context", "payload": {"model": "old-model"}},
+            message("assistant", "x" * 1100000, 20), event("task_complete", 10)])
+        self.assertEqual(self.collect()["s-model"]["model"], "current-model")
+        self.rollout("s-model", self.root, [
+            {"timestamp": stamp(20), "type": "turn_context", "payload": {"model": "transcript-model"}},
+            event("task_complete", 10)])
+        self.assertEqual(self.collect()["s-model"]["model"], "transcript-model")
+        for sid in ("missing", "invalid", "blank", "control"):
+            self.assertEqual(dash.codex_thread_model(sid), "")
+        with sqlite3.connect(self.home / "state_6.sqlite") as con:
+            con.execute("CREATE TABLE threads (id TEXT)")
+        self.assertEqual(dash.codex_thread_model("s-model"), "")
+        (self.home / "state_6.sqlite").write_text("not sqlite")
+        self.assertEqual(dash.codex_thread_model("s-model"), "")
+        for db in self.home.glob("state_*.sqlite"):
+            db.unlink()
+        self.assertEqual(dash.codex_thread_model("s-model"), "")
+
+    def test_invalid_journals_are_rejected(self):
+        for fields in ({"checks": [True]}, {"summary": {}}, {"auditor": []}, {"session_id": "other"}, {"cwd": str(self.root.parent)},
+                       {"engine": "claude"}, {"phase": "unknown"},
+                       {"phase": []}, {"updated": float("nan")},
+                       {"updated": self.now + 3600}, {"updated": True},
+                       {"history": []}, {"history": [{"phase": "plan", "timestamp": -1}]}):
+            with self.subTest(fields=fields):
+                self.journal("s-flow", **fields)
+                self.assertEqual(dash.codex_workflow("s-flow", str(self.root), self.now), {})
+        path = self.journal("s-flow")
+        path.write_text("invalid json")
+        self.assertEqual(dash.codex_workflow("s-flow", str(self.root), self.now), {})
+        self.assertEqual(dash.codex_workflow("../s-flow", str(self.root), self.now), {})
+
+    def test_explicit_phases_override_legacy_and_edits(self):
+        card = {"tree": {"edited": self.now + 10},
+                "declared": {"phase": "review", "at": self.now + 5}}
+        session = {"id": "s-flow", "engine": "codex", "state": "working",
+                   "workflow_at": self.now, "briefs": []}
+        for phase in ("investigate", "plan", "implement", "validate", "audit", "complete"):
+            with self.subTest(phase=phase):
+                session["workflow_phase"] = phase
+                result = dash.phase_of(card, [], [session])
+                self.assertEqual(result, "audit" if phase == "validate" else phase)
+
+    def dashboard_state(self, session, board, runs=(), only=None):
+        self.repo.board = self.root / "board.json"
+        self.repo.board.write_text(json.dumps(board))
+        self.repo.favourites = self.root / "dashboard-favourites.json"
+        self.repo.main = "main"
+        self.repo.projects = []
+        gc = types.SimpleNamespace(worktrees=lambda now: {session["worktree"] or str(self.root): {},
+                                                         **{r["root"]: {} for r in runs}},
+                                   detail=lambda key: {"branch": "main", "head": "a" * 40,
+                                                       "dirty": 0, "ahead": 0, "merged": True,
+                                                       "edited": 0})
+        with patch.object(dash, "collect_runs", return_value=list(runs)), \
+                patch.object(dash, "collect_sessions", return_value=[]), \
+                patch.object(dash, "fresh_sessions", return_value=[]), \
+                patch.object(dash, "collect_codex_sessions", return_value=[session]), \
+                patch.object(dash, "judge_turns"), patch.object(dash, "own_count", return_value=0), \
+                patch.object(dash, "newest_brief", return_value=None):
+            return dash.build_state(self.repo, gc, only=only)
+
+    def test_herdr_lead_has_one_card_even_with_runs_from_two_checkouts(self):
+        self.rollout("s-flow", self.root, [event("task_started", 20)])
+        session = self.collect()["s-flow"]
+        runs = [{"id": f"run-{n}", "session": "s-flow", "mode": "investigate", "state": "done",
+                 "root": str(self.root / f"checkout-{n}"), "unit": f"unit-{n}", "flags": [], "started": self.now - 10,
+                 "updated": self.now - 5, "goal": "", "desc": ""} for n in range(2)]
+        state = self.dashboard_state(session, {}, runs=runs, only={"s-flow"})
+        self.assertEqual(len(state["cards"]), 1)
+        self.assertEqual(state["cards"][0]["key"], "session:s-flow")
+        self.assertEqual(len(state["cards"][0]["runs"]), 2)
+        self.assertEqual(state["cards"][0]["worktree"], str(self.root / "checkout-1"))
+
+    def test_git_and_deployment_metadata_cannot_override_working_phase(self):
+        self.rollout("s-flow", self.root, [event("task_started", 20)])
+        self.journal("s-flow", "implement")
+        session = self.collect()["s-flow"]
+        session["worktree"] = str(self.root / "worktree")
+        board = {"locks": {"deploy": {"session": "s-flow"}},
+                 "events": [{"text": "DEPLOYED " + "a" * 40}]}
+        state = self.dashboard_state(session, board)
+        self.assertEqual(state["cards"][0]["phase"], "implement")
+        self.assertEqual(state["cards"][0]["sessions"][0]["state"], "working")
+        self.assertEqual(state["locks"], board["locks"])
+        session.pop("workflow_phase")
+        self.assertEqual(self.dashboard_state(session, board)["cards"][0]["phase"], "investigate")
+
+    def test_historical_dismissals_cannot_hide_sessions_or_attention(self):
+        self.rollout("s-flow", self.root, [event("task_complete", 10)])
+        self.journal("s-flow", "plan")
+        session = self.collect()["s-flow"]
+        session.update(state="still_open", pane="w2:p1")
+        historical = self.root / "dashboard-dismissed.json"
+        historical.write_text(json.dumps({"session:s-flow": self.now + 3600}))
+        self.repo.dismissed = historical
+        original = historical.read_bytes()
+        for status in ("still_open", "waiting"):
+            with self.subTest(status=status):
+                session["state"] = status
+                state = self.dashboard_state(session, {})
+                self.assertEqual([c["key"] for c in state["cards"]], ["session:s-flow"])
+                self.assertEqual([s["id"] for s in state[status]], ["s-flow"])
+                self.assertEqual(state["session_panes"]["s-flow"], "w2:p1")
+        self.assertEqual(historical.read_bytes(), original)
+
+    def test_dismiss_endpoint_is_rejected_before_body_or_state_access(self):
+        handler = object.__new__(dash.Handler)
+        handler.path = "/api/dismiss"
+        handler.authorised = lambda body: True
+        with patch.object(handler, "send") as send:
+            handler.do_POST()
+        send.assert_called_once_with(403, b"forbidden", "text/plain")
+        self.assertFalse(handler.body_read)
+
+    def test_codex_never_calls_classifier(self):
+        session = {"id": "s-flow", "engine": "codex", "state": "working"}
+        with patch.object(dash, "run_mode") as mode, patch.object(dash, "run_classifier") as classifier, \
+                patch.object(dash.threading, "Thread") as thread:
+            dash.judge_turns(self.repo, [session], self.now)
+            dash.judge_codex(session, self.now)
+            mode.assert_not_called()
+            classifier.assert_not_called()
+            thread.assert_not_called()
 
 
 if __name__ == "__main__":

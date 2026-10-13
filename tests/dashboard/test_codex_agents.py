@@ -1,4 +1,4 @@
-"""Codex cards show their running agents and get a Haiku phase verdict, like Claude cards."""
+"""Codex cards group session-owned runs and native descendants."""
 import importlib.util
 import json
 import os
@@ -9,6 +9,7 @@ import time
 import unittest
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
+from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 REPO = Path(__file__).resolve().parents[2]
@@ -39,6 +40,50 @@ class CodexAgentTests(unittest.TestCase):
         items = {i["id"]: i for i in dash.codex_agent_items("p1", children, None, {}, time.time())}
         self.assertEqual((items["c1"]["state"], items["c1"]["label"]), ("running", "codex · explorer"))
         self.assertEqual(items["c2"]["state"], "completed")
+
+    def test_shared_app_server_does_not_mix_independent_leads(self):
+        with patch.object(dash, "proc_agents") as processes:
+            for sid in ("lead-one", "lead-two"):
+                self.assertEqual(dash.codex_agent_items(sid, {}, ("", 42, 2), {}, time.time()), [])
+            processes.assert_not_called()
+
+    def test_native_grandchildren_cycle_and_no_six_agent_cap(self):
+        path = rollout(self.base / "busy.jsonl", {"type": "event_msg", "payload": {"type": "task_started"}})
+        edges = {"lead": [("child", "open", str(path), "worker")],
+                 "child": [(f"grand-{i}", "open", str(path), "worker") for i in range(8)],
+                 "grand-0": [("lead", "open", str(path), "cycle")]}
+        agents = dash.codex_agent_items("lead", edges, None, {}, time.time())
+        self.assertEqual(len(agents), 9)
+        self.assertEqual(next(a for a in agents if a["id"] == "grand-0")["parent_id"], "child")
+
+    def test_registered_headless_child_is_hidden_from_root_cards(self):
+        now = time.time()
+        home = self.base / "home"
+        artifact = self.base / "worker"
+        artifact.mkdir()
+        events = rollout(artifact / "events.jsonl", {"type": "thread.started", "thread_id": "headless"})
+        events.write_text('{broken\n[]\n' + events.read_text())
+        directory = home / "fsa-flow/runs/lead"
+        directory.mkdir(parents=True)
+        record = {"session_id": "lead", "run_id": "worker-run", "role": "implementer", "engine": "codex",
+                  "model": None, "root": str(self.base / "different-checkout"), "state": "running", "started": now, "updated": now,
+                  "artifact": str(artifact), "events_path": str(events), "summary": "", "verdict": None}
+        (directory / "worker-run.json").write_text(json.dumps(record))
+        paths = []
+        for sid in ("lead", "headless", "unrelated"):
+            path = rollout(self.base / (sid + ".jsonl"),
+                           {"type": "session_meta", "payload": {"id": sid, "cwd": str(self.base)}})
+            paths.append(path)
+        repo = type("Repo", (), {"root": self.base})()
+        def read(repo, path, meta, *args):
+            return {"id": meta["id"]}
+        with patch.object(dash, "CODEX_HOME", home), patch.object(dash, "codex_rollouts", return_value=paths), \
+                patch.object(dash, "codex_live", return_value={}), patch.object(dash, "codex_children", return_value={}), \
+                patch.object(dash, "read_codex_session", side_effect=read):
+            sessions = dash.collect_codex_sessions(repo, [], now, {})
+        self.assertEqual({s["id"] for s in sessions}, {"lead", "unrelated"})
+        lead = next(s for s in sessions if s["id"] == "lead")
+        self.assertEqual(lead["workflow_runs"][0]["child_session_id"], "headless")
 
     def test_agent_cli_under_the_codex_process_is_listed(self):
         nap = f"{sys.executable} -c 'import time; time.sleep(30)'"

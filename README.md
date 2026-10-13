@@ -11,8 +11,8 @@ A Claude Code plugin that brings intelligent, pattern-aware code generation to p
 
 ### Standalone Codex edition
 
-Codex leads investigation, planning and implementation; Claude audits a bounded
-diff and returns issues with repair scope. Install this edition separately:
+Codex leads investigation, planning, implementation and validation; Opus provides
+only bounded, read-only audits and returns issues with repair scope. Install this edition separately:
 
 ```bash
 codex plugin marketplace add adelabdelgawad/fullstack-agents

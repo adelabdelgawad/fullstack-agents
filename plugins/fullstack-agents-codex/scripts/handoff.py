@@ -4,6 +4,8 @@ import argparse
 import hashlib
 import json
 import os
+from phase import start_run, publish_run
+
 import subprocess
 import tempfile
 from pathlib import Path
@@ -116,6 +118,7 @@ def validate_result(result, root, files):
 
 
 def audit(args):
+    session = os.environ.get("CODEX_THREAD_ID")
     root = args.root.resolve()
     files = list(dict.fromkeys(repo_path(root, name) for name in args.files))
     if not 1 <= len(files) <= args.max_files:
@@ -139,6 +142,7 @@ def audit(args):
                "--tools", "", "--system-prompt", SYSTEM, "--no-session-persistence",
                "--output-format", "json", "--json-schema", json.dumps(schema),
                "--max-budget-usd", str(args.budget)]
+    registration = start_run(session, run, root, "auditor", "claude", args.model, str(args.plan))
     try:
         response = subprocess.run(command, input=prompt, cwd=root, capture_output=True, text=True, timeout=args.timeout)
         (run / "claude.json").write_text(response.stdout)
@@ -170,8 +174,10 @@ def audit(args):
         print(json.dumps({"verdict": result["verdict"], "issues": len(result["findings"]),
                           "repair_scope": scope, "handoff": str(run / "handoff.json"),
                           "brief": str(run / "repair-brief.md"), "packet_chars": len(prompt)}))
+        publish_run(registration, state="completed", summary=result["summary"], verdict=result["verdict"])
         return 0 if result["verdict"] == "PASS" else 3
     except (ValueError, OSError, subprocess.TimeoutExpired, TypeError) as error:
+        publish_run(registration, state="incomplete", summary=str(error), verdict=None)
         (run / "incomplete.txt").write_text(str(error) + "\n")
         raise ValueError(f"audit incomplete: {error}; artifacts: {run}") from error
 
@@ -185,7 +191,7 @@ def main():
     parser.add_argument("--context", action="append", default=[], help="path:start:end, max 120 lines")
     parser.add_argument("--previous", type=Path)
     parser.add_argument("--runs-dir", type=Path)
-    parser.add_argument("--model", default=os.environ.get("FSA_CLAUDE_AUDIT_MODEL", "sonnet"))
+    parser.add_argument("--model", default=os.environ.get("FSA_CLAUDE_AUDIT_MODEL", "opus"))
     parser.add_argument("--budget", type=float, default=2.0, help="Claude dollar ceiling for this bounded audit")
     parser.add_argument("--max-chars", type=int, default=32000)
     parser.add_argument("--max-files", type=int, default=8)

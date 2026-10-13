@@ -17,7 +17,7 @@ Codex investigates and plans
     → Codex reports the final result
 ```
 
-Claude is the auditor, not the standalone lead. Its audit CLI has no tools,
+Opus, through Claude, is only the independent bounded read-only auditor. Codex owns investigation, planning, implementation, validation and repairs. Its audit CLI has no tools,
 hooks, MCP connections or slash commands. It receives only the saved plan,
 explicit changed files, diff and optional supporting line ranges. It cannot
 edit the project. The Codex lead owns the conclusion and verifies findings.
@@ -86,9 +86,10 @@ skills have explicit Codex overrides. `inventory.json` records source hashes.
 Generated skill entry points are short section indexes; full engineering guides
 live in references and are read in targeted ranges. Native role instructions
 also point to their guide instead of embedding every example in the agent config.
-The dashboard is not included in this edition; the Claude plugin's dashboard
-shows Codex sessions running in herdr panes, read from `$CODEX_HOME/sessions`
-rollouts, beside Claude's and any other harness herdr reports.
+The optional shared dashboard shows Codex sessions from `$CODEX_HOME/sessions`
+rollouts beside Claude sessions and other harnesses herdr reports. It reads
+validated `$CODEX_HOME/fsa-flow` journals for explicit Codex progress without
+calling a model classifier, and displays the configured lead model and history.
 `plugins/fullstack-agents-codex/` is the checked-in generated release package;
 `.agents/plugins/marketplace.json` exposes it without changing the Claude
 marketplace. Regenerate the package from adapter/shared sources for releases.
@@ -150,7 +151,7 @@ context. Stop after two repair rounds and report unresolved issues.
 Default bounds: eight submitted files, eight supporting ranges of at most 120
 lines, 32,000 packet characters, twelve findings, a $2 audit ceiling and five
 minutes. `--max-files`, `--max-chars`, `--budget`, `--timeout` override these for
-one run. Claude defaults to `sonnet`; use `FSA_CLAUDE_AUDIT_MODEL` or `--model`
+one run. Claude defaults to `opus`; use `FSA_CLAUDE_AUDIT_MODEL` or `--model`
 to select an available audit model. Codex inherits its configured model.
 An incomplete audit is never converted into a pass or silently replaced with
 another engine. Cost and usage returned by Claude are saved with the handoff.
@@ -220,7 +221,8 @@ affected tests required by the saved plan. Missing checks are not passes.
 Hook feedback and instructions do not guarantee that a skill was read or
 prevent arbitrary shell writes. Explicit checks and Claude audits remain part
 of the completion contract. The original Claude transcript-based pre-edit
-gate, team guard, reply classifier and dashboard are not claimed as ported.
+gate, team guard and reply classifier are not claimed as ported. The optional
+shared dashboard supports explicit Codex workflow journals.
 
 Official runtime references: [skill discovery](https://learn.chatgpt.com/docs/build-skills),
 [native agents](https://learn.chatgpt.com/docs/agent-configuration/subagents),
@@ -269,3 +271,41 @@ python3 -m unittest discover -s tests/codex -v
 Tests use fake Claude/Codex executables for audit handoffs and scope detection;
 they do not spend model tokens. A real authenticated model audit remains a
 separate runtime check.
+
+## Explicit workflow progress
+
+Report every transition with the bundle's CLI:
+
+```bash
+python3 scripts/phase.py --root ROOT --phase investigate
+```
+
+Use `plan`, `implement`, `validate`, and `audit` as the work advances; report
+`implement` again for repairs, followed by validation and audit. Report
+`complete` only after the work is actually complete. The session defaults to
+`CODEX_THREAD_ID`; use `--session ID` when it is absent. Atomic journals live in
+`$CODEX_HOME/fsa-flow` (default `~/.codex/fsa-flow`); `--state-dir` overrides this
+location. The optional shared dashboard reads its default journal location.
+Phase writes need no user approval. Their bounded history records progress and
+never replaces checks, audit evidence, or authorization for commit/deploy.
+The dashboard shows validation/audit as Review and completed Codex work as Done.
+
+Workers and bounded audits register their originating `CODEX_THREAD_ID` in private,
+atomic `$CODEX_HOME/fsa-flow/runs/<session>/<run_id>.json` records. Missing session
+IDs disable registration; telemetry failures are reported without changing the task
+result. Records include artifacts, actual worker thread IDs, model (null when unknown),
+summary and terminal state. Audit verdicts appear only after handoff validation;
+failed or malformed audits remain incomplete. The dashboard groups registered runs
+and recursive native descendants under their lead, without attributing shared
+app-server processes to unrelated sessions.
+
+The phase CLI accepts repeatable `--check TEXT` and `--summary TEXT` to record
+lead-reported verification and result text. These are reports, not proof of a
+passing check. Omitted fields retain validated evidence for the same session and
+cwd; explicit checks replace the list. `investigate` clears prior task evidence.
+`--auditor-model MODEL` records selected intent, defaulting to
+`FSA_CLAUDE_AUDIT_MODEL` or `opus`; registered audit runs remain authoritative
+for the actual model, state and verdict. Information shows the latest eight phase
+transitions and keeps older recorded transitions in a collapsed disclosure.
+When no transcript model is available, the dashboard reads the exact thread's
+model from the latest Codex state database in read-only mode, without config guesses.

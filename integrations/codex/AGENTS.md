@@ -6,7 +6,7 @@ existing entry points, defaults, hooks and operating flow.
 ## Ownership and flow
 
 Codex owns intake, investigation, planning, implementation, verification and the
-final result. Claude is the independent, read-only auditor. Follow:
+final result. Opus, through Claude, is only the independent, bounded read-only auditor. Codex owns repairs. Follow:
 
 `investigate → plan → implement → validate → Claude audit → scoped Codex repair → validate → re-audit`
 
@@ -45,7 +45,7 @@ the affected services with the project's reload commands instead of deploying.
 - One focused Claude audit per completed change; re-audit only a repair or new
   evidence. Do not send the whole repository or conversation to the auditor.
 - No fixed model names. Codex inherits its configured model. Claude auditing
-  defaults to the `sonnet` alias, configurable with `FSA_CLAUDE_AUDIT_MODEL`.
+  defaults to the `opus` alias, configurable with `FSA_CLAUDE_AUDIT_MODEL`.
 
 ## Runtime
 
@@ -63,8 +63,26 @@ Codex lifecycle hooks inject this guide, remind the lead about routing, and
 provide per-file lint/format-check feedback for patches. Trust them with
 Codex `/hooks` before relying on them. They do not prove that a skill was read,
 and cannot police arbitrary shell writes. Explicit validation and audit remain
-required. No Claude hook, classifier, dashboard or session board is assumed.
+required. No Claude hook or classifier is assumed. The optional shared dashboard reads explicit Codex phase journals.
 
 Run checks from detected service roots, using project scripts where available.
 The bundle's `scripts/validate.sh` provides explicit Python, Rust and frontend
 checks. Missing tools or skipped checks must be reported; never label them green.
+
+## Explicit workflow progress
+
+Report every transition with the bundle's CLI:
+
+```bash
+python3 scripts/phase.py --root ROOT --phase investigate
+```
+
+Use `plan`, `implement`, `validate`, and `audit` as the work advances; report
+`implement` again for repairs, followed by validation and audit. Report
+`complete` only after the work is actually complete. The session defaults to
+`CODEX_THREAD_ID`; use `--session ID` when it is absent. Atomic journals live in
+`$CODEX_HOME/fsa-flow` (default `~/.codex/fsa-flow`); `--state-dir` overrides this
+location. The optional shared dashboard reads its default journal location.
+Phase writes need no user approval. Their bounded history records progress and
+never replaces checks, audit evidence, or authorization for commit/deploy.
+The dashboard shows validation/audit as Review and completed Codex work as Done.

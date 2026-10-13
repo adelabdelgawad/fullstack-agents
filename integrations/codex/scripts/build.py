@@ -183,7 +183,7 @@ def render(output):
     shutil.copy2(ADAPTER / "AGENTS.md", output / "AGENTS.md")
     shutil.copy2(ADAPTER / "config.toml.example", output / "config.toml.example")
     (output / "scripts").mkdir(exist_ok=True)
-    for name in ("validate.sh", "hook.py", "handoff.py", "worker.py"):
+    for name in ("validate.sh", "hook.py", "handoff.py", "worker.py", "phase.py"):
         shutil.copy2(ADAPTER / "scripts" / name, output / "scripts" / name)
     for path in sorted((ADAPTER / "schemas").glob("*.json")):
         write(output / "schemas" / path.name, path.read_text())

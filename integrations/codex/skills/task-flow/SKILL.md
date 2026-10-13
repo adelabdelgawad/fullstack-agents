@@ -5,7 +5,7 @@ description: Run the Codex-led fullstack change flow with a bounded Claude audit
 
 # Codex-led task flow
 
-Codex is the lead. Claude audits completed changes; it does not plan or implement.
+Codex owns investigation, planning, implementation, validation, repairs and the final result. Opus, through Claude, only audits completed changes as an independent bounded read-only auditor.
 Read the bundle's `AGENTS.md` for runtime bindings and token discipline.
 
 1. **Investigate.** Check `git status --short` and preserve other work. Search
@@ -57,3 +57,21 @@ sandbox is not a per-file allowlist. Isolate concurrent writers in worktrees.
 Investigative briefs require `FILES:` and `REPORT:`; ask for facts with source
 locations, not an unbounded repository sweep. Test-writing briefs name a
 `PATTERN:` example so the worker does not browse unrelated test suites.
+
+## Explicit workflow progress
+
+Report every transition with the bundle's CLI:
+
+```bash
+python3 scripts/phase.py --root ROOT --phase investigate
+```
+
+Use `plan`, `implement`, `validate`, and `audit` as the work advances; report
+`implement` again for repairs, followed by validation and audit. Report
+`complete` only after the work is actually complete. The session defaults to
+`CODEX_THREAD_ID`; use `--session ID` when it is absent. Atomic journals live in
+`$CODEX_HOME/fsa-flow` (default `~/.codex/fsa-flow`); `--state-dir` overrides this
+location. The optional shared dashboard reads its default journal location.
+Phase writes need no user approval. Their bounded history records progress and
+never replaces checks, audit evidence, or authorization for commit/deploy.
+The dashboard shows validation/audit as Review and completed Codex work as Done.
