@@ -86,7 +86,9 @@ skills have explicit Codex overrides. `inventory.json` records source hashes.
 Generated skill entry points are short section indexes; full engineering guides
 live in references and are read in targeted ranges. Native role instructions
 also point to their guide instead of embedding every example in the agent config.
-The Claude-transcript dashboard is not included in this edition.
+The dashboard is not included in this edition; the Claude plugin's dashboard
+also shows interactive Codex sessions in the same repository, read from
+`$CODEX_HOME/sessions` rollouts, with their herdr pane state.
 `plugins/fullstack-agents-codex/` is the checked-in generated release package;
 `.agents/plugins/marketplace.json` exposes it without changing the Claude
 marketplace. Regenerate the package from adapter/shared sources for releases.

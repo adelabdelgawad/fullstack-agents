@@ -31,6 +31,8 @@ HERE = Path(__file__).resolve().parent
 HTML = HERE / "lib" / "dashboard.html"
 FIRST_PROMPTS = {}
 LAST_ASKS = {}
+CODEX_META = {}
+CODEX_HOME = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
 RUN_WINDOW_S = 72 * 3600
 SESSION_WINDOW_S = 48 * 3600
 STALL_S = 300
@@ -1300,6 +1302,175 @@ def fresh_sessions(repo, trees, now):
     return out
 
 
+def codex_rollouts(now):
+    out = []
+    for back in range(SESSION_WINDOW_S // 86400 + 2):
+        day = datetime.fromtimestamp(now - back * 86400)
+        for f in (CODEX_HOME / "sessions" / f"{day:%Y}" / f"{day:%m}" / f"{day:%d}").glob("rollout-*.jsonl"):
+            try:
+                if now - f.stat().st_mtime <= SESSION_WINDOW_S:
+                    out.append(f)
+            except OSError:
+                continue
+    return out
+
+
+def codex_meta(path):
+    key = str(path)
+    if key not in CODEX_META:
+        meta = {}
+        try:
+            with path.open(encoding="utf-8", errors="replace") as fh:
+                first = json.loads(fh.readline() or "{}")
+            if first.get("type") == "session_meta":
+                meta = first.get("payload") or {}
+        except (OSError, ValueError):
+            pass
+        CODEX_META[key] = meta
+    return CODEX_META[key]
+
+
+def codex_thread_names():
+    names = {}
+    try:
+        with (CODEX_HOME / "session_index.jsonl").open(encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                if d.get("id") and d.get("thread_name"):
+                    names[d["id"]] = d["thread_name"]
+    except OSError:
+        pass
+    return names
+
+
+def codex_live():
+    """Rollout path -> herdr pane for every process holding a Codex transcript open (the live sessions)."""
+    out = {}
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            targets = [os.readlink(fd) for fd in (proc / "fd").iterdir()]
+        except OSError:
+            continue
+        rollouts = [t for t in targets if "/sessions/" in t and Path(t).name.startswith("rollout-") and t.endswith(".jsonl")]
+        if not rollouts:
+            continue
+        try:
+            env = (proc / "environ").read_bytes().split(b"\0")
+        except OSError:
+            env = []
+        pane = next((e[len(b"HERDR_PANE_ID="):].decode() for e in env if e.startswith(b"HERDR_PANE_ID=")), "")
+        for t in rollouts:
+            out[t] = pane or out.get(t, "")
+    return out
+
+
+def codex_text(payload):
+    return "\n".join(c.get("text", "") for c in payload.get("content") or []
+                     if isinstance(c, dict) and c.get("type") in ("input_text", "output_text")).strip()
+
+
+def codex_action(payload):
+    name, raw = payload.get("name") or "", payload.get("arguments") or payload.get("input") or ""
+    try:
+        args = json.loads(raw) if isinstance(raw, str) and raw.startswith("{") else {}
+    except ValueError:
+        args = {}
+    detail = args.get("cmd") or args.get("command") or args.get("path") if isinstance(args, dict) else ""
+    detail = " ".join(str(detail or (raw if not args else "")).split())
+    return f"{name}: {detail[:160]}" if detail else name
+
+
+def read_codex_session(repo, path, meta, now, names, waits, pane, pane_status):
+    sid = meta.get("id") or meta.get("session_id") or path.stem[-36:]
+    cwd, branch = meta.get("cwd") or "", (meta.get("git") or {}).get("branch") or ""
+    said = ask = action = action_id = ""
+    said_at = ask_at = action_at = turn_at = seen_at = ""
+    turn_open, answered, briefs = None, set(), set()
+    for line in tail_lines(path):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        ts, p = d.get("timestamp") or "", d.get("payload") or {}
+        seen_at = ts or seen_at
+        kind = (d.get("type"), p.get("type"))
+        if d.get("type") == "turn_context":
+            cwd = p.get("cwd") or cwd
+        elif kind == ("event_msg", "task_started"):
+            turn_open = True
+        elif kind == ("event_msg", "task_complete"):
+            turn_open, turn_at = False, ts
+        elif kind == ("response_item", "message"):
+            text = codex_text(p)
+            if p.get("role") == "assistant" and text:
+                said, said_at = text, ts
+            elif p.get("role") == "user" and text and not text.startswith("<"):
+                ask, ask_at = text, ts
+        elif kind in (("response_item", "function_call"), ("response_item", "custom_tool_call")):
+            action, action_at, action_id = codex_action(p), ts, p.get("call_id") or ""
+        elif kind in (("response_item", "function_call_output"), ("response_item", "custom_tool_call_output")):
+            answered.add(p.get("call_id"))
+        briefs.update(BRIEF_RE.findall(line))
+    if not seen_at:
+        return None
+    updated = iso_epoch(seen_at) or path.stat().st_mtime
+    idle = now - updated
+    if turn_open is None:
+        turn_open = pane is not None and idle < STALL_S
+    tail = URL_RE.sub("", said[-500:])
+    asks = "?" in tail or bool(ASK_RE.search(tail.strip().rsplit("\n\n", 1)[-1]))
+    declared = waits.get(sid) if isinstance(waits.get(sid), dict) else {}
+    need = declared.get("need", "") if iso_epoch(declared.get("at", "")) >= iso_epoch(ask_at) else ""
+    if pane_status == "blocked":
+        state, need = "waiting", need or "Codex is waiting for an answer or an approval in its terminal"
+    elif turn_open:
+        state = "quiet" if idle > STALL_S else "working"
+    elif need or asks and idle >= WAIT_MIN_S:
+        state = "waiting"
+    elif not asks and idle >= STILL_OPEN_S:
+        state = "still_open"
+    else:
+        state = "idle"
+    title = names.get(sid) or ""
+    return {
+        "id": sid, "engine": "codex", "pane": pane or "",
+        "name": title or f"codex {Path(cwd).name or 'session'} {sid[:8]}", "named": bool(title), "title": title,
+        "cwd": cwd, "branch": branch, "worktree": cwd if cwd != str(repo.root) else "", "state": state,
+        "updated": updated, "turn_at": iso_epoch(turn_at), "agents": [], "idle": idle,
+        "snippet": snippet(said) if state in ("waiting", "still_open", "idle") else "",
+        "briefs": sorted(briefs), "chips": [], "ask": snippet(ask, 600), "need": need,
+        "action": action, "action_at": iso_epoch(action_at),
+        "action_running": state == "working" and bool(action_id) and action_id not in answered,
+        "said_at": iso_epoch(said_at), "said": snippet(said, 600), "said_full": said[-SAID_MAX:],
+        "docs": message_docs(said, cwd),
+    }
+
+
+def collect_codex_sessions(repo, trees, now, waits):
+    roots = {str(repo.root), *trees}
+    found = [(f, m) for f in codex_rollouts(now) for m in [codex_meta(f)] if m.get("cwd") in roots]
+    if not found:
+        return []
+    live = codex_live()
+    panes = {str(f): live.get(str(f)) for f, _ in found if str(f) in live}
+    status = {}
+    if any(panes.values()):
+        status = {x["pane_id"]: x["status"] for x in read_herdr_snapshot()["panes"]}
+    names = codex_thread_names()
+    out = []
+    for f, meta in found:
+        pane = panes.get(str(f))
+        s = read_codex_session(repo, f, meta, now, names, waits, pane, status.get(pane or ""))
+        if s:
+            out.append(s)
+    return out
+
+
 def judge_turns(repo, sessions, now):
     for s in sessions:
         turn = s["turn_at"]
@@ -1374,6 +1545,7 @@ def build_state(repo, gc):
     sessions = collect_sessions(repo, trees, now, names, board.get("waits") or {})
     judge_turns(repo, sessions, now)
     sessions += fresh_sessions(repo, trees, now)
+    sessions += collect_codex_sessions(repo, trees, now, board.get("waits") or {})
     deployed_shas = [m.group(1) for e in board.get("events", []) for m in [DEPLOYED_RE.search(e.get("text", ""))] if m]
     dismissed = load_json(repo.dismissed) or {}
     favourites = load_json(repo.favourites) or {}
@@ -1439,6 +1611,7 @@ def build_state(repo, gc):
         card["steps"] = max([x for x in steps if isinstance(x, dict) and isinstance(x.get("items"), list)],
                             key=lambda x: x.get("at", ""), default={"items": []})["items"]
         card["now"] = [{**{k: s[k] for k in ("id", "name", "title", "state", "updated", "ask", "need", "action", "action_at", "action_running", "said", "said_at", "said_full", "docs")},
+                        "engine": s.get("engine", "claude"),
                         "agents": [{f: x[f] for f in ("id", "label", "state", "at")} for x in s["agents"]]}
                        for s in sorted(g["sessions"], key=lambda s: -s["updated"])]
         card["declared"] = max((declared[s["id"]] for s in g["sessions"] if s["id"] in declared),
@@ -1482,7 +1655,7 @@ def build_state(repo, gc):
         "_sources": output_sources(sessions),
         "_docs": {s["id"]: {d["path"] for d in s["docs"]} for s in sessions},
         "_scopes": scopes,
-        "session_panes": session_panes(repo),
+        "session_panes": {**session_panes(repo), **{s["id"]: s["pane"] for s in sessions if s.get("pane")}},
         "abandoned": sorted(old, key=lambda r: -r["updated"])[:30],
         "locks": board.get("locks") or {}, "events": (board.get("events") or [])[-12:],
     }

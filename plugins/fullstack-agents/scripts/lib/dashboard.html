@@ -1480,7 +1480,7 @@ function cardHtml(c) {
     ${cardNow(c)}
     ${paths}
     ${agentTiles(c)}</div>
-    ${human && sid ? `<div class="cardhint">claude --resume ${esc((sessionOf(sid) || {}).title ? `"${sessionOf(sid).title}"` : sid)}</div>` : ""}
+    ${human && sid ? `<div class="cardhint">${esc(resumeCmd(sessionOf(sid) || { id: sid }))}</div>` : ""}
     <div class="foot"><span>${ago(c.updated)} ago</span><button class="dismiss" data-dismiss="${esc(c.key)}">Dismiss</button></div></div>`;
 }
 
@@ -1650,8 +1650,10 @@ document.addEventListener("click", e => {
   if (b) { e.stopPropagation(); copyDoc(b); }
 });
 
+function resumeCmd(s) { return s.engine === "codex" ? `codex resume ${s.id}` : s.title ? `claude --resume "${s.title}"` : `claude --resume ${s.id}`; }
+
 function resumeHtml(s) {
-  const cmd = s.title ? `claude --resume "${s.title}"` : `claude --resume ${s.id}`;
+  const cmd = resumeCmd(s);
   return `<div class="now">
     <div><b>${esc(s.title || s.name)}</b></div>
     <div class="lbl">Session id</div><div class="mono">${esc(s.id)}</div>
