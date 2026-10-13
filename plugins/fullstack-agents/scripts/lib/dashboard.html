@@ -1996,7 +1996,10 @@ function closePanel() {
 function sessionHerdrPane(session) {
   const panes = (herdrData && herdrData.panes) || [], owned = (state && state.session_panes) || {};
   const card = (state && state.cards || []).find(c => c.key === session.card);
-  return panes.find(p => p.pane_id === owned[session.id]) || (card && matchedCardPane(card)) || panes.find(p => p.title === session.name) || null;
+  const names = [session.name, session.title].filter(Boolean);
+  const tab = ((herdrData && herdrData.tabs) || []).find(t => names.includes(t.label) && panes.some(p => p.tab_id === t.tab_id));
+  return panes.find(p => p.pane_id === owned[session.id]) || (card && matchedCardPane(card)) || panes.find(p => names.includes(p.title))
+    || (tab && panes.find(p => p.tab_id === tab.tab_id)) || null;
 }
 
 function openToastTarget(target, session) {
