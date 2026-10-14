@@ -437,6 +437,8 @@ html.herdr-page .herdr-view { height: 100%; }
 #ctx button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 5px; cursor: pointer; }
 #ctx button:hover:not(:disabled), #ctx button:focus-visible { background: var(--bg); outline: none; }
 #ctx button:disabled { color: var(--muted); cursor: default; }
+#ctx button.danger { color: var(--red); border-top: 1px solid var(--line); border-radius: 0 0 5px 5px; margin-top: 3px; }
+#ctx button.danger:disabled { color: var(--muted); }
 @keyframes slide { from { transform: translateX(30px); opacity: 0; } }
 @media (max-width: 1100px) { .board { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 28px; } .col.flow .col-head::after { display: none; } }
 @media (max-width: 640px) { header { padding: 18px 16px 4px; } .board { grid-template-columns: 1fr; padding: 14px 16px 32px; } .herdr-view { grid-template-columns: 1fr; grid-template-rows: minmax(0, 30vh) minmax(62vh, 1fr); height: auto; } .herdr-list { max-height: 30vh; } .herdr-sidebar-edge { display: none; } .herdr-detail { min-height: 62vh; } .terminal-head { align-items: flex-start; flex-wrap: wrap; } .terminal-source { margin-left: 0; } }
@@ -471,6 +473,7 @@ html.herdr-page .herdr-view { height: 100%; }
   <button role="menuitem" data-act="open">Open</button>
   <button role="menuitem" data-act="fav">Mark favourite</button>
   <button role="menuitem" data-act="copy">Copy session id</button>
+  <button role="menuitem" data-act="end" class="danger">End session</button>
 </div>
 <script src="/static/xterm/xterm.js"></script>
 <script src="/static/xterm/addon-fit.js"></script>
@@ -1163,13 +1166,13 @@ function openHerdrPrompt(title, value, action, params, returnFocus) {
   input.select();
 }
 
-function openHerdrConfirm(title, detail, action, params, returnFocus) {
-  const root = herdrModal(`<form><h2>${esc(title)}</h2><p class="herdr-modal-detail">${esc(detail)}</p><div class="herdr-modal-error" aria-live="polite"></div><div class="herdr-modal-actions"><button type="submit" class="danger">close</button><button type="button" data-herdr-cancel>cancel</button></div></form>`, returnFocus, async form => {
+function openHerdrConfirm(title, detail, action, params, returnFocus, {confirm = "close", after = renderHerdrPage} = {}) {
+  const root = herdrModal(`<form><h2>${esc(title)}</h2><p class="herdr-modal-detail">${esc(detail)}</p><div class="herdr-modal-error" aria-live="polite"></div><div class="herdr-modal-actions"><button type="submit" class="danger">${esc(confirm)}</button><button type="button" data-herdr-cancel>cancel</button></div></form>`, returnFocus, async form => {
     const button = form.querySelector('[type="submit"]');
     button.disabled = true;
     const result = await herdrAction(action, params, root);
     button.disabled = false;
-    if (result.ok && herdrOverlay?.root === root) { closeHerdrOverlay(false); renderHerdrPage(); }
+    if (result.ok && herdrOverlay?.root === root) { closeHerdrOverlay(false); after(); }
   });
 }
 
@@ -2583,6 +2586,15 @@ function closeCtx() {
   return true;
 }
 
+const cardPane = card => ((state && state.session_panes) || {})[card.dataset.sid] || "";
+
+function endSession(card) {
+  const pane = cardPane(card), name = card.querySelector(".feature")?.textContent || card.dataset.sid;
+  if (!pane) return;
+  openHerdrConfirm("End session?", `${name} — closes herdr pane ${pane} and stops the agent running in it. Unsaved work in that session is lost.`, "pane.close", {pane_id: pane}, card,
+    {confirm: "end session", after: () => { toast(`<b>Ended</b> ${esc(name)}`, "blue"); load(); }});
+}
+
 function openCtx(card, x, y) {
   ctxCard = card;
   const m = ctx();
@@ -2591,6 +2603,9 @@ function openCtx(card, x, y) {
   m.querySelector('[data-act="fav"]').disabled = !fav;
   m.querySelector('[data-act="fav"]').textContent = fav && fav.getAttribute("aria-pressed") === "true" ? "Unmark favourite" : "Mark favourite";
   m.querySelector('[data-act="copy"]').disabled = !card.dataset.sid;
+  const end = m.querySelector('[data-act="end"]'), pane = cardPane(card);
+  end.disabled = !pane;
+  end.title = pane ? `Close herdr pane ${pane} and stop this session` : "This session is not running in a herdr pane";
   m.hidden = false;
   m.style.left = Math.max(8, Math.min(x, innerWidth - m.offsetWidth - 8)) + "px";
   m.style.top = Math.max(8, Math.min(y, innerHeight - m.offsetHeight - 8)) + "px";
@@ -2629,6 +2644,7 @@ ctx().addEventListener("click", e => {
   closeCtx();
   if (act === "open") openCard(card.dataset.key);
   else if (act === "fav") toggleFavourite(card.dataset.key);
+  else if (act === "end") endSession(card);
   else if (act === "copy") copyText(card.dataset.sid).then(() => toast(`<b>Copied</b> ${esc(card.dataset.sid)}`, "blue"), () => toast("<b>Copy failed</b>", "red"));
 });
 
