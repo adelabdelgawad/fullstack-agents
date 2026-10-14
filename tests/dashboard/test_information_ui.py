@@ -116,18 +116,19 @@ const toolLine = s => s.action || '';
         card["now"][0]["name"] = "omni lead"
         card["runs"] = [{"id": "implement-20261014-125741-1", "unit": "p4-api", "engine": "grok", "model": "grok-4", "state": "running",
                          "session": "lead", "root": "/wt/p4", "mode": "implement", "started": 1, "updated": 2,
-                         "touched": ["src/a.rs"], "open_risks": ["needs <db>"]}]
+                         "touched": ["src/a.rs"], "open_risks": ["needs <db>"], "desc": "Ship the <p4> API"}]
         card["now"][0]["agents"] = [{"id": "b9", "label": "shell · Dispatch P4", "state": "completed", "at": 3, "shell": {
             "description": "Dispatch P4", "command": "cd /wt/p4 && run", "started": 1, "exit": 0, "cwd": "/wt/p4",
             "brief": "p4-api", "run": "implement-20261014-125741-1"}}]
         html = self.render(card)
         live = html[html.index('data-info-section="live"'):html.index('data-info-section="summary"')]
-        for text in ('<dt>Session</dt><dd>omni lead</dd>', '<dt>Target</dt><dd>/wt/p4</dd>', '<dt>Brief</dt><dd>p4-api</dd>',
+        for text in ('<b class="ls-title" title="Ship the &lt;p4&gt; API">Ship the &lt;p4&gt; API</b>', '<b>p4-api</b>', '<dt>Target</dt><dd>/wt/p4</dd>', '<dt>Brief</dt><dd>p4-api</dd>',
                      '<dt>Agent</dt><dd>grok · grok-4</dd>', '<dt>Launched by</dt><dd>Dispatch P4 · b9 · completed · exit 0</dd>',
-                     'data-asid="lead" data-agent="implement-20261014-125741-1"', 'data-open-run="implement-20261014-125741-1">Details in panel',
+                     'data-asid="lead" data-agent="implement-20261014-125741-1"', 'data-open-run="implement-20261014-125741-1">Panel', '1 file<', '1 risk<',
                      'Files touched (1)', 'needs &lt;db&gt;'):
             self.assertIn(text, live)
         self.assertNotIn('data-agent="b9"', live)
+        self.assertNotIn('<dt>Session</dt>', live)
         self.assertNotIn('<db>', live)
 
     def test_unlinked_shell_card_names_session_target_and_console(self):
@@ -137,9 +138,17 @@ const toolLine = s => s.action || '';
             "description": "Commit", "command": "git commit -m <x>", "started": 1, "exit": None, "cwd": "/wt/p7",
             "brief": "", "run": "", "moved": True}}]
         live = self.render(card)
-        for text in ('<dt>Session</dt><dd>omni lead</dd>', '<dt>Target</dt><dd>/wt/p7</dd>', '<dt>Agent</dt><dd>none</dd>',
+        for text in ('<b class="ls-title" title="Commit">Commit</b>', '<dt>Target</dt><dd>/wt/p7</dd>', '<dt>Agent</dt><dd>none</dd>',
                      'started in the foreground', 'data-asid="lead" data-agent="b7"', 'git commit -m &lt;x&gt;'):
             self.assertIn(text, live)
+
+    def test_run_card_offers_git_changes_only_with_a_worktree(self):
+        card = self.fixture()
+        card["runs"] = [{"id": "implement-5", "unit": "p5", "engine": "grok", "state": "running", "session": "lead", "root": "/wt/p5"},
+                        {"id": "implement-6", "unit": "p6", "engine": "grok", "state": "running", "session": "lead"}]
+        live = self.render(card)
+        self.assertIn('data-asid="lead" data-run-changes="implement-5" aria-haspopup="dialog">Git changes', live)
+        self.assertNotIn('data-run-changes="implement-6"', live)
 
     def dismiss_fixture(self):
         card = self.fixture()

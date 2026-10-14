@@ -875,6 +875,7 @@ def read_run(runs, rid, log_mtime, now, projects):
         "desc": goal_line(runs / f"{rid}.prompt.md", 900),
         "state": state, "flags": flags, "updated": log_mtime, "started": run_started(rid, meta),
         "touched": touched or [], "outside": outside, "open_risks": (result or {}).get("open_risks", []),
+        "allowed": sorted(read_allow(runs, rid)),
         "summary": ((result or {}).get("summary") or "")[:1500],
     }
 

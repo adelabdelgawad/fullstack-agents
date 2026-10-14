@@ -162,7 +162,7 @@ aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-sp
 .info-card { border: 1px solid var(--line); border-radius: 6px; padding: 12px; min-width: 0; }
 .info-card h4 { margin: 0 0 10px; }
 .info-card summary { cursor: pointer; font-weight: 600; }
-.info-top > summary h4 { display: inline; margin: 0 8px 0 0; }
+.info-top > summary h4 { display: inline; margin: 0 8px 0 0; font: inherit; text-transform: none; letter-spacing: normal; color: inherit; }
 .info-top[open] > summary { margin-bottom: 10px; }
 .info-top.live { grid-column: 1 / -1; }
 .live-group { margin-top: 10px; }
@@ -173,15 +173,60 @@ aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-sp
 .tile-wrap { position: relative; display: grid; min-width: 0; }
 .tile-x { position: absolute; top: 1px; right: 1px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; }
 .tile-x:hover, .tile-x:focus-visible { color: var(--ink); }
-.live-shells { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 8px; }
+.work-list { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+.work { display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; padding: 5px 7px; cursor: pointer; font: inherit; }
+.work:hover, .work:focus-visible { border-color: var(--active); }
+.work-goal { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 12px; line-height: 1.35; }
+.work-meta { display: flex; gap: 5px; align-items: center; margin-top: 3px; color: var(--muted); font: 10.5px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.board .card.has-work { height: 330px; }
+.overview { margin-top: 6px; }
+.ov-bar { display: flex; height: 5px; border-radius: 3px; overflow: hidden; background: var(--chip); gap: 1px; }
+.ov-live { background: var(--active); }
+.ov-done { background: var(--pass); opacity: .7; }
+.ov-bad { background: var(--red); }
+.ov-text { margin-top: 3px; color: var(--muted); font: 10.5px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.work-meta b { color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.work-meta > span:last-child { margin-left: auto; flex: none; }
+.work-goal { margin-top: 2px; }
+.work-more { margin-top: 4px; color: var(--muted); font-size: 10.5px; }
+.live-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.live-top > .action-button { margin-left: 0; }
+.pill { display: inline-block; font: 10.5px/1.5 var(--mono); padding: 0 7px; border-radius: 999px; background: var(--chip); color: var(--muted); white-space: nowrap; }
+.pill.live { background: var(--green-bg); color: var(--green); }
+.pill.bad { background: var(--red-bg); color: var(--red); }
+.pill.warn { background: var(--amber-bg); color: var(--amber); }
+.ls-time { margin-left: auto; color: var(--faint); font: 11px var(--mono); white-space: nowrap; }
+.ls-sub { color: var(--muted); font: 11px/1.5 var(--mono); margin-top: 2px; overflow-wrap: anywhere; }
+.ls-head .ls-title { flex: 0 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; line-height: 1.35; }
+.ls-sub b { color: var(--ink); font-weight: 600; }
+.goal { margin-top: 6px; font-size: 12px; line-height: 1.45; max-height: calc(2 * 1.45em); overflow: auto; overscroll-behavior: contain; overflow-wrap: anywhere; color: var(--ink); padding-right: 4px; }
+#out-info .goal { margin: 0 0 8px; font-size: 13px; padding: 6px 8px; max-height: calc(2 * 1.45em); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+.ls-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.live-shell > details { margin-top: 6px; }
+.live-shell > details > summary { cursor: pointer; color: var(--muted); font-size: 11.5px; }
+.live-shell .ls-actions { margin-top: 8px; align-items: center; }
+.ls-actions .action-button { margin-left: 0; }
+.ls-actions .action-button.dismiss { margin-left: auto; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; margin-top: 10px; }
+.seg button { border: 0; background: transparent; color: var(--muted); padding: 4px 14px; font-size: 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--blue-bg); color: var(--blue); font-weight: 600; }
+.flist { display: flex; flex-direction: column; gap: 1px; max-height: 170px; overflow: auto; margin-top: 6px; border: 1px solid var(--line); border-radius: 7px; padding: 3px; }
+.flist button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 0; background: transparent; color: var(--ink); padding: 3px 6px; border-radius: 5px; cursor: pointer; font: 12px var(--mono); }
+.flist button:hover { background: var(--chip); }
+.flist button[aria-pressed="true"] { background: var(--blue-bg); }
+.flist .fp { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+#out pre.diff { white-space: pre; word-break: normal; }
+#out-info .shell-facts { grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr); }
+.live-shells { align-items: start; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 8px; }
 .live-shell { border: 1px solid var(--line); border-radius: 6px; padding: 8px; min-width: 0; font-size: 12px; }
 .live-shell.running { border-color: color-mix(in srgb, var(--pass) 60%, transparent); }
-.live-shell .ls-head { display: flex; gap: 6px; align-items: baseline; overflow-wrap: anywhere; }
+.live-shell .ls-head { display: flex; gap: 6px; align-items: flex-start; overflow-wrap: anywhere; }
 .shell-facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; margin: 6px 0; font-size: 12px; }
 .shell-facts dt { color: var(--muted); }
 .shell-facts dd { margin: 0; overflow-wrap: anywhere; font-family: var(--mono); font-size: 11px; }
 .ls-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.live-shell details pre, #out-info details pre { max-height: 160px; overflow: auto; font-size: 11px; height: auto; }
+.live-shell details pre, #out-info details pre { max-height: 160px; overflow: auto; font: 11px/1.45 var(--mono); height: auto; margin: 4px 0 0; padding: 6px 8px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
 .info-card pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .info-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; }
 .info-facts dd { margin: 0; overflow-wrap: anywhere; }
@@ -370,6 +415,11 @@ html.herdr-page .herdr-view { height: 100%; }
 .agent.running { border-color: color-mix(in srgb, var(--pass) 60%, transparent); background: color-mix(in srgb, var(--pass) 14%, transparent); color: var(--pass); }
 .agent.running b { color: var(--pass); }
 .agent:hover, .agent:focus-visible { border-color: var(--active); outline: none; }
+#out[open] { display: flex; flex-direction: column; height: calc(100vh - 64px); overflow: hidden; }
+#out .oh, #out .items, #out-info, #out-files { flex: none; }
+#out .items { max-height: 76px; overflow: auto; overscroll-behavior: contain; }
+#out-info { max-height: 34vh; overflow: auto; overscroll-behavior: contain; }
+.flist, .live-shell details pre, #out-info details pre, #info { overscroll-behavior: contain; }
 #out { width: min(900px, calc(100% - 32px)); max-height: calc(100vh - 64px); border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); padding: 14px; }
 #out::backdrop { background: rgba(0,0,0,.45); }
 #out .oh { display: flex; align-items: center; gap: 8px; }
@@ -377,8 +427,11 @@ html.herdr-page .herdr-view { height: 100%; }
 #out .items { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 0; }
 #out .items button { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; font-size: 12px; padding: 3px 8px; cursor: pointer; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #out .items button[aria-pressed="true"] { border-color: var(--blue); background: var(--panel); }
-#out-info:not(:empty) { margin-top: 10px; }
-#out pre { margin: 10px 0 0; height: min(60vh, 560px); overflow: auto; white-space: pre-wrap; word-break: break-word; font: 12px ui-monospace, monospace; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+#out-info:not(:empty), #out-files:not(:empty) { margin-top: 10px; }
+#out-files .items { margin-top: 4px; max-height: 160px; overflow: auto; }
+#out-files .items button { max-width: 100%; font-family: var(--mono); }
+#out-files .outside { color: var(--human); }
+#out > pre { margin: 10px 0 0; flex: 1 1 auto; min-height: 140px; height: auto; overflow: auto; overscroll-behavior: contain; white-space: pre-wrap; word-break: break-word; font: 12px ui-monospace, monospace; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
 #ctx { position: fixed; z-index: 30; min-width: 170px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: 0 6px 24px rgba(0,0,0,.18); }
 #ctx[hidden] { display: none; }
 #ctx button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 5px; cursor: pointer; }
@@ -411,6 +464,7 @@ html.herdr-page .herdr-view { height: 100%; }
     <button class="action-button" id="out-close" style="margin-left:0">Close</button></div>
   <div class="items" id="out-items" role="group" aria-label="Choose output"></div>
   <div id="out-info"></div>
+  <div id="out-files"></div>
   <pre id="out-pre" tabindex="0" aria-label="Console output"></pre>
 </dialog>
 <div id="ctx" role="menu" aria-label="Card actions" hidden>
@@ -1458,7 +1512,7 @@ function roundOf(rounds, at) {
   return i;
 }
 
-function roundsHtml(c) {
+function roundsHtml(c, keep = 3) {
   const runs = c.rounds || [];
   const agents = (c.now || []).flatMap(s => (s.agents || []).map(a => ({...a, sid: s.id})));
   if (!runs.length) {
@@ -1487,8 +1541,35 @@ function roundsHtml(c) {
     const label = r.unit ? r.unit.slice(prefix.length) || r.unit : "no brief recorded";
     return `<div class="round" title="${esc(r.unit || r.id)}"><div class="rl"><span>${n + 1}</span><b>${esc(label)}</b><span>${esc(r.model || r.engine)}</span></div><div class="cells">${cell(runTone, "run", `implementer ${r.engine} ${r.model || ""} · ${r.unit}: ${r.state}${r.flags.length ? " · " + r.flags.join(", ") : ""} · open log`, `data-run-log="${esc(r.id)}" data-run-card="${esc(c.key)}"`)}${party("test-runner", x => x.kind === "tests", "test", "test-runner")}${LENSES.map(([k, s]) => party("diff-reviewer", x => x.kind === k, s, "diff-reviewer " + k)).join("")}${cell(lead, "lead", leadTitle)}</div></div>`;
   });
-  const hidden = rows.length - 3;
-  return `<div class="rounds">${hidden > 0 ? `<div class="earlier">+${hidden} earlier run${hidden > 1 ? "s" : ""}</div>` : ""}${rows.slice(-3).join("")}</div>`;
+  const hidden = keep > 1 ? rows.length - keep : 0;
+  return `<div class="rounds">${hidden > 0 ? `<div class="earlier">+${hidden} earlier run${hidden > 1 ? "s" : ""}</div>` : ""}${rows.slice(-keep).join("")}</div>`;
+}
+
+function briefOverview(c) {
+  const all = c.rounds || [];
+  if (!all.length) return "";
+  const n = st => all.filter(r => st.includes(r.state)).length;
+  const parts = [["live", n(["running", "stalled"]), "running"], ["done", n(["done"]), "done"], ["bad", n(["failed"]), "failed"]];
+  const flagged = all.filter(r => r.flags && r.flags.length).length;
+  const bar = parts.filter(([, k]) => k).map(([tone, k, label]) => `<span class="ov-${tone}" style="flex:${k}" title="${k} ${label}"></span>`).join("");
+  const text = [`${all.length} brief${all.length === 1 ? "" : "s"}`, ...parts.filter(([, k]) => k).map(([, k, label]) => `${k} ${label}`), flagged ? `${flagged} flagged` : ""].filter(Boolean).join(" · ");
+  return `<div class="overview"><div class="ov-bar" aria-hidden="true">${bar}</div><div class="ov-text" title="${esc(text)}">${esc(text)}</div></div>`;
+}
+
+function cardWork(c, sid) {
+  const runs = (c.runs || []).filter(LIVE).sort((a, b) => (b.started || 0) - (a.started || 0));
+  if (!runs.length) return briefOverview(c) + roundsHtml(c, 1);
+  const model = r => (r.model || r.engine || "").split("/").pop();
+  const rows = runs.slice(0, 2).map(r => `<button class="work" data-asid="${esc(r.session || sid)}" data-agent="${esc(r.id)}" aria-haspopup="dialog" title="${esc([r.unit, model(r)].filter(Boolean).join(" · ") + "\n" + (r.desc || r.goal || ""))}"><span class="work-meta"><span class="live-dot"></span><b>${esc(r.unit || r.id)}</b><span>${esc(r.started ? ago(r.started) : "")}</span></span><span class="work-goal">${esc(r.desc || r.goal || "")}</span></button>`).join("");
+  const more = runs.length > 2 ? `<div class="work-more">+${runs.length - 2} more running</div>` : "";
+  return `${briefOverview(c)}<div class="work-list">${rows}</div>${more}`;
+}
+
+
+
+function cardState(c) {
+  const order = ["waiting", "working", "quiet", "idle", "still_open"], st = order.find(x => c.sessions.some(s => s.state === x));
+  return st ? STATE_TEXT[st] || st : c.key.startsWith("session:") ? "session " + c.key.slice(8, 16) : c.key.split("/").pop();
 }
 
 function cardHtml(c) {
@@ -1509,16 +1590,16 @@ function cardHtml(c) {
   ].join("");
   const paths = c.outside && c.outside.length ? `<div class="paths">${c.outside.slice(0, 4).map(esc).join("<br>")}${c.outside.length > 4 ? `<br>+${c.outside.length - 4} more` : ""}</div>` : "";
   const sid = ((c.now || [])[0] || c.sessions[0] || {}).id || "";
-  return `<div class="card${live ? " live" : ""}${human ? " human" : ""}${QUIET.has(c.phase) && !human ? " quiet" : ""}" tabindex="0" data-key="${esc(c.key)}" data-sid="${esc(sid)}">
-    <div class="card-top">${live ? '<span class="blink" aria-label="running"></span>' : ""}<span class="num">${esc(c.key.startsWith("session:") ? "session " + c.key.slice(8, 16) : c.key.split("/").pop())}</span>${flag ? `<span class="flag">${esc(flag)}</span>` : ""}<button class="star" data-fav="${esc(c.key)}" aria-pressed="${!!c.favourite}" aria-label="${c.favourite ? "Remove from favourites" : "Add to favourites"}" title="${c.favourite ? "Remove from favourites" : "Add to favourites"}">${c.favourite ? "★" : "☆"}</button></div>
+  return `<div class="card${live ? " live" : ""}${c.runs.some(LIVE) ? " has-work" : ""}${human ? " human" : ""}${QUIET.has(c.phase) && !human ? " quiet" : ""}" tabindex="0" data-key="${esc(c.key)}" data-sid="${esc(sid)}">
+    <div class="card-top">${live ? '<span class="blink" aria-label="running"></span>' : ""}<span class="num" title="${esc(c.key)}">${esc(cardState(c))}</span>${flag ? `<span class="flag">${esc(flag)}</span>` : ""}<button class="star" data-fav="${esc(c.key)}" aria-pressed="${!!c.favourite}" aria-label="${c.favourite ? "Remove from favourites" : "Add to favourites"}" title="${c.favourite ? "Remove from favourites" : "Add to favourites"}">${c.favourite ? "★" : "☆"}</button></div>
     <p class="feature">${esc(c.title)}</p>
     ${c.repo && state && c.repo !== state.repo ? `<div class="branch">${esc(c.repo.split("/").pop())}</div>` : ""}
     ${branch ? `<div class="branch">${esc(branch)}</div>` : ""}
-    <div class="cbody">${sub ? `<div class="s">${esc(sub)}</div>` : ""}
-    ${roundsHtml(c)}
+    <div class="cbody">${sub && !c.runs.some(LIVE) ? `<div class="s">${esc(sub)}</div>` : ""}
+    ${cardWork(c, sid)}
     ${c.sessions.filter(s => s.engine === "codex" && s.workflow_history?.length).map(s => `<div class="s" title="Recorded workflow progress for ${esc(s.name)}">${s.workflow_history.map(e => `<span title="${esc(new Date(e.timestamp * 1000).toLocaleString())}">${esc(e.phase)}</span>`).join(" → ")}</div>`).join("")}
     <div class="chips">${chips}</div>
-    ${cardNow(c)}
+    ${c.runs.some(LIVE) ? "" : cardNow(c)}
     ${paths}
     ${agentTiles(c)}</div>
     ${human && sid ? `<div class="cardhint">${esc(resumeCmd(sessionOf(sid) || { id: sid }))}</div>` : ""}
@@ -1568,7 +1649,7 @@ const sessionOf = sid => { for (const c of (state && state.cards) || []) for (co
 const AGENT_NAMES = {"shell": "bg shell", "bounded-extractor": "haiku scan", "test-runner": "test-runner", "diff-reviewer": "diff-review", "general-purpose": "general", "Explore": "explore"};
 
 function agentTiles(c) {
-  const tiles = ownAgents(c).filter(notDismissed);
+  const tiles = ownAgents(c).filter(a => a.state === "running");
   return tiles.length ? `<div class="agents">${tiles.map(agentTile).join("")}</div>` : "";
 }
 
@@ -1767,12 +1848,22 @@ const activeStep = c => c.steps.find(x => x.state === "active");
 const panel = () => document.getElementById("panel");
 const enc = encodeURIComponent;
 
+const scrollKey = el => (el.closest("[data-info-section]")?.dataset.infoSection || "") + "|" + el.tagName + "." + el.className;
+function keepScroll(root, apply) {
+  const boxes = () => root.querySelectorAll("pre:not(.log), .flist, .shell-facts, .goal");
+  const saved = new Map([...boxes()].filter(e => e.scrollTop || e.scrollLeft).map(e => [scrollKey(e), [e.scrollTop, e.scrollLeft]]));
+  const own = root.scrollTop;
+  apply();
+  boxes().forEach(e => { const at = saved.get(scrollKey(e)); if (at) [e.scrollTop, e.scrollLeft] = at; });
+  root.scrollTop = own;
+}
+
 function setIfChanged(id, html) {
   const el = document.getElementById(id);
   if (!el || el.dataset.h === html) return false;
   const gb = el.querySelector(".gb"), top = gb ? gb.scrollTop : 0, left = gb ? gb.scrollLeft : 0, own = el.scrollTop;
   const lg = el.querySelector("pre.log"), lt = lg ? lg.scrollTop : 0, stick = !lg || lg.scrollHeight - lg.scrollTop - lg.clientHeight < 40;
-  el.innerHTML = html;
+  keepScroll(el, () => { el.innerHTML = html; });
   el.dataset.h = html;
   const nb = el.querySelector(".gb");
   if (nb) { nb.scrollTop = top; nb.scrollLeft = left; }
@@ -1842,7 +1933,7 @@ function dismiss(ids) {
   ids.forEach(id => dismissed.add(id));
   try { localStorage.setItem("fsa-dismissed", JSON.stringify([...dismissed].slice(-500))); } catch (e) {}
 }
-const dismissButton = x => isDone(x) ? `<button class="action-button" data-dismiss="${esc(x.id)}" aria-label="Dismiss ${esc(x.unit || x.label || x.id)}">Dismiss</button>` : "";
+const dismissButton = x => x && isDone(x) ? `<button class="action-button dismiss" data-dismiss="${esc(x.id)}" aria-label="Dismiss ${esc(x.unit || x.label || x.id)}">Dismiss</button>` : "";
 const factRow = (k, v) => v ? `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>` : "";
 const RECENT_S = 900;
 const recentRuns = (c, sid) => ((c && c.runs) || []).filter(r => (!sid || !r.session || r.session === sid) && (LIVE(r) || Date.now() / 1000 - (r.updated || 0) < RECENT_S));
@@ -1857,29 +1948,51 @@ function factList(c, key, title, items) {
 const ownAgents = c => cardAgents(c).filter(a => !(a.shell && shellRun(a, c)));
 const launcherOf = (r, c) => cardAgents(c || {}).find(a => a.shell && shellRun(a, c)?.id === r.id) || null;
 
-function runFacts(r, c) {
-  const s = ((c && c.now) || []).find(n => n.id === r.session) || {}, shell = launcherOf(r, c);
+const goalBox = r => (r.desc || r.goal) ? `<div class="goal" tabindex="0" aria-label="Goal">${esc(r.desc || r.goal)}</div>` : "";
+
+function runFacts(r, c, withGoal = true) {
+  const shell = launcherOf(r, c);
   const launched = shell ? [shell.shell.description || shell.id, shell.id, shell.state + (shell.shell.exit != null ? " · exit " + shell.shell.exit : "")].join(" · ") : "";
   const status = [r.state, (r.flags || []).join(", "), r.started ? `started ${ago(r.started)} ago` : "", r.updated ? `updated ${ago(r.updated)} ago` : ""].filter(Boolean).join(" · ");
-  return `<dl class="shell-facts">${factRow("Session", s.name || r.session)}${factRow("Kind", "implementer run (" + (r.mode || "implement") + ")")}${factRow("Target", r.root)}${factRow("Brief", r.unit)}${factRow("Status", status)}${factRow("Agent", [r.engine, r.model].filter(Boolean).join(" · "))}${factRow("Launched by", launched)}${factRow("Run id", r.id)}</dl>${factList(c, "run-goal-" + r.id, "Goal", r.goal ? [r.goal] : [])}${factList(c, "run-files-" + r.id, "Files touched", r.touched)}${factList(c, "run-out-" + r.id, "Outside allowed paths", r.outside)}${factList(c, "run-risks-" + r.id, "Open risks", r.open_risks)}`;
+  return `${withGoal ? goalBox(r) : ""}<dl class="shell-facts">${factRow("Kind", "implementer run (" + (r.mode || "implement") + ")")}${factRow("Target", r.root)}${factRow("Brief", r.unit)}${factRow("Status", status)}${factRow("Agent", [r.engine, r.model].filter(Boolean).join(" · "))}${factRow("Launched by", launched)}${factRow("Run id", r.id)}</dl>${factList(c, "run-files-" + r.id, "Files touched", r.touched)}${factList(c, "run-out-" + r.id, "Outside allowed paths", r.outside)}${factList(c, "run-risks-" + r.id, "Open risks", r.open_risks)}`;
+}
+
+const shortPath = p => String(p || "").split("/").filter(Boolean).slice(-2).join("/");
+const pillTone = state => ["running", "stalled"].includes(state) ? "live" : /fail|error|kill|stalled/.test(state) ? "bad" : "done";
+const statePill = state => `<span class="pill ${pillTone(state)}">${esc(state)}</span>`;
+const countBadges = pairs => pairs.filter(([, n]) => n).map(([one, n, tone, many]) => `<span class="pill ${tone || ""}">${n} ${esc(n === 1 ? one : many || one + "s")}</span>`).join("");
+
+function liveCard({running, title, state, time, sub, badges, details, actions, dismissItem}) {
+  return `<div class="live-shell${running ? " running" : ""}"><div class="ls-head"><b class="ls-title" title="${esc(title)}">${esc(title)}</b>${statePill(state)}${time ? `<span class="ls-time">${esc(time)}</span>` : ""}</div><div class="ls-sub">${sub}</div>${badges ? `<div class="ls-badges">${badges}</div>` : ""}${details}<div class="ls-actions">${actions}${dismissButton(dismissItem)}</div></div>`;
 }
 
 function runCard(c) {
-  return r => `<div class="live-shell${LIVE(r) ? " running" : ""}"><div class="ls-head"><b>${esc(r.unit || r.id)}</b><span class="chip">${esc(r.state)}</span></div>${runFacts(r, c)}<div class="ls-actions"><button class="action-button" data-asid="${esc(runSession(r, c))}" data-agent="${esc(r.id)}" aria-haspopup="dialog">Console</button><button class="action-button" data-open-run="${esc(r.id)}">Details in panel</button>${dismissButton(r)}</div></div>`;
+  return r => {
+    const sid = esc(runSession(r, c)), shell = launcherOf(r, c);
+    const sub = [r.unit ? `<b>${esc(r.unit)}</b>` : "", esc([r.engine, r.model].filter(Boolean).join(" · ")), r.root ? `<span title="${esc(r.root)}">${esc(shortPath(r.root))}</span>` : "", shell ? `via ${esc(shell.id)}` : ""].filter(Boolean).join(" · ");
+    const more = `<details data-info-section="run-more-${esc(r.id)}"${infoShown(c, "run-more-" + r.id, false) ? " open" : ""}><summary>Details</summary>${runFacts(r, c, false)}</details>`;
+    const actions = `<button class="action-button" data-asid="${sid}" data-agent="${esc(r.id)}" aria-haspopup="dialog">Console</button>${r.root ? `<button class="action-button" data-asid="${sid}" data-run-changes="${esc(r.id)}" aria-haspopup="dialog">Git changes</button>` : ""}<button class="action-button" data-open-run="${esc(r.id)}">Panel</button>`;
+    return liveCard({running: LIVE(r), title: r.desc || r.goal || r.unit || r.id, state: r.state, time: r.started ? ago(r.started) : "", sub,
+      badges: countBadges([["file", (r.touched || []).length], ["outside brief", (r.outside || []).length, "bad", "outside brief"], ["risk", (r.open_risks || []).length, "warn"]]),
+      details: more, actions, dismissItem: r});
+  };
 }
 
 function shellFacts(a, c) {
-  const x = a.shell || {}, s = ((c && c.now) || []).find(n => n.id === a.sid) || {};
+  const x = a.shell || {};
   const status = [a.state, x.exit != null ? `exit ${x.exit}` : "", x.started ? `started ${ago(x.started)} ago` : "", `output ${ago(a.at)} ago`].filter(Boolean).join(" · ");
   const agent = x.run ? x.run + " (not listed on this card)" : "none";
   const row = factRow;
-  return `<dl class="shell-facts">${row("Session", s.name || a.sid)}${row("Kind", x.command ? (x.moved ? "Bash command still running (started in the foreground)" : "background task (run_in_background)") : "")}${row("Target", x.cwd)}${row("Brief", x.brief)}${row("Status", status)}${row("Agent", agent)}${row("Task id", a.id)}</dl>${x.command ? `<details data-info-section="cmd-${esc(a.id)}"${c && infoShown(c, "cmd-" + a.id, false) ? " open" : ""}><summary>Command</summary><pre>${esc(x.command)}</pre></details>` : ""}`;
+  return `<dl class="shell-facts">${row("Kind", x.command ? (x.moved ? "Bash command still running (started in the foreground)" : "background task (run_in_background)") : "")}${row("Target", x.cwd)}${row("Brief", x.brief)}${row("Status", status)}${row("Agent", agent)}${row("Task id", a.id)}</dl>${x.command ? `<details data-info-section="cmd-${esc(a.id)}"${c && infoShown(c, "cmd-" + a.id, false) ? " open" : ""}><summary>Command</summary><pre>${esc(x.command)}</pre></details>` : ""}`;
 }
 
 function shellCard(c) {
   return a => {
     const x = a.shell || {}, [, ...rest] = a.label.split(" · ");
-    return `<div class="live-shell${a.state === "running" ? " running" : ""}"><div class="ls-head"><b>${esc(x.description || rest.join(" · ") || a.id)}</b><span class="chip">${esc(a.state)}</span></div>${shellFacts(a, c)}<div class="ls-actions"><button class="action-button" data-asid="${esc(a.sid)}" data-agent="${esc(a.id)}" aria-haspopup="dialog">Console</button>${dismissButton(a)}</div></div>`;
+    const sub = [x.command ? (x.moved ? "foreground command" : "background task") : "shell", x.cwd ? `<span title="${esc(x.cwd)}">${esc(shortPath(x.cwd))}</span>` : "", x.exit != null ? `exit ${esc(x.exit)}` : ""].filter(Boolean).join(" · ");
+    const more = `<details data-info-section="shell-more-${esc(a.id)}"${infoShown(c, "shell-more-" + a.id, false) ? " open" : ""}><summary>Details</summary>${shellFacts(a, c)}</details>`;
+    return liveCard({running: a.state === "running", title: x.description || rest.join(" · ") || a.id, state: a.state, time: x.started ? ago(x.started) : "", sub,
+      badges: "", details: more, actions: `<button class="action-button" data-asid="${esc(a.sid)}" data-agent="${esc(a.id)}" aria-haspopup="dialog">Console</button>`, dismissItem: a});
   };
 }
 
@@ -1894,11 +2007,11 @@ const subagentTile = a => isDone(a) ? `<div class="tile-wrap">${agentTile(a)}<bu
 function liveHtml(c) {
   const agents = ownAgents(c).filter(notDismissed), shell = a => a.label.startsWith("shell");
   const runs = recentRuns(c).filter(notDismissed).sort((a, b) => LIVE(b) - LIVE(a) || (b.updated || 0) - (a.updated || 0));
-  const lead = s => `<div class="live-lead"><span class="chip">${esc(STATE_TEXT[s.state] || s.state)}</span> <b>${esc(s.name)}</b>${s.action ? ` <span class="s">${esc(toolLine(s))}</span>` : ""}</div>`;
+  const lead = s => `<div class="live-lead"><span class="pill ${s.state === "working" ? "live" : ""}">${esc(STATE_TEXT[s.state] || s.state)}</span> <b>${esc(s.name)}</b>${s.action ? ` <span class="s">${esc(toolLine(s))}</span>` : ""}</div>`;
   const total = agents.filter(a => a.state === "running").length + runs.filter(LIVE).length;
   const done = [...runs, ...agents].filter(isDone).length;
-  const clear = done ? `<div class="ls-actions"><button class="action-button" data-dismiss-all="1">Dismiss all done (${done})</button></div>` : "";
-  return infoSection(c, "live", "Running now", `${clear}${(c.now || []).map(lead).join("")}
+  const clear = done ? `<button class="action-button" data-dismiss-all="1">Dismiss all done (${done})</button>` : "";
+  return infoSection(c, "live", "Running now", `<div class="live-top"><div>${(c.now || []).map(lead).join("")}</div>${clear}</div>
     ${liveGroup("Implementer runs", runs.map(r => ({...r, state: LIVE(r) ? "running" : r.state})), runCard(c), "live-shells")}
     ${liveGroup("Subagents", agents.filter(a => !shell(a)), subagentTile)}
     ${liveGroup("Background shells", agents.filter(shell), shellCard(c), "live-shells")}`, `<span class="chip">${total} running</span>`, true);
@@ -1965,6 +2078,7 @@ function wireInfo(c) {
   const lb = document.querySelector("#info [data-log]");
   if (lb) lb.onclick = ev => { ev.stopPropagation(); showLog = !showLog; logSeen = ""; stopLog(); paintPanel(); };
   document.querySelectorAll("#info [data-agent]").forEach(el => el.onclick = ev => { ev.preventDefault(); openAgent(el.dataset.asid, el.dataset.agent); });
+  document.querySelectorAll("#info [data-run-changes]").forEach(el => el.onclick = ev => { ev.preventDefault(); openAgent(el.dataset.asid, el.dataset.runChanges, "changes"); });
   document.querySelectorAll("#info [data-dismiss]").forEach(el => el.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); dismiss([el.dataset.dismiss]); repaintAll(); });
   const all = document.querySelector("#info [data-dismiss-all]");
   if (all) all.onclick = ev => { ev.preventDefault(); dismiss([...recentRuns(c), ...ownAgents(c)].filter(isDone).map(x => x.id)); repaintAll(); };
@@ -2330,12 +2444,14 @@ function outInfo(cur) {
   const c = cardOfSession(out.sid);
   if (!cur) return "";
   const bar = isDone(cur) ? `<div class="ls-actions">${dismissButton(cur)}</div>` : "";
-  if (cur.run) return runFacts(cur.run, c) + bar;
+  const view = v => `<button data-view="${v}" aria-pressed="${out.view === v}">${v === "changes" ? "Git changes" : "Console"}</button>`;
+  if (cur.run) return runFacts(cur.run, c) + bar + (cur.run.root ? `<div class="seg" role="group" aria-label="Show">${view("console")}${view("changes")}</div>` : "");
   return (cur.shell ? shellFacts({...cur, sid: out.sid}, c) : "") + bar;
 }
 
 function pickOut(id) {
   out.id = id;
+  out.file = null;
   out.text = null;
   outEl("out-pre").textContent = "loading…";
   paintOutItems();
@@ -2352,13 +2468,20 @@ function paintOutItems() {
   const box = outEl("out-info");
   if (box.dataset.html !== info) {
     const opened = new Set([...box.querySelectorAll("details")].filter(d => d.open).map(d => d.querySelector("summary")?.textContent));
-    box.innerHTML = info;
+    keepScroll(box, () => {
+      box.innerHTML = info;
+      box.querySelectorAll("details").forEach(d => { if (opened.has(d.querySelector("summary")?.textContent)) d.open = true; });
+    });
     box.dataset.html = info;
-    box.querySelectorAll("details").forEach(d => { if (opened.has(d.querySelector("summary")?.textContent)) d.open = true; });
+    box.querySelectorAll("[data-view]").forEach(b => b.onclick = () => { out.view = b.dataset.view; out.file = null; out.text = null; outEl("out-pre").textContent = "loading…"; paintOutItems(); pollOutput(); });
     box.querySelectorAll("[data-dismiss]").forEach(b => b.onclick = () => { dismiss([b.dataset.dismiss]); out.text = null; paintOutItems(); pollOutput(); repaintAll(); });
   }
-  outEl("out-items").innerHTML = items.map(x => `<button data-oid="${esc(x.id)}" aria-pressed="${x.id === out.id}" title="${esc(x.label)}">${x.state === "running" ? '<span class="live-dot"></span>' : ""}${esc(x.label || x.id)}</button>`).join("");
-  outEl("out-items").querySelectorAll("[data-oid]").forEach(b => b.onclick = () => pickOut(b.dataset.oid));
+  const chooser = outEl("out-items"), list = items.map(x => `<button data-oid="${esc(x.id)}" aria-pressed="${x.id === out.id}" title="${esc(x.label)}">${x.state === "running" ? '<span class="live-dot"></span>' : ""}${esc(x.label || x.id)}</button>`).join("");
+  if (chooser.dataset.html !== list) {
+    keepScroll(chooser, () => { chooser.innerHTML = list; });
+    chooser.dataset.html = list;
+    chooser.querySelectorAll("[data-oid]").forEach(b => b.onclick = () => pickOut(b.dataset.oid));
+  }
 }
 
 async function fetchText(url, gone) {
@@ -2366,7 +2489,37 @@ async function fetchText(url, gone) {
   return r.ok ? await r.text() : r.status === 404 ? gone : `(error ${r.status})`;
 }
 
+function paintFiles(files, cur) {
+  const box = outEl("out-files");
+  if (!files) {
+    if (box.innerHTML) box.innerHTML = "";
+    return;
+  }
+  const allowed = new Set(cur.run.allowed || []), inBrief = f => !allowed.size || allowed.has(f.path);
+  const head = files.length ? `${files.length} uncommitted file${files.length > 1 ? "s" : ""} in ${cur.run.root}${allowed.size ? ` · ${files.filter(inBrief).length} in the brief's allowed paths` : ""}` : `No uncommitted changes in ${cur.run.root} yet.`;
+  const html = `<div class="s">${esc(head)}</div><div class="flist" role="group" aria-label="Changed files">${files.map(f => `<button data-file="${esc(f.path)}" aria-pressed="${f.path === out.file}" title="${esc(inBrief(f) ? f.path : f.path + " — outside the brief's allowed paths")}"><span class="st st-${esc(stc(f.status))}">${esc(f.status)}</span><span class="fp">${esc(f.path)}</span>${inBrief(f) ? "" : '<span class="pill bad">outside brief</span>'}</button>`).join("")}</div>`;
+  if (box.dataset.html === html) return;
+  keepScroll(box, () => { box.innerHTML = html; });
+  box.dataset.html = html;
+  box.querySelectorAll("[data-file]").forEach(b => b.onclick = () => { out.file = b.dataset.file; out.text = null; outEl("out-pre").textContent = "loading…"; pollOutput(); });
+}
+
+async function changesText(want, cur) {
+  const key = enc(cur.run.root), r = await fetch(`/api/files?key=${key}&ref=WORKTREE`, {cache: "no-store"});
+  if (!r.ok) {
+    paintFiles(null);
+    return r.status === 404 ? `${cur.run.root} is not a known worktree any more.` : `(error ${r.status})`;
+  }
+  const files = await r.json();
+  if (out && out.id === want.id && out.view === "changes") paintFiles(files, cur);
+  if (!want.file) return files.length ? "Select a file to see its diff." : "";
+  if (!files.some(f => f.path === want.file)) return `${want.file} no longer has uncommitted changes.`;
+  return await fetchText(`/api/diff?key=${key}&ref=WORKTREE&path=${enc(want.file)}`, "(no diff for this file)");
+}
+
 async function outText(want, cur) {
+  if (cur && cur.run && want.view === "changes" && cur.run.root) return await changesText(want, cur);
+  paintFiles(null);
   const runLog = id => fetchText(`/api/log?id=${enc(id)}&full=1`, "(no log for this run)");
   if (cur && cur.run) {
     const log = await runLog(cur.id) || "(the run has not written to its log yet)", shell = launcherOf(cur.run, cardOfSession(want.sid));
@@ -2382,16 +2535,19 @@ async function pollOutput() {
   const want = {...out}, cur = outItems().find(x => x.id === want.id);
   try {
     const text = await outText(want, cur);
-    if (!out || out.sid !== want.sid || out.id !== want.id || text === out.text) return;
+    if (!out || out.sid !== want.sid || out.id !== want.id || out.view !== want.view || out.file !== want.file || text === out.text) return;
     const pre = outEl("out-pre"), atEnd = out.text === null || pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
     out.text = text;
-    pre.textContent = text || "(no output yet)";
+    const diff = want.view === "changes" && want.file && /^diff --git /m.test(text);
+    pre.classList.toggle("diff", diff);
+    if (diff) pre.innerHTML = diffHtml(text);
+    else pre.textContent = text || "(no output yet)";
     if (atEnd) pre.scrollTop = pre.scrollHeight;
   } catch (e) {}
 }
 
-function openAgent(sid, id) {
-  out = {sid, id, text: null};
+function openAgent(sid, id, view = "console") {
+  out = {sid, id, view, file: null, text: null};
   outEl("out-pre").textContent = "loading…";
   paintOutItems();
   outEl("out").showModal();
