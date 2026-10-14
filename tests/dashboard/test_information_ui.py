@@ -11,7 +11,7 @@ HTML = Path(__file__).resolve().parents[2] / "plugins/fullstack-agents/scripts/l
 
 @unittest.skipUnless(shutil.which("node"), "node unavailable: renderer tests require Node.js")
 class InformationUiTests(unittest.TestCase):
-    def render(self, card, opened=()):
+    def render(self, card, opened=(), pre=""):
         source = HTML.read_text()
         renderer = re.search(r"const infoOpen = new Map\(\);[\s\S]*?(?=\nasync function pollLog)", source).group()
         helpers = r'''
@@ -36,6 +36,7 @@ const toolLine = s => s.action || '';
         script = "const vm = require('vm'); const ctx = vm.createContext({});\n"
         script += "vm.runInContext(" + json.dumps(helpers + renderer) + ", ctx);\n"
         script += "vm.runInContext(" + json.dumps("infoOpen.set('card', new Map(" + json.dumps([[k, v] for k, v in (opened.items() if isinstance(opened, dict) else ((k, True) for k in opened))]) + "));") + ", ctx);\n"
+        script += "vm.runInContext(" + json.dumps(pre) + ", ctx);\n"
         script += "process.stdout.write(vm.runInContext(" + json.dumps("infoHtml(" + json.dumps(card) + ")") + ", ctx));"
         result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
         return result.stdout
@@ -139,6 +140,32 @@ const toolLine = s => s.action || '';
         for text in ('<dt>Session</dt><dd>omni lead</dd>', '<dt>Target</dt><dd>/wt/p7</dd>', '<dt>Agent</dt><dd>none</dd>',
                      'started in the foreground', 'data-asid="lead" data-agent="b7"', 'git commit -m &lt;x&gt;'):
             self.assertIn(text, live)
+
+    def dismiss_fixture(self):
+        card = self.fixture()
+        card["runs"] = [{"id": "implement-9", "unit": "p9", "engine": "grok", "state": "running", "session": "lead", "updated": 9e12},
+                        {"id": "implement-8", "unit": "p8", "engine": "grok", "state": "done", "session": "lead", "updated": 9e12}]
+        card["now"][0]["agents"] = [
+            {"id": "a1", "label": "test-runner · t", "state": "completed", "at": 1},
+            {"id": "b1", "label": "shell · Build", "state": "completed", "at": 2, "shell": {"description": "Build", "command": "make"}},
+            {"id": "b2", "label": "shell · Watch", "state": "running", "at": 3, "shell": {"description": "Watch", "command": "tail"}}]
+        return card
+
+    def test_done_items_get_dismiss_and_running_items_do_not(self):
+        live = self.render(self.dismiss_fixture())
+        for done in ("implement-8", "a1", "b1"):
+            self.assertIn(f'data-dismiss="{done}"', live)
+        for running in ("implement-9", "b2"):
+            self.assertNotIn(f'data-dismiss="{running}"', live)
+        self.assertIn('data-dismiss-all="1">Dismiss all done (3)', live)
+
+    def test_dismissed_done_items_are_hidden_but_running_ones_stay(self):
+        live = self.render(self.dismiss_fixture(), pre="['implement-8', 'a1', 'b1', 'b2', 'implement-9'].forEach(id => dismissed.add(id));")
+        live = live[live.index('data-info-section="live"'):live.index('data-info-section="summary"')]
+        for gone in ('data-agent="implement-8"', 'data-agent="a1"', 'data-agent="b1"', 'data-dismiss-all'):
+            self.assertNotIn(gone, live)
+        for kept in ('data-agent="implement-9"', 'data-agent="b2"'):
+            self.assertIn(kept, live)
 
     def test_agent_text_and_title_are_escaped(self):
         card = self.fixture()

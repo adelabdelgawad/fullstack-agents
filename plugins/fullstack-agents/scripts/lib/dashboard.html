@@ -170,6 +170,9 @@ aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-sp
 .live-group .agents { grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); margin-top: 0; }
 .live-group .agent { font-size: 11px; }
 .live-lead { margin-bottom: 4px; overflow-wrap: anywhere; }
+.tile-wrap { position: relative; display: grid; min-width: 0; }
+.tile-x { position: absolute; top: 1px; right: 1px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; }
+.tile-x:hover, .tile-x:focus-visible { color: var(--ink); }
 .live-shells { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 8px; }
 .live-shell { border: 1px solid var(--line); border-radius: 6px; padding: 8px; min-width: 0; font-size: 12px; }
 .live-shell.running { border-color: color-mix(in srgb, var(--pass) 60%, transparent); }
@@ -1565,7 +1568,7 @@ const sessionOf = sid => { for (const c of (state && state.cards) || []) for (co
 const AGENT_NAMES = {"shell": "bg shell", "bounded-extractor": "haiku scan", "test-runner": "test-runner", "diff-reviewer": "diff-review", "general-purpose": "general", "Explore": "explore"};
 
 function agentTiles(c) {
-  const tiles = ownAgents(c);
+  const tiles = ownAgents(c).filter(notDismissed);
   return tiles.length ? `<div class="agents">${tiles.map(agentTile).join("")}</div>` : "";
 }
 
@@ -1832,6 +1835,14 @@ function shellRun(a, c) {
   return (x.run && runs.find(r => r.id === x.run)) || (x.brief && runs.filter(r => r.unit === x.brief).slice(-1)[0]) || null;
 }
 
+const dismissed = (() => { try { return new Set(JSON.parse(localStorage.getItem("fsa-dismissed") || "[]")); } catch (e) { return new Set(); } })();
+const isDone = x => !["running", "stalled"].includes(x.state);
+const notDismissed = x => !(isDone(x) && dismissed.has(x.id));
+function dismiss(ids) {
+  ids.forEach(id => dismissed.add(id));
+  try { localStorage.setItem("fsa-dismissed", JSON.stringify([...dismissed].slice(-500))); } catch (e) {}
+}
+const dismissButton = x => isDone(x) ? `<button class="action-button" data-dismiss="${esc(x.id)}" aria-label="Dismiss ${esc(x.unit || x.label || x.id)}">Dismiss</button>` : "";
 const factRow = (k, v) => v ? `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>` : "";
 const RECENT_S = 900;
 const recentRuns = (c, sid) => ((c && c.runs) || []).filter(r => (!sid || !r.session || r.session === sid) && (LIVE(r) || Date.now() / 1000 - (r.updated || 0) < RECENT_S));
@@ -1854,7 +1865,7 @@ function runFacts(r, c) {
 }
 
 function runCard(c) {
-  return r => `<div class="live-shell${LIVE(r) ? " running" : ""}"><div class="ls-head"><b>${esc(r.unit || r.id)}</b><span class="chip">${esc(r.state)}</span></div>${runFacts(r, c)}<div class="ls-actions"><button class="action-button" data-asid="${esc(runSession(r, c))}" data-agent="${esc(r.id)}" aria-haspopup="dialog">Console</button><button class="action-button" data-open-run="${esc(r.id)}">Details in panel</button></div></div>`;
+  return r => `<div class="live-shell${LIVE(r) ? " running" : ""}"><div class="ls-head"><b>${esc(r.unit || r.id)}</b><span class="chip">${esc(r.state)}</span></div>${runFacts(r, c)}<div class="ls-actions"><button class="action-button" data-asid="${esc(runSession(r, c))}" data-agent="${esc(r.id)}" aria-haspopup="dialog">Console</button><button class="action-button" data-open-run="${esc(r.id)}">Details in panel</button>${dismissButton(r)}</div></div>`;
 }
 
 function shellFacts(a, c) {
@@ -1868,7 +1879,7 @@ function shellFacts(a, c) {
 function shellCard(c) {
   return a => {
     const x = a.shell || {}, [, ...rest] = a.label.split(" · ");
-    return `<div class="live-shell${a.state === "running" ? " running" : ""}"><div class="ls-head"><b>${esc(x.description || rest.join(" · ") || a.id)}</b><span class="chip">${esc(a.state)}</span></div>${shellFacts(a, c)}<div class="ls-actions"><button class="action-button" data-asid="${esc(a.sid)}" data-agent="${esc(a.id)}" aria-haspopup="dialog">Console</button></div></div>`;
+    return `<div class="live-shell${a.state === "running" ? " running" : ""}"><div class="ls-head"><b>${esc(x.description || rest.join(" · ") || a.id)}</b><span class="chip">${esc(a.state)}</span></div>${shellFacts(a, c)}<div class="ls-actions"><button class="action-button" data-asid="${esc(a.sid)}" data-agent="${esc(a.id)}" aria-haspopup="dialog">Console</button>${dismissButton(a)}</div></div>`;
   };
 }
 
@@ -1878,14 +1889,18 @@ function liveGroup(title, items, tile, cls = "agents") {
   return `<div class="live-group"><h5>${esc(title)}${count}</h5>${items.length ? `<div class="${cls}">${items.map(tile).join("")}</div>` : '<div class="s">None.</div>'}</div>`;
 }
 
+const subagentTile = a => isDone(a) ? `<div class="tile-wrap">${agentTile(a)}<button class="tile-x" data-dismiss="${esc(a.id)}" aria-label="Dismiss ${esc(a.label)}" title="Dismiss">×</button></div>` : agentTile(a);
+
 function liveHtml(c) {
-  const agents = ownAgents(c), shell = a => a.label.startsWith("shell");
-  const runs = recentRuns(c).sort((a, b) => LIVE(b) - LIVE(a) || (b.updated || 0) - (a.updated || 0));
+  const agents = ownAgents(c).filter(notDismissed), shell = a => a.label.startsWith("shell");
+  const runs = recentRuns(c).filter(notDismissed).sort((a, b) => LIVE(b) - LIVE(a) || (b.updated || 0) - (a.updated || 0));
   const lead = s => `<div class="live-lead"><span class="chip">${esc(STATE_TEXT[s.state] || s.state)}</span> <b>${esc(s.name)}</b>${s.action ? ` <span class="s">${esc(toolLine(s))}</span>` : ""}</div>`;
   const total = agents.filter(a => a.state === "running").length + runs.filter(LIVE).length;
-  return infoSection(c, "live", "Running now", `${(c.now || []).map(lead).join("")}
+  const done = [...runs, ...agents].filter(isDone).length;
+  const clear = done ? `<div class="ls-actions"><button class="action-button" data-dismiss-all="1">Dismiss all done (${done})</button></div>` : "";
+  return infoSection(c, "live", "Running now", `${clear}${(c.now || []).map(lead).join("")}
     ${liveGroup("Implementer runs", runs.map(r => ({...r, state: LIVE(r) ? "running" : r.state})), runCard(c), "live-shells")}
-    ${liveGroup("Subagents", agents.filter(a => !shell(a)), agentTile)}
+    ${liveGroup("Subagents", agents.filter(a => !shell(a)), subagentTile)}
     ${liveGroup("Background shells", agents.filter(shell), shellCard(c), "live-shells")}`, `<span class="chip">${total} running</span>`, true);
 }
 
@@ -1950,6 +1965,9 @@ function wireInfo(c) {
   const lb = document.querySelector("#info [data-log]");
   if (lb) lb.onclick = ev => { ev.stopPropagation(); showLog = !showLog; logSeen = ""; stopLog(); paintPanel(); };
   document.querySelectorAll("#info [data-agent]").forEach(el => el.onclick = ev => { ev.preventDefault(); openAgent(el.dataset.asid, el.dataset.agent); });
+  document.querySelectorAll("#info [data-dismiss]").forEach(el => el.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); dismiss([el.dataset.dismiss]); repaintAll(); });
+  const all = document.querySelector("#info [data-dismiss-all]");
+  if (all) all.onclick = ev => { ev.preventDefault(); dismiss([...recentRuns(c), ...ownAgents(c)].filter(isDone).map(x => x.id)); repaintAll(); };
   document.querySelectorAll("#info [data-open-run]").forEach(el => el.onclick = ev => { ev.preventDefault(); showRunLog(el.dataset.openRun); });
   const cb = document.querySelector("#info [data-collapse]");
   if (cb) cb.onclick = ev => { ev.stopPropagation(); toggleTask(openRun); };
@@ -2204,6 +2222,11 @@ function showRunLog(id) {
   document.querySelector("#info .task.open")?.scrollIntoView({block: "nearest"});
 }
 
+function repaintAll() {
+  render();
+  if (openKey) paintPanel();
+}
+
 function closePanel() {
   stopTerminal();
   stopLog();
@@ -2300,15 +2323,15 @@ const outEl = id => document.getElementById(id);
 
 function outItems() {
   const runs = recentRuns(cardOfSession(out.sid), out.sid).map(r => ({id: r.id, label: "run · " + (r.unit || r.id), state: LIVE(r) ? "running" : r.state, run: r}));
-  return [...runs, ...ownAgents(cardOfSession(out.sid) || {}).filter(a => a.sid === out.sid)];
+  return [...runs, ...ownAgents(cardOfSession(out.sid) || {}).filter(a => a.sid === out.sid)].filter(notDismissed);
 }
 
 function outInfo(cur) {
   const c = cardOfSession(out.sid);
   if (!cur) return "";
-  if (cur.run) return runFacts(cur.run, c);
-  if (!cur.shell) return "";
-  return shellFacts({...cur, sid: out.sid}, c);
+  const bar = isDone(cur) ? `<div class="ls-actions">${dismissButton(cur)}</div>` : "";
+  if (cur.run) return runFacts(cur.run, c) + bar;
+  return (cur.shell ? shellFacts({...cur, sid: out.sid}, c) : "") + bar;
 }
 
 function pickOut(id) {
@@ -2332,6 +2355,7 @@ function paintOutItems() {
     box.innerHTML = info;
     box.dataset.html = info;
     box.querySelectorAll("details").forEach(d => { if (opened.has(d.querySelector("summary")?.textContent)) d.open = true; });
+    box.querySelectorAll("[data-dismiss]").forEach(b => b.onclick = () => { dismiss([b.dataset.dismiss]); out.text = null; paintOutItems(); pollOutput(); repaintAll(); });
   }
   outEl("out-items").innerHTML = items.map(x => `<button data-oid="${esc(x.id)}" aria-pressed="${x.id === out.id}" title="${esc(x.label)}">${x.state === "running" ? '<span class="live-dot"></span>' : ""}${esc(x.label || x.id)}</button>`).join("");
   outEl("out-items").querySelectorAll("[data-oid]").forEach(b => b.onclick = () => pickOut(b.dataset.oid));
