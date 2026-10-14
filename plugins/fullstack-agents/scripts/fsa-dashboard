@@ -79,6 +79,11 @@ ACTIVITY_KEEP_S = 900
 ACTIVITY_MAX = 6
 OUTPUT_CHARS = 60000
 AGENT_STALE_S = 3600
+SHELL_EXIT_RE = re.compile(r"<task-id>([\w-]+)</task-id>.*?\(exit code (-?\d+)\)")
+SHELL_RUN_RE = re.compile(r"kc-runs/((?:implement|investigate)-\d{8}-\d{6}-\d+)")
+SHELL_BRIEF_RE = re.compile(r"\.codex-briefs/([\w.-]+?)\.md")
+SHELL_CD_RE = re.compile(r"(?:^|&&|;)\s*cd\s+(\S+)")
+ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
 JUDGE_WINDOW_S = 7200
 JUDGED = {}
 HERDR_KEYS = {"enter", "esc", "ctrl+c", "up", "down", "left", "right", "tab", "backspace", "1", "2", "3", "y", "n"}
@@ -1020,6 +1025,69 @@ def agent_items(session_dir, ended, now):
     return sorted(out, key=lambda x: -x["at"])[:ACTIVITY_MAX]
 
 
+def note_background(d, msg, bg):
+    if d["type"] == "assistant":
+        for c in msg.get("content") or []:
+            inp = c.get("input") if isinstance(c, dict) and c.get("type") == "tool_use" and c.get("name") == "Bash" else None
+            if isinstance(inp, dict):
+                facts = {"description": " ".join(str(inp.get("description") or "").split())[:160],
+                         "command": str(inp.get("command") or "")[:4000], "started": iso_epoch(d.get("timestamp") or "")}
+                bg["bash"][c.get("id", "")] = facts
+                if inp.get("run_in_background"):
+                    bg["labels"][c.get("id", "")] = facts
+        return
+    result = d.get("toolUseResult")
+    task = result.get("backgroundTaskId") if isinstance(result, dict) else None
+    if task:
+        bg["tasks"][task] = next((bg["labels"][u] for u in result_ids(msg) if u in bg["labels"]), {})
+
+
+def created_at(path):
+    try:
+        return path.stat().st_ctime
+    except OSError:
+        return 0
+
+
+def shell_items(path, bg, ended, now, skip=(), cwd=""):
+    launched = bg["tasks"]
+    tasks = Path(os.environ.get("CLAUDE_CODE_TMPDIR") or "/tmp") / f"claude-{os.getuid()}" / path.parent.name / path.stem / "tasks"
+    out, logs = [], sorted(tasks.glob("*.output"), key=created_at)
+    moved = [x.stem for x in logs if x.stem not in launched and x.stem not in ended and x.stem not in skip]
+    launched = {**dict(zip(moved[::-1], [dict(f, moved=True) for f in bg.get("pending", [])[::-1]])), **launched}
+    for log in logs:
+        tid = log.stem
+        try:
+            at = log.stat().st_mtime
+        except OSError:
+            continue
+        if tid in skip or not SOURCE_ID_RE.match(tid):
+            continue
+        state = ended.get(tid) or "running"
+        if state == "running" and (now - at > AGENT_STALE_S or tid not in launched):
+            continue
+        if state == "running" or now - at <= ACTIVITY_KEEP_S:
+            out.append({"id": tid, "label": "shell · " + (launched.get(tid, {}).get("description") or tid),
+                        "state": state, "at": at, "path": str(log),
+                        "shell": shell_facts(log, launched.get(tid, {}), bg["exit"].get(tid), cwd)})
+    return sorted(out, key=lambda x: (x["state"] != "running", -x["at"]))[:ACTIVITY_MAX]
+
+
+def shell_facts(log, launch, code, cwd):
+    command = launch.get("command", "")
+    tail = "\n".join(tail_lines(log, 8192))
+    run = SHELL_RUN_RE.findall(tail) or SHELL_RUN_RE.findall(command)
+    brief = SHELL_BRIEF_RE.search(command)
+    target = SHELL_CD_RE.search(command)
+    return {"description": launch.get("description", ""), "command": command, "started": launch.get("started") or 0,
+            "exit": code, "cwd": target.group(1) if target else cwd, "brief": brief.group(1) if brief else "",
+            "run": run[-1] if run else "", "moved": bool(launch.get("moved"))}
+
+
+def shell_output(path):
+    return ANSI_RE.sub("", "\n".join(tail_lines(path, OUTPUT_CHARS * 2)))[-OUTPUT_CHARS:] or "(no output yet)"
+
+
 def codex_transcript_lines(p):
     kind = p.get("type")
     if kind == "message" and p.get("role") in ("user", "assistant"):
@@ -1143,10 +1211,12 @@ def read_session(path, now, wt_re, names, waits):
     last, cwd, branch, title, text = None, "", "", "", ""
     action, action_at, action_id, said_at, seen_at, turn_at = "", "", "", "", "", ""
     mentions, briefs, answered = {}, set(), set()
-    finished = {}
+    finished, bg = {}, {"labels": {}, "tasks": {}, "exit": {}, "bash": {}, "pending": []}
     for line in tail_lines(path):
         for m in NOTE_RE.finditer(line):
             finished[m.group(1)] = m.group(2)
+        for m in SHELL_EXIT_RE.finditer(line):
+            bg["exit"][m.group(1)] = int(m.group(2))
         try:
             d = json.loads(line)
         except ValueError:
@@ -1159,6 +1229,7 @@ def read_session(path, now, wt_re, names, waits):
         cwd, branch = d.get("cwd") or cwd, d.get("gitBranch") or branch
         msg = d.get("message") or {}
         answered |= result_ids(msg)
+        note_background(d, msg, bg)
         if d["type"] == "assistant":
             said = final_text(msg)
             if said:
@@ -1195,13 +1266,15 @@ def read_session(path, now, wt_re, names, waits):
     elif not ended and idle > STALL_S and not busy:
         state = "quiet"
     worktree = max(mentions, key=mentions.get) if mentions else ""
+    agents = agent_items(path.with_suffix(""), finished, now)
+    bg["pending"] = [f for u, f in bg["bash"].items() if u not in answered and u not in bg["labels"]]
     return {
         "id": sid, "name": title or names.get(sid) or first_prompt(path) or f"{Path(cwd).name or 'session'} {sid[:8]}",
         "named": bool(title or names.get(sid)),
         "title": title,
         "cwd": cwd, "branch": branch, "worktree": worktree, "state": state, "updated": updated,
         "turn_at": iso_epoch(turn_at),
-        "agents": agent_items(path.with_suffix(""), finished, now),
+        "agents": agents + shell_items(path, bg, finished, now, {a["id"] for a in agents}, cwd),
         "idle": idle, "snippet": snippet(text) if state in ("waiting", "still_open", "idle") else "",
         "briefs": sorted(briefs), "chips": chips,
         "ask": snippet(ask, 600), "need": need, "action": action, "action_at": iso_epoch(action_at),
@@ -2002,7 +2075,7 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
                             key=lambda x: x.get("at", ""), default={"items": []})["items"]
         card["now"] = [{**{k: s[k] for k in ("id", "name", "title", "state", "updated", "ask", "need", "action", "action_at", "action_running", "said", "said_at", "said_full", "docs")},
                         "engine": s.get("engine", "claude"),
-                        "agents": [{f: x[f] for f in ("id", "label", "state", "at")} for x in s["agents"]]}
+                        "agents": [{**{f: x[f] for f in ("id", "label", "state", "at")}, **({"shell": x["shell"]} if "shell" in x else {})} for x in s["agents"]]}
                        for s in sorted(g["sessions"], key=lambda s: -s["updated"])]
         card["declared"] = max((declared[s["id"]] for s in g["sessions"] if s["id"] in declared),
                                key=lambda d: d["at"], default=None)
@@ -2428,7 +2501,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             runs = dict.fromkeys(r.runs for r, _ in self.server.roots.values())
             log = next((d / f"{rid}.log" for d in runs if (d / f"{rid}.log").exists()), self.server.repo.runs / f"{rid}.log")
             lines = tail_lines(log, 12000)
-            return self.send(200, "\n".join(lines[-120:]).encode(), "text/plain; charset=utf-8")
+            return self.send(200, ANSI_RE.sub("", "\n".join(lines[-120:])).encode(), "text/plain; charset=utf-8")
         if url.path == "/api/output":
             sid, aid = ((q.get(k) or [""])[0] for k in ("sid", "id"))
             if not SOURCE_ID_RE.match(sid) or not SOURCE_ID_RE.match(aid):
@@ -2437,7 +2510,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             path = self.server.sources.get(f"{sid}/{aid}")
             if not path:
                 return self.send(404, b"unknown subagent", "text/plain")
-            return self.send(200, render_transcript(path).encode(), "text/plain; charset=utf-8")
+            text = shell_output(path) if path.endswith(".output") else render_transcript(path)
+            return self.send(200, text.encode(), "text/plain; charset=utf-8")
         if url.path == "/api/doc":
             sid, path = ((q.get(k) or [""])[0] for k in ("sid", "path"))
             self.server.state()

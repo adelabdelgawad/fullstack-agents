@@ -30,10 +30,12 @@ const lastPara = t => t.trim().split(/\n\s*\n/).pop();
 const saidHtml = s => '<pre>' + esc(s.said_full || s.said) + '</pre>';
 const resumeHtml = s => '<div>' + esc(s.id) + ' codex resume ' + esc(s.id) + '</div>';
 const stepsHtml = c => c.steps.map(s => esc(s.text)).join('');
+const AGENT_NAMES = {shell: 'bg shell'};
+const toolLine = s => s.action || '';
 '''
         script = "const vm = require('vm'); const ctx = vm.createContext({});\n"
         script += "vm.runInContext(" + json.dumps(helpers + renderer) + ", ctx);\n"
-        script += "vm.runInContext(" + json.dumps("infoOpen.set('card', new Set(" + json.dumps(list(opened)) + "));") + ", ctx);\n"
+        script += "vm.runInContext(" + json.dumps("infoOpen.set('card', new Map(" + json.dumps([[k, v] for k, v in (opened.items() if isinstance(opened, dict) else ((k, True) for k in opened))]) + "));") + ", ctx);\n"
         script += "process.stdout.write(vm.runInContext(" + json.dumps("infoHtml(" + json.dumps(card) + ")") + ", ctx));"
         result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
         return result.stdout
@@ -77,7 +79,51 @@ const stepsHtml = c => c.steps.map(s => esc(s.text)).join('');
         self.assertIn('data-info-section="runs"><summary>', restored)
         other = self.fixture()
         other['key'] = 'other'
-        self.assertNotIn(' open>', self.render(other, ['session']))
+        self.assertIn('data-info-section="session"><summary>', self.render(other, ['session']))
+
+    def test_top_sections_default_closed_live_open_and_restore_per_card(self):
+        html = self.render(self.fixture())
+        self.assertIn('data-info-section="live" open><summary><h4>Running now', html)
+        for key in ('summary', 'progress', 'result'):
+            self.assertIn(f'data-info-section="{key}"><summary><h4>', html)
+        restored = self.render(self.fixture(), {'result': True, 'live': False})
+        self.assertIn('data-info-section="result" open><summary><h4>Result', restored)
+        self.assertIn('data-info-section="live"><summary><h4>Running now', restored)
+        self.assertIn('data-info-section="summary"><summary>', restored)
+
+    def test_running_now_separates_runs_subagents_and_shells(self):
+        card = self.fixture()
+        card["runs"] = [{"id": "implement-1", "unit": "p1-api", "engine": "grok", "model": "grok-4", "state": "running"},
+                        {"id": "implement-0", "unit": "p0-old", "engine": "grok", "state": "done"}]
+        card["now"][0]["agents"] = [
+            {"id": "a1", "label": "test-runner · run <tests>", "state": "running", "at": 2},
+            {"id": "b1", "label": "shell · Dispatch P1 with Grok", "state": "running", "at": 3},
+            {"id": "b2", "label": "shell · b2", "state": "completed", "at": 1}]
+        html = self.render(card)
+        live = html[html.index('data-info-section="live"'):html.index('data-info-section="summary"')]
+        self.assertIn('<span class="chip">3 running</span>', live)
+        self.assertIn('data-open-run="implement-1"', live)
+        self.assertNotIn('implement-0', live)
+        self.assertLess(live.index('<h5>Subagents'), live.index('data-agent="a1"'))
+        self.assertLess(live.index('<h5>Background shells'), live.index('data-agent="b1"'))
+        self.assertIn('1 running · 1 recent', live)
+        self.assertIn('run &lt;tests&gt;', live)
+        self.assertNotIn('<tests>', live)
+
+    def test_shell_card_names_session_target_agent_and_console(self):
+        card = self.fixture()
+        card["now"][0]["name"] = "omni lead"
+        card["runs"] = [{"id": "implement-20261014-125741-1", "unit": "p4-api", "engine": "grok", "model": "grok-4", "state": "running"}]
+        card["now"][0]["agents"] = [{"id": "b9", "label": "shell · Dispatch P4", "state": "completed", "at": 3, "shell": {
+            "description": "Dispatch P4", "command": "cd /wt/p4 && run <brief>", "started": 1, "exit": 0, "cwd": "/wt/p4",
+            "brief": "p4-api", "run": "implement-20261014-125741-1"}}]
+        html = self.render(card)
+        live = html[html.index('data-info-section="live"'):html.index('data-info-section="summary"')]
+        for text in ('<dt>Session</dt><dd>omni lead</dd>', '<dt>Target</dt><dd>/wt/p4</dd>', '<dt>Brief</dt><dd>p4-api</dd>',
+                     '<dd>grok · grok-4 · p4-api · running</dd>', 'completed · exit 0', 'data-asid="lead" data-agent="b9"',
+                     'data-open-run="implement-20261014-125741-1">Agent log', 'run &lt;brief&gt;'):
+            self.assertIn(text, live)
+        self.assertNotIn('<brief>', live)
 
     def test_agent_text_and_title_are_escaped(self):
         card = self.fixture()
