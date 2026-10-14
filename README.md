@@ -115,6 +115,7 @@ After generation, the chain `REVIEW PATTERNS → FIX → VALIDATE` runs automati
 | `prompt-polish` | Every prompt | Refine the request into a precise spec before acting / delegating |
 | `prompt-scan` | Every prompt | Routes by intent and lane to the skills to invoke: a Haiku classifier (`scripts/fsa-classify prompt`) picks from the real skill list with a confidence score, and the keyword rules take over below `FSA_ROUTER_MIN_CONFIDENCE` (0.55), on a timeout, or with `FSA_ROUTER=regex`; re-arms the 5-step gate for stack work |
 | `reply-classify` | Every finished reply (async) | Haiku decides whether the reply waits on the user (approval, decision, answer, action) and runs `team-board wait`; `FSA_WAIT_CLASSIFIER=off` disables it. Decisions are logged to `<config dir>/fullstack-agents/classifier.jsonl` |
+| `skill-gate` | Before code edits and brief writes | Blocks until every skill the touched paths map to (`scripts/fsa-skill-map`) was invoked; a brief must also cite the project documents bound in `.claude/fsa-skill-docs` |
 | `pre-edit-gate` | Before code edits | Blocks until codebase-scanning + a lane-relevant skill were invoked |
 | `post-edit-validate` | After code edits | ruff on Python, rustfmt on Rust (`FSA_SKIP_RUSTFMT=1` opts out) |
 

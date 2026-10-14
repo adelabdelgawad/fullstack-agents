@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# skill-gate — PreToolUse (Write|Edit|MultiEdit): the lane skills a path needs must be loaded first.
+# A brief (any file with an ALLOWED_PATHS: block) is checked for every path it allows, and must cite
+# the project document bound to each required skill (.claude/fsa-skill-docs). A code file is checked
+# for its own skills. The map is scripts/fsa-skill-map. Off switch: FSA_SKIP_SKILL_GATE=1.
+set -uo pipefail
+
+source "$(dirname "$0")/lib.sh"
+
+HOOK_INPUT="$(cat)"
+[ "${FSA_SKIP_SKILL_GATE:-0}" = "1" ] && exit 0
+# Implementer runs receive their skills as attachments from codex-task.sh, not through the Skill tool.
+[ -n "${FSA_IMPLEMENTER_RUN:-}" ] && exit 0
+transcript_path="$(json_get_field "transcript_path" "$HOOK_INPUT")"
+[ -n "$transcript_path" ] && [ -f "$transcript_path" ] || exit 0
+
+py=$(find_python || true)
+[ -n "$py" ] || exit 0
+map="$(dirname "$0")/../scripts/fsa-skill-map"
+
+# Prints: line 1 = kind (brief|code|skip), line 2 = repo root, remaining lines = paths to map.
+plan="$(printf '%s' "$HOOK_INPUT" | "$py" -c '
+import json, os, re, subprocess, sys
+data = json.load(sys.stdin)
+tool = data.get("tool_name", "")
+inp = data.get("tool_input") or {}
+path = inp.get("file_path") or ""
+if not path:
+    print("skip"); sys.exit()
+def after():
+    if tool == "Write":
+        return inp.get("content") or ""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        text = ""
+    edits = inp.get("edits") if tool == "MultiEdit" else [inp]
+    for e in edits or []:
+        old, new = e.get("old_string", ""), e.get("new_string", "")
+        if old:
+            text = text.replace(old, new) if e.get("replace_all") else text.replace(old, new, 1)
+    return text
+d = os.path.dirname(os.path.abspath(path))
+while d and not os.path.isdir(d):
+    d = os.path.dirname(d)
+try:
+    root = subprocess.run(["git", "-C", d, "rev-parse", "--show-toplevel"], capture_output=True, text=True, timeout=5).stdout.strip()
+except Exception:
+    root = ""
+root = root or os.getcwd()
+if path.endswith(".md") or "/.codex-briefs/" in path:
+    text = after()
+    lines = text.splitlines()
+    out, grab = [], False
+    for line in lines:
+        m = re.match(r"^\s*ALLOWED_PATHS:\s*(.*)$", line)
+        if m:
+            grab = True
+            out += [t for t in re.split(r"[\s,]+", m.group(1)) if t]
+            continue
+        if grab:
+            if not line.strip() or re.match(r"^[A-Z][A-Z_ -]*:", line):
+                grab = False
+                continue
+            out.append(line.strip().lstrip("-*").strip())
+    if not out:
+        print("skip"); sys.exit()
+    print("brief"); print(root)
+    for p in out:
+        print(p)
+else:
+    rel = os.path.relpath(os.path.abspath(path), root)
+    print("code"); print(root); print(rel)
+' 2>/dev/null)" || exit 0
+
+kind="$(printf '%s\n' "$plan" | sed -n 1p)"
+[ "$kind" = "brief" ] || [ "$kind" = "code" ] || exit 0
+root="$(printf '%s\n' "$plan" | sed -n 2p)"
+paths="$(printf '%s\n' "$plan" | sed -n '3,$p')"
+
+# A code edit outside a governed project is never gated (e.g. this plugin's own scripts).
+if [ "$kind" = "code" ]; then
+    (cd "$root" && is_fullstack_project) || exit 0
+fi
+
+required="$(printf '%s\n' "$paths" | "$py" "$map" --root "$root" 2>/dev/null)"
+[ -n "$required" ] || exit 0
+
+missing=""
+while IFS= read -r skill; do
+    [ -n "$skill" ] || continue
+    session_loaded_skill "$transcript_path" "$skill" || missing="${missing}  - fullstack-agents:${skill}
+"
+done <<<"$required"
+
+doc_missing=""
+if [ "$kind" = "brief" ] && [ -f "$root/.claude/fsa-skill-docs" ]; then
+    brief_text="$(printf '%s' "$HOOK_INPUT" | "$py" -c '
+import json, sys
+d = json.load(sys.stdin); i = d.get("tool_input") or {}
+if d.get("tool_name") == "Write":
+    print(i.get("content") or "")
+else:
+    try:
+        t = open(i.get("file_path") or "", encoding="utf-8").read()
+    except OSError:
+        t = ""
+    for e in (i.get("edits") if d.get("tool_name") == "MultiEdit" else [i]) or []:
+        o, n = e.get("old_string", ""), e.get("new_string", "")
+        if o:
+            t = t.replace(o, n) if e.get("replace_all") else t.replace(o, n, 1)
+    print(t)
+' 2>/dev/null)"
+    while read -r bskill bdoc _; do
+        case "$bskill" in ''|\#*) continue ;; esac
+        printf '%s\n' "$required" | grep -qx "$bskill" || continue
+        printf '%s' "$brief_text" | grep -qF "$bdoc" || doc_missing="${doc_missing}  - ${bdoc} (bound to ${bskill})
+"
+    done <"$root/.claude/fsa-skill-docs"
+fi
+
+[ -z "$missing" ] && [ -z "$doc_missing" ] && exit 0
+
+what="this edit"
+[ "$kind" = "brief" ] && what="this brief's ALLOWED_PATHS"
+{
+    printf '[fullstack-agents] BLOCKED: %s require lane skills that are not loaded this session.\n' "$what"
+    [ -n "$missing" ] && printf 'Invoke each with the Skill tool, read what applies, then retry:\n%s' "$missing"
+    [ -n "$doc_missing" ] && printf 'The brief must cite the project document bound to its skills (.claude/fsa-skill-docs):\n%s' "$doc_missing"
+    printf 'Required for these paths: %s\n' "$(printf '%s' "$required" | tr '\n' ' ')"
+    printf '(Override only on the user'"'"'s word: FSA_SKIP_SKILL_GATE=1)\n'
+} >&2
+exit 2

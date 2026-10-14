@@ -56,11 +56,17 @@ transcript_has_skill() {
     [ -n "$transcript" ] && [ -f "$transcript" ] || return 1
     # Single process, no pipeline: `grep -q` closing the pipe early makes the
     # upstream grep exit 141, which `set -o pipefail` reports as not-found.
-    awk -v skill="$skill_name" '
-        index($0, "\"Skill\"") && index($0, skill) { found = 1; exit }
+    # Only a real Skill tool call or slash command counts; a hint that merely names the skill does not.
+    local bare="${skill_name#fullstack-agents:}"
+    awk -v a="\"name\":\"Skill\",\"input\":{\"skill\":\"fullstack-agents:${bare}\"" \
+        -v b="\"name\":\"Skill\",\"input\":{\"skill\":\"${bare}\"" \
+        -v c="<command-name>/fullstack-agents:${bare}</command-name>" '
+        index($0, a) || index($0, b) || index($0, c) { found = 1; exit }
         END { exit !found }
     ' "$transcript" 2>/dev/null
 }
+
+session_loaded_skill() { session_has_skill "$@"; }
 
 # session_has_skill TRANSCRIPT_PATH SKILL_NAME
 #   PreToolUse carries no agent identity, so a subagent's edit arrives with the

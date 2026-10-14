@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Map repository paths to the fullstack-agents lane skills they require.
+
+Reads repo-relative paths (one per line) on stdin and prints the required skill
+names, one per line, in a stable order. The single source of truth for the brief
+gate, the edit gate and the skills attached to implementer runs.
+
+Usage: fsa-skill-map [--root DIR]
+"""
+import os
+import re
+import sys
+
+TEST = re.compile(r"(^|/)tests?/|_tests?\.rs$|\.test\.tsx?$|\.spec\.tsx?$|(^|/)test_[^/]*\.py$|_test\.py$")
+GENERATED = re.compile(r"/generated/|\.d\.ts$")
+
+# (skill, predicate(path, ctx)) in output order.
+RULES = [
+    ("rust-correctness", lambda p, c: p.endswith(".rs")),
+    ("rust-clean-architecture", lambda p, c: p.endswith(".rs") and not c["test"] and (
+        re.search(r"(^|/)(domain|application|services?|ports?|use_?cases?)/", p) or re.search(r"(^|/)(lib|mod)\.rs$", p)
+        or not c["exists"])),
+    ("rust-axum-api", lambda p, c: p.endswith(".rs") and re.search(r"(/routes?/|router\.rs$|/handlers?/|middleware)", p)),
+    ("rust-sqlx", lambda p, c: (p.endswith(".rs") and (re.search(r"(/repos?/|persistence|_repo\.rs$|sql[^/]*\.rs$)", p) or c["sql"]))
+        or (c["cargo"] and re.search(r"(^|/)(tests-)?migrations/.*\.sql$", p))),
+    ("rust-testing", lambda p, c: p.endswith(".rs") and c["test"]),
+    ("rust-quality-gates", lambda p, c: p.endswith(".rs")),
+    ("rust-nextjs-contract", lambda p, c: re.search(r"openapi[^/]*\.(ya?ml|json)$", p)
+        or (c["nextjs"] and p.endswith(".rs") and re.search(r"(/routes?/|router\.rs$|/dtos?/|_dto\.rs$|/pbx-dtos/)", p))),
+    ("nextjs", lambda p, c: re.search(r"\.tsx?$", p) and not c["test"] and not GENERATED.search(p)),
+    ("data-table", lambda p, c: re.search(r"\.tsx?$", p) and not GENERATED.search(p) and (
+        re.search(r"(table|columns?)[^/]*\.tsx?$", p, re.I) or re.search(r"/(data-table|tables)/", p)
+        or re.search(r"(^|/)app/.*page\.tsx$", p))),
+    ("fetch-architecture", lambda p, c: re.search(r"\.tsx?$", p) and not GENERATED.search(p)
+        and re.search(r"(/lib/api/|/actions?/|/app/api/|server-actions?)", p)),
+    ("fastapi", lambda p, c: p.endswith(".py") and not c["test"]),
+    ("celery", lambda p, c: p.endswith(".py") and re.search(r"(celery|(^|/)tasks?/|_tasks?\.py$|worker)", p)),
+    ("websocket", lambda p, c: p.endswith(".py") and re.search(r"(websocket|_ws\.py$|/ws/)", p)),
+    ("docker", lambda p, c: re.search(r"(^|/)(Dockerfile[^/]*|[^/]*compose[^/]*\.ya?ml|nginx[^/]*\.conf|[^/]*\.dockerfile)$", p)
+        or re.search(r"(^|/)nginx/", p)),
+    ("senior-engineer", lambda p, c: re.search(r"\.(rs|tsx?|py)$", p) and not c["exists"] and not c["test"]),
+]
+
+
+def project_flags(root):
+    def has(*names):
+        return any(os.path.exists(os.path.join(root, n)) for n in names)
+    nextjs = False
+    for pkg in ("package.json", "src/frontend/package.json", "frontend/package.json"):
+        try:
+            with open(os.path.join(root, pkg), encoding="utf-8") as fh:
+                if '"next"' in fh.read():
+                    nextjs = True
+                    break
+        except OSError:
+            continue
+    cargo = has("Cargo.toml", "src/backend/Cargo.toml", "backend/Cargo.toml")
+    if not cargo:
+        for top in os.listdir(root) if os.path.isdir(root) else []:
+            if os.path.exists(os.path.join(root, top, "Cargo.toml")):
+                cargo = True
+                break
+    return {"nextjs": nextjs, "cargo": cargo}
+
+
+def embeds_sql(full):
+    if not full.endswith(".rs"):
+        return False
+    try:
+        with open(full, encoding="utf-8", errors="ignore") as fh:
+            return re.search(r"sqlx::query|query_as!?\(|query_scalar", fh.read()) is not None
+    except OSError:
+        return False
+
+
+def skills_for(paths, root):
+    flags = project_flags(root)
+    found = set()
+    for raw in paths:
+        p = raw.strip().strip("`").lstrip("./")
+        if not p or p.startswith("#"):
+            continue
+        full = os.path.join(root, p)
+        ctx = dict(flags, test=bool(TEST.search(p)), exists=os.path.exists(full), sql=embeds_sql(full))
+        for skill, pred in RULES:
+            if pred(p, ctx):
+                found.add(skill)
+    return [skill for skill, _ in RULES if skill in found]
+
+
+def main(argv):
+    root = os.getcwd()
+    if len(argv) >= 2 and argv[0] == "--root":
+        root = argv[1]
+    for skill in skills_for(sys.stdin.read().splitlines(), root):
+        print(skill)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
