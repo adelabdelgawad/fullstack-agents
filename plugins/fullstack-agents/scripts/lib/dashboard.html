@@ -106,6 +106,8 @@ main { padding: 0; }
 .cell.PASS { border: 1px solid transparent; color: var(--pass); background: color-mix(in srgb, var(--pass) 14%, transparent); }
 .cell.CHANGES { border: 1px solid transparent; color: var(--changes); background: color-mix(in srgb, var(--changes) 16%, transparent); }
 .cell.bad { border: 1px solid var(--human); color: var(--human); }
+.cell[role="button"] { cursor: pointer; }
+.cell[role="button"]:hover, .cell[role="button"]:focus-visible { text-decoration: underline; outline: 1px solid var(--active); }
 .cell.done { border: 1px solid var(--line); color: var(--muted); }
 .cell.skip { border: 1px dotted var(--line); color: var(--faint); opacity: .7; }
 .cardhint { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); font: 10.5px/1.6 var(--mono); color: var(--muted); overflow-wrap: anywhere; user-select: all; }
@@ -1417,7 +1419,8 @@ const needsHuman = c => c.phase !== "complete" && (c.phase === "review" || c.nee
 const stageOf = c => needsHuman(c) ? "human" : (STAGES.find(s => s.phases.includes(c.phase)) || STAGES[0]).key;
 
 const LENSES = [["security", "sec"], ["ux", "ux"], ["code", "code"]];
-const cell = (tone, label, title) => `<span class="cell ${tone}" title="${esc(title)}">${esc(label)}</span>`;
+const cell = (tone, label, title, attrs = "") => `<span class="cell ${tone}" title="${esc(title)}"${attrs ? ` role="button" tabindex="0" ${attrs}` : ""}>${esc(label)}</span>`;
+const agentAttrs = a => a ? `data-asid="${esc(a.sid)}" data-agent="${esc(a.id)}"` : "";
 const verdictTone = v => /^(GREEN|PASS)$/.test(v) ? "PASS" : /^(RED|CHANGES|FAIL)$/.test(v) ? "CHANGES" : "done";
 
 const unitPrefix = units => {
@@ -1435,7 +1438,7 @@ function roundOf(rounds, at) {
 
 function roundsHtml(c) {
   const runs = c.rounds || [];
-  const agents = (c.now || []).flatMap(s => s.agents || []);
+  const agents = (c.now || []).flatMap(s => (s.agents || []).map(a => ({...a, sid: s.id})));
   if (!runs.length) {
     const scan = agents.filter(a => a.label.startsWith("bounded-extractor"));
     const lead = c.sessions.some(s => s.state === "working") ? "live" : c.sessions.some(s => s.state === "waiting") ? "bad" : c.sessions.length ? "done" : "";
@@ -1451,15 +1454,16 @@ function roundsHtml(c) {
     const after = n < last || r.state !== "running" && stage !== "build";
     const party = (kind, chipOf, label, name) => {
       const ch = chips.filter(chipOf).slice(-1)[0], ag = ags.filter(a => a.label.startsWith(kind));
-      if (ag.some(a => a.state === "running")) return cell("live", label, `${name}: running`);
-      if (ch) return cell(verdictTone(ch.verdict), label, `${name}: ${ch.verdict} · ${ch.label}`);
-      if (ag.length) return cell("done", label, `${name}: ${ag.map(a => a.state).join(", ")}`);
+      const open = agentAttrs(ag.find(a => a.state === "running") || ag[0]);
+      if (ag.some(a => a.state === "running")) return cell("live", label, `${name}: running`, open);
+      if (ch) return cell(verdictTone(ch.verdict), label, `${name}: ${ch.verdict} · ${ch.label}`, open);
+      if (ag.length) return cell("done", label, `${name}: ${ag.map(a => a.state).join(", ")}`, open);
       return cell(after ? "skip" : "", label, `${name}: ${after ? "not run" : "pending"}`);
     };
     const lead = n < last ? (r.sent_back ? "CHANGES" : "PASS") : stage === "review" ? "wait" : ["human", "complete"].includes(stage) ? "PASS" : "";
     const leadTitle = {CHANGES: "lead audit: sent back for a fix", PASS: "lead audit: accepted", wait: "lead audit: in progress", "": "lead audit: pending"}[lead];
     const label = r.unit ? r.unit.slice(prefix.length) || r.unit : "no brief recorded";
-    return `<div class="round" title="${esc(r.unit || r.id)}"><div class="rl"><span>${n + 1}</span><b>${esc(label)}</b><span>${esc(r.model || r.engine)}</span></div><div class="cells">${cell(runTone, "run", `implementer ${r.engine} ${r.model || ""} · ${r.unit}: ${r.state}${r.flags.length ? " · " + r.flags.join(", ") : ""}`)}${party("test-runner", x => x.kind === "tests", "test", "test-runner")}${LENSES.map(([k, s]) => party("diff-reviewer", x => x.kind === k, s, "diff-reviewer " + k)).join("")}${cell(lead, "lead", leadTitle)}</div></div>`;
+    return `<div class="round" title="${esc(r.unit || r.id)}"><div class="rl"><span>${n + 1}</span><b>${esc(label)}</b><span>${esc(r.model || r.engine)}</span></div><div class="cells">${cell(runTone, "run", `implementer ${r.engine} ${r.model || ""} · ${r.unit}: ${r.state}${r.flags.length ? " · " + r.flags.join(", ") : ""} · open log`, `data-run-log="${esc(r.id)}" data-run-card="${esc(c.key)}"`)}${party("test-runner", x => x.kind === "tests", "test", "test-runner")}${LENSES.map(([k, s]) => party("diff-reviewer", x => x.kind === k, s, "diff-reviewer " + k)).join("")}${cell(lead, "lead", leadTitle)}</div></div>`;
   });
   const hidden = rows.length - 3;
   return `<div class="rounds">${hidden > 0 ? `<div class="earlier">+${hidden} earlier run${hidden > 1 ? "s" : ""}</div>` : ""}${rows.slice(-3).join("")}</div>`;
@@ -1715,7 +1719,11 @@ function render() {
   });
   document.querySelectorAll("[data-agent]").forEach(el => {
     el.onclick = ev => { ev.stopPropagation(); openAgent(el.dataset.asid, el.dataset.agent); };
-    el.onkeydown = ev => ev.stopPropagation();
+    el.onkeydown = ev => { ev.stopPropagation(); if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); el.click(); } };
+  });
+  document.querySelectorAll("[data-run-log]").forEach(el => {
+    el.onclick = ev => { ev.stopPropagation(); openRunLog(el.dataset.runCard, el.dataset.runLog); };
+    el.onkeydown = ev => { ev.stopPropagation(); if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); el.click(); } };
   });
   document.querySelectorAll("[data-more]").forEach(el => el.onclick = () => {
     const k = el.dataset.more;
@@ -2086,6 +2094,15 @@ function openCard(key, keepTab = false) {
   panel().classList.add("open");
   document.documentElement.classList.add("lock");
   paintPanel();
+}
+
+function openRunLog(key, id) {
+  openCard(key);
+  openRun = id;
+  showLog = true;
+  document.querySelector('#info [data-info-section="runs"]')?.setAttribute("open", "");
+  paintPanel();
+  document.querySelector("#info .task.open")?.scrollIntoView({block: "nearest"});
 }
 
 function closePanel() {
