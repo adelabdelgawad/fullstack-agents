@@ -15,6 +15,15 @@ Read `fullstack-agents-task-flow` at task intake. For source changes, read
 only the lane skills that apply. Project instructions and the constitution
 outrank default patterns. Preserve existing user authorization.
 
+Before choosing a branch or worktree, resolve the project's execution binding.
+Read the project instructions from the bound checkout and inspect its configured
+development launcher (for example, a `ucm` symlink) or a known existing
+development checkout. Follow that checkout's current instructions even when the
+session opened on a stale default-branch checkout. If development is bound to an
+existing bare-metal checkout, use it directly and do not create another worktree.
+If an older worktree contains the reviewed change, apply the change to the bound
+development checkout while preserving existing work; do not merge it to main.
+
 Claude receives a saved plan, an explicit file list, the diff, and only the
 supporting line ranges needed to assess it. Use `scripts/handoff.py` from this
 bundle. It returns structured issues with evidence and repair paths, plus a
@@ -22,9 +31,16 @@ repair brief. Verify each finding against the source before repairing it.
 An unavailable auditor, malformed output, or exhausted budget is an incomplete
 audit, never a pass. Do not keep retrying: two repair rounds, then report the
 remaining issue and scope. Do not publish, deploy or commit without authorization.
-When the project binds bare-metal development, never work on the default branch:
-commit to the bound dev branch in its checkout (no worktree, no merge) and reload
-the affected services with the project's reload commands instead of deploying.
+When the project binds bare-metal development, implementation is incomplete until
+authorized changes are integrated and committed to the bound development branch
+in that existing checkout, and affected native services are reloaded with the
+project command. Verify the target database and service binding before a reload or
+migration. Do not merge to main, build or restart Docker production app images,
+or publish a deployment. Within this binding, "do not deploy" excludes those
+production actions; it does not prohibit an authorized native development reload
+or development database migration unless the user explicitly says no reload, no
+migration, or no commit. Development authorization never implies permission to
+mutate production.
 
 ## Token discipline
 
@@ -76,6 +92,10 @@ Report every transition with the bundle's CLI:
 ```bash
 python3 scripts/phase.py --root ROOT --phase investigate
 ```
+
+`ROOT` must remain the original session working directory so the dashboard can
+match the session card exactly. Use the resolved execution checkout separately as
+the working directory for project commands; do not move the phase journal root.
 
 Use `plan`, `implement`, `validate`, and `audit` as the work advances; report
 `implement` again for repairs, followed by validation and audit. Report

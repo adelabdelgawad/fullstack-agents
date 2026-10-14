@@ -21,6 +21,14 @@ explicitly; do not assume historical hooks or dashboards are running.
 
 """
 
+BARE_METAL_COORDINATION = """
+Project execution bindings outrank the generic worktree rule above. When project
+instructions bind bare-metal development to an existing checkout and branch, use
+that same checkout and do not create another worktree. Resolve this binding before
+branch or worktree decisions, including when the session starts in a stale default
+checkout.
+"""
+
 
 def frontmatter(text):
     """The repository manifests use scalar, single-line names and descriptions."""
@@ -108,7 +116,10 @@ def render(output):
             if path.name == "SKILL.md":
                 override = ADAPTER / "skills" / name / "SKILL.md"
                 if override.exists():
-                    path.write_text(override.read_text())
+                    body = override.read_text()
+                    if name == "team-coordination":
+                        body = body.rstrip() + "\n\n" + BARE_METAL_COORDINATION
+                    path.write_text(body)
                 elif (SOURCE / "skills" / name / "references/skill-guide.md").is_file():
                     # Shared Claude skills already use progressive disclosure.
                     # Reuse their index; do not wrap or overwrite the full guide.

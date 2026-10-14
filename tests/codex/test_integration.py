@@ -76,6 +76,32 @@ class BundleTests(unittest.TestCase):
         self.assertTrue((self.bundle / "scripts/handoff.py").exists())
         self.assertTrue((self.bundle / "scripts/phase.py").exists())
 
+    def test_rendered_workflow_resolves_bare_metal_binding_before_worktrees(self):
+        agents = (self.bundle / "AGENTS.md").read_text()
+        task_flow = (self.bundle / "skills/fullstack-agents-task-flow/SKILL.md").read_text()
+        coordination = (self.bundle / "skills/fullstack-agents-team-coordination/SKILL.md").read_text()
+        for text in (agents, task_flow, coordination):
+            self.assertIn("resolve", text.lower())
+            self.assertIn("existing", text.lower())
+            self.assertIn("do not create another worktree", text.lower())
+        self.assertLess(task_flow.index("resolve the project\n   execution binding"),
+                        task_flow.index("Check `git status --short`"))
+
+    def test_bare_metal_no_deploy_keeps_authorized_dev_completion_steps(self):
+        agents = (self.bundle / "AGENTS.md").read_text()
+        self.assertIn("committed to the bound development branch", agents)
+        self.assertIn("authorized native development reload", agents)
+        self.assertIn("development database migration", agents)
+        self.assertIn("Do not merge to main", agents)
+        self.assertIn("Docker production app images", agents)
+
+    def test_phase_journal_root_stays_at_original_session_cwd(self):
+        for path in (self.bundle / "AGENTS.md",
+                     self.bundle / "skills/fullstack-agents-task-flow/SKILL.md"):
+            text = path.read_text()
+            self.assertIn("original session working directory", text)
+            self.assertIn("phase journal root", text)
+
     def test_native_plugin_manifest_and_hooks_reference_bundled_resources(self):
         manifest = json.loads((self.bundle / ".codex-plugin/plugin.json").read_text())
         self.assertEqual(manifest["name"], "fullstack-agents-codex")
