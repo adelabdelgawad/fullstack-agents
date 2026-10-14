@@ -450,7 +450,7 @@ html.herdr-page .herdr-view { height: 100%; }
     <button class="viewtab" id="view-herdr" role="tab" data-view="herdr">Herdr</button>
   </div>
   <div class="hright">
-    <button class="newsess" id="newsess" title="Open a new herdr tab and start Claude in it">+ New session</button>
+    <button class="newsess" id="newsess" title="Open a new herdr tab and start Claude, Codex or Grok in it">+ New session</button>
     <button class="favsw" id="favsw" role="switch" aria-checked="false"><span class="track" aria-hidden="true"></span>Favourites only</button>
     <div class="status" id="meta"><span class="dot"></span>loading…</div>
   </div>
@@ -1173,6 +1173,12 @@ function openHerdrConfirm(title, detail, action, params, returnFocus) {
   });
 }
 
+const SESSION_ENGINES = {
+  claude: {label: "Claude", note: "Opens a new tab in the space and runs cc -n '<name>'"},
+  codex: {label: "Codex", note: "Opens a new tab in the space, named <name>, and runs codex"},
+  grok: {label: "Grok", note: "Opens a new tab in the space, named <name>, and runs opencode -m xai/grok-4.7"},
+};
+
 async function openNewSession(returnFocus) {
   if (!herdrData) await loadHerdr();
   const workspaces = herdrData.workspaces || [];
@@ -1183,17 +1189,20 @@ async function openNewSession(returnFocus) {
   const focused = (herdrData.panes || []).find(x => x.pane_id === herdrData.focused_pane_id);
   const current = (focused || {}).workspace_id || workspaces[0].workspace_id;
   const options = workspaces.map(x => `<option value="${esc(x.workspace_id)}" ${x.workspace_id === current ? "selected" : ""}>${esc(x.label || x.workspace_id)}</option>`).join("");
-  const root = herdrModal(`<form><h2>new session</h2><label>name<input name="name" maxlength="80" autocomplete="off" required></label><label>space<select name="space">${options}</select></label><p class="herdr-modal-note">Opens a new tab in the space and runs cc -n '&lt;name&gt;'</p><div class="herdr-modal-error" aria-live="polite"></div><div class="herdr-modal-actions"><button type="button" data-herdr-cancel>cancel</button><button type="submit" class="primary">start</button></div></form>`, returnFocus, async form => {
+  const engines = Object.entries(SESSION_ENGINES).map(([k, e]) => `<option value="${k}"${k === "claude" ? " selected" : ""}>${esc(e.label)}</option>`).join("");
+  const root = herdrModal(`<form><h2>new session</h2><label>agent<select name="engine">${engines}</select></label><label>name<input name="name" maxlength="80" autocomplete="off" required></label><label>space<select name="space">${options}</select></label><p class="herdr-modal-note" data-engine-note>${esc(SESSION_ENGINES.claude.note)}</p><div class="herdr-modal-error" aria-live="polite"></div><div class="herdr-modal-actions"><button type="button" data-herdr-cancel>cancel</button><button type="submit" class="primary">start</button></div></form>`, returnFocus, async form => {
     const name = form.elements.name.value.trim();
     if (!name || name.length > 80 || name.startsWith("-")) { setHerdrError('Name must be 1–80 characters and not start with "-"', root); return; }
     const button = form.querySelector('[type="submit"]');
     button.disabled = true;
     button.textContent = "starting…";
-    const result = await herdrAction("session.create", {workspace_id: form.elements.space.value, name}, root);
+    const result = await herdrAction("session.create", {workspace_id: form.elements.space.value, name, engine: form.elements.engine.value}, root);
     button.disabled = false;
     button.textContent = "start";
-    if (result.ok && herdrOverlay?.root === root) closeHerdrOverlay();
+    if (result.ok && herdrOverlay?.root === root) { closeHerdrOverlay(); load(); }
   });
+  const engine = root.querySelector('[name="engine"]');
+  engine.onchange = () => { root.querySelector("[data-engine-note]").textContent = SESSION_ENGINES[engine.value].note; };
 }
 
 function openStartAgent(pane, returnFocus) {

@@ -326,7 +326,7 @@ def herdr_action_args(body, snapshot):
         "workspace.rename": ({"workspace_id", "label"}, set()),
         "workspace.close": ({"workspace_id"}, set()),
         "tab.create": ({"workspace_id"}, {"label"}),
-        "session.create": ({"workspace_id", "name"}, set()),
+        "session.create": ({"workspace_id", "name"}, {"engine"}),
         "tab.rename": ({"tab_id", "label"}, set()),
         "tab.close": ({"tab_id"}, set()),
         "pane.rename": ({"pane_id", "label"}, set()),
@@ -385,6 +385,8 @@ def herdr_action_args(body, snapshot):
             args.extend(("--label", herdr_label(body["label"])))
         return [*args, "--no-focus"], 5
     if action == "session.create":
+        if body.get("engine", "claude") not in SESSION_ENGINES:
+            raise ValueError("bad engine")
         return ["tab", "create", "--workspace", checked_id("workspace_id"), "--label", herdr_label(body["name"]), "--no-focus"], 5
     if action.startswith("tab."):
         tab = checked_id("tab_id")
@@ -421,11 +423,18 @@ def herdr_action_args(body, snapshot):
             "--timeout", "30000"], 40
 
 
-def start_claude_session(created, name):
+SESSION_ENGINES = {
+    "claude": lambda name: f"cc -n {shlex.quote(name)}",
+    "codex": lambda name: "codex",
+    "grok": lambda name: "opencode -m xai/grok-4.7",
+}
+
+
+def start_session(created, name, engine="claude"):
     pane = ((created or {}).get("root_pane") or {}).get("pane_id")
     if not isinstance(pane, str) or not pane:
         return None
-    typed = run_herdr("pane", "send-text", pane, f"cc -n {shlex.quote(name)}")
+    typed = run_herdr("pane", "send-text", pane, SESSION_ENGINES[engine](name))
     return run_herdr("pane", "send-keys", pane, "enter") if typed is not None and typed.returncode == 0 else typed
 
 
@@ -2622,7 +2631,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 except (TypeError, ValueError):
                     pass
             if body.get("action") == "session.create" and result is not None and result.returncode == 0:
-                result = start_claude_session(parsed, body["name"])
+                result = start_session(parsed, body["name"], body.get("engine", "claude"))
+                self.server.cached_at = 0
             self.server.invalidate_herdr()
             if result is not None and result.returncode == 0:
                 reply = {"ok": True, "error": "", "result": parsed}
