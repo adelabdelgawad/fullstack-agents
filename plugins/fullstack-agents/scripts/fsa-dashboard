@@ -2500,8 +2500,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.send(400, b"bad run id", "text/plain")
             runs = dict.fromkeys(r.runs for r, _ in self.server.roots.values())
             log = next((d / f"{rid}.log" for d in runs if (d / f"{rid}.log").exists()), self.server.repo.runs / f"{rid}.log")
-            lines = tail_lines(log, 12000)
-            return self.send(200, ANSI_RE.sub("", "\n".join(lines[-120:])).encode(), "text/plain; charset=utf-8")
+            full = (q.get("full") or [""])[0] == "1"
+            lines = tail_lines(log, 400000 if full else 12000)
+            return self.send(200, ANSI_RE.sub("", "\n".join(lines[-3000 if full else -120:])).encode(), "text/plain; charset=utf-8")
         if url.path == "/api/output":
             sid, aid = ((q.get(k) or [""])[0] for k in ("sid", "id"))
             if not SOURCE_ID_RE.match(sid) or not SOURCE_ID_RE.match(aid):

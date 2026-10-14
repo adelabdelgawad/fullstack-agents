@@ -110,20 +110,35 @@ const toolLine = s => s.action || '';
         self.assertIn('run &lt;tests&gt;', live)
         self.assertNotIn('<tests>', live)
 
-    def test_shell_card_names_session_target_agent_and_console(self):
+    def test_run_card_absorbs_its_launcher_shell(self):
         card = self.fixture()
         card["now"][0]["name"] = "omni lead"
-        card["runs"] = [{"id": "implement-20261014-125741-1", "unit": "p4-api", "engine": "grok", "model": "grok-4", "state": "running"}]
+        card["runs"] = [{"id": "implement-20261014-125741-1", "unit": "p4-api", "engine": "grok", "model": "grok-4", "state": "running",
+                         "session": "lead", "root": "/wt/p4", "mode": "implement", "started": 1, "updated": 2,
+                         "touched": ["src/a.rs"], "open_risks": ["needs <db>"]}]
         card["now"][0]["agents"] = [{"id": "b9", "label": "shell · Dispatch P4", "state": "completed", "at": 3, "shell": {
-            "description": "Dispatch P4", "command": "cd /wt/p4 && run <brief>", "started": 1, "exit": 0, "cwd": "/wt/p4",
+            "description": "Dispatch P4", "command": "cd /wt/p4 && run", "started": 1, "exit": 0, "cwd": "/wt/p4",
             "brief": "p4-api", "run": "implement-20261014-125741-1"}}]
         html = self.render(card)
         live = html[html.index('data-info-section="live"'):html.index('data-info-section="summary"')]
         for text in ('<dt>Session</dt><dd>omni lead</dd>', '<dt>Target</dt><dd>/wt/p4</dd>', '<dt>Brief</dt><dd>p4-api</dd>',
-                     '<dd>grok · grok-4 · p4-api · running</dd>', 'completed · exit 0', 'data-asid="lead" data-agent="b9"',
-                     'data-open-run="implement-20261014-125741-1">Agent log', 'run &lt;brief&gt;'):
+                     '<dt>Agent</dt><dd>grok · grok-4</dd>', '<dt>Launched by</dt><dd>Dispatch P4 · b9 · completed · exit 0</dd>',
+                     'data-asid="lead" data-agent="implement-20261014-125741-1"', 'data-open-run="implement-20261014-125741-1">Details in panel',
+                     'Files touched (1)', 'needs &lt;db&gt;'):
             self.assertIn(text, live)
-        self.assertNotIn('<brief>', live)
+        self.assertNotIn('data-agent="b9"', live)
+        self.assertNotIn('<db>', live)
+
+    def test_unlinked_shell_card_names_session_target_and_console(self):
+        card = self.fixture()
+        card["now"][0]["name"] = "omni lead"
+        card["now"][0]["agents"] = [{"id": "b7", "label": "shell · Commit", "state": "running", "at": 3, "shell": {
+            "description": "Commit", "command": "git commit -m <x>", "started": 1, "exit": None, "cwd": "/wt/p7",
+            "brief": "", "run": "", "moved": True}}]
+        live = self.render(card)
+        for text in ('<dt>Session</dt><dd>omni lead</dd>', '<dt>Target</dt><dd>/wt/p7</dd>', '<dt>Agent</dt><dd>none</dd>',
+                     'started in the foreground', 'data-asid="lead" data-agent="b7"', 'git commit -m &lt;x&gt;'):
+            self.assertIn(text, live)
 
     def test_agent_text_and_title_are_escaped(self):
         card = self.fixture()

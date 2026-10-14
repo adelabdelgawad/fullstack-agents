@@ -1565,7 +1565,7 @@ const sessionOf = sid => { for (const c of (state && state.cards) || []) for (co
 const AGENT_NAMES = {"shell": "bg shell", "bounded-extractor": "haiku scan", "test-runner": "test-runner", "diff-reviewer": "diff-review", "general-purpose": "general", "Explore": "explore"};
 
 function agentTiles(c) {
-  const tiles = cardAgents(c);
+  const tiles = ownAgents(c);
   return tiles.length ? `<div class="agents">${tiles.map(agentTile).join("")}</div>` : "";
 }
 
@@ -1832,18 +1832,43 @@ function shellRun(a, c) {
   return (x.run && runs.find(r => r.id === x.run)) || (x.brief && runs.filter(r => r.unit === x.brief).slice(-1)[0]) || null;
 }
 
+const factRow = (k, v) => v ? `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>` : "";
+const RECENT_S = 900;
+const recentRuns = (c, sid) => ((c && c.runs) || []).filter(r => (!sid || !r.session || r.session === sid) && (LIVE(r) || Date.now() / 1000 - (r.updated || 0) < RECENT_S));
+const runSession = (r, c) => r.session || (((c && c.now) || [])[0] || {}).id || "";
+
+function factList(c, key, title, items) {
+  if (!items || !items.length) return "";
+  const open = c && infoShown(c, key, false) ? " open" : "";
+  return `<details data-info-section="${esc(key)}"${open}><summary>${esc(title)} (${items.length})</summary><pre>${esc(items.join("\n"))}</pre></details>`;
+}
+
+const ownAgents = c => cardAgents(c).filter(a => !(a.shell && shellRun(a, c)));
+const launcherOf = (r, c) => cardAgents(c || {}).find(a => a.shell && shellRun(a, c)?.id === r.id) || null;
+
+function runFacts(r, c) {
+  const s = ((c && c.now) || []).find(n => n.id === r.session) || {}, shell = launcherOf(r, c);
+  const launched = shell ? [shell.shell.description || shell.id, shell.id, shell.state + (shell.shell.exit != null ? " · exit " + shell.shell.exit : "")].join(" · ") : "";
+  const status = [r.state, (r.flags || []).join(", "), r.started ? `started ${ago(r.started)} ago` : "", r.updated ? `updated ${ago(r.updated)} ago` : ""].filter(Boolean).join(" · ");
+  return `<dl class="shell-facts">${factRow("Session", s.name || r.session)}${factRow("Kind", "implementer run (" + (r.mode || "implement") + ")")}${factRow("Target", r.root)}${factRow("Brief", r.unit)}${factRow("Status", status)}${factRow("Agent", [r.engine, r.model].filter(Boolean).join(" · "))}${factRow("Launched by", launched)}${factRow("Run id", r.id)}</dl>${factList(c, "run-goal-" + r.id, "Goal", r.goal ? [r.goal] : [])}${factList(c, "run-files-" + r.id, "Files touched", r.touched)}${factList(c, "run-out-" + r.id, "Outside allowed paths", r.outside)}${factList(c, "run-risks-" + r.id, "Open risks", r.open_risks)}`;
+}
+
+function runCard(c) {
+  return r => `<div class="live-shell${LIVE(r) ? " running" : ""}"><div class="ls-head"><b>${esc(r.unit || r.id)}</b><span class="chip">${esc(r.state)}</span></div>${runFacts(r, c)}<div class="ls-actions"><button class="action-button" data-asid="${esc(runSession(r, c))}" data-agent="${esc(r.id)}" aria-haspopup="dialog">Console</button><button class="action-button" data-open-run="${esc(r.id)}">Details in panel</button></div></div>`;
+}
+
 function shellFacts(a, c) {
-  const x = a.shell || {}, s = ((c && c.now) || []).find(n => n.id === a.sid) || {}, run = shellRun(a, c);
+  const x = a.shell || {}, s = ((c && c.now) || []).find(n => n.id === a.sid) || {};
   const status = [a.state, x.exit != null ? `exit ${x.exit}` : "", x.started ? `started ${ago(x.started)} ago` : "", `output ${ago(a.at)} ago`].filter(Boolean).join(" · ");
-  const agent = run ? [run.engine, run.model, run.unit, run.state].filter(Boolean).join(" · ") : x.run || "none recorded";
-  const row = (k, v) => v ? `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>` : "";
+  const agent = x.run ? x.run + " (not listed on this card)" : "none";
+  const row = factRow;
   return `<dl class="shell-facts">${row("Session", s.name || a.sid)}${row("Kind", x.command ? (x.moved ? "Bash command still running (started in the foreground)" : "background task (run_in_background)") : "")}${row("Target", x.cwd)}${row("Brief", x.brief)}${row("Status", status)}${row("Agent", agent)}${row("Task id", a.id)}</dl>${x.command ? `<details data-info-section="cmd-${esc(a.id)}"${c && infoShown(c, "cmd-" + a.id, false) ? " open" : ""}><summary>Command</summary><pre>${esc(x.command)}</pre></details>` : ""}`;
 }
 
 function shellCard(c) {
   return a => {
-    const x = a.shell || {}, run = shellRun(a, c), [, ...rest] = a.label.split(" · ");
-    return `<div class="live-shell${a.state === "running" ? " running" : ""}"><div class="ls-head"><b>${esc(x.description || rest.join(" · ") || a.id)}</b><span class="chip">${esc(a.state)}</span></div>${shellFacts(a, c)}<div class="ls-actions"><button class="action-button" data-asid="${esc(a.sid)}" data-agent="${esc(a.id)}" aria-haspopup="dialog">Console</button>${run ? `<button class="action-button" data-open-run="${esc(run.id)}">Agent log</button>` : ""}</div></div>`;
+    const x = a.shell || {}, [, ...rest] = a.label.split(" · ");
+    return `<div class="live-shell${a.state === "running" ? " running" : ""}"><div class="ls-head"><b>${esc(x.description || rest.join(" · ") || a.id)}</b><span class="chip">${esc(a.state)}</span></div>${shellFacts(a, c)}<div class="ls-actions"><button class="action-button" data-asid="${esc(a.sid)}" data-agent="${esc(a.id)}" aria-haspopup="dialog">Console</button></div></div>`;
   };
 }
 
@@ -1854,13 +1879,12 @@ function liveGroup(title, items, tile, cls = "agents") {
 }
 
 function liveHtml(c) {
-  const agents = cardAgents(c), shell = a => a.label.startsWith("shell");
-  const runs = (c.runs || []).filter(LIVE);
-  const runTile = r => `<button class="agent running" data-open-run="${esc(r.id)}" title="${esc(r.goal || r.unit || r.id)}"><b>${esc(r.unit || r.id)}</b><span>${esc([r.engine, r.model].filter(Boolean).join(" · "))} · ${esc(r.state)} ${dur(r)}</span></button>`;
+  const agents = ownAgents(c), shell = a => a.label.startsWith("shell");
+  const runs = recentRuns(c).sort((a, b) => LIVE(b) - LIVE(a) || (b.updated || 0) - (a.updated || 0));
   const lead = s => `<div class="live-lead"><span class="chip">${esc(STATE_TEXT[s.state] || s.state)}</span> <b>${esc(s.name)}</b>${s.action ? ` <span class="s">${esc(toolLine(s))}</span>` : ""}</div>`;
-  const total = agents.filter(a => a.state === "running").length + runs.length;
+  const total = agents.filter(a => a.state === "running").length + runs.filter(LIVE).length;
   return infoSection(c, "live", "Running now", `${(c.now || []).map(lead).join("")}
-    ${liveGroup("Implementer runs", runs, runTile)}
+    ${liveGroup("Implementer runs", runs.map(r => ({...r, state: LIVE(r) ? "running" : r.state})), runCard(c), "live-shells")}
     ${liveGroup("Subagents", agents.filter(a => !shell(a)), agentTile)}
     ${liveGroup("Background shells", agents.filter(shell), shellCard(c), "live-shells")}`, `<span class="chip">${total} running</span>`, true);
 }
@@ -2275,33 +2299,65 @@ let out = null, outTimer = null;
 const outEl = id => document.getElementById(id);
 
 function outItems() {
-  return (sessionOf(out.sid) || {}).agents || [];
+  const runs = recentRuns(cardOfSession(out.sid), out.sid).map(r => ({id: r.id, label: "run · " + (r.unit || r.id), state: LIVE(r) ? "running" : r.state, run: r}));
+  return [...runs, ...ownAgents(cardOfSession(out.sid) || {}).filter(a => a.sid === out.sid)];
+}
+
+function outInfo(cur) {
+  const c = cardOfSession(out.sid);
+  if (!cur) return "";
+  if (cur.run) return runFacts(cur.run, c);
+  if (!cur.shell) return "";
+  return shellFacts({...cur, sid: out.sid}, c);
+}
+
+function pickOut(id) {
+  out.id = id;
+  out.text = null;
+  outEl("out-pre").textContent = "loading…";
+  paintOutItems();
+  pollOutput();
 }
 
 function paintOutItems() {
   const items = outItems();
   if (!items.some(x => x.id === out.id) && items.length) out.id = items[0].id;
   const cur = items.find(x => x.id === out.id);
-  outEl("out-title").textContent = "Subagents and shells · " + ((sessionOf(out.sid) || {}).name || out.sid);
+  outEl("out-title").textContent = "Monitor · " + ((sessionOf(out.sid) || {}).name || out.sid);
   outEl("out-meta").textContent = cur ? cur.state : "";
-  const info = cur && cur.shell ? shellFacts({...cur, sid: out.sid}, cardOfSession(out.sid)) : "";
+  const info = outInfo(cur);
   const box = outEl("out-info");
   if (box.dataset.html !== info) {
-    const wasOpen = box.querySelector("details")?.open;
+    const opened = new Set([...box.querySelectorAll("details")].filter(d => d.open).map(d => d.querySelector("summary")?.textContent));
     box.innerHTML = info;
     box.dataset.html = info;
-    if (wasOpen) box.querySelector("details")?.setAttribute("open", "");
+    box.querySelectorAll("details").forEach(d => { if (opened.has(d.querySelector("summary")?.textContent)) d.open = true; });
   }
   outEl("out-items").innerHTML = items.map(x => `<button data-oid="${esc(x.id)}" aria-pressed="${x.id === out.id}" title="${esc(x.label)}">${x.state === "running" ? '<span class="live-dot"></span>' : ""}${esc(x.label || x.id)}</button>`).join("");
-  outEl("out-items").querySelectorAll("[data-oid]").forEach(b => b.onclick = () => { out.id = b.dataset.oid; out.text = null; outEl("out-pre").textContent = "loading…"; paintOutItems(); pollOutput(); });
+  outEl("out-items").querySelectorAll("[data-oid]").forEach(b => b.onclick = () => pickOut(b.dataset.oid));
+}
+
+async function fetchText(url, gone) {
+  const r = await fetch(url, {cache: "no-store"});
+  return r.ok ? await r.text() : r.status === 404 ? gone : `(error ${r.status})`;
+}
+
+async function outText(want, cur) {
+  const runLog = id => fetchText(`/api/log?id=${enc(id)}&full=1`, "(no log for this run)");
+  if (cur && cur.run) {
+    const log = await runLog(cur.id) || "(the run has not written to its log yet)", shell = launcherOf(cur.run, cardOfSession(want.sid));
+    if (!shell) return log;
+    const tail = await fetchText(`/api/output?sid=${enc(shell.sid)}&id=${enc(shell.id)}`, "");
+    return /\S/.test(tail) && tail !== "(no output yet)" ? `${log}\n\n──── launcher shell ${shell.id} · ${shell.state} ────\n${tail}` : log;
+  }
+  return await fetchText(`/api/output?sid=${enc(want.sid)}&id=${enc(want.id)}`, "(this item is no longer listed)");
 }
 
 async function pollOutput() {
   if (!out || document.hidden) return;
-  const want = {...out};
+  const want = {...out}, cur = outItems().find(x => x.id === want.id);
   try {
-    const r = await fetch(`/api/output?sid=${enc(want.sid)}&id=${enc(want.id)}`, {cache: "no-store"});
-    const text = r.ok ? await r.text() : r.status === 404 ? "(this subagent is no longer listed)" : `(error ${r.status})`;
+    const text = await outText(want, cur);
     if (!out || out.sid !== want.sid || out.id !== want.id || text === out.text) return;
     const pre = outEl("out-pre"), atEnd = out.text === null || pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
     out.text = text;
