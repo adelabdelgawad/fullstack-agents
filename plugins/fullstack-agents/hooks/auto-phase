@@ -15,39 +15,29 @@ hook_input=""
 [ ! -t 0 ] && hook_input=$(cat || true)
 [ -n "$hook_input" ] || exit 0
 
-read_field() {
-    printf '%s' "$hook_input" | python3 -c "import json,sys
-try:
-    d=json.load(sys.stdin)
-except ValueError:
-    sys.exit(0)
-v=d
-for k in sys.argv[1].split('.'):
-    v=v.get(k) if isinstance(v,dict) else None
-print(v if isinstance(v,str) else ('true' if v is True else ''))" "$1" 2>/dev/null
-}
-
-session=$(read_field session_id)
-cwd=$(read_field cwd)
+source "${SCRIPT_DIR}/lib.sh"
+json_fields "$hook_input" session_id cwd prompt tool_input.command tool_response.interrupted tool_response.stderr tool_response.stdout
+session="${JSON_FIELDS[0]}"
+cwd="${JSON_FIELDS[1]}"
 [ -n "$session" ] || exit 0
 [ -n "$cwd" ] && { cd "$cwd" 2>/dev/null || exit 0; }
 git rev-parse --git-dir >/dev/null 2>&1 || exit 0
 
 case "$mode" in
 prompt)
-    prompt=$(read_field prompt)
+    prompt="${JSON_FIELDS[2]}"
     [ -n "$prompt" ] || exit 0
     case "$prompt" in *"SYSTEM NOTIFICATION - NOT USER INPUT"*|*"<task-notification>"*) exit 0 ;; esac
     python3 "$TB" --session "$session" phase investigate --only-from review,complete \
         --note "new request after hand-back" >/dev/null 2>&1
     ;;
 push)
-    command=$(read_field tool_input.command)
+    command="${JSON_FIELDS[3]}"
     printf '%s' "$command" | grep -qE '(^|[;&|[:space:]])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|$)' || exit 0
     printf '%s' "$command" | grep -qE -- '--dry-run|(^|[[:space:]])-n([[:space:]]|$)|--delete' && exit 0
-    [ "$(read_field tool_response.interrupted)" = "true" ] && exit 0
-    output="$(read_field tool_response.stderr)
-$(read_field tool_response.stdout)"
+    [ "${JSON_FIELDS[4]}" = "true" ] && exit 0
+    output="${JSON_FIELDS[5]}
+${JSON_FIELDS[6]}"
     printf '%s' "$output" | grep -qiE '\[rejected\]|^error:|^fatal:|failed to push' && exit 0
     branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null) || exit 0
     if [ -n "${FSA_DONE_BRANCHES:-}" ]; then

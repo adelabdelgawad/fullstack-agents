@@ -86,6 +86,22 @@ out="$(cd "$tmp" && route_all "the terminal scroller is very slow on vpn" "$tmp/
 check "performance outside Next.js -> no nextjs skills" "$(printf '%s' "$out" | grep -qF 'nextjs' && echo 0 || echo 1)"
 check "no Next.js project -> no 'load these NOW'" "$(printf '%s' "$out" | grep -qF 'load these NOW' && echo 0 || echo 1)"
 
+# Router selection: copy the plugin with a stub Haiku classifier that announces itself.
+stub="$tmp/plugin"
+mkdir -p "$stub/scripts"
+cp -r "$(dirname "$hook")" "$stub/hooks"
+printf 'print("[stub] haiku routed")\nprint("")\n' > "$stub/scripts/fsa-classify"
+routed_by() {  # router prompt
+    python3 -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1]}))' "$2" | FSA_ROUTER="$1" bash "$stub/hooks/prompt-scan" | head -1
+}
+haiku_used() { routed_by "$1" "$2" | grep -qF '[stub] haiku' && echo 1 || echo 0; }
+check "auto: regex hit skips Haiku" "$([ "$(haiku_used auto 'the login button is broken on the settings page')" = 0 ] && echo 1 || echo 0)"
+check "auto: unclassified long prompt asks Haiku" "$(haiku_used auto 'is this dashboard secured enough to publish on my public address')"
+check "auto: unclassified short prompt stays silent" "$([ -z "$(routed_by auto 'commit and push')" ] && echo 1 || echo 0)"
+check "haiku: always asks Haiku" "$(haiku_used haiku 'the login button is broken on the settings page')"
+check "regex: never asks Haiku" "$([ -z "$(routed_by regex 'is this dashboard secured enough to publish on my public address')" ] && echo 1 || echo 0)"
+check "default router is auto" "$(python3 -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1]}))' 'is this dashboard secured enough to publish on my public address' | env -u FSA_ROUTER bash "$stub/hooks/prompt-scan" | grep -qF '[stub] haiku' && echo 1 || echo 0)"
+
 reject "change the campaign form label"
 reject "add a feature flag for exports"
 reject "fix the uploading of lead files"

@@ -46,4 +46,24 @@ chk "unknown skill is not found" \
 chk "missing transcript is not-found, not an error" \
     no  "$(yn session_has_skill "$tmp/absent.jsonl" "codebase-scanning")"
 
+missing="$(session_missing_skills "$parent" codebase-scanning fullstack-agents:rust-sqlx no-such-skill other-missing)"
+chk "one pass lists only the skills nobody loaded" \
+    "no-such-skill other-missing" "$(printf '%s' "$missing" | tr '\n' ' ' | sed 's/ $//')"
+chk "one pass on a missing transcript lists every skill" \
+    "a b" "$(session_missing_skills "$tmp/absent.jsonl" a b | tr '\n' ' ' | sed 's/ $//')"
+echo '{"x":1}' > "$tmp/plain.jsonl"
+chk "slash command counts as loaded" \
+    yes "$(printf '%s\n' '{"message":"<command-name>/fullstack-agents:debug</command-name>"}' > "$tmp/cmd.jsonl"; yn session_has_skill "$tmp/cmd.jsonl" debug)"
+chk "a line merely naming the skill does not count" \
+    no "$(printf '%s\n' '{"text":"please load fullstack-agents:debug"}' > "$tmp/hint.jsonl"; yn session_has_skill "$tmp/hint.jsonl" debug)"
+
+json_fields '{"prompt":"two\nlines","tool_input":{"command":"git push"},"tool_response":{"interrupted":false}}' prompt tool_input.command tool_response.interrupted absent
+chk "json_fields keeps multi-line values" "two
+lines" "${JSON_FIELDS[0]}"
+chk "json_fields reads nested paths" "git push" "${JSON_FIELDS[1]}"
+chk "json_fields renders booleans as JSON" "false" "${JSON_FIELDS[2]}"
+chk "json_fields returns empty for absent paths" "4:" "${#JSON_FIELDS[@]}:${JSON_FIELDS[3]}"
+json_fields 'not json' a b
+chk "json_fields on bad JSON yields empty values" "2::" "${#JSON_FIELDS[@]}:${JSON_FIELDS[0]}:${JSON_FIELDS[1]}"
+
 exit $fail

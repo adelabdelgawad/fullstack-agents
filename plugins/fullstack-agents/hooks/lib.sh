@@ -4,15 +4,56 @@
 
 # Execution-test the interpreter: on Windows, a Microsoft Store stub named
 # python3.exe can sit on PATH and fail when actually run.
+# Only Windows shells need the execution test; elsewhere `command -v` suffices
+# and avoids starting an interpreter on every hook call.
 find_python() {
     local cand
     for cand in python3 python; do
-        if command -v "$cand" >/dev/null 2>&1 && "$cand" -c 'pass' >/dev/null 2>&1; then
-            printf '%s' "$cand"
-            return 0
-        fi
+        command -v "$cand" >/dev/null 2>&1 || continue
+        case "${OSTYPE:-}" in
+            msys*|cygwin*|win32*) "$cand" -c 'pass' >/dev/null 2>&1 || continue ;;
+        esac
+        printf '%s' "$cand"
+        return 0
     done
     return 1
+}
+
+# json_fields JSON_STRING FIELD_PATH...
+#   Read several dotted field paths with ONE interpreter start. Sets the array
+#   JSON_FIELDS, one element per path ("" when absent; booleans as true/false).
+json_fields() {
+    local json_str="${1:-}" py v f
+    shift
+    JSON_FIELDS=()
+    py=$(find_python || true)
+    if [ -n "$py" ] && [ -n "$json_str" ]; then
+        while IFS= read -r -d '' v; do JSON_FIELDS+=("$v"); done < <(printf '%s' "$json_str" | "$py" -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except ValueError:
+    data = {}
+for field in sys.argv[1:]:
+    obj = data
+    for key in field.split("."):
+        obj = obj.get(key) if isinstance(obj, dict) else None
+    if obj is None:
+        out = ""
+    elif isinstance(obj, bool):
+        out = "true" if obj else "false"
+    elif isinstance(obj, str):
+        out = obj
+    elif isinstance(obj, (int, float)):
+        out = str(obj)
+    else:
+        out = json.dumps(obj)
+    sys.stdout.write(out.replace("\0", "") + "\0")' "$@" 2>/dev/null)
+    fi
+    if [ "${#JSON_FIELDS[@]}" -ne "$#" ]; then
+        JSON_FIELDS=()
+        for f in "$@"; do JSON_FIELDS+=("$(json_get_field "$f" "$json_str")"); done
+    fi
 }
 
 # json_get_field FIELD_PATH JSON_STRING
@@ -68,19 +109,50 @@ transcript_has_skill() {
 
 session_loaded_skill() { session_has_skill "$@"; }
 
-# session_has_skill TRANSCRIPT_PATH SKILL_NAME
+# session_missing_skills TRANSCRIPT_PATH SKILL_NAME...
 #   PreToolUse carries no agent identity, so a subagent's edit arrives with the
 #   parent transcript path; its own Skill calls live in <session-dir>/subagents/.
-#   Checks the parent transcript and every subagent transcript of that session.
+#   Prints each named skill (as given) that neither the parent transcript nor any
+#   subagent transcript of that session loaded. One awk pass over all files.
+session_missing_skills() {
+    local transcript="${1:-}" sub
+    shift
+    [ "$#" -gt 0 ] || return 0
+    local files=()
+    [ -n "$transcript" ] && [ -f "$transcript" ] && files+=("$transcript")
+    if [ -n "$transcript" ]; then
+        for sub in "${transcript%.jsonl}"/subagents/*.jsonl; do
+            [ -f "$sub" ] && files+=("$sub")
+        done
+    fi
+    if [ "${#files[@]}" -eq 0 ]; then
+        printf '%s\n' "$@"
+        return 0
+    fi
+    awk -v list="$*" '
+        BEGIN {
+            n = split(list, want, " "); left = n
+            for (i = 1; i <= n; i++) { b = want[i]; sub(/^fullstack-agents:/, "", b); bare[i] = b }
+        }
+        index($0, "\"name\":\"Skill\"") || index($0, "<command-name>/fullstack-agents:") {
+            for (i = 1; i <= n; i++) {
+                if (hit[i]) continue
+                b = bare[i]
+                if (index($0, "\"name\":\"Skill\",\"input\":{\"skill\":\"fullstack-agents:" b "\"") \
+                    || index($0, "\"name\":\"Skill\",\"input\":{\"skill\":\"" b "\"") \
+                    || index($0, "<command-name>/fullstack-agents:" b "</command-name>")) { hit[i] = 1; left-- }
+            }
+            if (!left) exit
+        }
+        END { for (i = 1; i <= n; i++) if (!hit[i]) print want[i] }
+    ' "${files[@]}" 2>/dev/null
+}
+
+# session_has_skill TRANSCRIPT_PATH SKILL_NAME
+#   0 when the session (parent or any subagent) loaded SKILL_NAME.
 session_has_skill() {
-    local transcript="${1:-}" skill_name="${2:-}" sub
-    transcript_has_skill "$transcript" "$skill_name" && return 0
-    [ -n "$transcript" ] || return 1
-    for sub in "${transcript%.jsonl}"/subagents/*.jsonl; do
-        [ -f "$sub" ] || continue
-        transcript_has_skill "$sub" "$skill_name" && return 0
-    done
-    return 1
+    [ -n "${2:-}" ] || return 1
+    [ -z "$(session_missing_skills "${1:-}" "$2")" ]
 }
 
 # find_constitution

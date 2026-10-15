@@ -5,11 +5,13 @@ set -uo pipefail
 source "$(dirname "$0")/lib.sh"
 
 HOOK_INPUT="$(cat)"
-prompt="$(json_get_field "prompt" "$HOOK_INPUT")"
+json_fields "$HOOK_INPUT" prompt transcript_path session_id
+prompt="${JSON_FIELDS[0]}"
+transcript_path="${JSON_FIELDS[1]}"
+session_id="${JSON_FIELDS[2]}"
 [ -n "$prompt" ] || exit 0
 case "$prompt" in *"SYSTEM NOTIFICATION - NOT USER INPUT"*|*"<task-notification>"*) exit 0 ;; esac
 
-transcript_path="$(json_get_field "transcript_path" "$HOOK_INPUT")"
 skill_loaded() { session_has_skill "$transcript_path" "fullstack-agents:$1"; }
 lane_core_skill() {
     case "$1" in
@@ -20,13 +22,17 @@ lane_core_skill() {
     esac
 }
 
-routed=""
-if [ "${FSA_ROUTER:-haiku}" != "regex" ]; then
-    routed="$(printf '%s' "$HOOK_INPUT" | python3 "$(dirname "$0")/../scripts/fsa-classify" prompt 2>/dev/null)" || routed=""
-fi
-
 prompt_lower="$(printf '%s' "$prompt" | tr '[:upper:]' '[:lower:]')"
 has() { printf '%s' "$prompt_lower" | grep -qE "$1"; }
+
+# Routing: FSA_ROUTER=auto (default) classifies with the regexes below and calls the Haiku
+# router only when they match nothing and the prompt has at least FSA_ROUTER_MIN_WORDS words;
+# FSA_ROUTER=haiku always calls Haiku (about 5 s per prompt); FSA_ROUTER=regex never does.
+router="${FSA_ROUTER:-auto}"
+routed=""
+if [ "$router" = "haiku" ]; then
+    routed="$(printf '%s' "$HOOK_INPUT" | python3 "$(dirname "$0")/../scripts/fsa-classify" prompt 2>/dev/null)" || routed=""
+fi
 
 out_line=""
 if [ -n "$routed" ]; then
@@ -62,8 +68,17 @@ elif has 'docker|compose|nginx|\bssl\b|container'; then
     lane="infra"
 fi
 
-[ -n "$intent" ] || [ -n "$lane" ] || exit 0
+if [ -z "$intent" ] && [ -z "$lane" ]; then
+    words=0
+    for _ in $prompt; do words=$((words + 1)); done
+    [ "$router" = "auto" ] && [ "$words" -ge "${FSA_ROUTER_MIN_WORDS:-6}" ] || exit 0
+    routed="$(printf '%s' "$HOOK_INPUT" | python3 "$(dirname "$0")/../scripts/fsa-classify" prompt 2>/dev/null)" || routed=""
+    [ -n "$routed" ] || exit 0
+    out_line="$(printf '%s\n' "$routed" | sed -n 1p)"
+    lane="$(printf '%s\n' "$routed" | sed -n 2p)"
+fi
 
+if [ -z "$routed" ]; then
 case "$intent" in
     performance) skills="task-flow (Investigate: measure server time vs browser time before any hypothesis), debug" ;;
     investigate) skills="task-flow (Investigate + scan ladder), debug" ;;
@@ -89,6 +104,7 @@ line="[fullstack-agents] intent: ${intent:-general}, lane: ${lane:-any} -> invok
 [ -n "$lane_skills" ] && line="${line}; lane: ${lane_skills} — load these NOW, before the root cause, the plan or any code"
 out_line="${line}. Take the cheapest rung that answers it; the conclusion, plan and audit stay yours."
 fi
+fi
 
 core_skill="$(lane_core_skill "$lane")"
 # A lane the repository does not contain gets no "not loaded" nag and no stack doctrine.
@@ -109,7 +125,6 @@ printf '%s\n' "$out_line"
 
 # The full stack doctrine goes in once per session, only when code in a lane is in play.
 [ -n "$lane" ] || exit 0
-session_id="$(json_get_field "session_id" "$HOOK_INPUT")"
 armed_flag=""
 [ -n "$session_id" ] && armed_flag="$(state_dir)/armed-${session_id}"
 [ -n "$armed_flag" ] && [ -f "$armed_flag" ] && exit 0

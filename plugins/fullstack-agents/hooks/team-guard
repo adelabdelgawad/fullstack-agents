@@ -8,21 +8,11 @@ hook_input=""
 [ ! -t 0 ] && hook_input=$(cat || true)
 [ -n "$hook_input" ] || exit 0
 
-read_field() {
-    printf '%s' "$hook_input" | python3 -c "import json,sys
-try:
-    d=json.load(sys.stdin)
-except ValueError:
-    sys.exit(0)
-v=d
-for k in sys.argv[1].split('.'):
-    v=v.get(k) if isinstance(v,dict) else None
-print(v or '')" "$1" 2>/dev/null
-}
-
-command=$(read_field tool_input.command)
-session=$(read_field session_id)
-cwd=$(read_field cwd)
+source "${SCRIPT_DIR}/lib.sh"
+json_fields "$hook_input" tool_input.command session_id cwd
+command="${JSON_FIELDS[0]}"
+session="${JSON_FIELDS[1]}"
+cwd="${JSON_FIELDS[2]}"
 [ -n "$command" ] || exit 0
 [ -n "$cwd" ] && cd "$cwd" 2>/dev/null
 

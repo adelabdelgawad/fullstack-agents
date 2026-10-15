@@ -11,7 +11,9 @@ set -uo pipefail
 source "$(dirname "$0")/lib.sh"
 
 HOOK_INPUT="$(cat)"
-prompt="$(json_get_field "prompt" "$HOOK_INPUT")"
+json_fields "$HOOK_INPUT" prompt session_id
+prompt="${JSON_FIELDS[0]}"
+session_id="${JSON_FIELDS[1]}"
 [ -n "$prompt" ] || exit 0
 case "$prompt" in *"SYSTEM NOTIFICATION - NOT USER INPUT"*|*"<task-notification>"*) exit 0 ;; esac
 
@@ -24,7 +26,6 @@ esac
 # Short commands ("commit and push", "run the tests") are already a spec.
 [ "$(printf '%s' "$prompt" | wc -w)" -ge "${FSA_POLISH_MIN_WORDS:-6}" ] || exit 0
 
-session_id="$(json_get_field "session_id" "$HOOK_INPUT")"
 polished_flag=""
 [ -n "$session_id" ] && polished_flag="$(state_dir)/polished-${session_id}"
 
