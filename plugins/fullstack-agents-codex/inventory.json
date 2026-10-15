@@ -214,7 +214,7 @@
   ],
   "source_hashes": {
     ".claude-plugin/marketplace.json": "88540c3d139cc6b4a0594b35273ad2fb90523eb0becec24146df9e130e0a19cb",
-    ".claude-plugin/plugin.json": "01a247c36590ed6f576cbaf0b4819a7ebf8668dbe7908b3cf8ed7c4f03f29d15",
+    ".claude-plugin/plugin.json": "6db3115953d3f35b4db3a932ed5bd4ef1f478b9e0bb943378ae8c1759553ef77",
     "README.md": "6e4ea504497c8f8057f09e23bf5c09f11aa21a52e39da01f563fc0c0f3440574",
     "agents/_core/AGENT_BASE.md": "c29fe50773b1f705354beadd48af6018d39bfb830599ff3190e26b6bd9188f1a",
     "agents/_core/detection-patterns.md": "5f4b2d3bf8a5e1559725f60a86d0fa9ea0d4df4ce2e1e622713c26a0a9639389",
