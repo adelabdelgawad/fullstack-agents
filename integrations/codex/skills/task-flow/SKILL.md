@@ -29,6 +29,8 @@ Read the bundle's `AGENTS.md` for runtime bindings and token discipline.
    while preserving existing work; do not create another worktree or merge changes
    into main.
 4. **Validate.** Review the completed deliverable and use its affected checks.
+   Run known local checks that finish in about a minute with short output directly,
+   saving their output to a log; delegating them adds avoidable startup overhead.
    Reuse workers' successful logs for unchanged code; the lead does not repeat
    the same suite for ownership. Finish all writers before the final batch.
    Serialize checks sharing database names, fixture state or a native build target;

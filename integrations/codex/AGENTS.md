@@ -55,6 +55,8 @@ mutate production.
   count alone does not require delegation or splitting a deliverable. Use bounded
   Codex workers when authorized and independent work improves throughput. A brief names
   exact paths, necessary skills, acceptance criteria, and reporting format.
+- Run known local checks that finish in about a minute with short output directly
+  and save their logs; avoid worker startup overhead for these commands.
 - Fix compiler/lint/test failures as a batch, then run affected checks once.
 - Keep full logs on disk. Return summaries, precise citations and failing lines,
   rather than copying logs or complete files into messages.

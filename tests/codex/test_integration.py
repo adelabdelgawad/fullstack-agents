@@ -621,6 +621,23 @@ class CLITests(unittest.TestCase):
 
 
 class HookAndValidationTests(unittest.TestCase):
+    def test_prompt_hook_skips_notifications_and_short_commands(self):
+        for prompt in ("commit and push", "yes", "", "<task-notification> background task completed successfully </task-notification>",
+                       "SYSTEM NOTIFICATION - NOT USER INPUT: background task completed"):
+            with self.subTest(prompt=prompt):
+                result = run([sys.executable, str(SCRIPTS / "hook.py"), "prompt"],
+                             input=json.dumps({"prompt": prompt}))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "")
+
+    def test_prompt_hook_keeps_guidance_for_substantive_requests(self):
+        result = run([sys.executable, str(SCRIPTS / "hook.py"), "prompt"],
+                     input=json.dumps({"prompt": "Please investigate the slow backend request and fix it"}))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        output = json.loads(result.stdout)["hookSpecificOutput"]
+        self.assertEqual(output["hookEventName"], "UserPromptSubmit")
+        self.assertIn("Codex leads", output["additionalContext"])
+
     def test_hook_understands_patch_moves_and_does_not_fetch_missing_tool(self):
         with tempfile.TemporaryDirectory(prefix="fsa-hook-") as scratch:
             root = Path(scratch)
