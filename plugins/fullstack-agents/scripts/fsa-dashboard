@@ -41,6 +41,7 @@ CODEX_JUDGE_S = 600
 RUN_WINDOW_S = 72 * 3600
 SESSION_WINDOW_S = 48 * 3600
 STALL_S = 300
+CODEX_ACTIVE_S = 90
 IDLE_DROP_S = 12 * 3600
 ABANDON_S = 24 * 3600
 LOOSE_RUN_S = 12 * 3600
@@ -1293,10 +1294,14 @@ def read_session(path, now, wt_re, names, waits):
     }
 
 
+def worktree_re(repo, trees):
+    wt = [re.escape(p) for p in trees if Path(p) != repo.root]
+    return re.compile("(" + "|".join(sorted(wt, key=len, reverse=True)) + r")(?![\w.-])") if wt else None
+
+
 def collect_sessions(repo, trees, now, names, waits):
     paths = [repo.root] + [Path(p) for p in trees if Path(p) != repo.root]
-    wt = [re.escape(p) for p in trees if Path(p) != repo.root]
-    wt_re = re.compile("(" + "|".join(sorted(wt, key=len, reverse=True)) + r")(?![\w.-])") if wt else None
+    wt_re = worktree_re(repo, trees)
     out = []
     for base in repo.projects:
         for p in paths:
@@ -1679,7 +1684,32 @@ def codex_workflow(sid, cwd, now):
         return {}
 
 
-def read_codex_session(repo, path, meta, now, names, waits, pane, pane_status, agents=()):
+def codex_pending_question(path):
+    """(title, asynchronous) of the newest request_user_input call that no later user message answered."""
+    for line in reversed(tail_lines(path, 1048576)):
+        if "request_user_input" not in line and '"role":"user"' not in line.replace(" ", ""):
+            continue
+        try:
+            p = json.loads(line).get("payload") or {}
+        except (ValueError, AttributeError):
+            continue
+        if p.get("type") == "function_call" and str(p.get("name", "")).startswith("request_user_input"):
+            return codex_question(p), p.get("name") == "request_user_input_async"
+        if p.get("type") == "message" and p.get("role") == "user" and (codex_text(p) or "<").strip()[:1] != "<":
+            return "", False
+    return "", False
+
+
+def codex_question(payload):
+    try:
+        questions = json.loads(payload.get("arguments") or "{}").get("questions") or []
+    except (ValueError, AttributeError):
+        return "Codex asked a question in its terminal"
+    first = questions[0] if questions and isinstance(questions[0], dict) else {}
+    return " ".join(str(first.get("title") or first.get("question") or "Codex asked a question in its terminal").split())[:300]
+
+
+def read_codex_session(repo, path, meta, now, names, waits, pane, pane_status, agents=(), wt_re=None):
     sid = meta.get("id") or meta.get("session_id") or path.stem[-36:]
     cwd, branch = meta.get("cwd") or "", (meta.get("git") or {}).get("branch") or ""
     said = ask = action = action_id = model = ""
@@ -1696,7 +1726,7 @@ def read_codex_session(repo, path, meta, now, names, waits, pane, pane_status, a
         except (ValueError, AttributeError):
             continue
     said_at = ask_at = action_at = turn_at = seen_at = ""
-    turn_open, answered, briefs = None, set(), set()
+    turn_open, answered, briefs, mentions = None, set(), set(), {}
     for line in tail_lines(path):
         try:
             d = json.loads(line)
@@ -1724,6 +1754,9 @@ def read_codex_session(repo, path, meta, now, names, waits, pane, pane_status, a
         elif kind in (("response_item", "function_call_output"), ("response_item", "custom_tool_call_output")):
             answered.add(p.get("call_id"))
         briefs.update(BRIEF_RE.findall(line))
+        if wt_re:
+            for m in wt_re.findall(line):
+                mentions[m] = mentions.get(m, 0) + 1
     if not seen_at:
         return None
     if not model:
@@ -1736,8 +1769,11 @@ def read_codex_session(repo, path, meta, now, names, waits, pane, pane_status, a
     asks = "?" in tail or bool(ASK_RE.search(tail.strip().rsplit("\n\n", 1)[-1]))
     declared = waits.get(sid) if isinstance(waits.get(sid), dict) else {}
     need = declared.get("need", "") if iso_epoch(declared.get("at", "")) >= iso_epoch(ask_at) else ""
-    if pane_status == "blocked":
-        state, need = "waiting", need or "Codex is waiting for an answer or an approval in its terminal"
+    question, asynchronous = codex_pending_question(path)
+    if pane_status == "blocked" and asynchronous and turn_open and idle < CODEX_ACTIVE_S:
+        state = "working"
+    elif pane_status == "blocked":
+        state, need = "waiting", need or question or "Codex is waiting for an answer or an approval in its terminal"
     elif turn_open:
         state = "quiet" if idle > STALL_S else "working"
     elif need or asks and idle >= WAIT_MIN_S:
@@ -1751,7 +1787,8 @@ def read_codex_session(repo, path, meta, now, names, waits, pane, pane_status, a
         "id": sid, "engine": "codex", "model": model, "pane": pane or "",
         **codex_workflow(sid, cwd, now),
         "name": title or f"codex {Path(cwd).name or 'session'} {sid[:8]}", "named": bool(title), "title": title,
-        "cwd": cwd, "branch": branch, "worktree": cwd if cwd != str(repo.root) else "", "state": state,
+        "cwd": cwd, "branch": branch, "state": state, "question": question if state == "working" else "",
+        "worktree": max(mentions, key=mentions.get) if mentions else cwd if cwd != str(repo.root) else "",
         "updated": updated, "turn_at": iso_epoch(turn_at), "agents": list(agents), "idle": idle, "transcript": str(path),
         "snippet": snippet(said) if state in ("waiting", "still_open", "idle") else "",
         "briefs": sorted(briefs), "chips": [], "ask": snippet(ask, 600), "need": need,
@@ -1790,13 +1827,13 @@ def collect_codex_sessions(repo, trees, now, waits):
     if any(panes.values()):
         status = {x["pane_id"]: x["status"] for x in read_herdr_snapshot()["panes"]}
     names, kids = codex_thread_names(), proc_children() if live else {}
-    out = []
+    out, wt_re = [], worktree_re(repo, trees)
     for f, meta in found:
         if meta.get("id") in spawned:
             continue
         pane = panes.get(str(f))
         agents = codex_agent_items(meta.get("id"), children, live.get(str(f)), kids, now, registrations.get(meta.get("id"), ()))
-        s = read_codex_session(repo, f, meta, now, names, waits, pane, status.get(pane or ""), agents)
+        s = read_codex_session(repo, f, meta, now, names, waits, pane, status.get(pane or ""), agents, wt_re)
         if s:
             s["workflow_runs"] = registrations.get(meta.get("id"), [])
             out.append(s)
@@ -2000,7 +2037,7 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
                 continue
             if pane.get("status") == "working":
                 s["state"], s["need"] = "working", ""
-            elif pane.get("status") == "blocked":
+            elif pane.get("status") == "blocked" and not s.get("question"):
                 s["state"] = "waiting"
             elif pane.get("status") in ("idle", "done"):
                 s["state"] = "idle"
@@ -2084,6 +2121,7 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
         card["steps"] = max([x for x in steps if isinstance(x, dict) and isinstance(x.get("items"), list)],
                             key=lambda x: x.get("at", ""), default={"items": []})["items"]
         card["now"] = [{**{k: s[k] for k in ("id", "name", "title", "state", "updated", "ask", "need", "action", "action_at", "action_running", "said", "said_at", "said_full", "docs")},
+                        "question": s.get("question", ""),
                         "engine": s.get("engine", "claude"),
                         "agents": [{**{f: x[f] for f in ("id", "label", "state", "at")}, **({"shell": x["shell"]} if "shell" in x else {})} for x in s["agents"]]}
                        for s in sorted(g["sessions"], key=lambda s: -s["updated"])]

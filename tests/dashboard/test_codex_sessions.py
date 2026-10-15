@@ -94,6 +94,44 @@ class CodexSessionTests(unittest.TestCase):
         self.assertEqual((s["state"], s["pane"]), ("waiting", "w2:p1"))
         self.assertTrue(s["need"])
 
+    def ask(self, name, title, ago):
+        return {"timestamp": stamp(ago), "type": "response_item", "payload": {"type": "function_call", "name": name, "call_id": "q1",
+                "arguments": json.dumps({"questions": [{"title": title, "options": ["a", "b"]}]})}}
+
+    def test_async_question_while_working_stays_working_and_shows_the_question(self):
+        path = self.rollout("s-async", self.root, [event("task_started", 60), message("user", "revise the chatbot", 50),
+                                                    self.ask("request_user_input_async", "Does <it> mean Infobip?", 40),
+                                                    message("assistant", "Editing the tables", 5)])
+        s = dash.read_codex_session(self.repo, path, dash.codex_meta(path), self.now, {}, {}, "w2:p1", "blocked")
+        self.assertEqual((s["state"], s["question"], s["need"]), ("working", "Does <it> mean Infobip?", ""))
+
+    def test_async_question_after_codex_goes_quiet_is_waiting_with_the_question(self):
+        path = self.rollout("s-quiet", self.root, [event("task_started", 400), message("user", "revise", 390),
+                                                    self.ask("request_user_input_async", "Which flow?", 380)])
+        s = dash.read_codex_session(self.repo, path, dash.codex_meta(path), self.now, {}, {}, "w2:p1", "blocked")
+        self.assertEqual((s["state"], s["need"], s["question"]), ("waiting", "Which flow?", ""))
+
+    def test_blocking_question_is_waiting_at_once(self):
+        path = self.rollout("s-sync", self.root, [event("task_started", 30), message("user", "revise", 25),
+                                                   self.ask("request_user_input", "Approve the plan?", 10)])
+        s = dash.read_codex_session(self.repo, path, dash.codex_meta(path), self.now, {}, {}, "w2:p1", "blocked")
+        self.assertEqual((s["state"], s["need"]), ("waiting", "Approve the plan?"))
+
+    def test_answered_question_is_not_pending(self):
+        path = self.rollout("s-answered", self.root, [event("task_started", 60), self.ask("request_user_input_async", "Which?", 40),
+                                                       message("user", "the first one", 30), message("assistant", "ok", 5)])
+        s = dash.read_codex_session(self.repo, path, dash.codex_meta(path), self.now, {}, {}, "w2:p1", "working")
+        self.assertEqual((s["state"], s["question"]), ("working", ""))
+
+    def test_worktree_follows_the_paths_codex_edits(self):
+        other = self.root.parent / "repo-dev"
+        patch_call = {"timestamp": stamp(10), "type": "response_item", "payload": {"type": "custom_tool_call", "name": "apply_patch", "call_id": "p1",
+                      "input": f"*** Update File: {other}/src/a.tsx\n*** Update File: {other}/src/b.tsx"}}
+        path = self.rollout("s-wt", self.root, [event("task_started", 20), message("user", "edit", 19), patch_call])
+        wt_re = dash.worktree_re(self.repo, {str(self.root), str(other)})
+        s = dash.read_codex_session(self.repo, path, dash.codex_meta(path), self.now, {}, {}, None, None, (), wt_re)
+        self.assertEqual(s["worktree"], str(other))
+
     def test_session_in_another_repo_is_not_collected(self):
         self.rollout("s-other", self.root.parent / "elsewhere", [event("task_complete", 10)])
         self.assertNotIn("s-other", self.collect())
