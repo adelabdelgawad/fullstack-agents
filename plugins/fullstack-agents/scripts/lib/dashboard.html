@@ -450,7 +450,7 @@ html.herdr-page .herdr-view { height: 100%; }
 .task-counts { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .tracked-tasks { list-style: none; padding: 0; margin: 8px 0 0; }
 .tracked-task { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
-.task-status.running { color: var(--blue); }
+.task-status.in_progress, .task-status.running { color: var(--blue); }
 .task-status.blocked { color: var(--red); }
 .task-status.done { color: var(--green); }
 .session-task-overview, .info-top.task-list { grid-column: 1 / -1; }
@@ -463,13 +463,24 @@ html.herdr-page .herdr-view { height: 100%; }
 .task-stage-timeline li::before { content: ""; position: absolute; height: 1px; background: var(--line); top: 10px; left: 0; right: 0; }
 .task-stage-timeline li span { z-index: 1; display: grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; width: 21px; height: 21px; background: var(--bg); font-size: 12px; }
 .task-stage-timeline li small { font: 10px var(--mono); }
-.task-stage-timeline li.running { color: var(--blue); }
+.task-stage-timeline li.in_progress, .task-stage-timeline li.running { color: var(--blue); }
 .task-stage-timeline li.done { color: var(--green); }
 .task-stage-timeline li.blocked, .task-error { color: var(--red); }
 .task-current { margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-activity { grid-column: 1 / -1; display: grid; gap: 12px; min-width: 0; }
 .tracked-tasks { max-height: 640px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 @media (max-width: 760px) { .info-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.task-status-icon { display: inline-flex; flex: 0 0 24px; align-items: center; justify-content: center; width: 24px; height: 24px; color: var(--muted); vertical-align: middle; }
+.task-status-icon.in_progress { color: var(--blue); }
+.task-status-icon.done { color: var(--green); }
+.task-status-icon.blocked, .task-status-icon.canceled { color: var(--red); }
+.task-status-icon.executing { border-radius: 50%; background: color-mix(in srgb, var(--blue) 12%, transparent); outline: 1px solid var(--blue); }
+.task-stage-timeline li .task-status-icon { width: 21px; height: 21px; border: 0; }
+.task-stage-timeline li .task-status-icon svg { width: 17px; height: 17px; }
+.task-activity { margin-top: 4px; }
+.task-activity b { color: var(--blue); }
+
 </style>
 </head>
 <body>
@@ -2083,16 +2094,35 @@ function liveHtml(c) {
     ${groups || '<div class="s">Nothing running or recently finished.</div>'}`, `<span class="chip">${total} running</span>`, true);
 }
 
+function taskStatusLabel(status) {
+  return ({pending: "Pending", in_progress: "In progress", running: "In progress", blocked: "Blocked", done: "Done", skipped: "Skipped", canceled: "Canceled"})[status] || "Unknown";
+}
+function taskIsActive(item) {
+  return item.is_active === true && Date.parse(item.active_until) > Date.now();
+}
+function taskStatusIcon(status, active = false) {
+  const paths = {
+    pending: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
+    in_progress: '<path d="M20 12a8 8 0 1 1-3-6.2M20 4v5h-5"/>',
+    blocked: '<path d="m8 3-5 5v8l5 5h8l5-5V8l-5-5ZM12 8v5m0 3h.01"/>',
+    done: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+    skipped: '<path d="m5 5 9 7-9 7ZM18 5v14"/>',
+    canceled: '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/>'
+  };
+  const canonical = status === "running" ? "in_progress" : status;
+  const label = taskStatusLabel(status) + (active ? " — actively executing (agent-reported)" : "");
+  return `<span class="task-status-icon ${esc(canonical)}${active ? ' executing' : ''}" role="img" aria-label="${esc(label)}" title="${esc(label)}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[canonical] || paths.pending}</svg></span>`;
+}
 function taskProgressHtml(c, compact = false) {
   const sessions = (c.sessions || []).filter(s => s.task_tracking && Object.keys(s.task_tracking).length);
   if (!sessions.length) return "";
   return sessions.map(s => {
     const t = s.task_tracking;
     if (t.error) return `<div class="task-overview task-error" role="alert">Task list needs attention: ${esc(t.error)}</div>`;
-    const counts = `${t.counts.running || 0} running · ${t.counts.pending || 0} pending · ${t.counts.blocked || 0} blocked`;
-    const active = t.items.filter(x => ["running", "blocked"].includes(x.status));
+    const counts = `${t.items.filter(taskIsActive).length} actively executing · ${t.counts.in_progress ?? t.counts.running ?? 0} in progress · ${t.counts.pending || 0} pending · ${t.counts.blocked || 0} blocked`;
+    const active = t.items.filter(taskIsActive);
     const percent = t.total ? Math.round(t.completed / t.total * 100) : 0;
-    const timeline = compact ? "" : `<ol class="task-stage-timeline" aria-label="Task stage timeline">${t.items.map(x => `<li class="${esc(x.status)}" title="${esc(x.id + ': ' + x.title + ' — ' + x.status)}" aria-label="${esc(x.id + ': ' + x.title + ' — ' + x.status)}"><span aria-hidden="true">${x.status === "done" ? "✓" : x.status === "running" ? "●" : x.status === "blocked" ? "!" : "○"}</span><small>${esc(x.id)}</small></li>`).join("")}</ol>`;
+    const timeline = compact ? "" : `<ol class="task-stage-timeline" aria-label="Task stage timeline">${t.items.map(x => `<li class="${esc(x.status)}" title="${esc(x.id + ': ' + x.title + ' — ' + taskStatusLabel(x.status))}" aria-label="${esc(x.id + ': ' + x.title + ' — ' + taskStatusLabel(x.status))}"><span aria-hidden="true">${taskStatusIcon(x.status, taskIsActive(x))}</span><small>${esc(x.id)}</small></li>`).join("")}</ol>`;
     return `<section class="task-overview ${compact ? "compact" : "session-task-overview"}" aria-label="Task progress"><div class="task-progress-title"><b>${esc(t.completed)}/${esc(t.total)} tasks done</b><span>${percent}%</span></div><progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress><div class="s">${esc(counts)}</div>${compact && active.length ? `<div class="s task-current">${esc(active[0].id + ': ' + active[0].title)}${active.length > 1 ? ` · +${active.length - 1} active` : ""}</div>` : ""}${timeline}</section>`;
   }).join("");
 }
@@ -2103,11 +2133,11 @@ function taskListHtml(c) {
   const body = sessions.map(s => {
     const t = s.task_tracking;
     if (t.error) return `<div role="alert" class="snip"><b>${esc(s.name || s.id)}</b>: ${esc(t.error)}</div>`;
-    const counts = ["running", "pending", "blocked", "done", "skipped", "canceled"].map(k => `<span class="chip task-status ${k}">${esc(k)} ${esc(t.counts[k] || 0)}</span>`).join(" ");
-    const order = {running: 0, blocked: 1, pending: 2, done: 3, skipped: 4, canceled: 5};
-    const sorted = [...t.items].sort((a, b) => order[a.status] - order[b.status]);
+    const counts = ["in_progress", "pending", "blocked", "done", "skipped", "canceled"].map(k => `<span class="chip" title="${esc(taskStatusLabel(k))}">${taskStatusIcon(k)} ${esc(t.counts[k] ?? (k === "in_progress" ? t.counts.running : 0) ?? 0)}</span>`).join(" ");
+    const order = {in_progress: 0, running: 0, blocked: 1, pending: 2, done: 3, skipped: 4, canceled: 5};
+    const sorted = [...t.items].sort((a, b) => Number(taskIsActive(b)) - Number(taskIsActive(a)) || order[a.status] - order[b.status]);
     const source = `/api/doc?sid=${encodeURIComponent(s.id)}&path=${encodeURIComponent(t.file)}`;
-    return `<article class="tracked-plan"><b>${esc(t.title)}</b><div class="s"><a href="${esc(source)}" target="_blank" rel="noopener">${esc(t.relative_file)}</a> · ${esc(t.completed)}/${esc(t.total)} done</div><progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress><div class="task-counts">${counts}</div><ul class="tracked-tasks" tabindex="0" aria-label="Tasks; scroll for more">${sorted.map(x => `<li class="tracked-task"><span class="chip task-status ${esc(x.status)}">${esc(x.status)}</span><div><b>${esc(x.id)}</b> ${esc(x.title)}${x.note ? `<div class="s">${esc(x.note)}</div>` : ""}</div></li>`).join("")}</ul></article>`;
+    return `<article class="tracked-plan"><b>${esc(t.title)}</b><div class="s"><a href="${esc(source)}" target="_blank" rel="noopener">${esc(t.relative_file)}</a> · ${esc(t.completed)}/${esc(t.total)} done</div><progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress><div class="task-counts">${counts}</div><ul class="tracked-tasks" tabindex="0" aria-label="Tasks; scroll for more">${sorted.map(x => `<li class="tracked-task${taskIsActive(x) ? ' executing' : ''}">${taskStatusIcon(x.status, taskIsActive(x))}<div><b>${esc(x.id)}</b> ${esc(x.title)}<div class="s task-activity"><span>${esc(x.owner || "Unassigned")}</span> · ${esc(x.activity || "No activity reported")}${taskIsActive(x) ? ' · <b title="Agent-reported activity expires automatically; it is separate from process detection">Actively executing</b>' : ' · No active execution reported'}</div>${x.note ? `<div class="s">${esc(x.note)}</div>` : ""}</div></li>`).join("")}</ul></article>`;
   }).join("");
   return infoSection(c, "task-list", "Tasks", body, "", true);
 }

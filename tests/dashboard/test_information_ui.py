@@ -59,9 +59,10 @@ const toolLine = s => s.action || '';
         self.assertIn('1/3 tasks done', html)
         self.assertIn('aria-label="Task stage timeline"', html)
         self.assertLess(html.index('session-task-overview'), html.index('<h4>Summary'))
-        self.assertIn('T02: Canvas — running', html)
-        self.assertIn('running 1', html)
-        self.assertIn('pending 1', html)
+        self.assertIn('T02: Canvas — In progress', html)
+        self.assertIn('0 actively executing · 1 in progress', html)
+        self.assertIn('aria-label="In progress"', html)
+        self.assertIn('aria-label="Pending"', html)
         self.assertIn('Browser pending', html)
         self.assertLess(html.index('<b>T02</b>'), html.index('<b>T03</b>'))
         self.assertLess(html.index('<b>T03</b>'), html.index('<b>T01</b>'))
@@ -69,7 +70,25 @@ const toolLine = s => s.action || '';
         self.assertIn('tabindex="0" aria-label="Tasks; scroll for more"', html)
         self.assertIn('/api/doc?sid=lead&amp;path=', html)
         card["sessions"][0]["task_tracking"]["items"][1]["status"] = "done"
-        self.assertIn('class="chip task-status done">done</span><div><b>T02', self.render(card))
+        self.assertRegex(self.render(card), r'task-status-icon done[^>]*role="img"[^>]*aria-label="Done"')
+
+    def test_task_icons_owners_activity_and_expiring_execution_are_separate(self):
+        card = self.fixture()
+        card["sessions"][0]["task_tracking"] = {"title": "Tasks", "file": "/repo/TASKS.md", "relative_file": "TASKS.md", "total": 3, "completed": 1, "counts": {"done": 1, "in_progress": 2}, "items": [
+            {"id": "T1", "status": "in_progress", "title": "Waiting review", "owner": "lead", "activity": "Awaiting audit", "is_active": False},
+            {"id": "T2", "status": "in_progress", "title": "Live implementation", "owner": "agent:<worker>", "activity": "Fix <script>draft</script>", "is_active": True, "active_until": "2030-01-01T00:00:00Z"},
+            {"id": "T3", "status": "done", "title": "Complete"}]}
+        html = self.render(card, pre="Date.now = () => Date.parse('2026-01-01T00:00:00Z');")
+        self.assertIn('1 actively executing · 2 in progress', html)
+        self.assertIn('aria-label="In progress — actively executing (agent-reported)"', html)
+        self.assertLess(html.index('<b>T2</b>'), html.index('<b>T1</b>'))
+        self.assertIn('agent:&lt;worker&gt;', html)
+        self.assertIn('Fix &lt;script&gt;draft&lt;/script&gt;', html)
+        self.assertNotIn('<script>draft</script>', html)
+        self.assertNotRegex(html, r'>in_progress</span>|>done</span>|>pending</span>')
+        expired = self.render(card, pre="Date.now = () => Date.parse('2031-01-01T00:00:00Z');")
+        self.assertIn('0 actively executing · 2 in progress', expired)
+        self.assertNotIn('actively executing (agent-reported)', expired)
 
     def test_task_list_escapes_untrusted_content_and_reports_bound_errors(self):
         card = self.fixture()

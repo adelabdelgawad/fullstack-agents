@@ -77,7 +77,7 @@ class CodexSessionTests(unittest.TestCase):
             state = dash.build_state(repo, dash.GitCache(repo))
             card = next(c for c in state["cards"] if any(s["id"] == "tracked" for s in c["sessions"]))
             tracked = next(s["task_tracking"] for s in card["sessions"] if s["id"] == "tracked")
-            self.assertEqual(tracked["counts"]["running"], 1)
+            self.assertEqual(tracked["counts"]["in_progress"], 1)
             self.assertIn(str(task), state["_docs"]["tracked"])
             missing = self.collect()["tracked"]
             missing["cwd"] = ""

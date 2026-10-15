@@ -111,5 +111,9 @@ The dashboard shows validation/audit as Review and completed Codex work as Done.
 
 For multi-step implementation, maintain a dedicated Markdown task file in the repository.
 Register it using `scripts/tasks.py` with the actual lead session and original session working directory,
-and update statuses as work starts, blocks or finishes. Follow the task-flow task-tracking reference.
+and update statuses as work starts, blocks or finishes. Canonical `in_progress` describes progress,
+not a running process (`running` remains a legacy alias). Optional owner/activity/expiry columns
+report active work only with an unexpired agent lease. Record owner/activity on assignment/start,
+renew only during actual work, and clear `--active-for 0` on worker exit, waiting or shell completion.
+Do not infer a PID or completion from task status or activity. Follow the task-flow task-tracking reference.
 Verify the dashboard Tasks section and invite the user to inspect the UI after wiring it.

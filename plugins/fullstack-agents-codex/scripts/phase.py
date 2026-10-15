@@ -118,7 +118,7 @@ def main():
     if args.phase == "complete" and tracked:
         if tracked.get("error"):
             parser.error(f"cannot complete with an invalid task list: {tracked['error']}")
-        unfinished = [item["id"] for item in tracked["items"] if item["status"] in {"pending", "running", "blocked"}]
+        unfinished = [item["id"] for item in tracked["items"] if item["status"] in {"pending", "in_progress", "running", "blocked"}]
         if unfinished:
             parser.error("cannot complete while tasks remain unfinished: " + ", ".join(unfinished))
     path = args.state_dir.expanduser() / f"{args.session}.json"

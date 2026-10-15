@@ -102,5 +102,11 @@ The dashboard shows validation/audit as Review and completed Codex work as Done.
 ## Task list visible in the dashboard
 
 For multi-step implementation, create and register a dedicated repository Markdown task file,
-update task statuses as work changes, and verify the live session Tasks section. Read
+update task statuses as work changes, and verify the live session Tasks section.
+Use canonical `in_progress` (legacy `running` normalizes to it); progress is not proof of execution.
+Four-column task tables remain supported; optional Owner, Activity and Active until columns
+report a short agent activity lease. Set owner/activity on assignment/start, renew only during
+actual work, and clear `--active-for 0` on worker exit, waiting or shell completion. Active
+requires `in_progress`, owner, activity and an unexpired lease; it is not a verified PID.
+Do not mark done until required checks and audit are complete. Read
 [task tracking](references/task-tracking.md) for the helper, format and completion rules.

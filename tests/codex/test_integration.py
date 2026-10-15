@@ -347,7 +347,8 @@ class CLITests(unittest.TestCase):
         result = run([*cmd, "--phase", "implement"], env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
         record = json.loads((state / "tracked-lead.json").read_text())
-        self.assertEqual(record["task_tracking"]["counts"]["running"], 1)
+        self.assertEqual(record["task_tracking"]["counts"]["in_progress"], 1)
+        self.assertNotIn("running", record["task_tracking"]["counts"])
         result = run([*cmd, "--phase", "complete"], env=env)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("T01", result.stderr)
@@ -360,6 +361,30 @@ class CLITests(unittest.TestCase):
         result = run([*cmd, "--phase", "complete"], env=env)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("invalid task list", result.stderr)
+
+    def test_phase_completion_guard_covers_canonical_in_progress_and_activity_metadata(self):
+        env = {**self.env, "CODEX_THREAD_ID": "active-lead", "FSA_TASKS_DIR": str(Path(self.scratch.name) / "active-registry")}
+        tasks = self.bundle / "scripts/tasks.py"
+        result = run([sys.executable, str(tasks), "init", "--root", str(self.root), "--file", "docs/tasks/active.md", "--task", "T1|in_progress|Implement|"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = run([sys.executable, str(tasks), "set", "--root", str(self.root), "--file", "docs/tasks/active.md", "--id", "T1", "--status", "in_progress", "--owner", "lead", "--activity", "Run tests", "--active-for", "120"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = Path(self.scratch.name) / "active-phase"
+        command = [sys.executable, str(self.bundle / "scripts/phase.py"), "--root", str(self.root), "--state-dir", str(state)]
+        result = run([*command, "--phase", "implement"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        record = json.loads((state / "active-lead.json").read_text())
+        self.assertEqual(record["task_tracking"]["counts"]["in_progress"], 1)
+        result = run([*command, "--phase", "complete"], env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unfinished", result.stderr)
+        self.assertEqual(json.loads((state / "active-lead.json").read_text())["phase"], "implement")
+        result = run([sys.executable, str(tasks), "set", "--root", str(self.root), "--file", "docs/tasks/active.md", "--id", "T1", "--status", "done"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = run([*command, "--phase", "complete"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        record = json.loads((state / "active-lead.json").read_text())
+        self.assertEqual((record["phase"], record["task_tracking"]["completed"]), ("complete", 1))
 
     def test_phase_cli_preserves_evidence_and_clears_it_for_new_task(self):
         state = Path(self.scratch.name) / "evidence-state"

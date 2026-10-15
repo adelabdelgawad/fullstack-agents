@@ -1,5 +1,7 @@
 """Explicit task ledgers are validated, scoped to a session root and reread live."""
 import contextlib
+from datetime import datetime, timedelta, timezone
+import time
 import importlib.util
 import io
 import json
@@ -159,7 +161,7 @@ class TaskTrackingTests(unittest.TestCase):
 
     def test_init_does_not_overwrite_and_set_preserves_outside_prose_and_note(self):
         result = self.invoke("init", "--root", str(self.root), "--file", "TASKS.md", "--title", "Feature tasks", "--task", "T1|running|Implement API|Keep this note")
-        self.assertEqual(result["items"][0]["status"], "running")
+        self.assertEqual(result["items"][0]["status"], "in_progress")
         before = self.ledger([tasks._item("T1", "running", "Implement API", "Keep this note")])
         self.path.write_text(before)
         original = self.path.read_bytes()
@@ -217,6 +219,143 @@ class TaskTrackingTests(unittest.TestCase):
         process = subprocess.run([sys.executable, str(bundle / "tasks.py"), "set", "--root", str(self.root), "--file", "TASKS.md", "--id", "T1", "--status", "blocked", "--note", "Dependency"], text=True, capture_output=True)
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertEqual(tasks.load_tasks("session-1", self.root)["counts"]["blocked"], 1)
+
+    def deadline(self, seconds=120):
+        return (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat().replace("+00:00", "Z")
+
+    def set_task(self, *arguments):
+        return self.invoke("set", "--root", str(self.root), "--file", str(self.path), "--id", "T1", *arguments)
+
+    def test_running_compatibility_normalizes_to_canonical_in_progress(self):
+        legacy = self.ledger().replace("| T1 | pending |", "| T1 | running |")
+        result = self.bind(legacy)
+        self.assertEqual(result["items"][0]["status"], "in_progress")
+        self.assertEqual(result["counts"]["in_progress"], 1)
+        self.assertNotIn("running", result["counts"])
+        self.set_task("--status", "running")
+        result = tasks.load_tasks("session-1", self.root)
+        self.assertEqual(result["items"][0]["status"], "in_progress")
+        self.assertIn("| T1 | in_progress |", self.path.read_text())
+
+    def test_extended_columns_roundtrip_escaped_metadata_without_executing_html(self):
+        owner = "lead | browser\\worker"
+        activity = '<img src=x onerror="alert(1)"> | inspect'
+        deadline = self.deadline()
+        result = self.bind(self.ledger([tasks._item("T1", "in_progress", "Inspect | UI", "Keep note", owner=owner, activity=activity, active_until=deadline)]))
+        self.assertIn("| Owner | Activity | Active until |", self.path.read_text())
+        item = result["items"][0]
+        self.assertEqual((item["owner"], item["activity"], item["active_until"]), (owner, activity, deadline))
+        self.assertTrue(item["is_active"])
+        self.assertEqual(result["active"], 1)
+        self.assertEqual(result["completed"], 0)
+        self.assertEqual(tasks._parse(self.path.read_text())[0][0]["activity"], activity)
+        self.set_task("--status", "in_progress", "--note", "Updated | note")
+        reread = tasks.load_tasks("session-1", self.root)["items"][0]
+        self.assertEqual((reread["owner"], reread["activity"]), (owner, activity))
+        self.assertEqual(reread["note"], "Updated | note")
+
+    def test_extended_rows_with_missing_metadata_cells_are_explicit_errors(self):
+        self.bind(self.ledger([tasks._item("T1", "in_progress", "Task", "", owner="lead", activity="Checks", active_until=self.deadline())]))
+        malformed = self.path.read_text().replace("| lead | Checks |", "| lead |")
+        self.path.write_text(malformed)
+        result = tasks.load_tasks("session-1", self.root)
+        self.assertIn("error", result)
+        self.assertNotIn("active", result)
+        self.assertNotIn("completed", result)
+
+    def test_four_column_table_remains_valid_and_incomplete_counts_do_not_imply_activity(self):
+        result = self.bind(self.ledger([tasks._item("T1", "in_progress", "No heartbeat", ""), tasks._item("T2", "pending", "Queued", ""), tasks._item("T3", "blocked", "Dependency", "")]))
+        self.assertNotIn("| Owner |", self.path.read_text())
+        self.assertEqual((result["total"], result["completed"], result["active"]), (3, 0, 0))
+        self.assertEqual((result["counts"]["in_progress"], result["counts"]["pending"], result["counts"]["blocked"]), (1, 1, 1))
+        self.assertTrue(all(item["is_active"] is False for item in result["items"]))
+
+    def test_expired_and_file_mtime_capped_leases_do_not_remain_busy(self):
+        expired = self.bind(self.ledger([tasks._item("T1", "in_progress", "Expired", "", owner="lead", activity="Checks", active_until=self.deadline(-60))]))
+        self.assertFalse(expired["items"][0]["is_active"])
+        self.assertEqual(expired["active"], 0)
+        self.path.write_text(self.ledger([tasks._item("T1", "in_progress", "Future claim", "", owner="lead", activity="Checks", active_until=self.deadline(3600))]))
+        old = time.time() - 301
+        os.utime(self.path, (old, old))
+        capped = tasks.load_tasks("session-1", self.root)
+        self.assertEqual(capped["counts"]["in_progress"], 1)
+        self.assertFalse(capped["items"][0]["is_active"])
+        self.assertEqual(capped["active"], 0)
+
+    def test_active_for_requires_in_progress_owner_and_activity_and_is_bounded(self):
+        self.bind()
+        invalid = [
+            ["--status", "pending", "--owner", "lead", "--activity", "Checks", "--active-for", "60"],
+            ["--status", "in_progress", "--activity", "Checks", "--active-for", "60"],
+            ["--status", "in_progress", "--owner", "lead", "--active-for", "60"],
+            ["--status", "in_progress", "--owner", "lead", "--activity", "Checks", "--active-for", "301"],
+            ["--status", "in_progress", "--owner", "lead", "--activity", "Checks", "--active-for", "-1"],
+        ]
+        original = self.path.read_bytes()
+        for arguments in invalid:
+            with self.subTest(arguments=arguments), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                self.set_task(*arguments)
+            self.assertEqual(self.path.read_bytes(), original)
+        self.set_task("--status", "in_progress", "--owner", "lead", "--activity", "Checks", "--active-for", "300")
+        result = tasks.load_tasks("session-1", self.root)
+        self.assertTrue(result["items"][0]["is_active"])
+        self.assertEqual(result["active"], 1)
+        remaining = datetime.fromisoformat(result["items"][0]["active_until"].replace("Z", "+00:00")).timestamp() - time.time()
+        self.assertGreater(remaining, 290)
+        self.assertLessEqual(remaining, 300)
+        self.set_task("--status", "in_progress", "--active-for", "0")
+        cleared = tasks.load_tasks("session-1", self.root)
+        self.assertEqual(cleared["items"][0]["active_until"], "")
+        self.assertEqual(cleared["active"], 0)
+
+    def test_owner_transfer_clears_previous_activity_and_lease(self):
+        self.bind(self.ledger([tasks._item("T1", "in_progress", "Working", "", owner="old owner", activity="Old checks", active_until=self.deadline())]))
+        self.set_task("--status", "in_progress", "--owner", "new owner")
+        result = tasks.load_tasks("session-1", self.root)
+        item = result["items"][0]
+        self.assertEqual((item["owner"], item["activity"], item["active_until"]), ("new owner", "", ""))
+        self.assertFalse(item["is_active"])
+        self.assertEqual(result["active"], 0)
+
+    def test_owner_transfer_cannot_renew_previous_owners_activity_without_a_fresh_description(self):
+        self.bind(self.ledger([tasks._item("T1", "in_progress", "Working", "", owner="old owner", activity="Old checks", active_until=self.deadline())]))
+        original = self.path.read_bytes()
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            self.set_task("--status", "in_progress", "--owner", "new owner", "--active-for", "60")
+        self.assertEqual(self.path.read_bytes(), original)
+        self.set_task("--status", "running", "--owner", "new owner", "--activity", "New checks", "--active-for", "60")
+        result = tasks.load_tasks("session-1", self.root)
+        self.assertEqual((result["items"][0]["owner"], result["items"][0]["activity"]), ("new owner", "New checks"))
+        self.assertEqual(result["active"], 1)
+
+    def test_nonprogress_status_clears_active_deadline_without_counting_it_as_done(self):
+        self.bind()
+        for status in ("pending", "blocked", "done", "skipped", "canceled"):
+            self.path.write_text(self.ledger([tasks._item("T1", "in_progress", "Working", "", owner="lead", activity="Checks", active_until=self.deadline())]))
+            self.set_task("--status", status)
+            result = tasks.load_tasks("session-1", self.root)
+            self.assertEqual(result["items"][0]["active_until"], "")
+            self.assertFalse(result["items"][0]["is_active"])
+            self.assertEqual(result["active"], 0)
+            self.assertEqual(result["completed"], int(status == "done"))
+
+    def test_timezone_offsets_are_accepted_and_resolve_to_the_same_instant(self):
+        offset = "2026-10-15T12:00:00+02:00"
+        item = tasks._item("T1", "in_progress", "Task", "", owner="lead", activity="Checks", active_until=offset)
+        self.assertEqual(item["active_until"], offset)
+        self.assertEqual(tasks._deadline(offset), tasks._deadline("2026-10-15T10:00:00Z"))
+
+    def test_metadata_control_characters_and_invalid_deadlines_are_rejected(self):
+        for key, value in [("owner", "bad\nowner"), ("activity", "bad\tactivity"), ("owner", "bad\x1bowner"), ("activity", tasks.END), ("active_until", "tomorrow"), ("active_until", "2026-10-15T12:00:00")]:
+            kwargs = {"owner": "lead", "activity": "Checks", "active_until": self.deadline(), key: value}
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                tasks._item("T1", "in_progress", "Task", "", **kwargs)
+        self.bind()
+        original = self.path.read_bytes()
+        for flag, value in [("--owner", "bad\nowner"), ("--activity", "bad\tactivity")]:
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                self.set_task("--status", "in_progress", flag, value)
+            self.assertEqual(self.path.read_bytes(), original)
 
 
 if __name__ == "__main__":

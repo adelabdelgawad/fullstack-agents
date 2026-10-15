@@ -1,5 +1,7 @@
 """Bounded, explicit Markdown task ledgers shared by dashboard and agent CLIs."""
 import argparse
+from datetime import datetime, timezone
+import time
 from collections import Counter
 from contextlib import contextmanager
 import fcntl
@@ -13,7 +15,10 @@ import tempfile
 
 START = "<!-- fsa:tasks:start -->"
 END = "<!-- fsa:tasks:end -->"
-STATUSES = ("pending", "running", "blocked", "done", "skipped", "canceled")
+STATUSES = ("pending", "in_progress", "blocked", "done", "skipped", "canceled")
+MAX_ACTIVE_SECONDS = 300
+HEADERS = ["ID", "Status", "Task", "Note"]
+ACTIVITY_HEADERS = HEADERS + ["Owner", "Activity", "Active until"]
 MAX_BYTES = 256 * 1024
 MAX_ROWS = 200
 SID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,199}\Z")
@@ -83,24 +88,43 @@ def _cells(line):
             current.append(char)
         index += 1
     cells.append("".join(current).strip())
-    if len(cells) != 4:
-        raise ValueError("Malformed task table row: expected exactly four columns")
+    if len(cells) not in (4, 7):
+        raise ValueError("Malformed task table row: expected four or seven columns")
     return cells
 
 
-def _item(identifier, status, title, note):
+def _deadline(value):
+    if not value:
+        return 0.0
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            raise ValueError("timezone required")
+        return parsed.timestamp()
+    except (ValueError, OverflowError, TypeError) as error:
+        raise ValueError("Active until must be an ISO 8601 timestamp with timezone") from error
+
+
+def _item(identifier, status, title, note, owner="", activity="", active_until=""):
+    status = "in_progress" if status == "running" else status
     if not isinstance(identifier, str) or not TASK_ID.fullmatch(identifier):
         raise ValueError("Task ID must be a safe nonempty identifier of at most 64 characters")
     if status not in STATUSES:
         raise ValueError(f"Invalid task status: {status}")
     if not isinstance(title, str) or not title.strip():
         raise ValueError("Task title must be nonempty")
-    for value in (identifier, status, title, note):
+    for value in (identifier, status, title, note, owner, activity, active_until):
         if not isinstance(value, str) or any(ord(char) < 32 or ord(char) == 127 for char in value):
             raise ValueError("Task cells must be single-line text without control characters")
         if START in value or END in value:
             raise ValueError("Task cells cannot contain ledger markers")
-    return {"id": identifier, "status": status, "title": title.strip(), "note": note.strip()}
+    if status != "in_progress":
+        active_until = ""
+    if active_until and (not owner.strip() or not activity.strip()):
+        raise ValueError("Active execution requires an owner and activity")
+    _deadline(active_until)
+    return {"id": identifier, "status": status, "title": title.strip(), "note": note.strip(),
+            "owner": owner.strip(), "activity": activity.strip(), "active_until": active_until}
 
 
 def _parse(text):
@@ -114,15 +138,21 @@ def _parse(text):
         if not any(line.strip() == marker for line in text.splitlines()):
             raise ValueError("Task markers must be on separate lines")
     rows = [line for line in text[start + len(START):end].splitlines() if line.strip()]
-    if len(rows) < 2 or _cells(rows[0]) != ["ID", "Status", "Task", "Note"]:
-        raise ValueError("Task table header must be ID | Status | Task | Note")
+    header = _cells(rows[0]) if rows else []
+    if len(rows) < 2 or header not in (HEADERS, ACTIVITY_HEADERS):
+        raise ValueError("Task table header must be ID | Status | Task | Note, optionally Owner | Activity | Active until")
+    if len(_cells(rows[1])) != len(header):
+        raise ValueError("Task separator column count must match header")
     if not all(re.fullmatch(r":?-{3,}:?", cell) for cell in _cells(rows[1])):
         raise ValueError("Malformed task table separator")
     if len(rows) - 2 > MAX_ROWS:
         raise ValueError(f"Task table exceeds {MAX_ROWS} rows")
     items, identifiers = [], set()
     for row in rows[2:]:
-        item = _item(*_cells(row))
+        cells = _cells(row)
+        if len(cells) != len(header):
+            raise ValueError("Task row column count must match header")
+        item = _item(*cells)
         if item["id"] in identifiers:
             raise ValueError(f"Duplicate task ID: {item['id']}")
         identifiers.add(item["id"])
@@ -133,8 +163,11 @@ def _parse(text):
 def _render(items):
     def cell(value):
         return value.replace("\\", "\\\\").replace("|", "\\|")
-    lines = ["| ID | Status | Task | Note |", "| --- | --- | --- | --- |"]
-    lines.extend("| " + " | ".join(cell(item[key]) for key in ("id", "status", "title", "note")) + " |" for item in items)
+    extended = any(item.get(key) for item in items for key in ("owner", "activity", "active_until"))
+    header = ACTIVITY_HEADERS if extended else HEADERS
+    keys = ("id", "status", "title", "note", "owner", "activity", "active_until") if extended else ("id", "status", "title", "note")
+    lines = ["| " + " | ".join(header) + " |", "| " + " | ".join("---" for _ in header) + " |"]
+    lines.extend("| " + " | ".join(cell(item.get(key, "")) for key in keys) + " |" for item in items)
     return "\n" + "\n".join(lines) + "\n"
 
 
@@ -205,10 +238,16 @@ def load_tasks(session_id, cwd):
         text = _read(path)
         items, _, _ = _parse(text)
         title = next((line[2:].strip() for line in text.splitlines() if line.startswith("# ")), path.stem)
+        updated = path.stat().st_mtime
+        now = time.time()
+        for item in items:
+            item["is_active"] = bool(item["status"] == "in_progress" and item["owner"] and item["activity"]
+                                     and min(_deadline(item["active_until"]), updated + MAX_ACTIVE_SECONDS) > now)
         counts = dict.fromkeys(STATUSES, 0)
         counts.update(Counter(item["status"] for item in items))
         return {**info, "title": title, "updated": path.stat().st_mtime, "items": items,
-                "counts": counts, "total": len(items), "completed": counts["done"]}
+                "counts": counts, "total": len(items), "completed": counts["done"],
+                "active": sum(item["is_active"] for item in items)}
     except (OSError, ValueError, TypeError, KeyError, RuntimeError) as error:
         return {**info, "error": str(error)}
 
@@ -226,8 +265,11 @@ def main(argv=None):
             sub.add_argument("--task", action="append", default=[], help="ID|status|title|note (repeatable)")
         if command == "set":
             sub.add_argument("--id", required=True)
-            sub.add_argument("--status", required=True, choices=STATUSES)
+            sub.add_argument("--status", required=True, choices=(*STATUSES, "running"))
             sub.add_argument("--note")
+            sub.add_argument("--owner")
+            sub.add_argument("--activity")
+            sub.add_argument("--active-for", type=int, help="Report active execution for 1..300 seconds; 0 clears it")
     args = parser.parse_args(argv)
     try:
         root = _root(args.root)
@@ -260,7 +302,17 @@ def main(argv=None):
                 task = next((item for item in items if item["id"] == args.id), None)
                 if task is None:
                     raise ValueError(f"Unknown task ID: {args.id}")
-                task.update(_item(task["id"], args.status, task["title"], task["note"] if args.note is None else args.note))
+                owner = task["owner"] if args.owner is None else args.owner
+                activity = (task["activity"] if owner == task["owner"] else "") if args.activity is None else args.activity
+                active_until = task["active_until"] if owner == task["owner"] else ""
+                if args.active_for is not None:
+                    if not 0 <= args.active_for <= MAX_ACTIVE_SECONDS:
+                        raise ValueError("--active-for must be between 0 and 300 seconds")
+                    if args.active_for and args.status not in ("in_progress", "running"):
+                        raise ValueError("Active execution requires in_progress status")
+                    active_until = datetime.fromtimestamp(time.time() + args.active_for, timezone.utc).isoformat() if args.active_for else ""
+                task.update(_item(task["id"], args.status, task["title"], task["note"] if args.note is None else args.note,
+                                  owner, activity, active_until))
                 changed = text[:start] + _render(items) + text[end:]
                 _parse(changed)
                 _file(root, args.file)
