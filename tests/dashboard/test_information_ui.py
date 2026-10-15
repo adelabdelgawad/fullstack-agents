@@ -54,11 +54,16 @@ const toolLine = s => s.action || '';
         card = self.fixture()
         card["sessions"][0]["task_tracking"] = {"title": "Canvas work", "file": "/repo/docs/tasks/canvas.md", "relative_file": "docs/tasks/canvas.md", "total": 3, "completed": 1, "counts": {"done": 1, "running": 1, "pending": 1}, "items": [{"id": "T01", "status": "done", "title": "Reference", "note": "Verified pin"}, {"id": "T02", "status": "running", "title": "Canvas", "note": "Browser pending"}, {"id": "T03", "status": "pending", "title": "Engine", "note": ""}]}
         html = self.render(card)
-        self.assertIn('data-info-section="task-list" open', html)
+        self.assertIn('data-info-section="task-list"><summary><h4>Tasks</h4><span class="chip">1/3 done</span>', html)
+        self.assertIn('data-info-section="task-list" open', self.render(card, ['task-list']))
+        tasks = html[html.index('data-info-section="task-list"'):]
+        self.assertIn('session-task-overview', tasks)
+        self.assertNotIn('session-task-overview', html[:html.index('data-info-section="task-list"')])
+        self.assertLess(html.index('data-info-section="runs"'), html.index('data-info-section="task-list"'))
         self.assertIn('1/3 done', html)
         self.assertIn('1/3 tasks done', html)
         self.assertIn('aria-label="Task stage timeline"', html)
-        self.assertLess(html.index('session-task-overview'), html.index('<h4>Summary'))
+        self.assertLess(html.index('<h4>Summary'), html.index('session-task-overview'))
         self.assertIn('T02: Canvas — In progress', html)
         self.assertIn('0 actively executing · 1 in progress', html)
         self.assertIn('aria-label="In progress"', html)
@@ -89,6 +94,19 @@ const toolLine = s => s.action || '';
         expired = self.render(card, pre="Date.now = () => Date.parse('2031-01-01T00:00:00Z');")
         self.assertIn('0 actively executing · 2 in progress', expired)
         self.assertNotIn('actively executing (agent-reported)', expired)
+
+    def test_task_rows_show_id_title_status_badge_and_status_tiles(self):
+        card = self.fixture()
+        card["sessions"][0]["task_tracking"] = {"title": "Plan", "file": "/r/t.md", "relative_file": "t.md", "total": 2, "completed": 0, "counts": {"blocked": 1, "pending": 1}, "items": [
+            {"id": "T1", "status": "pending", "title": "Later"}, {"id": "T2", "status": "blocked", "title": "Stuck", "owner": "lead"}]}
+        html = self.render(card)
+        self.assertIn('<li class="tracked-task blocked"', html)
+        self.assertIn('<b>T2</b><span class="tt-title">Stuck</span>', html)
+        self.assertIn('<span class="tt-badge blocked">Blocked</span>', html)
+        self.assertRegex(html, r'tt-tile blocked[\s\S]*?Blocked</div><div class="tt-n">1</div>')
+        self.assertRegex(html, r'tt-tile done[\s\S]*?<div class="tt-n">0</div>')
+        self.assertNotIn('tt-tile skipped', html)
+        self.assertIn('0/2 done</b><span>0%</span>', html)
 
     def test_task_list_escapes_untrusted_content_and_reports_bound_errors(self):
         card = self.fixture()
@@ -143,6 +161,20 @@ const toolLine = s => s.action || '';
         self.assertIn('data-info-section="result" open><summary><h4>Result', restored)
         self.assertIn('data-info-section="live"><summary><h4>Running now', restored)
         self.assertIn('data-info-section="summary"><summary>', restored)
+
+    def test_overview_strip_leads_with_state_counts_and_needs(self):
+        card = self.fixture()
+        card["needs_you"] = ["stalled", "stalled"]
+        card["runs"] = [{"id": "implement-1", "unit": "p1", "state": "running"}]
+        card["sessions"][0]["task_tracking"] = {"title": "T", "file": "/r/t.md", "relative_file": "t.md", "total": 4, "completed": 1, "counts": {"done": 1}, "items": []}
+        html = self.render(card)
+        strip = html[html.index('class="session-overview"'):html.index('data-info-section="live"')]
+        self.assertIn('<span class="pill live">working</span>', strip)
+        self.assertIn('<span class="pill bad">1 needs you</span>', strip)
+        self.assertIn('Tasks done</div><div class="so-v">1/4</div>', strip)
+        self.assertIn('Running now</div><div class="so-v">1</div>', strip)
+        self.assertIn('style="width:25%"', strip)
+        self.assertLess(html.index('session-overview'), html.index('session-task-overview'))
 
     def test_running_now_separates_runs_subagents_and_shells(self):
         card = self.fixture()

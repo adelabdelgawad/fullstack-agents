@@ -8,17 +8,17 @@
 <style>
 :root {
   --bg: #f4f5f8; --panel: #ffffff; --card: #ffffff; --card-hover: #f7f8fb; --ink: #1b1d26; --muted: #5d6273; --faint: #8b90a3; --line: #dfe2ea;
-  --active: #0b7a99; --pass: #1d7f3e; --changes: #a85a00; --human: #b0246f;
-  --amber: #a85a00; --amber-bg: #fff1dd; --blue: #0b7a99; --blue-bg: #e2f3f8;
+  --active: #2563eb; --pass: #1d7f3e; --changes: #a85a00; --human: #b0246f;
+  --amber: #a85a00; --amber-bg: #fff1dd; --blue: #2563eb; --blue-bg: #e6eefe;
   --red: #b42318; --red-bg: #fde8e6; --green: #1d7f3e; --green-bg: #e2f4e8; --chip: #eef0f5; --yellow: #a85a00;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #14151b; --panel: #1a1c24; --card: #20222c; --card-hover: #252835; --ink: #e4e5ea; --muted: #9da2b6; --faint: #6c7187; --line: #2b2e3b;
-    --active: #8be9fd; --pass: #50fa7b; --changes: #ffb86c; --human: #ff79c6;
-    --amber: #ffb86c; --amber-bg: #3a2c16; --blue: #8be9fd; --blue-bg: #18303a;
-    --red: #ff8a7f; --red-bg: #43201c; --green: #50fa7b; --green-bg: #173322; --chip: #2a2d3a; --yellow: #ffb86c;
+    --bg: #0b0f17; --panel: #0f1520; --card: #141b27; --card-hover: #18212f; --ink: #e5e9f0; --muted: #8c96a8; --faint: #5d6779; --line: #222b3a;
+    --active: #4f8ff7; --pass: #4ade80; --changes: #f2b24c; --human: #f472b6;
+    --amber: #f2b24c; --amber-bg: #2e2412; --blue: #4f8ff7; --blue-bg: #14233d;
+    --red: #f47272; --red-bg: #33171b; --green: #4ade80; --green-bg: #12291c; --chip: #1b2331; --yellow: #f2b24c;
   }
 }
 * { box-sizing: border-box; }
@@ -480,6 +480,121 @@ html.herdr-page .herdr-view { height: 100%; }
 .task-stage-timeline li .task-status-icon svg { width: 17px; height: 17px; }
 .task-activity { margin-top: 4px; }
 .task-activity b { color: var(--blue); }
+
+/* Session panel: dark navy cards, icon headers, pill tabs, outlined badges. */
+aside { background: var(--bg); }
+#phead { padding: 18px 20px 10px; }
+#phead h3 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+#phead .s { color: var(--muted); font-size: 12px; }
+.ptabs { gap: 2px; margin: 4px 20px 6px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); align-self: flex-start; }
+.tab2 { border-bottom: 0; border-radius: 6px; padding: 5px 12px; font-size: 12.5px; }
+.tab2:hover:not(:disabled) { color: var(--ink); }
+.tab2[aria-selected="true"] { background: var(--blue-bg); color: var(--blue); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--blue) 35%, transparent); }
+.tab2:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.tab2 .badge { font: 10.5px/1.5 var(--mono); padding: 0 6px; border-radius: 999px; background: var(--amber-bg); color: var(--amber); }
+#info { padding: 8px 20px 20px; }
+.info-grid { gap: 14px; }
+.info-card { background: var(--card); border-color: var(--line); border-radius: 8px; box-shadow: inset 0 1px 0 color-mix(in srgb, var(--blue) 28%, transparent); }
+.info-card > summary { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; list-style: none; margin: -12px -12px 0; padding: 10px 12px; font-size: 13px; }
+.info-card > summary::-webkit-details-marker { display: none; }
+.info-card > summary::before { content: ""; flex: none; width: 22px; height: 22px; border-radius: 6px; background: var(--blue-bg) radial-gradient(circle, var(--blue) 0 3px, transparent 3.5px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--blue) 30%, transparent); }
+.info-card > summary::after { content: "›"; margin-left: auto; color: var(--faint); font-size: 15px; line-height: 1; transition: transform .15s; }
+.info-card[open] > summary { margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.info-card[open] > summary::after { transform: rotate(90deg); }
+.info-card > summary:hover::after { color: var(--ink); }
+.info-top[open] > summary { margin-bottom: 12px; }
+aside h4 { font-size: 10.5px; letter-spacing: .06em; color: var(--muted); }
+aside .info-facts dt, aside .shell-facts dt { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+aside .pill { background: transparent; border: 1px solid var(--line); }
+aside .pill.live { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 40%, transparent); }
+aside .pill.bad { background: var(--red-bg); border-color: color-mix(in srgb, var(--red) 40%, transparent); }
+aside .pill.warn { background: var(--amber-bg); border-color: color-mix(in srgb, var(--amber) 40%, transparent); }
+aside .chip { border: 1px solid var(--line); background: transparent; }
+aside .chip.ok { border-color: color-mix(in srgb, var(--pass) 40%, transparent); }
+aside .chip.bad { border-color: color-mix(in srgb, var(--human) 40%, transparent); }
+aside .chip.st-working { border-color: color-mix(in srgb, var(--active) 40%, transparent); }
+aside .action-button { background: var(--card); border-color: var(--line); color: var(--ink); border-radius: 6px; padding: 4px 10px; font-size: 11.5px; }
+aside .action-button:hover { border-color: var(--blue); color: var(--ink); }
+aside .live-shell, aside .task, aside .now, aside .task-overview { background: var(--panel); border-color: var(--line); border-radius: 8px; }
+aside .live-shell.running { border-color: color-mix(in srgb, var(--pass) 45%, var(--line)); }
+aside pre:not(.diff):not(.terminal-screen) { background: var(--panel); border: 1px solid var(--line); }
+aside progress { accent-color: var(--blue); }
+
+/* Session panel structure: overview strip, KPI tiles, labelled rows, timeline. */
+.session-overview { grid-column: 1 / -1; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px; box-shadow: inset 0 1px 0 color-mix(in srgb, var(--blue) 28%, transparent); }
+.so-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 13px; }
+.so-ico { flex: none; width: 22px; height: 22px; border-radius: 6px; background: var(--blue-bg) radial-gradient(circle, var(--blue) 0 3px, transparent 3.5px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--blue) 30%, transparent); }
+.so-right { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.so-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 12px; }
+.so-tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; min-width: 0; }
+.so-l { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; }
+.so-v { margin-top: 2px; font-size: 20px; font-weight: 600; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.so-tile.time .so-v { font-size: 13px; padding-top: 5px; }
+.so-tile.live .so-v { color: var(--blue); }
+.so-tile.bad .so-v { color: var(--red); }
+.so-bar { height: 5px; margin-top: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; }
+.so-bar span { display: block; height: 100%; background: var(--blue); border-radius: 3px; }
+.info-card > summary > h4 { flex: 1; }
+.info-card.live { --sec: var(--green); } .info-card.progress { --sec: var(--amber); } .info-card.result { --sec: var(--human); }
+.info-card.live, .info-card.progress, .info-card.result { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--sec) 45%, transparent); }
+.info-card.live > summary::before, .info-card.progress > summary::before, .info-card.result > summary::before { background: color-mix(in srgb, var(--sec) 14%, transparent) radial-gradient(circle, var(--sec) 0 3px, transparent 3.5px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sec) 35%, transparent); }
+aside .info-facts { grid-template-columns: auto minmax(0, 1fr); gap: 0 12px; }
+aside .info-facts dt, aside .info-facts dd { padding: 7px 0; border-top: 1px solid var(--line); }
+aside .info-facts dt:first-of-type, aside .info-facts dt:first-of-type + dd { border-top: 0; }
+aside .info-facts dd { text-align: right; font-size: 12.5px; }
+.info-card .snip { padding-top: 8px; margin-top: 8px; border-top: 1px solid var(--line); }
+.info-timeline { list-style: none; margin: 0; padding: 0 0 0 16px; border-left: 1px solid var(--line); }
+.info-timeline li { position: relative; padding: 0 0 9px; }
+.info-timeline li::before { content: ""; position: absolute; left: -20.5px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--card); border: 1.5px solid var(--faint); }
+.info-timeline li:last-child::before { border-color: var(--blue); background: var(--blue); }
+.info-timeline time { display: block; color: var(--muted); font: 11px var(--mono); }
+.live-group h5 { text-transform: uppercase; letter-spacing: .06em; font-size: 10.5px; color: var(--muted); margin-top: 4px; }
+
+/* Tasks section: plan header, status tiles, incident-style rows. */
+.tp-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.tp-title { display: grid; gap: 1px; min-width: 0; }
+.tp-title b { font-size: 13.5px; }
+.tp-file { font: 11px var(--mono); color: var(--blue); text-decoration: none; overflow-wrap: anywhere; }
+.tp-file:hover { text-decoration: underline; }
+.tp-done { display: flex; gap: 8px; align-items: baseline; font-size: 12px; color: var(--muted); }
+.tp-done b { color: var(--ink); font-size: 13px; }
+aside .tracked-plan progress { appearance: none; -webkit-appearance: none; height: 6px; border: 0; border-radius: 3px; background: var(--chip); overflow: hidden; margin: 8px 0 12px; }
+aside .tracked-plan progress::-webkit-progress-bar { background: var(--chip); border-radius: 3px; }
+aside .tracked-plan progress::-webkit-progress-value { background: var(--blue); border-radius: 3px; }
+aside .tracked-plan progress::-moz-progress-bar { background: var(--blue); border-radius: 3px; }
+.task-counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 0 0 12px; }
+.tt-tile { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.tt-tile .task-status-icon { flex-basis: 20px; width: 20px; height: 20px; }
+.tt-n { font-size: 18px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.tt-tile.in_progress .tt-n { color: var(--blue); } .tt-tile.blocked .tt-n { color: var(--red); } .tt-tile.done .tt-n { color: var(--green); }
+.tracked-tasks { margin: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.tracked-task { grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 10px 12px 10px 10px; border-top: 1px solid var(--line); border-left: 3px solid transparent; }
+.tracked-task:first-child { border-top: 0; }
+.tracked-task.blocked { border-left-color: var(--red); background: color-mix(in srgb, var(--red) 5%, transparent); }
+.tracked-task.in_progress { border-left-color: color-mix(in srgb, var(--blue) 45%, transparent); }
+.tracked-task.executing { border-left-color: var(--blue); background: color-mix(in srgb, var(--blue) 6%, transparent); }
+.tracked-task.done .tt-title, .tracked-task.skipped .tt-title, .tracked-task.canceled .tt-title { color: var(--muted); }
+.tt-main { min-width: 0; }
+.tt-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.tt-top > b { font: 600 11px var(--mono); color: var(--muted); padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; }
+.tt-title { flex: 1; min-width: 0; font-weight: 600; font-size: 13px; }
+.tt-badges { display: flex; gap: 5px; margin-left: auto; }
+.tt-badge { font: 10.5px/1.6 var(--mono); padding: 0 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.tt-badge.in_progress, .tt-badge.live { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 40%, transparent); background: var(--blue-bg); }
+.tt-badge.blocked { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); background: var(--red-bg); }
+.tt-badge.done { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, transparent); background: var(--green-bg); }
+.tt-owner { color: var(--ink); font-family: var(--mono); font-size: 11px; }
+.tt-note { margin-top: 3px; font-size: 12px; }
+
+.info-card .session-task-overview { margin-bottom: 12px; background: var(--panel); }
+
+/* Running now: each group is one row of fixed-width cards that scrolls sideways. */
+.live-shells { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(min(85%, 300px), 340px); max-height: none; overflow-x: auto; overflow-y: hidden; padding: 0 0 8px; scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.live-group .live-shells { grid-template-columns: none; }
+.live-shells > * { scroll-snap-align: start; }
+.live-shells:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 6px; }
+.live-shells::-webkit-scrollbar { height: 6px; } .live-shells::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+.live-group .live-shells.agents { grid-auto-columns: minmax(200px, 240px); }
 
 </style>
 </head>
@@ -2053,7 +2168,7 @@ function liveGroup(title, items, tile, cls) {
   if (!items.length) return "";
   const running = items.filter(x => x.state === "running").length;
   const count = ` <span class="chip">${running} running${items.length > running ? ` · ${items.length - running} recent` : ""}</span>`;
-  return `<div class="live-group"><h5>${esc(title)}${count}</h5><div class="${cls}">${items.map(tile).join("")}</div></div>`;
+  return `<div class="live-group"><h5>${esc(title)}${count}</h5><div class="${cls}" tabindex="0" role="region" aria-label="${esc(title)}; scroll sideways for more">${items.map(tile).join("")}</div></div>`;
 }
 
 const flowRuns = c => (c.workflow_runs || []).map(r => ({...r, id: r.run_id}))
@@ -2079,11 +2194,15 @@ function flowCard(c) {
   };
 }
 
+function liveSets(c) {
+  return {agents: liveAgents(c).filter(notDismissed), flows: flowRuns(c).filter(notDismissed),
+    runs: recentRuns(c).filter(notDismissed).sort((a, b) => LIVE(b) - LIVE(a) || (b.updated || 0) - (a.updated || 0))};
+}
+const liveTotal = ({agents, runs, flows}) => agents.filter(a => a.state === "running").length + runs.filter(LIVE).length + flows.filter(r => r.state === "running").length;
 function liveHtml(c) {
-  const agents = liveAgents(c).filter(notDismissed), shell = a => a.label.startsWith("shell"), flows = flowRuns(c).filter(notDismissed);
-  const runs = recentRuns(c).filter(notDismissed).sort((a, b) => LIVE(b) - LIVE(a) || (b.updated || 0) - (a.updated || 0));
+  const sets = liveSets(c), {agents, flows, runs} = sets, shell = a => a.label.startsWith("shell");
   const lead = s => `<div class="live-lead"><span class="pill ${s.state === "working" ? "live" : ""}">${esc(STATE_TEXT[s.state] || s.state)}</span> <b>${esc(s.name)}</b>${s.action ? `<div class="s lead-act" title="${esc(toolLine(s))}">${esc(toolLine(s).replace(/\\n|\s+/g, " "))}</div>` : ""}${s.question ? `<div class="ask-q">Question for you (it keeps working meanwhile): ${esc(s.question)}</div>` : ""}</div>`;
-  const total = agents.filter(a => a.state === "running").length + runs.filter(LIVE).length + flows.filter(r => r.state === "running").length;
+  const total = liveTotal(sets);
   const done = [...runs, ...flows, ...agents].filter(isDone).length;
   const groups = [liveGroup("Implementer runs", runs.map(r => ({...r, state: LIVE(r) ? "running" : r.state})), runCard(c), "live-shells runs"),
     liveGroup("Workflow runs", flows, flowCard(c), "live-shells flows"),
@@ -2133,13 +2252,23 @@ function taskListHtml(c) {
   const body = sessions.map(s => {
     const t = s.task_tracking;
     if (t.error) return `<div role="alert" class="snip"><b>${esc(s.name || s.id)}</b>: ${esc(t.error)}</div>`;
-    const counts = ["in_progress", "pending", "blocked", "done", "skipped", "canceled"].map(k => `<span class="chip" title="${esc(taskStatusLabel(k))}">${taskStatusIcon(k)} ${esc(t.counts[k] ?? (k === "in_progress" ? t.counts.running : 0) ?? 0)}</span>`).join(" ");
+    const count = k => t.counts[k] ?? (k === "in_progress" ? t.counts.running : 0) ?? 0;
+    const tiles = ["in_progress", "blocked", "pending", "done", "skipped", "canceled"].filter(k => count(k) || ["in_progress", "blocked", "pending", "done"].includes(k))
+      .map(k => `<div class="tt-tile ${esc(k)}" title="${esc(taskStatusLabel(k))}">${taskStatusIcon(k)}<div><div class="so-l">${esc(taskStatusLabel(k))}</div><div class="tt-n">${esc(count(k))}</div></div></div>`).join("");
     const order = {in_progress: 0, running: 0, blocked: 1, pending: 2, done: 3, skipped: 4, canceled: 5};
     const sorted = [...t.items].sort((a, b) => Number(taskIsActive(b)) - Number(taskIsActive(a)) || order[a.status] - order[b.status]);
     const source = `/api/doc?sid=${encodeURIComponent(s.id)}&path=${encodeURIComponent(t.file)}`;
-    return `<article class="tracked-plan"><b>${esc(t.title)}</b><div class="s"><a href="${esc(source)}" target="_blank" rel="noopener">${esc(t.relative_file)}</a> · ${esc(t.completed)}/${esc(t.total)} done</div><progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress><div class="task-counts">${counts}</div><ul class="tracked-tasks" tabindex="0" aria-label="Tasks; scroll for more">${sorted.map(x => `<li class="tracked-task${taskIsActive(x) ? ' executing' : ''}">${taskStatusIcon(x.status, taskIsActive(x))}<div><b>${esc(x.id)}</b> ${esc(x.title)}<div class="s task-activity"><span>${esc(x.owner || "Unassigned")}</span> · ${esc(x.activity || "No activity reported")}${taskIsActive(x) ? ' · <b title="Agent-reported activity expires automatically; it is separate from process detection">Actively executing</b>' : ' · No active execution reported'}</div>${x.note ? `<div class="s">${esc(x.note)}</div>` : ""}</div></li>`).join("")}</ul></article>`;
+    const percent = t.total ? Math.round(t.completed / t.total * 100) : 0;
+    const row = x => {
+      const st = x.status === "running" ? "in_progress" : x.status, live = taskIsActive(x);
+      return `<li class="tracked-task ${esc(st)}${live ? " executing" : ""}">${taskStatusIcon(x.status, live)}<div class="tt-main"><div class="tt-top"><b>${esc(x.id)}</b><span class="tt-title">${esc(x.title)}</span><span class="tt-badges">${live ? '<span class="tt-badge live" title="Agent-reported activity expires automatically; it is separate from process detection">Actively executing</span>' : ""}<span class="tt-badge ${esc(st)}">${esc(taskStatusLabel(x.status))}</span></span></div>
+        <div class="s task-activity"><span class="tt-owner">${esc(x.owner || "Unassigned")}</span>${x.activity ? ` · ${esc(x.activity)}` : ""}</div>${x.note ? `<div class="s tt-note">${esc(x.note)}</div>` : ""}</div></li>`;
+    };
+    return `<article class="tracked-plan"><div class="tp-head"><div class="tp-title"><b>${esc(t.title)}</b><a class="tp-file" href="${esc(source)}" target="_blank" rel="noopener">${esc(t.relative_file)}</a></div><div class="tp-done"><b>${esc(t.completed)}/${esc(t.total)} done</b><span>${percent}%</span></div></div>
+      <progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress><div class="task-counts">${tiles}</div><ul class="tracked-tasks" tabindex="0" aria-label="Tasks; scroll for more">${sorted.map(row).join("")}</ul></article>`;
   }).join("");
-  return infoSection(c, "task-list", "Tasks", body, "", true);
+  const ok = sessions.map(s => s.task_tracking).filter(t => !t.error), doneN = ok.reduce((n, t) => n + (t.completed || 0), 0), allN = ok.reduce((n, t) => n + (t.total || 0), 0);
+  return infoSection(c, "task-list", "Tasks", taskProgressHtml(c) + body, allN ? `<span class="chip">${doneN}/${allN} done</span>` : "");
 }
 
 function infoHtml(c) {
@@ -2168,14 +2297,22 @@ function infoHtml(c) {
   const registered = runs.map(r => `<article class="info-run"><b>${esc(r.role)}</b> · ${esc(engineName(r.engine))} · ${esc(r.model || "model not recorded")} <span class="chip">${esc(r.state)}</span>${r.verdict ? " · " + esc(r.verdict) : ""}<div class="s">${esc(stamp(r.updated))}</div>${r.summary ? `<div class="snip">${esc(r.summary.slice(0, 320))}</div>${infoDisclosure(c, "run-" + r.run_id, "Full run summary", `<pre>${esc(r.summary)}</pre>`)}` : ""}${r.brief ? infoDisclosure(c, "brief-" + r.run_id, "Brief", `<pre>${esc(r.brief)}</pre>`) : ""}<div class="s">Run ${esc(r.run_id)}</div></article>`).join("");
   const checks = (c.chips || []).filter(x => x.kind === "tests").map(x => `<div class="snip"><b>Worker-reported checks</b> ${esc(x.verdict)}${x.label ? " · " + esc(x.label) : ""}</div>`).join("") + [...runs, ...(c.runs || [])].filter(r => r.tests?.length).map(r => `<div class="snip"><b>Worker-reported checks</b><pre>${esc(JSON.stringify(r.tests, null, 2))}</pre></div>`).join("");
   const blockers = [...(c.needs_you || []).map(f => FLAG_TEXT[f] || f), ...now.filter(s => s.need).map(s => s.need), ...(c.runs || []).flatMap(r => r.open_risks || [])];
+  const need = new Set(blockers).size, phase = lead.workflow_phase || c.phase || "unknown";
+  const tracked = sessions.map(s => s.task_tracking).filter(t => t && !t.error && t.total);
+  const doneN = tracked.reduce((n, t) => n + t.completed, 0), allN = tracked.reduce((n, t) => n + t.total, 0);
+  const tone = {working: "live", blocked: "bad", done: "done"}[status] || "";
+  const tile = (label, value, cls = "", extra = "") => `<div class="so-tile ${cls}"><div class="so-l">${esc(label)}</div><div class="so-v">${esc(value)}</div>${extra}</div>`;
+  const overview = `<section class="session-overview" aria-label="Session overview"><div class="so-head"><span class="so-ico" aria-hidden="true"></span><b>Session health</b><span class="pill ${tone}">${esc(status)}</span><span class="so-right">${need ? `<span class="pill bad">${need} need${need === 1 ? "s" : ""} you</span>` : ""}<span class="pill">${esc(phase)}</span></span></div>
+    <div class="so-tiles">${tile("Phase", phase)}${tile("Tasks done", allN ? `${doneN}/${allN}` : "—", "", allN ? `<div class="so-bar" aria-hidden="true"><span style="width:${Math.round(doneN / allN * 100)}%"></span></div>` : "")}${tile("Running now", liveTotal(liveSets(c)), "live")}${tile("Needs you", need, need ? "bad" : "")}${tile("Latest activity", stamp(activity.updated || c.updated), "time")}</div></section>`;
   return `<div class="info-grid">
-    <div class="session-activity">${taskProgressHtml(c)}${liveHtml(c)}</div>
+    ${overview}
+    <div class="session-activity">${liveHtml(c)}</div>
     ${infoSection(c, "summary", "Summary", `<b>${esc(c.title)}</b><dl class="info-facts"><dt>State</dt><dd>${esc(status)}</dd><dt>Phase</dt><dd>${esc(lead.workflow_phase || c.phase || "unknown")}</dd><dt>Lead</dt><dd>${esc(engineName(lead.engine))}${lead.model ? " · " + esc(lead.model) : ""}</dd><dt>Auditor</dt><dd>${esc(auditor)}</dd><dt>Latest activity</dt><dd>${esc(stamp(activity.updated || c.updated))}</dd></dl>`)}
     ${infoSection(c, "progress", "Progress", `${history.length ? timeline(history.slice(-8)) + (history.length > 8 ? infoDisclosure(c, "history", "Earlier phase history", timeline(history.slice(0, -8))) : "") : '<div class="s">No phase history recorded.</div>'}${activity.action ? `<div class="snip"><b>${activity.action_running ? "Running now" : "Latest action"}</b> ${esc(activity.action)}</div>` : ""}${c.steps?.length ? stepsHtml(c) : ""}${c.declared?.note ? `<div class="snip">${esc(c.declared.note)}</div>` : ""}`)}
     ${infoSection(c, "result", "Result", `${lead.workflow_summary ? `<div class="snip"><b>Lead-reported summary</b><pre>${esc(lead.workflow_summary)}</pre></div>` : message ? `<div class="snip">${esc(lastPara(message.said || message.said_full).slice(0, 400))}</div>${infoDisclosure(c, "message", "Full message from " + engineName(message.engine), `<button class="copy-ico" data-said="${esc(message.id)}" aria-label="Copy the last message">${COPY_ICON}</button>${saidHtml(message)}`)}` : '<div class="s">No agent update recorded.</div>'}<div class="snip"><b>Audit</b> ${audit ? esc(audit.state) + (audit.verdict ? " · " + esc(audit.verdict) : " · no verdict recorded") : "No registered audit result."}</div>${leadChecks}${checks}${blockers.length ? `<div class="snip"><b>Blockers / needs you</b><ul>${[...new Set(blockers)].map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}`)}
-    ${taskListHtml(c)}
     ${infoDisclosure(c, "session", "Session details", (now.length ? now : sessions).map(resumeHtml).join("") + runs.map(r => `<div class="mono">${esc(r.run_id)} · ${esc(r.root || "")} · ${esc(r.artifact || "")}</div>`).join("") + `<div class="mono">${esc(c.worktree || c.repo || "")}</div>` + now.map(s => `<div class="s">Pane: ${esc(((state && state.session_panes) || {})[s.id] || "not recorded")}</div>`).join(""))}
     ${infoDisclosure(c, "runs", "Worker and audit runs", (desc ? infoDisclosure(c, "task-brief", "Task brief", `<pre>${esc(desc)}</pre>`) : "") + registered + (tasks ? `<ul class="tasks">${tasks}</ul>` : "") + (!runs.length && !tasks ? '<div class="s">No run records available.</div>' : ""))}
+    ${taskListHtml(c)}
   </div>`;
 }
 
