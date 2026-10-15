@@ -194,8 +194,9 @@ def render(output):
     shutil.copy2(ADAPTER / "AGENTS.md", output / "AGENTS.md")
     shutil.copy2(ADAPTER / "config.toml.example", output / "config.toml.example")
     (output / "scripts").mkdir(exist_ok=True)
-    for name in ("validate.sh", "hook.py", "handoff.py", "worker.py", "phase.py"):
+    for name in ("validate.sh", "hook.py", "handoff.py", "worker.py", "phase.py", "tasks.py"):
         shutil.copy2(ADAPTER / "scripts" / name, output / "scripts" / name)
+    shutil.copy2(SOURCE / "scripts/lib/task_tracking.py", output / "scripts/task_tracking.py")
     for path in sorted((ADAPTER / "schemas").glob("*.json")):
         write(output / "schemas" / path.name, path.read_text())
     version = json.loads((SOURCE / ".claude-plugin/plugin.json").read_text())["version"]

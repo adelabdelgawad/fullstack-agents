@@ -15,3 +15,7 @@ The server is detached from the session; only `stop` ends it.
 
 Valid arguments: `start` (prints the URL), `stop`, `status` (URL or "not running").
 Any other argument is refused; do not pass `serve` or `state`.
+
+The session Information view includes a **Tasks** section when the lead registers a task
+Markdown file with `scripts/fsa-task`. It updates from that file and links to its source;
+see the task-flow skill task-tracking reference.

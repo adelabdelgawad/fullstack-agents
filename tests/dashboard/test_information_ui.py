@@ -50,6 +50,39 @@ const toolLine = s => s.action || '';
                 "updated": 1700000100, "said_at": 1700000090, "said": "Search now works.",
                 "action": "Inspect diff", "action_running": True}], "workflow_runs": []}
 
+    def test_registered_task_list_shows_counts_source_and_live_statuses(self):
+        card = self.fixture()
+        card["sessions"][0]["task_tracking"] = {"title": "Canvas work", "file": "/repo/docs/tasks/canvas.md", "relative_file": "docs/tasks/canvas.md", "total": 3, "completed": 1, "counts": {"done": 1, "running": 1, "pending": 1}, "items": [{"id": "T01", "status": "done", "title": "Reference", "note": "Verified pin"}, {"id": "T02", "status": "running", "title": "Canvas", "note": "Browser pending"}, {"id": "T03", "status": "pending", "title": "Engine", "note": ""}]}
+        html = self.render(card)
+        self.assertIn('data-info-section="task-list" open', html)
+        self.assertIn('1/3 done', html)
+        self.assertIn('1/3 tasks done', html)
+        self.assertIn('aria-label="Task stage timeline"', html)
+        self.assertLess(html.index('session-task-overview'), html.index('<h4>Summary'))
+        self.assertIn('T02: Canvas — running', html)
+        self.assertIn('running 1', html)
+        self.assertIn('pending 1', html)
+        self.assertIn('Browser pending', html)
+        self.assertLess(html.index('<b>T02</b>'), html.index('<b>T03</b>'))
+        self.assertLess(html.index('<b>T03</b>'), html.index('<b>T01</b>'))
+        self.assertLess(html.index('<h4>Result'), html.index('<h4>Tasks'))
+        self.assertIn('tabindex="0" aria-label="Tasks; scroll for more"', html)
+        self.assertIn('/api/doc?sid=lead&amp;path=', html)
+        card["sessions"][0]["task_tracking"]["items"][1]["status"] = "done"
+        self.assertIn('class="chip task-status done">done</span><div><b>T02', self.render(card))
+
+    def test_task_list_escapes_untrusted_content_and_reports_bound_errors(self):
+        card = self.fixture()
+        card["sessions"][0]["task_tracking"] = {"error": "Missing <script>alert(1)</script>"}
+        html = self.render(card)
+        self.assertIn('role="alert"', html)
+        self.assertIn('&lt;script&gt;', html)
+        self.assertNotIn('<script>alert(1)</script>', html)
+        self.assertNotIn('0/0 done', html)
+
+    def test_unregistered_session_does_not_show_fabricated_task_progress(self):
+        self.assertNotIn('data-info-section="task-list"', self.render(self.fixture()))
+
     def test_lead_and_real_auditor_are_distinct(self):
         card = self.fixture()
         card["workflow_runs"] = [{"role": "auditor", "engine": "claude", "model": "opus", "state": "completed",

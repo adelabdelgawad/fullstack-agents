@@ -76,7 +76,7 @@ def main():
             else:
                 context("SessionStart", f"Fullstack Agents bundle root: {BUNDLE}\n\n" + (BUNDLE / "AGENTS.md").read_text())
         elif mode == "prompt":
-            context("UserPromptSubmit", "Codex leads: reuse the cached scan and skills, route by service/lane, search before bounded reads. Follow fullstack-agents-task-flow: investigate, plan, implement, validate, bounded read-only Opus audit, scoped Codex repair. Record actual phase transitions with scripts/phase.py from this bundle; complete only when the work is done. Do not add approval rounds for already authorized work.")
+            context("UserPromptSubmit", "Codex leads: reuse the cached scan and skills, route by service/lane, search before bounded reads. Follow fullstack-agents-task-flow: investigate, plan, implement, validate, bounded read-only Opus audit, scoped Codex repair. Record actual phase transitions with scripts/phase.py from this bundle. For multi-step implementation, maintain and register a repository Markdown task list with scripts/tasks.py and update statuses for the dashboard Tasks section; complete only when the work is done. Do not add approval rounds for already authorized work.")
         elif mode == "post":
             post(payload)
         else:

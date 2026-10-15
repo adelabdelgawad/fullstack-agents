@@ -1,5 +1,7 @@
 """Interactive Codex sessions become dashboard sessions, read from Codex's own rollout transcripts."""
 import json
+import os
+import subprocess
 import sqlite3
 import tempfile
 import time
@@ -61,6 +63,34 @@ class CodexSessionTests(unittest.TestCase):
 
     def collect(self):
         return {s["id"]: s for s in dash.collect_codex_sessions(self.repo, set(), self.now, {})}
+
+    def test_registered_task_file_reaches_the_session_card_and_document_allowlist(self):
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        subprocess.run(["git", "-C", str(self.root), "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-q", "--allow-empty", "-m", "fixture"], check=True)
+        self.rollout("tracked", self.root, [event("task_started", 30), message("user", "Implement canvas", 29)])
+        task = self.root / "docs/tasks/canvas.md"
+        task.parent.mkdir(parents=True)
+        task.write_text("# Canvas\n<!-- fsa:tasks:start -->\n| ID | Status | Task | Note |\n| --- | --- | --- | --- |\n| T01 | running | Canvas | Browser pending |\n<!-- fsa:tasks:end -->\n")
+        with patch.dict(os.environ, {"FSA_TASKS_DIR": str(Path(self.scratch.name) / "registry")}):
+            dash.load_tasks.__globals__["bind_tasks"]("tracked", self.root, task)
+            repo = dash.Repo(str(self.root), str(Path(self.scratch.name) / "runs"), [])
+            state = dash.build_state(repo, dash.GitCache(repo))
+            card = next(c for c in state["cards"] if any(s["id"] == "tracked" for s in c["sessions"]))
+            tracked = next(s["task_tracking"] for s in card["sessions"] if s["id"] == "tracked")
+            self.assertEqual(tracked["counts"]["running"], 1)
+            self.assertIn(str(task), state["_docs"]["tracked"])
+            missing = self.collect()["tracked"]
+            missing["cwd"] = ""
+            with patch.object(dash, "collect_codex_sessions", return_value=[missing]):
+                missing_state = dash.build_state(repo, dash.GitCache(repo))
+            missing_card = next(c for c in missing_state["cards"] if any(s["id"] == "tracked" for s in c["sessions"]))
+            self.assertIn("error", missing_card["sessions"][0]["task_tracking"])
+            self.assertNotIn("completed", missing_card["sessions"][0]["task_tracking"])
+
+            task.write_text(task.read_text().replace("| running |", "| done |"))
+            state = dash.build_state(repo, dash.GitCache(repo))
+            card = next(c for c in state["cards"] if any(s["id"] == "tracked" for s in c["sessions"]))
+            self.assertEqual(card["sessions"][0]["task_tracking"]["completed"], 1)
 
     def test_finished_turn_is_an_idle_named_codex_session(self):
         self.rollout("s-done", self.root, [

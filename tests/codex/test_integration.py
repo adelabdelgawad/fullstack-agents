@@ -328,6 +328,39 @@ class CLITests(unittest.TestCase):
                          ["investigate", "plan", "implement", "validate", "audit", "complete"])
         self.assertFalse(self.call.exists())
 
+    def test_task_tracking_reference_is_bundled_and_its_skill_link_resolves(self):
+        skill = self.bundle / "skills/fullstack-agents-task-flow/SKILL.md"
+        target = skill.parent / "references/task-tracking.md"
+        self.assertTrue(target.is_file())
+        self.assertIn("(references/task-tracking.md)", skill.read_text())
+        self.assertIn("scripts/tasks.py", target.read_text())
+        self.assertTrue((self.bundle / "scripts/task_tracking.py").is_file())
+        self.assertTrue((self.bundle / "scripts/tasks.py").is_file())
+
+    def test_phase_flow_links_tasks_and_refuses_premature_completion(self):
+        env = {**self.env, "CODEX_THREAD_ID": "tracked-lead", "FSA_TASKS_DIR": str(Path(self.scratch.name) / "task-registry")}
+        tasks = self.bundle / "scripts/tasks.py"
+        result = run([sys.executable, str(tasks), "init", "--root", str(self.root), "--file", "docs/tasks/work.md", "--title", "Work", "--task", "T01|running|Implement|Audit pending"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = Path(self.scratch.name) / "task-flow-state"
+        cmd = [sys.executable, str(self.bundle / "scripts/phase.py"), "--root", str(self.root), "--state-dir", str(state)]
+        result = run([*cmd, "--phase", "implement"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        record = json.loads((state / "tracked-lead.json").read_text())
+        self.assertEqual(record["task_tracking"]["counts"]["running"], 1)
+        result = run([*cmd, "--phase", "complete"], env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("T01", result.stderr)
+        self.assertEqual(json.loads((state / "tracked-lead.json").read_text())["phase"], "implement")
+        result = run([sys.executable, str(tasks), "set", "--root", str(self.root), "--file", "docs/tasks/work.md", "--id", "T01", "--status", "done"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = run([*cmd, "--phase", "complete"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        (self.root / "docs/tasks/work.md").unlink()
+        result = run([*cmd, "--phase", "complete"], env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("invalid task list", result.stderr)
+
     def test_phase_cli_preserves_evidence_and_clears_it_for_new_task(self):
         state = Path(self.scratch.name) / "evidence-state"
         env = {**self.env, "FSA_CLAUDE_AUDIT_MODEL": "sonnet"}

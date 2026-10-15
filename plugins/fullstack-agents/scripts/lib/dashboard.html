@@ -158,7 +158,7 @@ aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-sp
 .tab2[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--blue); }
 .tab2:disabled { opacity: .4; cursor: default; }
 .pbody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 12px; align-items: start; }
+.info-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .info-card { border: 1px solid var(--line); border-radius: 6px; padding: 12px; min-width: 0; }
 .info-card h4 { margin: 0 0 10px; }
 .info-card summary { cursor: pointer; font-weight: 600; }
@@ -445,6 +445,31 @@ html.herdr-page .herdr-view { height: 100%; }
 @media (max-width: 1100px) { .board { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 28px; } .col.flow .col-head::after { display: none; } }
 @media (max-width: 640px) { header { padding: 18px 16px 4px; } .board { grid-template-columns: 1fr; padding: 14px 16px 32px; } .herdr-view { grid-template-columns: 1fr; grid-template-rows: minmax(0, 30vh) minmax(62vh, 1fr); height: auto; } .herdr-list { max-height: 30vh; } .herdr-sidebar-edge { display: none; } .herdr-detail { min-height: 62vh; } .terminal-head { align-items: flex-start; flex-wrap: wrap; } .terminal-source { margin-left: 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .card:hover { transform: none; } }
+.tracked-plan + .tracked-plan { margin-top: 16px; }
+.tracked-plan progress { display: block; width: 100%; height: 8px; margin: 10px 0; accent-color: var(--blue); }
+.task-counts { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.tracked-tasks { list-style: none; padding: 0; margin: 8px 0 0; }
+.tracked-task { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.task-status.running { color: var(--blue); }
+.task-status.blocked { color: var(--red); }
+.task-status.done { color: var(--green); }
+.session-task-overview, .info-top.task-list { grid-column: 1 / -1; }
+.task-overview { border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+.task-overview.compact { margin: 8px 0; padding: 8px 10px; }
+.task-progress-title { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.task-overview progress { display: block; width: 100%; height: 7px; margin: 8px 0; accent-color: var(--blue); }
+.task-stage-timeline { display: flex; list-style: none; padding: 12px 0 0; margin: 0; overflow-x: auto; }
+.task-stage-timeline li { flex: 0 0 38px; display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--muted); position: relative; }
+.task-stage-timeline li::before { content: ""; position: absolute; height: 1px; background: var(--line); top: 10px; left: 0; right: 0; }
+.task-stage-timeline li span { z-index: 1; display: grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; width: 21px; height: 21px; background: var(--bg); font-size: 12px; }
+.task-stage-timeline li small { font: 10px var(--mono); }
+.task-stage-timeline li.running { color: var(--blue); }
+.task-stage-timeline li.done { color: var(--green); }
+.task-stage-timeline li.blocked, .task-error { color: var(--red); }
+.task-current { margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-activity { grid-column: 1 / -1; display: grid; gap: 12px; min-width: 0; }
+.tracked-tasks { max-height: 640px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+@media (max-width: 760px) { .info-grid { grid-template-columns: minmax(0, 1fr); } }
 </style>
 </head>
 <body>
@@ -1607,6 +1632,7 @@ function cardHtml(c) {
   return `<div class="card${live ? " live" : ""}${c.runs.some(LIVE) ? " has-work" : ""}${human ? " human" : ""}${QUIET.has(c.phase) && !human ? " quiet" : ""}" tabindex="0" data-key="${esc(c.key)}" data-sid="${esc(sid)}">
     <div class="card-top">${live ? '<span class="blink" aria-label="running"></span>' : ""}<span class="num" title="${esc(c.key)}">${esc(cardState(c))}</span>${flag ? `<span class="flag">${esc(flag)}</span>` : ""}<button class="star" data-fav="${esc(c.key)}" aria-pressed="${!!c.favourite}" aria-label="${c.favourite ? "Remove from favourites" : "Add to favourites"}" title="${c.favourite ? "Remove from favourites" : "Add to favourites"}">${c.favourite ? "★" : "☆"}</button></div>
     <p class="feature">${esc(c.title)}</p>
+    ${taskProgressHtml(c, true)}
     ${c.repo && state && c.repo !== state.repo ? `<div class="branch">${esc(c.repo.split("/").pop())}</div>` : ""}
     ${branch ? `<div class="branch">${esc(branch)}</div>` : ""}
     <div class="cbody">${sub && !c.runs.some(LIVE) ? `<div class="s">${esc(sub)}</div>` : ""}
@@ -1866,7 +1892,7 @@ const enc = encodeURIComponent;
 
 const scrollKey = el => (el.closest("[data-info-section]")?.dataset.infoSection || "") + "|" + el.tagName + "." + el.className;
 function keepScroll(root, apply) {
-  const boxes = () => root.querySelectorAll("pre:not(.log), .flist, .shell-facts, .goal, .live-shells");
+  const boxes = () => root.querySelectorAll("pre:not(.log), .flist, .shell-facts, .goal, .live-shells, .tracked-tasks, .task-stage-timeline");
   const saved = new Map([...boxes()].filter(e => e.scrollTop || e.scrollLeft).map(e => [scrollKey(e), [e.scrollTop, e.scrollLeft]]));
   const own = root.scrollTop;
   apply();
@@ -1879,7 +1905,7 @@ function setIfChanged(id, html) {
   if (!el || el.dataset.h === html) return false;
   const gb = el.querySelector(".gb"), top = gb ? gb.scrollTop : 0, left = gb ? gb.scrollLeft : 0, own = el.scrollTop;
   const lg = el.querySelector("pre.log"), lt = lg ? lg.scrollTop : 0, stick = !lg || lg.scrollHeight - lg.scrollTop - lg.clientHeight < 40;
-  keepScroll(el, () => { el.innerHTML = html; });
+  keepScroll(el, () => { el.innerHTML = html; if (id === "info") fitTaskLists(); });
   el.dataset.h = html;
   const nb = el.querySelector(".gb");
   if (nb) { nb.scrollTop = top; nb.scrollLeft = left; }
@@ -2057,6 +2083,35 @@ function liveHtml(c) {
     ${groups || '<div class="s">Nothing running or recently finished.</div>'}`, `<span class="chip">${total} running</span>`, true);
 }
 
+function taskProgressHtml(c, compact = false) {
+  const sessions = (c.sessions || []).filter(s => s.task_tracking && Object.keys(s.task_tracking).length);
+  if (!sessions.length) return "";
+  return sessions.map(s => {
+    const t = s.task_tracking;
+    if (t.error) return `<div class="task-overview task-error" role="alert">Task list needs attention: ${esc(t.error)}</div>`;
+    const counts = `${t.counts.running || 0} running · ${t.counts.pending || 0} pending · ${t.counts.blocked || 0} blocked`;
+    const active = t.items.filter(x => ["running", "blocked"].includes(x.status));
+    const percent = t.total ? Math.round(t.completed / t.total * 100) : 0;
+    const timeline = compact ? "" : `<ol class="task-stage-timeline" aria-label="Task stage timeline">${t.items.map(x => `<li class="${esc(x.status)}" title="${esc(x.id + ': ' + x.title + ' — ' + x.status)}" aria-label="${esc(x.id + ': ' + x.title + ' — ' + x.status)}"><span aria-hidden="true">${x.status === "done" ? "✓" : x.status === "running" ? "●" : x.status === "blocked" ? "!" : "○"}</span><small>${esc(x.id)}</small></li>`).join("")}</ol>`;
+    return `<section class="task-overview ${compact ? "compact" : "session-task-overview"}" aria-label="Task progress"><div class="task-progress-title"><b>${esc(t.completed)}/${esc(t.total)} tasks done</b><span>${percent}%</span></div><progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress><div class="s">${esc(counts)}</div>${compact && active.length ? `<div class="s task-current">${esc(active[0].id + ': ' + active[0].title)}${active.length > 1 ? ` · +${active.length - 1} active` : ""}</div>` : ""}${timeline}</section>`;
+  }).join("");
+}
+
+function taskListHtml(c) {
+  const sessions = (c.sessions || []).filter(s => s.task_tracking && Object.keys(s.task_tracking).length);
+  if (!sessions.length) return "";
+  const body = sessions.map(s => {
+    const t = s.task_tracking;
+    if (t.error) return `<div role="alert" class="snip"><b>${esc(s.name || s.id)}</b>: ${esc(t.error)}</div>`;
+    const counts = ["running", "pending", "blocked", "done", "skipped", "canceled"].map(k => `<span class="chip task-status ${k}">${esc(k)} ${esc(t.counts[k] || 0)}</span>`).join(" ");
+    const order = {running: 0, blocked: 1, pending: 2, done: 3, skipped: 4, canceled: 5};
+    const sorted = [...t.items].sort((a, b) => order[a.status] - order[b.status]);
+    const source = `/api/doc?sid=${encodeURIComponent(s.id)}&path=${encodeURIComponent(t.file)}`;
+    return `<article class="tracked-plan"><b>${esc(t.title)}</b><div class="s"><a href="${esc(source)}" target="_blank" rel="noopener">${esc(t.relative_file)}</a> · ${esc(t.completed)}/${esc(t.total)} done</div><progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress><div class="task-counts">${counts}</div><ul class="tracked-tasks" tabindex="0" aria-label="Tasks; scroll for more">${sorted.map(x => `<li class="tracked-task"><span class="chip task-status ${esc(x.status)}">${esc(x.status)}</span><div><b>${esc(x.id)}</b> ${esc(x.title)}${x.note ? `<div class="s">${esc(x.note)}</div>` : ""}</div></li>`).join("")}</ul></article>`;
+  }).join("");
+  return infoSection(c, "task-list", "Tasks", body, "", true);
+}
+
 function infoHtml(c) {
   const tasks = c.runs.map(r => {
     const open = openRun === r.id;
@@ -2084,10 +2139,11 @@ function infoHtml(c) {
   const checks = (c.chips || []).filter(x => x.kind === "tests").map(x => `<div class="snip"><b>Worker-reported checks</b> ${esc(x.verdict)}${x.label ? " · " + esc(x.label) : ""}</div>`).join("") + [...runs, ...(c.runs || [])].filter(r => r.tests?.length).map(r => `<div class="snip"><b>Worker-reported checks</b><pre>${esc(JSON.stringify(r.tests, null, 2))}</pre></div>`).join("");
   const blockers = [...(c.needs_you || []).map(f => FLAG_TEXT[f] || f), ...now.filter(s => s.need).map(s => s.need), ...(c.runs || []).flatMap(r => r.open_risks || [])];
   return `<div class="info-grid">
-    ${liveHtml(c)}
+    <div class="session-activity">${taskProgressHtml(c)}${liveHtml(c)}</div>
     ${infoSection(c, "summary", "Summary", `<b>${esc(c.title)}</b><dl class="info-facts"><dt>State</dt><dd>${esc(status)}</dd><dt>Phase</dt><dd>${esc(lead.workflow_phase || c.phase || "unknown")}</dd><dt>Lead</dt><dd>${esc(engineName(lead.engine))}${lead.model ? " · " + esc(lead.model) : ""}</dd><dt>Auditor</dt><dd>${esc(auditor)}</dd><dt>Latest activity</dt><dd>${esc(stamp(activity.updated || c.updated))}</dd></dl>`)}
     ${infoSection(c, "progress", "Progress", `${history.length ? timeline(history.slice(-8)) + (history.length > 8 ? infoDisclosure(c, "history", "Earlier phase history", timeline(history.slice(0, -8))) : "") : '<div class="s">No phase history recorded.</div>'}${activity.action ? `<div class="snip"><b>${activity.action_running ? "Running now" : "Latest action"}</b> ${esc(activity.action)}</div>` : ""}${c.steps?.length ? stepsHtml(c) : ""}${c.declared?.note ? `<div class="snip">${esc(c.declared.note)}</div>` : ""}`)}
     ${infoSection(c, "result", "Result", `${lead.workflow_summary ? `<div class="snip"><b>Lead-reported summary</b><pre>${esc(lead.workflow_summary)}</pre></div>` : message ? `<div class="snip">${esc(lastPara(message.said || message.said_full).slice(0, 400))}</div>${infoDisclosure(c, "message", "Full message from " + engineName(message.engine), `<button class="copy-ico" data-said="${esc(message.id)}" aria-label="Copy the last message">${COPY_ICON}</button>${saidHtml(message)}`)}` : '<div class="s">No agent update recorded.</div>'}<div class="snip"><b>Audit</b> ${audit ? esc(audit.state) + (audit.verdict ? " · " + esc(audit.verdict) : " · no verdict recorded") : "No registered audit result."}</div>${leadChecks}${checks}${blockers.length ? `<div class="snip"><b>Blockers / needs you</b><ul>${[...new Set(blockers)].map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}`)}
+    ${taskListHtml(c)}
     ${infoDisclosure(c, "session", "Session details", (now.length ? now : sessions).map(resumeHtml).join("") + runs.map(r => `<div class="mono">${esc(r.run_id)} · ${esc(r.root || "")} · ${esc(r.artifact || "")}</div>`).join("") + `<div class="mono">${esc(c.worktree || c.repo || "")}</div>` + now.map(s => `<div class="s">Pane: ${esc(((state && state.session_panes) || {})[s.id] || "not recorded")}</div>`).join(""))}
     ${infoDisclosure(c, "runs", "Worker and audit runs", (desc ? infoDisclosure(c, "task-brief", "Task brief", `<pre>${esc(desc)}</pre>`) : "") + registered + (tasks ? `<ul class="tasks">${tasks}</ul>` : "") + (!runs.length && !tasks ? '<div class="s">No run records available.</div>' : ""))}
   </div>`;
@@ -2105,13 +2161,22 @@ async function pollLog(id) {
 
 function stopLog() { clearInterval(logTimer); logTimer = null; }
 
+function fitTaskLists() {
+  document.querySelectorAll("#info .tracked-tasks").forEach(list => {
+    const height = [...list.children].slice(0, 10).reduce((sum, row) => sum + row.getBoundingClientRect().height, 0);
+    if (height > 0) list.style.maxHeight = Math.ceil(height) + "px";
+  });
+}
+
 function wireInfo(c) {
+  fitTaskLists();
   document.querySelectorAll("#info [data-info-section]").forEach(el => {
     el.ontoggle = () => {
       if (!el.isConnected) return;
       const keys = infoOpen.get(c.key) || new Map();
       keys.set(el.dataset.infoSection, el.open);
       infoOpen.set(c.key, keys);
+      fitTaskLists();
     };
   });
   document.querySelectorAll("#info .task").forEach(li => li.onclick = ev => { if (!ev.target.closest(".detail")) toggleTask(li.dataset.run); });

@@ -98,3 +98,9 @@ location. The optional shared dashboard reads its default journal location.
 Phase writes need no user approval. Their bounded history records progress and
 never replaces checks, audit evidence, or authorization for commit/deploy.
 The dashboard shows validation/audit as Review and completed Codex work as Done.
+
+## Task list visible in the dashboard
+
+For multi-step implementation, create and register a dedicated repository Markdown task file,
+update task statuses as work changes, and verify the live session Tasks section. Read
+[task tracking](references/task-tracking.md) for the helper, format and completion rules.

@@ -88,8 +88,14 @@ def start_run(session, run, root, role, engine, model, brief=None, events_path=N
 
 
 def main():
+    import sys
+    if not Path(__file__).with_name("task_tracking.py").is_file():
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "plugins/fullstack-agents/scripts/lib"))
+    from task_tracking import bind_tasks, load_tasks
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True, type=Path)
+    parser.add_argument("--tasks", help="Repository Markdown task file to bind to this session")
     parser.add_argument("--phase", required=True, choices=PHASES)
     parser.add_argument("--session", default=os.environ.get("CODEX_THREAD_ID"))
     parser.add_argument("--state-dir", type=Path, default=Path(
@@ -103,6 +109,18 @@ def main():
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,199}", args.session):
         parser.error("session ID must be a safe filename (letters, digits, _, ., -)")
     cwd = str(args.root.expanduser().resolve())
+    if args.tasks:
+        try:
+            bind_tasks(args.session, cwd, args.tasks)
+        except (OSError, ValueError, TypeError, KeyError) as error:
+            parser.error(f"task registration failed: {error}")
+    tracked = load_tasks(args.session, cwd)
+    if args.phase == "complete" and tracked:
+        if tracked.get("error"):
+            parser.error(f"cannot complete with an invalid task list: {tracked['error']}")
+        unfinished = [item["id"] for item in tracked["items"] if item["status"] in {"pending", "running", "blocked"}]
+        if unfinished:
+            parser.error("cannot complete while tasks remain unfinished: " + ", ".join(unfinished))
     path = args.state_dir.expanduser() / f"{args.session}.json"
     history = []
     checks, summary = [], ""
@@ -136,7 +154,8 @@ def main():
     record = {"session_id": args.session, "engine": "codex", "lead": "codex",
               "auditor": args.auditor_model, "checks": checks, "summary": summary,
               "cwd": cwd, "phase": args.phase,
-              "updated": now, "history": history}
+              "updated": now, "history": history,
+              "task_tracking": {k: tracked[k] for k in ("file", "counts", "total", "completed", "error") if k in tracked}}
     temporary = None
     try:
         path.parent.mkdir(parents=True, exist_ok=True)

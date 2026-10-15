@@ -75,3 +75,9 @@ Markdown links are relocated.
 - Line 268: Token Discipline (efficiency without quality loss)
 - Line 290: How to Access Skills
 - Line 294: Skill Types
+
+## Task progress
+
+For multi-step work, follow `task-flow` task tracking: a dedicated repository Markdown file,
+session registration and status updates reflected in the dashboard Tasks section. Workflow
+phase reporting is separate from task completion.

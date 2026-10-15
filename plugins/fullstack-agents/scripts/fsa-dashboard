@@ -30,6 +30,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE / "lib"))
+from task_tracking import load_tasks
 HTML = HERE / "lib" / "dashboard.html"
 FIRST_PROMPTS = {}
 LAST_ASKS = {}
@@ -2082,6 +2084,8 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
                 if s.get("engine") == "codex":
                     s["need"] = ""
         sessions = list(by_session.values())
+    for session in sessions:
+        session["task_tracking"] = load_tasks(session["id"], session.get("cwd"))
     judge_turns(repo, sessions, now)
     favourites = load_json(repo.favourites) or {}
     main_root = str(repo.root)
@@ -2145,7 +2149,7 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
         title = (owner or {}).get("name") or label or (latest_run or {}).get("goal", "")[:90] or key
         card = {"key": key, "repo": main_root, "title": title, "label": label, "tree": tree, "worktree": tree_key if tree else "",
                 "goal": (latest_run or {}).get("goal", ""), "desc": (latest_run or {}).get("desc", ""),
-                "sessions": [{**{k: s.get(k) for k in ("id", "name", "state", "updated", "branch", "model", "workflow_phase", "workflow_at", "workflow_history", "workflow_checks", "workflow_summary", "workflow_auditor", "workflow_runs")},
+                "sessions": [{**{k: s.get(k) for k in ("id", "name", "state", "updated", "branch", "model", "workflow_phase", "workflow_at", "workflow_history", "workflow_checks", "workflow_summary", "workflow_auditor", "workflow_runs", "task_tracking")},
                               "engine": s.get("engine") or "claude"} for s in g["sessions"]],
                 "workflow_runs": [r for s in g["sessions"] for r in s.get("workflow_runs", [])],
                 "runs": g["runs"][-6:],
@@ -2199,7 +2203,9 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
         "cards": sorted(cards, key=lambda c: -c["updated"]),
         "waiting": attention("waiting"), "still_open": attention("still_open"),
         "_sources": output_sources(sessions),
-        "_docs": {s["id"]: {d["path"] for d in s["docs"]} for s in sessions},
+        "_docs": {s["id"]: {d["path"] for d in s["docs"]} |
+                  ({s["task_tracking"]["file"]} if s.get("task_tracking", {}).get("file")
+                   and not s["task_tracking"].get("error") else set()) for s in sessions},
         "_scopes": scopes,
         "session_panes": {**session_panes(repo), **{s["id"]: s["pane"] for s in sessions if s.get("pane")}},
         "abandoned": sorted(old, key=lambda r: -r["updated"])[:30],

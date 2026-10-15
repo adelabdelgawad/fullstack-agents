@@ -86,3 +86,9 @@ Markdown links are relocated.
 - Line 213: Reporting the phase
 - Line 241: Working alongside other sessions
 - Line 249: Project bindings
+
+## Task list visible in the dashboard
+
+For multi-step implementation, create and register a dedicated repository Markdown task file,
+update task statuses as work changes, and verify the live session Tasks section. Read
+[task tracking](references/task-tracking.md) for the helper, format and completion rules.
