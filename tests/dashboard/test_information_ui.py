@@ -57,13 +57,13 @@ const toolLine = s => s.action || '';
         self.assertIn('data-info-section="task-list"><summary><h4>Tasks</h4><span class="chip">1/3 done</span>', html)
         self.assertIn('data-info-section="task-list" open', self.render(card, ['task-list']))
         tasks = html[html.index('data-info-section="task-list"'):]
-        self.assertIn('session-task-overview', tasks)
-        self.assertNotIn('session-task-overview', html[:html.index('data-info-section="task-list"')])
+        self.assertNotIn('session-task-overview', tasks)
+        self.assertIn('session-task-overview', html[:html.index('data-info-section="task-list"')])
         self.assertLess(html.index('data-info-section="runs"'), html.index('data-info-section="task-list"'))
         self.assertIn('1/3 done', html)
         self.assertIn('1/3 tasks done', html)
         self.assertIn('aria-label="Task stage timeline"', html)
-        self.assertLess(html.index('<h4>Summary'), html.index('session-task-overview'))
+        self.assertLess(html.index('session-task-overview'), html.index('<h4>Summary'))
         self.assertIn('T02: Canvas — In progress', html)
         self.assertIn('0 actively executing · 1 in progress', html)
         self.assertIn('aria-label="In progress"', html)
@@ -175,6 +175,9 @@ const toolLine = s => s.action || '';
         self.assertIn('Running now</div><div class="so-v">1</div>', strip)
         self.assertIn('style="width:25%"', strip)
         self.assertLess(html.index('session-overview'), html.index('session-task-overview'))
+        self.assertLess(html.index('session-task-overview'), html.index('data-info-section="live"'))
+        self.assertLess(html.index('session-task-overview'), html.index('data-info-section="summary"'))
+        self.assertEqual(html.count('aria-label="Task stage timeline"'), 1)
 
     def test_running_now_separates_runs_subagents_and_shells(self):
         card = self.fixture()

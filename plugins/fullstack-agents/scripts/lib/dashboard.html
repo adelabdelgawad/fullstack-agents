@@ -2268,7 +2268,7 @@ function taskListHtml(c) {
       <progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress><div class="task-counts">${tiles}</div><ul class="tracked-tasks" tabindex="0" aria-label="Tasks; scroll for more">${sorted.map(row).join("")}</ul></article>`;
   }).join("");
   const ok = sessions.map(s => s.task_tracking).filter(t => !t.error), doneN = ok.reduce((n, t) => n + (t.completed || 0), 0), allN = ok.reduce((n, t) => n + (t.total || 0), 0);
-  return infoSection(c, "task-list", "Tasks", taskProgressHtml(c) + body, allN ? `<span class="chip">${doneN}/${allN} done</span>` : "");
+  return infoSection(c, "task-list", "Tasks", body, allN ? `<span class="chip">${doneN}/${allN} done</span>` : "");
 }
 
 function infoHtml(c) {
@@ -2306,6 +2306,7 @@ function infoHtml(c) {
     <div class="so-tiles">${tile("Phase", phase)}${tile("Tasks done", allN ? `${doneN}/${allN}` : "—", "", allN ? `<div class="so-bar" aria-hidden="true"><span style="width:${Math.round(doneN / allN * 100)}%"></span></div>` : "")}${tile("Running now", liveTotal(liveSets(c)), "live")}${tile("Needs you", need, need ? "bad" : "")}${tile("Latest activity", stamp(activity.updated || c.updated), "time")}</div></section>`;
   return `<div class="info-grid">
     ${overview}
+    ${taskProgressHtml(c)}
     <div class="session-activity">${liveHtml(c)}</div>
     ${infoSection(c, "summary", "Summary", `<b>${esc(c.title)}</b><dl class="info-facts"><dt>State</dt><dd>${esc(status)}</dd><dt>Phase</dt><dd>${esc(lead.workflow_phase || c.phase || "unknown")}</dd><dt>Lead</dt><dd>${esc(engineName(lead.engine))}${lead.model ? " · " + esc(lead.model) : ""}</dd><dt>Auditor</dt><dd>${esc(auditor)}</dd><dt>Latest activity</dt><dd>${esc(stamp(activity.updated || c.updated))}</dd></dl>`)}
     ${infoSection(c, "progress", "Progress", `${history.length ? timeline(history.slice(-8)) + (history.length > 8 ? infoDisclosure(c, "history", "Earlier phase history", timeline(history.slice(0, -8))) : "") : '<div class="s">No phase history recorded.</div>'}${activity.action ? `<div class="snip"><b>${activity.action_running ? "Running now" : "Latest action"}</b> ${esc(activity.action)}</div>` : ""}${c.steps?.length ? stepsHtml(c) : ""}${c.declared?.note ? `<div class="snip">${esc(c.declared.note)}</div>` : ""}`)}
