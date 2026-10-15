@@ -41,7 +41,6 @@ CODEX_JUDGE_S = 600
 RUN_WINDOW_S = 72 * 3600
 SESSION_WINDOW_S = 48 * 3600
 STALL_S = 300
-CODEX_ACTIVE_S = 90
 IDLE_DROP_S = 12 * 3600
 ABANDON_S = 24 * 3600
 LOOSE_RUN_S = 12 * 3600
@@ -1605,6 +1604,30 @@ def codex_run_records(sid, now):
     return sorted(out, key=lambda r: r["started"])
 
 
+CODEX_TASK_NAMES = {}
+
+
+def codex_task_name(rollout):
+    """Task name a Codex subagent was given; the task text itself is stored encrypted."""
+    if rollout not in CODEX_TASK_NAMES:
+        name = ""
+        try:
+            with open(rollout, "rb") as f:
+                for raw in f:
+                    if b'"agent_message"' not in raw:
+                        continue
+                    try:
+                        recipient = (json.loads(raw).get("payload") or {}).get("recipient") or ""
+                    except (ValueError, AttributeError):
+                        continue
+                    name = " ".join(str(recipient).rsplit("/", 1)[-1].replace("_", " ").split())[:120]
+                    break
+        except OSError:
+            pass
+        CODEX_TASK_NAMES[rollout] = name
+    return CODEX_TASK_NAMES[rollout]
+
+
 def codex_agent_items(sid, children, holder, kids, now, registrations=()):
     out = [{"id": r.get("child_session_id") or r["run_id"],
             "label": " · ".join(x for x in (r["engine"], r["role"], r.get("model")) if x),
@@ -1629,7 +1652,7 @@ def codex_agent_items(sid, children, holder, kids, now, registrations=()):
         if running or now - at <= ACTIVITY_KEEP_S:
             out.append({"id": child, "label": " · ".join(x for x in ("codex", label) if x),
                         "state": "running" if running else "completed", "at": at, "path": rollout,
-                        "parent_id": parent})
+                        "parent_id": parent, "task": codex_task_name(rollout)})
     # Registered CLIs already have durable ownership; shared app-server inference is ambiguous.
     if holder and holder[2] == 1 and not registrations:
         out += proc_agents(holder[1], kids, now)
@@ -1684,20 +1707,35 @@ def codex_workflow(sid, cwd, now):
         return {}
 
 
+QUESTION_SCAN = {}
+
+
 def codex_pending_question(path):
     """(title, asynchronous) of the newest request_user_input call that no later user message answered."""
-    for line in reversed(tail_lines(path, 1048576)):
-        if "request_user_input" not in line and '"role":"user"' not in line.replace(" ", ""):
+    key = str(path)
+    offset, pending = QUESTION_SCAN.get(key, (0, ("", False)))
+    try:
+        with open(path, "rb") as f:
+            if f.seek(0, os.SEEK_END) < offset:
+                offset, pending = 0, ("", False)
+            f.seek(offset)
+            data = f.read()
+    except OSError:
+        return "", False
+    complete = data.rfind(b"\n") + 1
+    for raw in data[:complete].splitlines():
+        if b"request_user_input" not in raw and b'"user"' not in raw:
             continue
         try:
-            p = json.loads(line).get("payload") or {}
+            p = json.loads(raw).get("payload") or {}
         except (ValueError, AttributeError):
             continue
         if p.get("type") == "function_call" and str(p.get("name", "")).startswith("request_user_input"):
-            return codex_question(p), p.get("name") == "request_user_input_async"
-        if p.get("type") == "message" and p.get("role") == "user" and (codex_text(p) or "<").strip()[:1] != "<":
-            return "", False
-    return "", False
+            pending = codex_question(p), p.get("name") == "request_user_input_async"
+        elif p.get("type") == "message" and p.get("role") == "user" and (codex_text(p) or "<").strip()[:1] != "<":
+            pending = "", False
+    QUESTION_SCAN[key] = (offset + complete, pending)
+    return pending
 
 
 def codex_question(payload):
@@ -1770,7 +1808,7 @@ def read_codex_session(repo, path, meta, now, names, waits, pane, pane_status, a
     declared = waits.get(sid) if isinstance(waits.get(sid), dict) else {}
     need = declared.get("need", "") if iso_epoch(declared.get("at", "")) >= iso_epoch(ask_at) else ""
     question, asynchronous = codex_pending_question(path)
-    if pane_status == "blocked" and asynchronous and turn_open and idle < CODEX_ACTIVE_S:
+    if pane_status == "blocked" and asynchronous and turn_open and idle < STALL_S:
         state = "working"
     elif pane_status == "blocked":
         state, need = "waiting", need or question or "Codex is waiting for an answer or an approval in its terminal"
@@ -2123,7 +2161,7 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
         card["now"] = [{**{k: s[k] for k in ("id", "name", "title", "state", "updated", "ask", "need", "action", "action_at", "action_running", "said", "said_at", "said_full", "docs")},
                         "question": s.get("question", ""),
                         "engine": s.get("engine", "claude"),
-                        "agents": [{**{f: x[f] for f in ("id", "label", "state", "at")}, **({"shell": x["shell"]} if "shell" in x else {})} for x in s["agents"]]}
+                        "agents": [{**{f: x[f] for f in ("id", "label", "state", "at")}, **{k: x[k] for k in ("shell", "task") if x.get(k)}} for x in s["agents"]]}
                        for s in sorted(g["sessions"], key=lambda s: -s["updated"])]
         card["declared"] = max((declared[s["id"]] for s in g["sessions"] if s["id"] in declared),
                                key=lambda d: d["at"], default=None)

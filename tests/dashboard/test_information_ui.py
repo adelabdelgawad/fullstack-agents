@@ -176,6 +176,22 @@ const toolLine = s => s.action || '';
         for kept in ('data-agent="implement-9"', 'data-agent="b2"'):
             self.assertIn(kept, live)
 
+    def test_workflow_runs_are_cards_and_hide_their_duplicate_agents(self):
+        card = self.fixture()
+        card["workflow_runs"] = [{"run_id": "fsa-audit-1", "role": "auditor", "engine": "claude", "model": "opus", "state": "completed",
+                                  "verdict": "CHANGES", "root": "/wt/dev", "summary": "Fix the <race>", "updated": 9e12, "started": 1}]
+        card["now"][0]["agents"] = [{"id": "fsa-audit-1", "label": "claude · auditor · opus", "state": "completed", "at": 2},
+                                    {"id": "kid", "label": "codex · Harvey", "state": "running", "at": 3, "task": "chatbot readiness"}]
+        html = self.render(card)
+        live = html[html.index('data-info-section="live"'):html.index('data-info-section="summary"')]
+        self.assertIn('<h5>Workflow runs', live)
+        self.assertIn('title="Fix the &lt;race&gt;">Fix the &lt;race&gt;</b>', live)
+        self.assertIn('<span class="pill warn">CHANGES</span>', live)
+        self.assertNotIn('data-agent="fsa-audit-1"', live)
+        self.assertIn('title="chatbot readiness">chatbot readiness</b>', live)
+        self.assertIn('<b>Harvey</b>', live)
+        self.assertNotIn('<h5>Implementer runs', live)
+
     def test_agent_text_and_title_are_escaped(self):
         card = self.fixture()
         card['title'] = '<img src=x onerror=alert(1)>'

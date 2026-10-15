@@ -169,10 +169,8 @@ aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-sp
 .live-group h5 { margin: 0 0 4px; font-size: 12px; display: flex; gap: 6px; align-items: center; }
 .live-group .agents { grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); margin-top: 0; }
 .live-group .agent { font-size: 11px; }
-.live-lead { margin-bottom: 4px; overflow-wrap: anywhere; }
-.tile-wrap { position: relative; display: grid; min-width: 0; }
-.tile-x { position: absolute; top: 1px; right: 1px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; }
-.tile-x:hover, .tile-x:focus-visible { color: var(--ink); }
+.live-lead { margin-bottom: 4px; overflow-wrap: anywhere; min-width: 0; }
+.lead-act { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ask-q { color: var(--amber); font-size: 12px; overflow-wrap: anywhere; }
 .card .ask-q { margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .work-list { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
@@ -193,6 +191,7 @@ aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-sp
 .work-more { margin-top: 4px; color: var(--muted); font-size: 10.5px; }
 .live-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .live-top > .action-button { margin-left: 0; }
+.live-top > div { flex: 1; min-width: 0; }
 .pill { display: inline-block; font: 10.5px/1.5 var(--mono); padding: 0 7px; border-radius: 999px; background: var(--chip); color: var(--muted); white-space: nowrap; }
 .pill.live { background: var(--green-bg); color: var(--green); }
 .pill.bad { background: var(--red-bg); color: var(--red); }
@@ -221,6 +220,7 @@ aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-sp
 #out pre.diff { white-space: pre; word-break: normal; }
 #out-info .shell-facts { grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr); }
 .live-shells { --card-h: 156px; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); grid-auto-rows: var(--card-h); gap: 8px; max-height: calc(2 * var(--card-h) + 8px); overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+.live-shells.agents { --card-h: 112px; }
 .live-shell { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; padding: 8px; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; font-size: 12px; }
 .live-shell.running { border-color: color-mix(in srgb, var(--pass) 60%, transparent); }
 .live-shell .ls-head { display: flex; gap: 6px; align-items: flex-start; overflow-wrap: anywhere; }
@@ -2012,25 +2012,49 @@ function shellCard(c) {
   };
 }
 
-function liveGroup(title, items, tile, cls = "agents") {
+function liveGroup(title, items, tile, cls) {
+  if (!items.length) return "";
   const running = items.filter(x => x.state === "running").length;
-  const count = items.length ? ` <span class="chip">${running} running${items.length > running ? ` · ${items.length - running} recent` : ""}</span>` : "";
-  return `<div class="live-group"><h5>${esc(title)}${count}</h5>${items.length ? `<div class="${cls}">${items.map(tile).join("")}</div>` : '<div class="s">None.</div>'}</div>`;
+  const count = ` <span class="chip">${running} running${items.length > running ? ` · ${items.length - running} recent` : ""}</span>`;
+  return `<div class="live-group"><h5>${esc(title)}${count}</h5><div class="${cls}">${items.map(tile).join("")}</div></div>`;
 }
 
-const subagentTile = a => isDone(a) ? `<div class="tile-wrap">${agentTile(a)}<button class="tile-x" data-dismiss="${esc(a.id)}" aria-label="Dismiss ${esc(a.label)}" title="Dismiss">×</button></div>` : agentTile(a);
+const flowRuns = c => (c.workflow_runs || []).map(r => ({...r, id: r.run_id}))
+  .filter(r => r.state === "running" || Date.now() / 1000 - (r.updated || 0) < RECENT_S);
+const liveAgents = c => { const flows = new Set((c.workflow_runs || []).map(r => r.run_id)); return ownAgents(c).filter(a => !flows.has(a.id)); };
+
+function agentCard(a) {
+  const [kind, ...rest] = a.label.split(" · "), name = AGENT_NAMES[kind] || kind;
+  const actions = `<button class="action-button" data-asid="${esc(a.sid)}" data-agent="${esc(a.id)}" aria-haspopup="dialog">Console</button>`;
+  const who = rest.join(" · ") || name;
+  return liveCard({running: a.state === "running", title: a.task || who, state: a.state, time: ago(a.at),
+    sub: [a.task ? `<b>${esc(who)}</b>` : "", esc(name), esc(a.state === "running" ? "working" : `finished ${ago(a.at)} ago`)].filter(Boolean).join(" · "), badges: "", details: "", actions, dismissItem: a});
+}
+
+function flowCard(c) {
+  return r => {
+    const verdict = r.verdict ? `<span class="pill ${/^(PASS|GREEN)$/.test(r.verdict) ? "live" : "warn"}">${esc(r.verdict)}</span>` : "";
+    const sub = [esc([r.engine, r.model].filter(Boolean).join(" · ")), r.root ? `<span title="${esc(r.root)}">${esc(shortPath(r.root))}</span>` : ""].filter(Boolean).join(" · ");
+    const facts = `<dl class="shell-facts">${factRow("Role", r.role)}${factRow("Target", r.root)}${factRow("Verdict", r.verdict)}${factRow("Started", r.started ? new Date(r.started * 1000).toLocaleString() : "")}${factRow("Report", r.artifact)}${factRow("Run id", r.run_id)}</dl>${factList(c, "flow-sum-" + r.run_id, "Summary", r.summary ? [r.summary] : [])}${factList(c, "flow-brief-" + r.run_id, "Brief", r.brief ? [r.brief] : [])}`;
+    const more = `<details data-info-section="flow-more-${esc(r.run_id)}"${infoShown(c, "flow-more-" + r.run_id, false) ? " open" : ""}><summary>Details</summary>${facts}</details>`;
+    return liveCard({running: r.state === "running", title: r.summary || `${r.role || "run"} run`, state: r.state, time: r.started ? ago(r.started) : "",
+      sub: `<b>${esc(r.role || "run")}</b> · ${sub}`, badges: verdict, details: more, actions: `<button class="action-button" data-open-flow="${esc(r.run_id)}">Panel</button>`, dismissItem: r});
+  };
+}
 
 function liveHtml(c) {
-  const agents = ownAgents(c).filter(notDismissed), shell = a => a.label.startsWith("shell");
+  const agents = liveAgents(c).filter(notDismissed), shell = a => a.label.startsWith("shell"), flows = flowRuns(c).filter(notDismissed);
   const runs = recentRuns(c).filter(notDismissed).sort((a, b) => LIVE(b) - LIVE(a) || (b.updated || 0) - (a.updated || 0));
-  const lead = s => `<div class="live-lead"><span class="pill ${s.state === "working" ? "live" : ""}">${esc(STATE_TEXT[s.state] || s.state)}</span> <b>${esc(s.name)}</b>${s.action ? ` <span class="s">${esc(toolLine(s))}</span>` : ""}${s.question ? `<div class="ask-q">Question for you (it keeps working meanwhile): ${esc(s.question)}</div>` : ""}</div>`;
-  const total = agents.filter(a => a.state === "running").length + runs.filter(LIVE).length;
-  const done = [...runs, ...agents].filter(isDone).length;
+  const lead = s => `<div class="live-lead"><span class="pill ${s.state === "working" ? "live" : ""}">${esc(STATE_TEXT[s.state] || s.state)}</span> <b>${esc(s.name)}</b>${s.action ? `<div class="s lead-act" title="${esc(toolLine(s))}">${esc(toolLine(s).replace(/\\n|\s+/g, " "))}</div>` : ""}${s.question ? `<div class="ask-q">Question for you (it keeps working meanwhile): ${esc(s.question)}</div>` : ""}</div>`;
+  const total = agents.filter(a => a.state === "running").length + runs.filter(LIVE).length + flows.filter(r => r.state === "running").length;
+  const done = [...runs, ...flows, ...agents].filter(isDone).length;
+  const groups = [liveGroup("Implementer runs", runs.map(r => ({...r, state: LIVE(r) ? "running" : r.state})), runCard(c), "live-shells runs"),
+    liveGroup("Workflow runs", flows, flowCard(c), "live-shells flows"),
+    liveGroup("Subagents", agents.filter(a => !shell(a)), agentCard, "live-shells agents"),
+    liveGroup("Background shells", agents.filter(shell), shellCard(c), "live-shells shells")].join("");
   const clear = done ? `<button class="action-button" data-dismiss-all="1">Dismiss all done (${done})</button>` : "";
   return infoSection(c, "live", "Running now", `<div class="live-top"><div>${(c.now || []).map(lead).join("")}</div>${clear}</div>
-    ${liveGroup("Implementer runs", runs.map(r => ({...r, state: LIVE(r) ? "running" : r.state})), runCard(c), "live-shells runs")}
-    ${liveGroup("Subagents", agents.filter(a => !shell(a)), subagentTile)}
-    ${liveGroup("Background shells", agents.filter(shell), shellCard(c), "live-shells shells")}`, `<span class="chip">${total} running</span>`, true);
+    ${groups || '<div class="s">Nothing running or recently finished.</div>'}`, `<span class="chip">${total} running</span>`, true);
 }
 
 function infoHtml(c) {
@@ -2097,7 +2121,8 @@ function wireInfo(c) {
   document.querySelectorAll("#info [data-run-changes]").forEach(el => el.onclick = ev => { ev.preventDefault(); openAgent(el.dataset.asid, el.dataset.runChanges, "changes"); });
   document.querySelectorAll("#info [data-dismiss]").forEach(el => el.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); dismiss([el.dataset.dismiss]); repaintAll(); });
   const all = document.querySelector("#info [data-dismiss-all]");
-  if (all) all.onclick = ev => { ev.preventDefault(); dismiss([...recentRuns(c), ...ownAgents(c)].filter(isDone).map(x => x.id)); repaintAll(); };
+  if (all) all.onclick = ev => { ev.preventDefault(); dismiss([...recentRuns(c), ...flowRuns(c), ...liveAgents(c)].filter(isDone).map(x => x.id)); repaintAll(); };
+  document.querySelectorAll("#info [data-open-flow]").forEach(el => el.onclick = ev => { ev.preventDefault(); const d = document.querySelector('#info [data-info-section="runs"]'); if (d) { d.open = true; d.scrollIntoView({block: "nearest"}); } });
   document.querySelectorAll("#info [data-open-run]").forEach(el => el.onclick = ev => { ev.preventDefault(); showRunLog(el.dataset.openRun); });
   const cb = document.querySelector("#info [data-collapse]");
   if (cb) cb.onclick = ev => { ev.stopPropagation(); toggleTask(openRun); };

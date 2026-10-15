@@ -117,6 +117,23 @@ class CodexSessionTests(unittest.TestCase):
         s = dash.read_codex_session(self.repo, path, dash.codex_meta(path), self.now, {}, {}, "w2:p1", "blocked")
         self.assertEqual((s["state"], s["need"]), ("waiting", "Approve the plan?"))
 
+    def test_question_far_back_in_a_long_log_is_still_found(self):
+        filler = [message("assistant", "x" * 4000, 50 - i * 0.01) for i in range(400)]
+        path = self.rollout("s-long", self.root, [event("task_started", 200), message("user", "revise", 190),
+                                                   self.ask("request_user_input_async", "Which flow?", 180), *filler])
+        self.assertEqual(dash.codex_pending_question(path), ("Which flow?", True))
+        with path.open("a") as fh:
+            fh.write(json.dumps(message("user", "the first", 1)) + "\n")
+        self.assertEqual(dash.codex_pending_question(path), ("", False))
+
+    def test_subagent_task_name_comes_from_its_delegation_message(self):
+        inherited = [message("user", "parent history", 300 - i) for i in range(5)]
+        task = {"timestamp": stamp(100), "type": "response_item", "payload": {"type": "agent_message", "author": "/root",
+                "recipient": "/root/chatbot_readiness", "content": [{"type": "input_text", "text": "Message Type: NEW_TASK"},
+                                                                   {"type": "encrypted_content", "encrypted_content": "x"}]}}
+        path = self.rollout("s-child", self.root, [*inherited, task])
+        self.assertEqual(dash.codex_task_name(str(path)), "chatbot readiness")
+
     def test_answered_question_is_not_pending(self):
         path = self.rollout("s-answered", self.root, [event("task_started", 60), self.ask("request_user_input_async", "Which?", 40),
                                                        message("user", "the first one", 30), message("assistant", "ok", 5)])
