@@ -5,9 +5,32 @@ import hashlib
 import json
 import re
 import shutil
+import shlex
 from pathlib import Path
 
 PREFIX = "fullstack-agents-"
+
+# This bootstrap lives inside the command, so it survives eviction of PLUGIN_ROOT.
+HOOK_BOOTSTRAP = r"""import re, runpy, sys
+from pathlib import Path
+root = Path(sys.argv.pop(1))
+versions = sorted(
+    (p for p in root.parent.iterdir() if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", p.name)),
+    key=lambda p: tuple(map(int, p.name.split("."))), reverse=True,
+) if root.parent.is_dir() else []
+script = next((p / "scripts/hook.py" for p in [root, *versions]
+               if (p / "scripts/hook.py").is_file()), None)
+if script is None:
+    sys.exit("Fullstack Agents hook unavailable: reinstall the plugin or reload its cache")
+sys.argv[0] = str(script)
+sys.path.insert(0, str(script.parent))
+runpy.run_path(str(script), run_name="__main__")
+"""
+
+
+def hook_command(mode):
+    return f'python3 -I -c {shlex.quote(HOOK_BOOTSTRAP)} "${{PLUGIN_ROOT}}" {mode}'
+
 ADAPTER = Path(__file__).resolve().parents[1]
 SOURCE = ADAPTER.parents[1] / "plugins" / "fullstack-agents"
 RUNTIME = """## Codex runtime binding
@@ -209,7 +232,7 @@ def render(output):
     for event, mode, matcher in (("SessionStart", "start", ""),
                                  ("UserPromptSubmit", "prompt", ""),
                                  ("PostToolUse", "post", "^apply_patch$")):
-        group = {"hooks": [{"type": "command", "command": f'python3 "${{PLUGIN_ROOT}}/scripts/hook.py" {mode}',
+        group = {"hooks": [{"type": "command", "command": hook_command(mode),
                              "timeout": 30, "statusMessage": f"Fullstack Agents Codex: {mode}"}]}
         if matcher:
             group["matcher"] = matcher

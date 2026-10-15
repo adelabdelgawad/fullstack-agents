@@ -109,8 +109,55 @@ class BundleTests(unittest.TestCase):
         hooks = json.loads((self.bundle / manifest["hooks"]).read_text())["hooks"]
         self.assertEqual(set(hooks), {"SessionStart", "UserPromptSubmit", "PostToolUse"})
         for groups in hooks.values():
-            self.assertIn('${PLUGIN_ROOT}/scripts/hook.py', groups[0]["hooks"][0]["command"])
+            self.assertIn('${PLUGIN_ROOT}', groups[0]["hooks"][0]["command"])
+            self.assertIn('runpy.run_path', groups[0]["hooks"][0]["command"])
         self.assertTrue((self.bundle / "scripts/hook.py").is_file())
+
+    def test_hook_survives_evicted_version_and_selects_latest_semantic_version(self):
+        hooks = json.loads((self.bundle / "hooks/hooks.json").read_text())["hooks"]
+        with tempfile.TemporaryDirectory(prefix="fsa hook cache ") as directory:
+            cache = Path(directory)
+            old = cache / "3.58.6"
+            old.mkdir()
+            for version in ("3.9.0", "3.59.0", "3.100.0", "not-a-version"):
+                write(cache / version / "scripts/hook.py",
+                      "import json,sys; print(json.dumps({'version':" + repr(version) +
+                      ", 'mode':sys.argv[1], 'payload':json.load(sys.stdin)}))")
+            env = dict(os.environ, PLUGIN_ROOT=str(old))
+            old.rmdir()  # Reproduce cache eviction while the session retains its hook command.
+            for event, mode in (("SessionStart", "start"), ("UserPromptSubmit", "prompt"), ("PostToolUse", "post")):
+                command = hooks[event][0]["hooks"][0]["command"]
+                result = run(["bash", "-c", command], env=env, input='{"cwd":"/fixture"}')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout), {"version":"3.100.0", "mode":mode, "payload":{"cwd":"/fixture"}})
+            write(old / "scripts/hook.py", "print('current-root')")
+            result = run(["bash", "-c", hooks["SessionStart"][0]["hooks"][0]["command"]], env=env, input="{}")
+            self.assertEqual(result.stdout.strip(), "current-root")
+
+    def test_hook_isolates_workspace_imports_and_retains_hook_sibling_imports(self):
+        hooks = json.loads((self.bundle / "hooks/hooks.json").read_text())["hooks"]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            for module in ("re", "pathlib"):
+                write(workspace / (module + ".py"), "raise RuntimeError('workspace module must not load')")
+            script = root / "cache/3.59.1/scripts/hook.py"
+            write(script, "import hook_helper; print(hook_helper.VALUE)")
+            write(script.parent / "hook_helper.py", "VALUE='sibling-import-ok'")
+            env = dict(os.environ, PLUGIN_ROOT=str(root / "cache/3.58.6"), PYTHONPATH=str(workspace))
+            result = run(["bash", "-c", hooks["SessionStart"][0]["hooks"][0]["command"]], cwd=workspace, env=env, input="{}")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), "sibling-import-ok")
+
+    def test_hook_missing_entire_cache_reports_actionable_failure(self):
+        hooks = json.loads((self.bundle / "hooks/hooks.json").read_text())["hooks"]
+        with tempfile.TemporaryDirectory() as directory:
+            env = dict(os.environ, PLUGIN_ROOT=str(Path(directory) / "missing" / "3.58.6"))
+            result = run(["bash", "-c", hooks["SessionStart"][0]["hooks"][0]["command"]], env=env, input="{}")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("reinstall the plugin", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
 
     def test_large_skills_have_short_indexes_and_working_reference_links(self):
         entry = self.bundle / "skills/fullstack-agents-nextjs/SKILL.md"
