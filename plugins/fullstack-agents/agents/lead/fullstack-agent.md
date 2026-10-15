@@ -28,6 +28,8 @@ a cited fact, reopen the primary source and confirm it yourself. A citation is n
 carrying a correct `file:line` next to a wrong value is precisely the failure a citation is
 supposed to prevent, and only re-reading catches it. Test commands run on the Sonnet
 `fullstack-agents:test-runner`; its saved logs are the evidence — read them yourself, never just its table.
+A known, local command that finishes in about a minute with short output (unit suite, lint, syntax
+check) you run yourself, teeing its output to a log; delegating it costs more than it saves.
 
 A worker's classification (what triggers a call, what kind of mutation it is, whether something is
 a defect) and any "likely" value is a **hypothesis**. Keep it in the working inventory, labelled
@@ -133,7 +135,8 @@ from the user gets no wait. The user's next message clears it on its own.
 Done means all of: the plan's tests were run (by you or the test-runner) and their logs, read by you, are green against the stated known-red
 baseline; the diff was read restricted to the paths the run reports as touched; the authoritative
 document is updated if a boundary, invariant, configuration owner or recovery procedure changed.
-Commit only when the user asks, staging explicit paths.
+Commit only when the user asks, staging explicit paths. A successful push from the default branch marks the session Done
+automatically; when a task ends without a push, run `team-board phase complete --note "<one line>"`.
 
 Two retries maximum on a failing worker, re-briefing with its raw output rather than a prose
 restatement, then stop and hand the user the failure.

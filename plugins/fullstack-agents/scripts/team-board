@@ -14,7 +14,7 @@ DEFAULT_CLAIM_TTL_MIN = 240
 DEFAULT_LOCK_TTL_MIN = 120
 MAX_EVENTS = 40
 PHASE_TTL_H = 48
-PHASES = ("investigate", "plan", "implement", "audit", "review")
+PHASES = ("investigate", "plan", "implement", "audit", "review", "complete")
 STEP_STATES = ("active", "done", "skipped", "pending")
 MAX_STEPS = 20
 EXIT_LOCK_HELD = 3
@@ -210,6 +210,7 @@ def main():
     ph.add_argument("phase", choices=PHASES)
     ph.add_argument("--worktree", default="")
     ph.add_argument("--note", default="")
+    ph.add_argument("--only-from", default="", help="comma list of current phases (or 'none') this change applies to")
     st = sub.add_parser("steps")
     st.add_argument("action", choices=("set", "add") + STEP_STATES)
     st.add_argument("args", nargs="+", help="step texts for set/add, a 1-based step number otherwise")
@@ -284,6 +285,9 @@ def main():
                 event(data, t, sid, held.get("name", "?"), f"unlocked {args.surface}")
         elif args.cmd == "phase":
             prev = data["phases"].get(sid, {})
+            allowed = {x.strip() for x in args.only_from.split(",") if x.strip()}
+            if allowed and (prev.get("phase") or "none") not in allowed:
+                return 0
             worktree = os.path.abspath(args.worktree) if args.worktree else prev.get("worktree", "")
             data["phases"][sid] = {"phase": args.phase, "at": iso(t), "note": args.note, "worktree": worktree}
         elif args.cmd == "steps":

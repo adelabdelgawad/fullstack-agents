@@ -596,6 +596,8 @@ aside .tracked-plan progress::-moz-progress-bar { background: var(--blue); borde
 .live-shells::-webkit-scrollbar { height: 6px; } .live-shells::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
 .live-group .live-shells.agents { grid-auto-columns: minmax(200px, 240px); }
 
+.terminal-caption [data-terminal-status].lagging { color: var(--herdr-yellow); }
+
 </style>
 </head>
 <body>
@@ -948,12 +950,32 @@ function mountTerminalFiles(current) {
   });
 }
 
+function setLiveLag(current, epoch, lagging) {
+  if (terminal !== current || current.liveEpoch !== epoch || !current.session) return;
+  current.lagging = lagging;
+  const status = current.root.querySelector("[data-terminal-status]");
+  if (!current.imageStatus && current.root.querySelector(".terminal-disconnected").hidden) {
+    status.textContent = liveStatusText(current);
+    status.classList.toggle("lagging", lagging);
+  }
+}
+
 function postLiveTerminal(current, body) {
   if (!current.session || terminal !== current) return Promise.resolve();
   const session = current.session, epoch = current.liveEpoch;
   current.postChain = current.postChain.then(async () => {
     if (current.liveEpoch !== epoch || terminal !== current) return;
-    const response = await fetch("/api/herdr/live/input", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({session, ...body}), signal: current.postAbort?.signal});
+    const started = performance.now();
+    const slow = setTimeout(() => setLiveLag(current, epoch, true), 400);
+    let response;
+    try {
+      response = await fetch("/api/herdr/live/input", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({session, ...body}), signal: current.postAbort?.signal});
+    } finally {
+      clearTimeout(slow);
+    }
+    const took = performance.now() - started;
+    current.rtt = current.rtt ? current.rtt * 0.7 + took * 0.3 : took;
+    setLiveLag(current, epoch, false);
     if (!response.ok) throw new Error((await response.text()) || `terminal input error ${response.status}`);
     if (terminal === current && current.liveEpoch === epoch) current.root.querySelector(".terminal-error").textContent = "";
   }).catch(error => {
@@ -981,16 +1003,20 @@ function queueTerminalInput(current, bytes) {
   if (!current.inputFrame) current.inputFrame = requestAnimationFrame(() => flushTerminalInput(current));
 }
 
+const liveStatusText = current => `live · ${current.term.cols}×${current.term.rows}${current.lagging ? " · sending…" : current.rtt ? ` · ${Math.round(current.rtt)} ms` : ""}`;
+
 function liveTerminalStatus(current, reason) {
   const status = current.root.querySelector("[data-terminal-status]"), actions = current.root.querySelector("[data-terminal-reconnect]");
   if (reason === null) {
-    status.textContent = current.imageStatus || `live · ${current.term.cols}×${current.term.rows}`;
+    status.textContent = current.imageStatus || liveStatusText(current);
+    status.classList.toggle("lagging", !!current.lagging);
     actions.hidden = true;
     current.root.querySelector(".terminal-disconnected").hidden = true;
   } else {
     clearTimeout(current.imageStatusTimer);
     current.imageStatus = "";
     current.imageStatusTimer = null;
+    status.classList.remove("lagging");
     status.textContent = `${reason} · ${current.term.cols}×${current.term.rows}`;
     current.root.querySelector("[data-terminal-reason]").textContent = /already has an attached client/.test(reason)
       ? "This pane is open live in another view" : reason;
@@ -1010,6 +1036,26 @@ function closeLiveStream(current) {
   current.session = null;
 }
 
+// Wheel ticks arrive ~60 per second; posting each one serially queues a round trip per tick, which over a
+// slow link keeps scrolling long after the wheel stops. Sum them and keep at most one scroll request in flight.
+function queueTerminalScroll(current, lines) {
+  current.scrollLines = (current.scrollLines || 0) + lines;
+  if (!current.scrollFrame) current.scrollFrame = requestAnimationFrame(() => flushTerminalScroll(current));
+}
+
+function flushTerminalScroll(current) {
+  current.scrollFrame = 0;
+  if (!current.session) { current.scrollLines = 0; return; }
+  if (current.scrollSending || !current.scrollLines) return;
+  const lines = Math.max(-100, Math.min(100, current.scrollLines));
+  current.scrollLines -= lines;
+  current.scrollSending = true;
+  postLiveTerminal(current, {type: "scroll", direction: lines < 0 ? "up" : "down", lines: Math.abs(lines)}).finally(() => {
+    current.scrollSending = false;
+    if (current.scrollLines) flushTerminalScroll(current);
+  });
+}
+
 function disposeLiveTerminal(current) {
   closeLiveStream(current);
   clearTimeout(current.resizeTimer);
@@ -1019,6 +1065,10 @@ function disposeLiveTerminal(current) {
   if (current.inputFrame) cancelAnimationFrame(current.inputFrame);
   current.inputFrame = 0;
   current.inputQueue.length = 0;
+  if (current.scrollFrame) cancelAnimationFrame(current.scrollFrame);
+  current.scrollFrame = 0;
+  current.scrollLines = 0;
+  current.scrollSending = false;
   current.postChain = Promise.resolve();
   current.resizeObserver?.disconnect();
   current.liveDisposables?.forEach(disposable => disposable.dispose());
@@ -1032,14 +1082,16 @@ function openLiveStream(current, takeover = false) {
   current.postAbort = new AbortController();
   current.postChain = Promise.resolve();
   const cols = current.term.cols, rows = current.term.rows;
-  current.root.querySelector("[data-terminal-status]").textContent = `live · connecting · ${cols}×${rows}`;
+  const quiet = current.retries && current.retries <= RECONNECT_QUIET;
+  if (!quiet) current.root.querySelector("[data-terminal-status]").textContent = `live · connecting · ${cols}×${rows}`;
   current.root.querySelector("[data-terminal-reconnect]").hidden = true;
-  current.root.querySelector(".terminal-disconnected").hidden = false;
+  current.root.querySelector(".terminal-disconnected").hidden = !!quiet;
   const stream = new EventSource(`/api/herdr/live?pane=${enc(current.pane)}&cols=${cols}&rows=${rows}${takeover ? "&takeover=1" : ""}`);
   current.stream = stream;
   stream.addEventListener("ready", event => {
     if (terminal !== current || current.stream !== stream) return;
     try { current.session = JSON.parse(event.data).session; } catch (e) { return liveTerminalClosed(current, "Invalid terminal session"); }
+    current.retries = 0;
     liveTerminalStatus(current, null);
     flushTerminalInput(current);
     const active = document.activeElement;
@@ -1061,21 +1113,36 @@ function openLiveStream(current, takeover = false) {
   };
 }
 
+// Slow or flaky links drop the stream now and then: retry with backoff for as long as the pane is open live,
+// and keep the last screen visible (status line only) for the first few attempts.
+const RECONNECT_QUIET = 3;
+const reconnectDelay = attempt => Math.min(10000, 1000 * 2 ** Math.max(0, attempt - 1));
+
 function liveTerminalClosed(current, reason) {
   closeLiveStream(current);
-  liveTerminalStatus(current, reason);
-  if (!current.autoRetried && !/ownership|owner|conflict|already.*control|in use/i.test(reason)) {
-    current.autoRetried = true;
-    current.reconnectTimer = setTimeout(() => { if (terminal === current && current.mode === "live") openLiveStream(current); }, 2000);
+  current.lagging = false;
+  if (/ownership|owner|conflict|already.*control|attached client|in use/i.test(reason)) return liveTerminalStatus(current, reason);
+  current.retries = (current.retries || 0) + 1;
+  const delay = reconnectDelay(current.retries);
+  if (current.retries > RECONNECT_QUIET) liveTerminalStatus(current, reason);
+  else {
+    const status = current.root.querySelector("[data-terminal-status]");
+    status.classList.add("lagging");
+    status.textContent = `reconnecting in ${Math.round(delay / 1000)}s · ${reason}`;
   }
+  current.reconnectTimer = setTimeout(() => { if (terminal === current && current.mode === "live") openLiveStream(current); }, delay);
 }
+
+addEventListener("online", () => {
+  if (terminal?.mode === "live" && terminal.term && !terminal.stream && terminal.reconnectTimer) openLiveStream(terminal);
+});
 
 function startLiveTerminal(current, restoreFocus = false) {
   const host = current.root.querySelector(".terminal-live"), box = current.root.querySelector(".terminal-screen-box");
   current.root.querySelector(".terminal-screen").hidden = true;
   current.root.querySelector(".terminal-jump").hidden = true;
   host.hidden = false;
-  current.autoRetried = false;
+  current.retries = 0;
   if (!window.Terminal || !window.FitAddon?.FitAddon) return liveTerminalStatus(current, "Terminal assets unavailable");
   const css = getComputedStyle(current.root), colour = name => css.getPropertyValue(name).trim();
   current.term = new window.Terminal({scrollback: 0, fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--mono").trim(), fontSize: 12, cursorBlink: true, theme: {
@@ -1099,7 +1166,8 @@ function startLiveTerminal(current, restoreFocus = false) {
   ];
   current.term.attachCustomWheelEventHandler(event => {
     if (!event.deltaY) return false;
-    postLiveTerminal(current, {type: "scroll", direction: event.deltaY < 0 ? "up" : "down", lines: Math.max(1, Math.round(Math.abs(event.deltaY) / 40))});
+    const px = Math.abs(event.deltaY) * (event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 400 : 1);
+    queueTerminalScroll(current, Math.sign(event.deltaY) * Math.max(1, Math.round(px / 40)));
     return false;
   });
   let dimensions = `${current.term.cols}x${current.term.rows}`;
@@ -1158,7 +1226,7 @@ function mountTerminal(container, pane, panes, restore) {
   terminal = {root, pane: pane.pane_id, mode: old ? old.mode : "live",
     text: old ? old.text : null, hash: old ? old.hash : null, pending: old ? old.pending : null, polling: false, pollAgain: false,
     term: null, fit: null, stream: null, session: null, resizeObserver: null, resizeTimer: null, reconnectTimer: null,
-    autoRetried: false, inputQueue: [], inputFrame: 0, postChain: Promise.resolve(), postAbort: null, liveEpoch: 0, liveDisposables: [],
+    retries: 0, inputQueue: [], inputFrame: 0, postChain: Promise.resolve(), postAbort: null, liveEpoch: 0, liveDisposables: [],
     imageStatus: "", imageStatusTimer: null, started: false};
   if (old) {
     const pre = root.querySelector(".terminal-screen");
@@ -1172,8 +1240,8 @@ function mountTerminal(container, pane, panes, restore) {
   jump.onclick = applyPending;
   pre.onscroll = () => { if (terminal && terminal.root === root && terminal.pending !== null && terminalAtEnd(pre)) applyPending(); };
   root.querySelectorAll("[data-mode]").forEach(button => button.onclick = () => switchTerminalMode(terminal, button.dataset.mode, true));
-  root.querySelector("[data-reconnect]").onclick = () => { if (terminal?.root !== root || !terminal.term) return; terminal.autoRetried = true; openLiveStream(terminal); terminal.term.focus(); };
-  root.querySelectorAll("[data-takeover]").forEach(button => button.onclick = () => { if (terminal?.root !== root || !terminal.term) return; terminal.autoRetried = true; openLiveStream(terminal, true); terminal.term.focus(); });
+  root.querySelector("[data-reconnect]").onclick = () => { if (terminal?.root !== root || !terminal.term) return; terminal.retries = 0; openLiveStream(terminal); terminal.term.focus(); };
+  root.querySelectorAll("[data-takeover]").forEach(button => button.onclick = () => { if (terminal?.root !== root || !terminal.term) return; terminal.retries = 0; openLiveStream(terminal, true); terminal.term.focus(); });
   mountTerminalFiles(terminal);
   mountTerminalCopy(terminal);
   switchTerminalMode(terminal, terminal.mode, old?.focus === "live");

@@ -108,6 +108,20 @@ state_dir() {
     printf '%s' "$dir"
 }
 
+# project_has_lane <frontend|rust|python|infra>
+#   Returns 0 when the cwd holds a project of that lane, so lane nags stay
+#   silent in repositories the lane does not apply to.
+project_has_lane() {
+    case "$1" in
+        frontend) grep -qs '"next"' package.json src/frontend/package.json \
+                  || [ -n "$(find . -maxdepth 3 -name package.json -not -path '*/node_modules/*' -exec grep -l '"next"' {} + 2>/dev/null | head -1)" ] ;;
+        rust)     [ -n "$(find . -maxdepth 3 -name Cargo.toml -not -path '*/target/*' 2>/dev/null | head -1)" ] ;;
+        python)   grep -qsiE 'fastapi|sqlalchemy|celery' pyproject.toml requirements.txt src/backend/pyproject.toml ;;
+        infra)    [ -n "$(find . -maxdepth 2 \( -name 'docker-compose*.y*ml' -o -name 'compose*.y*ml' -o -name Dockerfile \) 2>/dev/null | head -1)" ] ;;
+        *)        return 1 ;;
+    esac
+}
+
 # is_fullstack_project
 #   Returns 0 when the cwd looks like a project this plugin governs
 #   (FastAPI, Rust workspace, or Next.js).

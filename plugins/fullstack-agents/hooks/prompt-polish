@@ -13,6 +13,7 @@ source "$(dirname "$0")/lib.sh"
 HOOK_INPUT="$(cat)"
 prompt="$(json_get_field "prompt" "$HOOK_INPUT")"
 [ -n "$prompt" ] || exit 0
+case "$prompt" in *"SYSTEM NOTIFICATION - NOT USER INPUT"*|*"<task-notification>"*) exit 0 ;; esac
 
 # Skip pure control replies — there is nothing to refine in an affirmation or a
 # bare continuation, and padding them wastes a turn.
@@ -20,6 +21,8 @@ prompt_trimmed="$(printf '%s' "$prompt" | tr '[:upper:]' '[:lower:]' | tr -d '[:
 case "$prompt_trimmed" in
     yes|y|ok|okay|yep|yeah|sure|no|n|nope|continue|go|proceed|stop|cancel|thanks|ty) exit 0 ;;
 esac
+# Short commands ("commit and push", "run the tests") are already a spec.
+[ "$(printf '%s' "$prompt" | wc -w)" -ge "${FSA_POLISH_MIN_WORDS:-6}" ] || exit 0
 
 session_id="$(json_get_field "session_id" "$HOOK_INPUT")"
 polished_flag=""

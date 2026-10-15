@@ -7,7 +7,7 @@ source "$(dirname "$0")/lib.sh"
 HOOK_INPUT="$(cat)"
 prompt="$(json_get_field "prompt" "$HOOK_INPUT")"
 [ -n "$prompt" ] || exit 0
-case "$prompt" in *"SYSTEM NOTIFICATION - NOT USER INPUT"*) exit 0 ;; esac
+case "$prompt" in *"SYSTEM NOTIFICATION - NOT USER INPUT"*|*"<task-notification>"*) exit 0 ;; esac
 
 transcript_path="$(json_get_field "transcript_path" "$HOOK_INPUT")"
 skill_loaded() { session_has_skill "$transcript_path" "fullstack-agents:$1"; }
@@ -83,7 +83,7 @@ case "$lane" in
     *)        lane_skills="" ;;
 esac
 [ "$intent" = "performance" ] && [ "$lane" != "rust" ] && [ "$lane" != "python" ] && [ "$lane" != "infra" ] \
-    && lane_skills="nextjs (read references/client-performance.md, data-freshness.md; live-updates.md for streams), data-table for list pages"
+    && project_has_lane frontend && lane_skills="nextjs (read references/client-performance.md, data-freshness.md; live-updates.md for streams), data-table for list pages"
 
 line="[fullstack-agents] intent: ${intent:-general}, lane: ${lane:-any} -> invoke via the Skill tool (fullstack-agents:*): ${skills}"
 [ -n "$lane_skills" ] && line="${line}; lane: ${lane_skills} — load these NOW, before the root cause, the plan or any code"
@@ -91,6 +91,12 @@ out_line="${line}. Take the cheapest rung that answers it; the conclusion, plan 
 fi
 
 core_skill="$(lane_core_skill "$lane")"
+# A lane the repository does not contain gets no "not loaded" nag and no stack doctrine.
+if [ -n "$lane" ] && ! project_has_lane "$lane"; then
+    core_skill=""
+    out_line="$(printf '%s' "$out_line" | sed 's/; lane: .* — load these NOW[^.]*//')"
+    lane=""
+fi
 if [ -n "$core_skill" ]; then
     if skill_loaded "$core_skill"; then
         out_line="$(printf '%s' "$out_line" | sed 's/; lane: .* — load these NOW[^.]*//')"

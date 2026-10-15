@@ -9,7 +9,8 @@ Claude remains the lead; headless Claude Sonnet remains the default implementer.
 Grok/Codex are alternatives selected by existing bindings or the user's request.
 `IMPLEMENTER:` in a brief wins over `FSA_IMPLEMENTER`. Lead planning, audit and
 conclusion never transfer to the implementer. Tests run through
-`fullstack-agents:test-runner`; the lead reads its saved logs. The project's
+`fullstack-agents:test-runner`; the lead reads its saved logs. A short local
+suite (about a minute, small output) the lead runs itself and tees to a log. The project's
 `CLAUDE.md` supplies bindings and wins over defaults.
 
 ## Always-loaded contract

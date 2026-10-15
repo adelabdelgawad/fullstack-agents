@@ -293,6 +293,16 @@ class CodexSessionTests(unittest.TestCase):
         self.assertEqual(len(state["cards"][0]["runs"]), 2)
         self.assertEqual(state["cards"][0]["worktree"], str(self.root / "checkout-1"))
 
+    def test_claude_declared_complete_shows_done_until_a_new_working_turn(self):
+        card = {"declared": {"phase": "complete", "at": self.now}}
+        session = {"id": "s-claude", "engine": "claude", "state": "idle", "turn_at": self.now - 60, "briefs": []}
+        self.assertIn("complete", dash.PHASES)
+        self.assertEqual(dash.phase_of(card, [], [session]), "complete")
+        session.update(state="working", turn_at=self.now - 30)
+        self.assertEqual(dash.phase_of(card, [], [session]), "complete")
+        session["turn_at"] = self.now + 30
+        self.assertEqual(dash.phase_of(card, [], [session]), "investigate")
+
     def test_git_and_deployment_metadata_cannot_override_working_phase(self):
         self.rollout("s-flow", self.root, [event("task_started", 20)])
         self.journal("s-flow", "implement")

@@ -2,9 +2,15 @@
 # Self-check for prompt routing. Run: bash hooks/prompt-scan.test.sh
 set -uo pipefail
 
-hook="$(dirname "$0")/prompt-scan"
+hook="$(cd "$(dirname "$0")" && pwd)/prompt-scan"
 export FSA_ROUTER=regex
 fail=0
+# Lane nags only apply inside a project of that lane: run from a stub Next.js + Rust + Docker repo.
+proj="$(mktemp -d)"
+printf '{"dependencies":{"next":"15.0.0"}}\n' > "$proj/package.json"
+printf '[package]\nname = "x"\n' > "$proj/Cargo.toml"
+printf 'services: {}\n' > "$proj/docker-compose.yml"
+cd "$proj" || exit 1
 
 route() {
     python3 -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1]}))' "$1" | bash "$hook" | head -1
@@ -53,7 +59,7 @@ check() {
     if [ "$cond" = 1 ]; then echo "ok   ${name}"; else echo "FAIL ${name}"; fail=1; fi
 }
 
-tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+tmp="$(mktemp -d)"; trap 'rm -rf "$tmp" "$proj"' EXIT
 printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"no skills yet"}]}}' > "$tmp/empty.jsonl"
 printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"fullstack-agents:nextjs"}}]}}' > "$tmp/loaded.jsonl"
 fe="the conversation page shows the list after the page paints"
@@ -67,6 +73,18 @@ out="$(route_all "<system-reminder>
 [SYSTEM NOTIFICATION - NOT USER INPUT]
 Monitor event: build progress" "$tmp/empty.jsonl")"
 check "automated notification -> silent" "$([ -z "$out" ] && echo 1 || echo 0)"
+out="$(route_all "<task-notification>
+<task-id>a1</task-id><status>completed</status>
+</task-notification>" "$tmp/empty.jsonl")"
+check "task notification -> silent" "$([ -z "$out" ] && echo 1 || echo 0)"
+plain="$(mktemp -d)"
+out="$(cd "$plain" && route_all "$fe" "$tmp/empty.jsonl")"
+rm -rf "$plain"
+check "no Next.js project -> no NOT LOADED line" "$(printf '%s' "$out" | grep -qF 'NOT LOADED' && echo 0 || echo 1)"
+check "no Next.js project -> no stack doctrine" "$(printf '%s' "$out" | grep -qF 'STACK TOPIC DETECTED' && echo 0 || echo 1)"
+out="$(cd "$tmp" && route_all "the terminal scroller is very slow on vpn" "$tmp/empty.jsonl")"
+check "performance outside Next.js -> no nextjs skills" "$(printf '%s' "$out" | grep -qF 'nextjs' && echo 0 || echo 1)"
+check "no Next.js project -> no 'load these NOW'" "$(printf '%s' "$out" | grep -qF 'load these NOW' && echo 0 || echo 1)"
 
 reject "change the campaign form label"
 reject "add a feature flag for exports"
