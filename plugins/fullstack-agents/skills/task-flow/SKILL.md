@@ -92,3 +92,15 @@ Markdown links are relocated.
 For multi-step implementation, create and register a dedicated repository Markdown task file,
 update task statuses as work changes, and verify the live session Tasks section. Read
 [task tracking](references/task-tracking.md) for the helper, format and completion rules.
+
+## Keep work moving
+
+Choose a coherent deliverable with observable acceptance criteria, not a quota of files or phases. Reuse the current scan, source evidence, plan and loaded skills until an assumption changes. Once the cause and required behavior are established, implement; another investigation needs a named unresolved question.
+
+Default file budgets size briefs; they are not user approval gates. The lead may extend a bounded read-only investigation to directly related source/assets without asking the user. A worker reports the needed paths and continues independent work; the lead answers promptly. Explicit project prohibitions and enforced write allowlists still apply: amend the brief before writing a newly required path.
+
+When delegation is authorized, give independent implementation and validation work to available workers with disjoint write ownership. Do not serialize unrelated units behind a single worker. Resume an idle worker using the runtime's task/follow-up operation; a message that does not start execution is not a dispatch. Track actual activity, and clear activity when work pauses or finishes.
+
+Batch validation and one independent audit around the completed deliverable, including coupled worker changes. Do not audit each exploratory step, asset or file separately. Re-run only checks affected by repairs or new evidence. Preserve required lane gates, audit independence and authorization boundaries.
+
+If progress stalls, inspect actual worker/tool activity and the outstanding dependency, then remove the bottleneck or rebalance the work. Explain concrete completed behavior and the next deliverable; repeated planning or status updates do not count as implementation.

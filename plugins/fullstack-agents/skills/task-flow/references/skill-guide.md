@@ -99,9 +99,9 @@ each. Keep a unit to at most 8 files (the dispatch limit): every implementer ste
 conversation, so a run's cost grows faster than its step count, and two short runs cost about half
 of one long one. A unit whose build or
 tests would race another (a shared compile target, a shared database)
-waits instead; the project binding caps how many heavy runs share a host. Each unit is audited on
-its own diff before the next depends on it; units only start together when neither needs the
-other's output.
+waits instead; the project binding caps how many heavy runs share a host. Review worker output before dependent work uses it; run the independent audit once on the
+completed coherent deliverable, including coupled units. Units only start together when neither
+needs the other's output.
 
 ## Visible workers (only when the user says "use herdr")
 

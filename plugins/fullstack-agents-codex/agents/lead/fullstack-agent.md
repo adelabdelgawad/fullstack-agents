@@ -58,6 +58,10 @@ mutate production.
 - Fix compiler/lint/test failures as a batch, then run affected checks once.
 - Keep full logs on disk. Return summaries, precise citations and failing lines,
   rather than copying logs or complete files into messages.
+- Plan and audit a coherent deliverable, not each file or exploratory step. Default
+  file budgets are sizing guidance, not user approval gates; the lead may extend
+  directly related read-only scope. Preserve enforced write allowlists and explicit
+  project restrictions. Resume idle workers with an execution-triggering follow-up.
 - One focused Claude audit per completed change; re-audit only a repair or new
   evidence. Do not send the whole repository or conversation to the auditor.
 - No fixed model names. Codex inherits its configured model. Claude auditing
