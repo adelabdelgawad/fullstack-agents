@@ -14,13 +14,13 @@ Everything above **Project bindings** is project-independent; the bindings come 
 | Step | Owner | Output |
 |---|---|---|
 | 1. Investigate | Orchestrator | Lane skill loaded first; for latency, server vs client time measured first. Then root cause with `file:line`, the command/event path, minimal fix shape |
-| 2. Plan | Orchestrator (Codex, plan mode first; never delegated to the implementer) | ≤ 40 lines: outcome, files with `file:line`, minimum test set, verification commands, deploy class, risks |
+| 2. Plan | Orchestrator (saved plan first; no extra user approval for authorized work) | ≤ 40 lines: outcome, files with `file:line`, minimum test set, verification commands, deploy class, risks |
 | 3. Implement | Orchestrator (small) or Implementer (rest) | The diff, nothing else |
 | 4. Audit | Orchestrator (Codex) | The implementer's git diff reviewed for conformity with the brief and the architecture docs (and accessibility on UI diffs), the plan's tests re-run, each `ACCEPTANCE:` item marked met with its evidence; `diff-reviewer` lens passes as extra evidence when the diff warrants them |
 | 5. Loop | Orchestrator | Re-brief with raw output; two retries, then hand the failure to the user |
 
 The orchestrator owns every step but the writing of large changes. It never delegates the
-conclusion, the plan, or the verification. Test execution goes to the the configured Codex model `fullstack-agents-test-runner`, which saves full logs;
+conclusion, the plan, or responsibility for verification. Test execution goes to the the configured Codex model `fullstack-agents-test-runner`, which saves full logs;
 those logs are the evidence the orchestrator reads — the runner's summary is only an index into them.
 
 ## The size threshold
@@ -118,7 +118,7 @@ first with `herdr --skill`.
   each one's transcript with `scripts/herdr-watch.sh <output_file> <name>`. The worker, its cost and
   its result are identical to a headless run; the pane only renders the transcript for the user and
   never enters the lead's context.
-- **Hygiene.** Close each worker's pane after its audit. A worker blocked on an approval dialog is
+- **Hygiene.** Close each worker's pane after collecting its output; audit the completed deliverable. A worker blocked on an approval dialog is
   shown to the user; never answer it on their behalf.
 
 ## Watching a run
@@ -138,6 +138,12 @@ overwrite files a re-dispatched run wrote. Re-dispatch once; if it hangs again, 
 user instead of retrying silently, and tell any peer session waiting on the result.
 
 ## Auditing
+
+Runtime bindings win over the historical dispatcher rules below: in the Codex-led flow,
+the lead and native workers may run assigned checks within their actual tool permissions;
+the independent auditor only performs the bounded read-only audit. Test-suite denial below
+applies to the historical headless implementer dispatcher, not native workers. Never bypass
+an enforced tool restriction. Reuse completed evidence; do not rerun solely to change the runner.
 
 The implementer's completion report is not evidence. Read the git diff restricted to the paths the
 run reports as touched and review it for conformity: the brief's scope, the project's architecture

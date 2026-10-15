@@ -81,11 +81,11 @@ Markdown links are relocated.
 - Line 106: Visible workers (only when the user says "use herdr")
 - Line 124: Watching a run
 - Line 140: Auditing
-- Line 184: Scanning wide
-- Line 204: Cost discipline
-- Line 213: Reporting the phase
-- Line 241: Working alongside other sessions
-- Line 249: Project bindings
+- Line 190: Scanning wide
+- Line 210: Cost discipline
+- Line 219: Reporting the phase
+- Line 247: Working alongside other sessions
+- Line 257: Project bindings
 
 ## Task list visible in the dashboard
 
