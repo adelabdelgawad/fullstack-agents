@@ -23,8 +23,11 @@ conclusion never transfer to the implementer. Tests run through
    it finishes. Vendored forks, migrations and ownership/lifecycle code always
    go to the implementer; scope these risks to the actual process-owning tree.
 4. Audit: read touched-path diff; check scope, architecture, lanes, wire contract
-   and UI accessibility. Rerun all affected plan tests via test-runner and read
-   logs. Mark every acceptance item with evidence. Worker findings stay
+   and UI accessibility. Reuse successful test-runner logs for unchanged code;
+   do not repeat a worker's suite solely because the lead owns acceptance.
+   Finish all writers and required checks before one audit of the coherent
+   deliverable. Serialize checks sharing fixture databases or native build state.
+   Mark every acceptance item with evidence. Worker findings stay
    hypotheses until verified; confirmed repairs go back in bounded briefs.
 5. Loop: pass raw failing lines, not entire logs. Two retries maximum, then
    report unresolved issues. Skipped surfaces never count as green.
@@ -104,3 +107,10 @@ When delegation is authorized, give independent implementation and validation wo
 Batch validation and one independent audit around the completed deliverable, including coupled worker changes. Do not audit each exploratory step, asset or file separately. Re-run only checks affected by repairs or new evidence. Preserve required lane gates, audit independence and authorization boundaries.
 
 If progress stalls, inspect actual worker/tool activity and the outstanding dependency, then remove the bottleneck or rebalance the work. Explain concrete completed behavior and the next deliverable; repeated planning or status updates do not count as implementation.
+
+Audit completed evidence, not moving worker fragments or pending test runs.
+After repairs, rerun only affected checks and the scoped audit. Reuse loaded
+skills, the cached scan and existing plan across status questions and continuations.
+Reload native services once per integrated batch after required checks pass;
+account for automatic watchers before concurrent edits. Keep task registration
+bound to the session cwd when operating on a second repository.

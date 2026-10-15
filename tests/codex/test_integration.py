@@ -300,6 +300,36 @@ class CLITests(unittest.TestCase):
         self.assertIn("+value = 2", call["input"])
         self.assertEqual((self.root / "app.py").read_text(), "value = 2\n")
 
+    def test_identical_prior_pass_skips_model_and_changes_invalidate_reuse(self):
+        first = self.audit()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        prior = json.loads(first.stdout)["handoff"]
+        self.call.unlink()
+        reused = self.audit(extra=("--previous", prior))
+        self.assertEqual(reused.returncode, 0, reused.stderr)
+        self.assertTrue(json.loads(reused.stdout)["reused"])
+        self.assertFalse(self.call.exists())
+        write(self.root / "app.py", "value = 3\n")
+        changed = self.audit(extra=("--previous", prior))
+        self.assertEqual(changed.returncode, 0, changed.stderr)
+        self.assertNotIn("reused", json.loads(changed.stdout))
+        self.assertTrue(self.call.exists())
+
+    def test_prior_pass_reuse_requires_same_plan_context_and_model(self):
+        first = self.audit()
+        prior = json.loads(first.stdout)["handoff"]
+        for extra in [("--model", "other-auditor"), ("--context", "other.py:1:1")]:
+            self.call.unlink()
+            result = self.audit(extra=("--previous", prior, *extra))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(self.call.exists())
+            self.assertNotIn("reused", json.loads(result.stdout))
+        self.plan.write_text(self.plan.read_text()+"Changed acceptance.\n")
+        self.call.unlink()
+        result = self.audit(extra=("--previous", prior))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(self.call.exists())
+
     def test_audit_defaults_to_opus_and_preserves_overrides(self):
         self.env.pop("FSA_CLAUDE_AUDIT_MODEL", None)
         for env_model, extra, expected in (

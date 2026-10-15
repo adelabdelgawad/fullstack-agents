@@ -19,23 +19,33 @@ Read the bundle's `AGENTS.md` for runtime bindings and token discipline.
 2. **Plan.** Keep a saved plan to approximately 40 lines: outcome, exact files,
    acceptance criteria, minimal checks, risks. Resolve only material ambiguity.
    Existing authorization permits continuing; do not add approval round trips.
-3. **Implement.** Edit small changes directly, within three source files by
-   default; project risk paths and budgets win. For larger changes, use a native
-   Codex role when delegation is authorized, or the bundle's `scripts/worker.py`
-   for a bounded headless unit. Codex workers return evidence; the lead retains
+3. **Implement.** Edit a coherent change directly within the project's enforced
+   budget; project risk paths and write allowlists win. File count alone does not
+   require another worker. Use a native Codex role or `scripts/worker.py` when
+   delegation is authorized and an independent unit improves throughput. Codex workers return evidence; the lead retains
    ownership. Do not dispatch the original Claude-first `codex-task.sh` here. For
    a bare-metal binding, work directly in the existing bound development checkout
    and branch. If an older worktree holds the reviewed change, apply it there
    while preserving existing work; do not create another worktree or merge changes
    into main.
-4. **Validate.** Review the diff and run the affected project's checks from its
-   detected roots. Fix failures in one batch, verify once, save logs. Read-only
+4. **Validate.** Review the completed deliverable and use its affected checks.
+   Reuse workers' successful logs for unchanged code; the lead does not repeat
+   the same suite for ownership. Finish all writers before the final batch.
+   Serialize checks sharing database names, fixture state or a native build target;
+   parallelize only independent resources. Fix failures in one batch, verify once.
+   Save logs and identify their source revision. Read-only
    investigations need source verification rather than a fabricated diff audit.
-5. **Claude audit.** For a completed source change, call the bundle's
+5. **Claude audit.** Audit once per coherent deliverable after required checks
+   have finished and passed. Do not audit a moving diff, each worker fragment,
+   formatting-only follow-ups, or a test run whose result is still pending.
+   Include successful check evidence and existing context in the saved plan.
+   For that completed change, call the bundle's
    `scripts/handoff.py --root ROOT --plan PLAN --files FILE...`. Include narrowly
    scoped `--context path:start:end` ranges when the diff alone is insufficient.
    Exit 0 means PASS; exit 3 means issues; exit 2 means the audit could not finish.
    The auditor has no tools and receives only the bounded evidence packet.
+   An explicit `--previous` PASS is reused without calling Claude only when the
+   source, context, plan, base, model and audit contract are identical.
 6. **Repair.** Read `handoff.json` and `repair-brief.md`. Reopen every cited source
    location; reject unsupported findings with evidence. Fix confirmed issues
    only within their repair scope. A new required path must be surfaced before
@@ -122,3 +132,10 @@ When delegation is authorized, give independent implementation and validation wo
 Batch validation and one independent audit around the completed deliverable, including coupled worker changes. Do not audit each exploratory step, asset or file separately. Re-run only checks affected by repairs or new evidence. Preserve required lane gates, audit independence and authorization boundaries.
 
 If progress stalls, inspect actual worker/tool activity and the outstanding dependency, then remove the bottleneck or rebalance the work. Explain concrete completed behavior and the next deliverable; repeated planning or status updates do not count as implementation.
+
+Keep operation boundaries aligned with delivery: perform one native reload after
+an integrated batch passes, then verify readiness. Avoid restarting services for
+each worker fragment; account for automatic watchers before concurrent edits.
+A status question or continuation does not restart intake, planning or completed
+checks. Keep the task registration bound to the session cwd even when operating
+on a second repository; do not overwrite it with that repository's task ledger.

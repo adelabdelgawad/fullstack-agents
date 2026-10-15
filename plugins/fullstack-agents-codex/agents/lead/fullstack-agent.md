@@ -51,9 +51,9 @@ mutate production.
   assumptions. Read each relevant skill once while it remains in context.
 - Route per service/file: Python, Rust and frontend idioms must stay separate.
 - Keep plans short: outcome, files, acceptance criteria, checks, risks.
-- Edit small changes directly (three source files by default, unless the project
-  sets another budget). Use bounded Codex workers for substantial work
-  when delegation is authorized; sequential work is the default. A brief names
+- Edit a coherent change directly within the project's enforced budget. File
+  count alone does not require delegation or splitting a deliverable. Use bounded
+  Codex workers when authorized and independent work improves throughput. A brief names
   exact paths, necessary skills, acceptance criteria, and reporting format.
 - Fix compiler/lint/test failures as a batch, then run affected checks once.
 - Keep full logs on disk. Return summaries, precise citations and failing lines,
