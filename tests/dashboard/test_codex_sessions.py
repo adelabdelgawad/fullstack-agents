@@ -64,6 +64,44 @@ class CodexSessionTests(unittest.TestCase):
     def collect(self):
         return {s["id"]: s for s in dash.collect_codex_sessions(self.repo, set(), self.now, {})}
 
+    def test_fresh_ledger_overrides_stale_journal_and_cross_repository_binding(self):
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        self.rollout("accuracy", self.root, [event("task_started", 30), message("user", "Fix dashboard", 29)])
+        task = self.root / "TASKS.md"
+        def ledger(status):
+            return ("# Accuracy\n<!-- fsa:tasks:start -->\n| ID | Status | Task | Note |\n"
+                    "| --- | --- | --- | --- |\n| T1 | " + status + " | Correct counts | Native evidence |\n<!-- fsa:tasks:end -->\n")
+        task.write_text(ledger("in_progress"))
+        journal = self.home / "fsa-flow" / "accuracy.json"
+        journal.parent.mkdir(parents=True)
+        journal.write_text(json.dumps({"session_id": "accuracy", "engine": "codex", "cwd": str(self.root),
+            "phase": "implement", "updated": self.now, "history": [{"phase": "implement", "timestamp": self.now}],
+            "task_tracking": {"file": str(task), "counts": {"in_progress": 1, "pending": 0}, "total": 1}}))
+        with patch.dict(os.environ, {"FSA_TASKS_DIR": str(Path(self.scratch.name) / "registry")}):
+            bind = dash.load_tasks.__globals__["bind_tasks"]
+            bind("accuracy", self.root, task)
+            repo = dash.Repo(str(self.root), str(Path(self.scratch.name) / "runs"), [])
+            def tracked():
+                state = dash.build_state(repo, dash.GitCache(repo))
+                session = next(s for c in state["cards"] for s in c["sessions"] if s["id"] == "accuracy")
+                self.assertEqual(self.collect()["accuracy"]["cwd"], str(self.root))
+                return state, session["task_tracking"]
+            self.assertEqual(tracked()[1]["counts"]["in_progress"], 1)
+            task.write_text(ledger("pending"))
+            counts = tracked()[1]["counts"]
+            self.assertEqual((counts["pending"], counts["in_progress"]), (1, 0))
+            plugin = self.root.parent / "plugin"
+            plugin.mkdir()
+            subprocess.run(["git", "init", "-q", str(plugin)], check=True)
+            sibling = plugin / "PLUGIN-TASKS.md"
+            sibling.write_text(ledger("done"))
+            bind("accuracy", plugin, sibling)
+            state, tasks = tracked()
+            self.assertNotIn("error", tasks)
+            self.assertEqual((tasks["file"], tasks["completed"]), (str(sibling), 1))
+            self.assertIn(str(sibling), state["_docs"]["accuracy"])
+            self.assertEqual(json.loads(journal.read_text())["cwd"], str(self.root))
+
     def test_registered_task_file_reaches_the_session_card_and_document_allowlist(self):
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
         subprocess.run(["git", "-C", str(self.root), "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-q", "--allow-empty", "-m", "fixture"], check=True)

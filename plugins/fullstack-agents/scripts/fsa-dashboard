@@ -1501,13 +1501,68 @@ def codex_children():
     return out
 
 
+CODEX_TURN_SCAN = {}
+# Codex emits this fixed envelope order. Matching its structural prefix avoids
+# allocating a potentially huge last_agent_message on native completion events.
+CODEX_TURN_HEADER = re.compile(
+    rb'^\s*\{\s*(?:"timestamp"\s*:\s*"(?:[^"\\]|\\.)*"\s*,\s*)?'
+    rb'"type"\s*:\s*"event_msg"\s*,\s*"payload"\s*:\s*\{\s*'
+    rb'"type"\s*:\s*"(task_started|task_complete)"(?=\s*[,}])'
+)
+
+
 def codex_turn_open(path):
-    for line in reversed(tail_lines(path, 65536)):
-        if '"task_complete"' in line:
-            return False
-        if '"task_started"' in line:
-            return True
-    return False
+    """Read native turn boundaries incrementally, not a short tail of a long turn.
+
+    Only complete native event records count. Tool text, activity leases and
+    process guesses cannot open a turn; long output lines are skipped in bounded
+    chunks. A partial final record is retried after its newline arrives.
+    """
+    key, line_limit = str(path), 65536
+    try:
+        with open(path, "rb") as stream:
+            before = os.fstat(stream.fileno())
+            identity = (before.st_dev, before.st_ino)
+            cached = CODEX_TURN_SCAN.get(key)
+            prefix = stream.read(min(before.st_size, 4096))
+            offset, opened = 0, False
+            if (cached and cached[0] == identity and before.st_size >= cached[1]
+                    and prefix[:len(cached[5])] == cached[5]
+                    and (before.st_size != cached[1] or before.st_mtime_ns == cached[2])):
+                offset, opened = cached[3:5]
+            stream.seek(offset)
+            while True:
+                start = stream.tell()
+                raw = stream.readline(line_limit + 1)
+                if not raw:
+                    break
+                oversized = len(raw) > line_limit
+                header = CODEX_TURN_HEADER.match(raw) if oversized else None
+                while oversized and raw and not raw.endswith(b"\n"):
+                    raw = stream.readline(line_limit + 1)
+                if not raw.endswith(b"\n"):
+                    stream.seek(start)
+                    break
+                if oversized:
+                    if header:
+                        opened = header[1] == b"task_started"
+                    continue
+                if b'"task_started"' not in raw and b'"task_complete"' not in raw:
+                    continue
+                try:
+                    record = json.loads(raw)
+                    payload = record.get("payload") or {}
+                    if record.get("type") == "event_msg" and payload.get("type") in ("task_started", "task_complete"):
+                        opened = payload["type"] == "task_started"
+                except (ValueError, AttributeError, TypeError):
+                    continue
+            after = os.fstat(stream.fileno())
+            CODEX_TURN_SCAN[key] = (identity, after.st_size, after.st_mtime_ns, stream.tell(), opened, prefix)
+            if len(CODEX_TURN_SCAN) > 1024:
+                CODEX_TURN_SCAN.pop(next(iter(CODEX_TURN_SCAN)))
+            return opened
+    except OSError:
+        return False
 
 
 def proc_parent(pid):
@@ -1650,7 +1705,7 @@ def codex_agent_items(sid, children, holder, kids, now, registrations=()):
             at = Path(rollout).stat().st_mtime
         except OSError:
             continue
-        running = codex_turn_open(Path(rollout)) and now - at <= AGENT_STALE_S
+        running = status == "open" and codex_turn_open(Path(rollout)) and now - at <= AGENT_STALE_S
         if running or now - at <= ACTIVITY_KEEP_S:
             out.append({"id": child, "label": " · ".join(x for x in ("codex", label) if x),
                         "state": "running" if running else "completed", "at": at, "path": rollout,

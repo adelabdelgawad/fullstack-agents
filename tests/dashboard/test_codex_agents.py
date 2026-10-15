@@ -41,6 +41,93 @@ class CodexAgentTests(unittest.TestCase):
         self.assertEqual((items["c1"]["state"], items["c1"]["label"]), ("running", "codex · explorer"))
         self.assertEqual(items["c2"]["state"], "completed")
 
+    def test_long_native_turn_is_not_lost_after_sixty_four_kibibytes(self):
+        path = rollout(self.base / "long.jsonl", {"type": "event_msg", "payload": {"type": "task_started"}})
+        with path.open("a") as stream:
+            for _ in range(300):
+                stream.write(json.dumps({"type": "response_item", "payload": {"type": "reasoning", "text": "x" * 500}}) + "\n")
+        children = {"lead": [("child", "open", str(path), "worker")]}
+        self.assertEqual(dash.codex_agent_items("lead", children, None, {}, time.time())[0]["state"], "running")
+        with path.open("a") as stream:
+            stream.write(json.dumps({"type": "event_msg", "payload": {"type": "task_complete"}}) + "\n")
+        self.assertFalse(dash.codex_turn_open(path))
+
+    def test_turn_scan_is_incremental_and_only_native_boundaries_count(self):
+        path = rollout(self.base / "events.jsonl", {"type": "event_msg", "payload": {"type": "task_started"}})
+        self.assertTrue(dash.codex_turn_open(path))
+        self.assertEqual(dash.CODEX_TURN_SCAN[str(path)][3], path.stat().st_size)
+        offset = path.stat().st_size
+        real_open = open
+        with real_open(path, "rb") as stream:
+            with patch("builtins.open", return_value=stream), patch.object(stream, "seek", wraps=stream.seek) as seek:
+                self.assertTrue(dash.codex_turn_open(path))
+                seek.assert_called_once_with(offset)
+        with path.open("a") as stream:
+            stream.write(json.dumps({"type": "response_item", "payload": {"type": "task_complete"}}) + "\n")
+            stream.write(json.dumps({"type": "response_item", "payload": {"type": "task_complete"}, "oversized": "x" * 200000}) + "\n")
+            stream.write('{"type":"event_msg","payload":{"type":"task_complete"}}')
+        self.assertTrue(dash.codex_turn_open(path))
+        self.assertLess(dash.CODEX_TURN_SCAN[str(path)][3], path.stat().st_size)
+        with path.open("a") as stream:
+            stream.write("\n")
+        self.assertFalse(dash.codex_turn_open(path))
+        with path.open("a") as stream:
+            stream.write(json.dumps({"type": "event_msg", "payload": {"type": "task_started"}}) + "\n")
+        self.assertTrue(dash.codex_turn_open(path))
+
+    def test_turn_scan_resets_on_truncation_replacement_and_same_size_rewrite(self):
+        path = rollout(self.base / "replace.jsonl", {"type": "event_msg", "payload": {"type": "task_started"}})
+        self.assertTrue(dash.codex_turn_open(path))
+        path.write_text("{}\n")
+        self.assertFalse(dash.codex_turn_open(path))
+        replacement = rollout(self.base / "new.jsonl", {"type": "event_msg", "payload": {"type": "task_started"}})
+        replacement.replace(path)
+        self.assertTrue(dash.codex_turn_open(path))
+        size, mtime = path.stat().st_size, path.stat().st_mtime_ns
+        path.write_text(" " * (size - 3) + "{}\n")
+        os.utime(path, ns=(mtime + 1000000, mtime + 1000000))
+        self.assertFalse(dash.codex_turn_open(path))
+
+    def test_large_native_completion_closes_turn_but_tool_text_does_not(self):
+        path = rollout(self.base / "large-final.jsonl", {"type": "event_msg", "payload": {"type": "task_started"}})
+        self.assertTrue(dash.codex_turn_open(path))
+        fake = {"type": "response_item", "payload": {"type": "message", "text":
+            '{"type":"event_msg","payload":{"type":"task_complete"}}' + "x" * 200000}}
+        with path.open("a") as stream:
+            stream.write(json.dumps(fake) + "\n")
+        self.assertTrue(dash.codex_turn_open(path))
+        complete = json.dumps({"timestamp": "2026-10-15T20:00:00Z", "type": "event_msg",
+            "payload": {"type": "task_complete", "last_agent_message": "x" * 200000}})
+        with path.open("a") as stream:
+            stream.write(complete)
+        self.assertTrue(dash.codex_turn_open(path))  # incomplete native write
+        with path.open("a") as stream:
+            stream.write("\n")
+        self.assertFalse(dash.codex_turn_open(path))
+        # Cold startup and append scans must agree for the same large record.
+        dash.CODEX_TURN_SCAN.pop(str(path))
+        self.assertFalse(dash.codex_turn_open(path))
+
+    def test_no_boundary_and_copytruncate_regrowth_do_not_reuse_old_turn(self):
+        path = rollout(self.base / "copytruncate.jsonl", {"type": "event_msg", "payload": {"type": "task_started"}})
+        padding = json.dumps({"type": "response_item", "payload": {"text": "x" * 200000}}) + "\n"
+        with path.open("a") as stream:
+            stream.write(padding)
+        self.assertTrue(dash.codex_turn_open(path))
+        # Same inode, file grows past the cached size before the next poll.
+        path.write_text(json.dumps({"type": "event_msg", "payload": {"type": "task_complete"}}) + "\n" + padding + "{}\n")
+        self.assertFalse(dash.codex_turn_open(path))
+        with path.open("a") as stream:
+            stream.write(json.dumps({"type": "event_msg", "payload": {"type": "task_started"}}) + "\n")
+        self.assertTrue(dash.codex_turn_open(path))
+        no_boundary = rollout(self.base / "no-boundary.jsonl", {"type": "event_msg", "payload": {"type": "token_count"}})
+        self.assertFalse(dash.codex_turn_open(no_boundary))
+
+    def test_closed_native_edge_cannot_report_an_open_rollout_as_running(self):
+        path = rollout(self.base / "closed.jsonl", {"type": "event_msg", "payload": {"type": "task_started"}})
+        children = {"lead": [("child", "closed", str(path), "worker")]}
+        self.assertEqual(dash.codex_agent_items("lead", children, None, {}, time.time())[0]["state"], "completed")
+
     def test_shared_app_server_does_not_mix_independent_leads(self):
         with patch.object(dash, "proc_agents") as processes:
             for sid in ("lead-one", "lead-two"):
