@@ -1,6 +1,6 @@
 # Session task tracking
 
-For a multi-step implementation, maintain a dedicated Markdown task file in the bound repository (normally `docs/tasks/<task>.md`). Keep its scope, acceptance criteria and evidence there. Register it to the actual lead session and original session working directory. A phase journal reports workflow activity; it does not replace the task list.
+For a multi-step implementation, maintain a dedicated Markdown task file in the repository the work changes (normally `docs/tasks/<task>.md`), even when the session runs from another checkout: plugin work started from a project directory is tracked in the plugin repository, and project work in the project. Pass that repository's root as `--root`; a root other than the session's cwd must be a git repository root. Keep its scope, acceptance criteria and evidence there. Register it to the actual lead session and original session working directory. A phase journal reports workflow activity; it does not replace the task list.
 
 Use the bundled helper to initialize, bind or update the file. Codex runs `python3 scripts/tasks.py`; Codex runs `scripts/fsa-task` from its plugin. The examples below show the Codex form:
 

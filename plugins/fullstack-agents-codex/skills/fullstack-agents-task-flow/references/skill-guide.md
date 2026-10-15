@@ -21,7 +21,9 @@ Everything above **Project bindings** is project-independent; the bindings come 
 
 The orchestrator owns every step but the writing of large changes. It never delegates the
 conclusion, the plan, or responsibility for verification. Test execution goes to the the configured Codex model `fullstack-agents-test-runner`, which saves full logs;
-those logs are the evidence the orchestrator reads — the runner's summary is only an index into them.
+those logs are the evidence the orchestrator reads — the runner's summary is only an index into them. Exception: a known, local
+command that finishes in about a minute with short output (a unit suite, a lint, a syntax check) the lead runs itself, saving
+its output with `tee` to the scratchpad; delegating it costs more than running it.
 
 ## The size threshold
 
@@ -227,6 +229,12 @@ Declare each one the moment it starts, with the plugin's `scripts/team-board`:
 | The plan or first brief is written | `team-board phase plan` |
 | An implementer run returns and the audit begins | `team-board phase audit` |
 | The result goes back to the user (report, question or merge decision) | `team-board phase review --note "<one line>"` |
+| The task is finished: answered with nothing left to do | `team-board phase complete --note "<one line>"` (the card moves to Done until the session's next working turn) |
+
+Two transitions are automatic (`hooks/auto-phase`): a successful `git push` from the remote's default
+branch (or a branch in `FSA_DONE_BRANCHES`) declares `complete`, and the user's next real prompt after
+`review` or `complete` declares `investigate`. Plan, Build and Review are derived by the dashboard from
+briefs, implementer runs and edits; declare them explicitly when no brief or run exists.
 | Any reply that needs the user to approve, decide, answer or act | `team-board wait "<what you need>"` (cleared by the user's next message) |
 
 The card also shows the lead's own steps, so the user can follow investigation, design and

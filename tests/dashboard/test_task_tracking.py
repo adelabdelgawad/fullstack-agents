@@ -79,10 +79,19 @@ class TaskTrackingTests(unittest.TestCase):
         self.bind()
         nested = self.root / "nested"
         nested.mkdir()
-        self.assertIn("root does not match", tasks.load_tasks("session-1", nested)["error"])
+        self.assertIn("must be the session cwd or a git repository root", tasks.load_tasks("session-1", nested)["error"])
         record = self.state / "session-1.json"
         record.write_text(json.dumps({"session_id": "other", "root": str(self.root), "file": str(self.path)}))
         self.assertIn("session does not match", tasks.load_tasks("session-1", self.root)["error"])
+
+    def test_ledger_may_live_in_another_git_repository_than_the_cwd(self):
+        (self.root / ".git").mkdir()
+        self.bind()
+        project = self.base / "project"
+        project.mkdir()
+        loaded = tasks.load_tasks("session-1", project)
+        self.assertNotIn("error", loaded)
+        self.assertEqual(loaded["relative_file"], "TASKS.md")
 
     def test_absent_session_cwd_cannot_match_process_working_directory(self):
         self.bind()

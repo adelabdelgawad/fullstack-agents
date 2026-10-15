@@ -231,8 +231,10 @@ def load_tasks(session_id, cwd):
         if not isinstance(record, dict) or record.get("session_id") != session_id:
             raise ValueError("Task registration session does not match")
         root = _root(record["root"])
-        if _root(cwd) != root:
-            raise ValueError("Task registration root does not match the session cwd")
+        # The ledger lives in the repository the work changes, which may differ from the session's cwd
+        # (e.g. plugin work run from a project checkout); any other root must be a git repository.
+        if _root(cwd) != root and not (root / ".git").exists():
+            raise ValueError("Task registration root must be the session cwd or a git repository root")
         path = _file(root, record["file"])
         info = {"file": str(path), "relative_file": str(path.relative_to(root))}
         text = _read(path)
