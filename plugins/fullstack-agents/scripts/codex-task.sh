@@ -183,9 +183,15 @@ jq -nRe '[inputs | fromjson? | select(.type == "result")] | last | select(.is_er
 exit \$rc
 EOF
 else
+  # Build caches and journals outside the root stay read-only in workspace-write unless the project names them.
+  add_dirs=""
+  if [ "$sandbox" = "workspace-write" ]; then
+    IFS=: read -ra extra <<<"${FSA_CODEX_ADD_DIRS:-}"
+    for d in "${extra[@]}"; do [ -n "$d" ] && mkdir -p "$d" && add_dirs+=" --add-dir $(printf %q "$d")"; done
+  fi
   cat > "$runner" <<EOF
 set -o pipefail
-codex exec --cd '$root' -m '$model' -s '$sandbox' --output-schema '$schema' -o '$last' - < '$prompt' 2>&1 | tee '$log'
+codex exec --cd '$root' -m '$model' -s '$sandbox'$add_dirs --output-schema '$schema' -o '$last' - < '$prompt' 2>&1 | tee '$log'
 exit \${PIPESTATUS[0]}
 EOF
 fi

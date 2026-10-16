@@ -914,6 +914,24 @@ class ClaudeImplementerTests(unittest.TestCase):
         self.assertEqual(call["env"]["FSA_IMPLEMENTER_ROOT"], str(self.root))
         self.assertEqual(Path(call["env"]["FSA_ALLOWED_PATHS_FILE"]).read_text().split(), ["app.py"])
 
+    def test_codex_implementer_gets_project_writable_dirs(self):
+        fake = Path(self.case.name) / "bin/codex"
+        write(fake, "#!" + sys.executable + "\n" + r'''import json, os, sys
+open(os.environ["FSA_TEST_CALL"], "w").write(json.dumps({"args": sys.argv[1:]}))
+out = sys.argv[sys.argv.index("-o") + 1]
+open(out, "w").write(json.dumps({"summary": "done"}))
+''')
+        fake.chmod(0o755)
+        self.brief.write_text(self.brief.read_text().replace("IMPLEMENTER: claude", "IMPLEMENTER: codex"))
+        cache, journal = Path(self.case.name) / "cache dir", Path(self.case.name) / "journal"
+        self.env["FSA_CODEX_ADD_DIRS"] = f"{cache}:{journal}"
+        result = self.dispatch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        args = json.loads(self.call.read_text())["args"]
+        dirs = [args[i + 1] for i, value in enumerate(args) if value == "--add-dir"]
+        self.assertEqual(dirs, [str(cache), str(journal)])
+        self.assertTrue(cache.is_dir() and journal.is_dir())
+
     def test_missing_alias_refuses_dispatch_before_any_claude_call(self):
         (self.home / ".bashrc").write_text("")
         result = self.dispatch()
