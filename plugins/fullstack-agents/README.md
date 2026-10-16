@@ -188,8 +188,8 @@ Optional environment: `FSA_CODEX_ROOT` (repository root, default the current git
 `FSA_CODEX_RUNS_DIR` (default `~/.codex/fsa-runs`), `FSA_IMPLEMENTER` (`claude`, the default, `grok` or `codex`; a brief's `IMPLEMENTER:` line overrides it for that task),
 `FSA_CLAUDE_MODEL_IMPLEMENT` (default `claude-sonnet-5`; the Claude engine only implements),
 `FSA_GROK_MODEL_INVESTIGATE|IMPLEMENT` (opencode `provider/model`, default `xai/grok-4.7`; Grok has no plan mode because Claude plans) and
-`FSA_CODEX_MODEL_INVESTIGATE|PLAN|IMPLEMENT`. The Claude engine runs `claude -p` with project settings only (the user-scope plugin lead never
-loads), `dontAsk` permissions with `Edit`/`Write` rules for each `ALLOWED_PATHS` entry, test runners
+`FSA_CODEX_MODEL_INVESTIGATE|PLAN|IMPLEMENT`. The Claude engine runs `cc -p` (the user's `cc` alias, resolved by `scripts/lib/claude_cli.py`; dispatch is refused without it) with project settings only (the user-scope plugin lead never
+loads), a `--settings` PreToolUse fence (`scripts/lib/allowed-paths-fence`) that blocks `Edit`/`Write` outside the `ALLOWED_PATHS` entries even with permissions bypassed, test runners
 denied, and `FSA_IMPLEMENTER_RUN=<run id>` exported for project edit gates; its structured output is
 the result file. The Grok engine needs the `opencode` CLI and `XAI_API_KEY`;
 investigate runs (opt-in with `FSA_GROK_INVESTIGATE=1`; wide scans default to the Haiku bounded-extractor) deny opencode edits and shell, implement runs allow both and are told to read by grep and line range, lane skills are trimmed to what the brief's paths need (a `SKILLS:` line overrides), and the final answer's

@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+"""PreToolUse fence for implementer runs: file tools may write only the brief's ALLOWED_PATHS, even with permissions bypassed."""
+import json
+import os
+from pathlib import Path
+import sys
+
+WRITERS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
+
+
+def main():
+    try:
+        hook = json.load(sys.stdin)
+    except ValueError:
+        print("allowed-paths fence: unreadable hook input", file=sys.stderr)
+        return 2
+    if hook.get("tool_name") not in WRITERS:
+        return 0
+    root = Path(os.environ["FSA_IMPLEMENTER_ROOT"]).resolve()
+    allowed = {(root / line.strip()).resolve()
+               for line in Path(os.environ["FSA_ALLOWED_PATHS_FILE"]).read_text().splitlines() if line.strip()}
+    tool_input = hook.get("tool_input") or {}
+    target = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
+    path = (root / target).resolve() if target else None
+    if path in allowed:
+        return 0
+    print(f"BLOCKED: {target or '(no path)'} is outside the brief's ALLOWED_PATHS. Do not retry; "
+          "stop and name the needed path in open_risks.", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (KeyError, OSError) as error:
+        print(f"allowed-paths fence unavailable ({error}); refusing the write", file=sys.stderr)
+        raise SystemExit(2)

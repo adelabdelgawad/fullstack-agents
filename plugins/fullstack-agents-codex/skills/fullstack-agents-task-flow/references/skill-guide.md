@@ -77,7 +77,7 @@ outside the list is scope creep and gets rejected. And the known-red baseline mu
 a pre-existing failure is never mistaken for a regression.
 
 The dispatch script enforces the list. The Codex and Grok engines' edit and write tools accept
-only the `ALLOWED_PATHS` entries (the Codex engine exports `FSA_IMPLEMENTER_RUN=<run id>` so a
+only the `ALLOWED_PATHS` entries (the Codex engine, launched through the `cc` alias, enforces this with a PreToolUse fence hook and exports `FSA_IMPLEMENTER_RUN=<run id>` so a
 project edit gate can admit exactly `<runs>/<id>.allow`), and the manifest prints `STATUS=OUT_OF_SCOPE` for any other path that
 changed during the run (in a shared tree that can be another session, so confirm the author). A
 brief over `FSA_MAX_ALLOWED_PATHS` paths (default 8) is refused. So list every file the change

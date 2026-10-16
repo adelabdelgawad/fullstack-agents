@@ -28,7 +28,7 @@ case "$engine:$mode" in
 esac
 case "$engine" in
   codex) command -v codex > /dev/null || { echo "codex CLI not found" >&2; exit 2; } ;;
-  claude) command -v claude > /dev/null || { echo "claude CLI not found" >&2; exit 2; } ;;
+  claude) cc_cmd=$(python3 -I "$(dirname "${BASH_SOURCE[0]}")/lib/claude_cli.py") || exit 2 ;;
   grok)  opencode_bin=${FSA_OPENCODE_BIN:-$(command -v opencode || echo "$HOME/.opencode/bin/opencode")}
          [ -x "$opencode_bin" ] || { echo "opencode CLI not found (the Grok engine runs through opencode)" >&2; exit 2; }
          oc_auth=${XDG_DATA_HOME:-$HOME/.local/share}/opencode/auth.json
@@ -156,8 +156,11 @@ python3 '$here/lib/extract-result.py' '$log' '$last' || rc=1
 exit \$rc
 EOF
 elif [ "$engine" = "claude" ]; then
-  # Project settings only, so the user-scope plugin lead never loads; Edit/Write rules admit only ALLOWED_PATHS.
-  args=(-p --model "$model" --setting-sources project,local --strict-mcp-config --permission-mode dontAsk
+  # Project settings only, so the user-scope plugin lead never loads. The `cc` alias bypasses permission prompts,
+  # so the PreToolUse fence (not the Edit/Write allow rules) is what keeps file tools inside ALLOWED_PATHS.
+  fence=$(jq -cn --arg c "python3 -I $(printf %q "$here/lib/allowed-paths-fence")" \
+    '{hooks:{PreToolUse:[{matcher:"Edit|Write|MultiEdit|NotebookEdit",hooks:[{type:"command",command:$c}]}]}}')
+  args=(-p --model "$model" --setting-sources project,local --settings "$fence" --strict-mcp-config --permission-mode dontAsk
         --output-format stream-json --verbose --json-schema "$(cat "$schema")"
         --tools Read Grep Glob Edit Write Bash --allowedTools Read Grep Glob Bash)
   # Permission paths are gitignore globs, so Next.js segments like [id] must be escaped to match literally.
@@ -174,7 +177,7 @@ elif [ "$engine" = "claude" ]; then
   cat > "$runner" <<EOF
 set -o pipefail
 export BASH_DEFAULT_TIMEOUT_MS=\${BASH_DEFAULT_TIMEOUT_MS:-600000} BASH_MAX_TIMEOUT_MS=\${BASH_MAX_TIMEOUT_MS:-1800000}
-cd $(printf %q "$root") && FSA_IMPLEMENTER_RUN=$(printf %q "$id") claude $(printf '%q ' "${args[@]}") < '$prompt' 2>&1 | tee '$log'
+cd $(printf %q "$root") && FSA_IMPLEMENTER_RUN=$(printf %q "$id") FSA_IMPLEMENTER_ROOT=$(printf %q "$root") FSA_ALLOWED_PATHS_FILE=$(printf %q "$runs/$id.allow") $cc_cmd $(printf '%q ' "${args[@]}") < '$prompt' 2>&1 | tee '$log'
 rc=\${PIPESTATUS[0]}
 jq -nRe '[inputs | fromjson? | select(.type == "result")] | last | select(.is_error | not) | .structured_output // empty' '$log' > '$last' || { : > '$last'; rc=1; }
 exit \$rc

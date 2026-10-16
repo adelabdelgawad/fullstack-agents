@@ -865,5 +865,79 @@ class ClaudeLauncherTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.call.exists())
 
+FAKE_CC_CLAUDE = r'''import json, os, sys
+open(os.environ["FSA_TEST_CALL"], "w").write(json.dumps({"args": sys.argv[1:], "env": {
+    k: os.environ.get(k) for k in ("FSA_IMPLEMENTER_RUN", "FSA_IMPLEMENTER_ROOT", "FSA_ALLOWED_PATHS_FILE")}}))
+print(json.dumps({"type": "result", "is_error": False, "structured_output": {"summary": "done"}}))
+'''
+
+
+class ClaudeImplementerTests(unittest.TestCase):
+    """The Claude implementer runs through `cc`; a PreToolUse fence, not permission prompts, holds ALLOWED_PATHS."""
+
+    SCRIPTS = REPO / "plugins/fullstack-agents/scripts"
+
+    def setUp(self):
+        self.case = tempfile.TemporaryDirectory(prefix="fsa-impl-")
+        base = Path(self.case.name)
+        self.root = base / "repo"
+        self.root.mkdir()
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        write(self.root / "app.py", "value = 1\n")
+        git = ["git", "-C", str(self.root), "-c", "user.email=t@example.invalid", "-c", "user.name=T"]
+        subprocess.run([*git, "add", "app.py"], check=True)
+        subprocess.run([*git, "commit", "-qm", "base"], check=True)
+        self.brief = base / "brief.md"
+        self.brief.write_text("IMPLEMENTER: claude\nPLAN: none: test\nALLOWED_PATHS:\napp.py\n\nGOAL: x\n")
+        write(base / "bin/claude", "#!" + sys.executable + "\n" + FAKE_CC_CLAUDE)
+        (base / "bin/claude").chmod(0o755)
+        self.home = base / "home"
+        write(self.home / ".bashrc", "alias cc='claude --dangerously-skip-permissions'\n")
+        self.call = base / "call.json"
+        self.env = {**os.environ, "HOME": str(self.home), "PATH": f"{base / 'bin'}{os.pathsep}{os.environ['PATH']}",
+                    "FSA_TEST_CALL": str(self.call), "FSA_CODEX_ROOT": str(self.root),
+                    "FSA_CODEX_RUNS_DIR": str(base / "runs")}
+
+    def tearDown(self):
+        self.case.cleanup()
+
+    def dispatch(self):
+        return run(["bash", str(self.SCRIPTS / "codex-task.sh"), "implement", str(self.brief)], env=self.env)
+
+    def test_implementer_launches_the_cc_alias_with_the_path_fence(self):
+        result = self.dispatch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        call = json.loads(self.call.read_text())
+        self.assertEqual(call["args"][0], "--dangerously-skip-permissions")
+        settings = json.loads(call["args"][call["args"].index("--settings") + 1])
+        self.assertIn("allowed-paths-fence", settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"])
+        self.assertEqual(call["env"]["FSA_IMPLEMENTER_ROOT"], str(self.root))
+        self.assertEqual(Path(call["env"]["FSA_ALLOWED_PATHS_FILE"]).read_text().split(), ["app.py"])
+
+    def test_missing_alias_refuses_dispatch_before_any_claude_call(self):
+        (self.home / ".bashrc").write_text("")
+        result = self.dispatch()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("alias cc=", result.stderr)
+        self.assertFalse(self.call.exists())
+
+    def fence(self, tool, path, allow_file=None):
+        allow = allow_file or Path(self.case.name) / "allow"
+        if allow_file is None:
+            allow.write_text("app.py\nsrc/[id]/page.tsx\n")
+        env = {**os.environ, "FSA_IMPLEMENTER_ROOT": str(self.root), "FSA_ALLOWED_PATHS_FILE": str(allow)}
+        return run([sys.executable, "-I", str(self.SCRIPTS / "lib/allowed-paths-fence")],
+                   input=json.dumps({"tool_name": tool, "tool_input": {"file_path": path}}), env=env)
+
+    def test_fence_admits_only_allowed_paths_and_fails_closed(self):
+        self.assertEqual(self.fence("Edit", str(self.root / "app.py")).returncode, 0)
+        self.assertEqual(self.fence("Write", "src/[id]/page.tsx").returncode, 0)
+        self.assertEqual(self.fence("Read", "/etc/passwd").returncode, 0)
+        for target in ("other.py", str(self.root / "../escape.py"), "/etc/passwd"):
+            blocked = self.fence("Write", target)
+            self.assertEqual(blocked.returncode, 2, target)
+            self.assertIn("ALLOWED_PATHS", blocked.stderr)
+        self.assertEqual(self.fence("Edit", "app.py", Path(self.case.name) / "missing").returncode, 2)
+
 if __name__ == "__main__":
     unittest.main()

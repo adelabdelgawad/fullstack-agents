@@ -142,9 +142,11 @@ one naming a missing binary) is an incomplete audit, a skipped classification,
 and a session-start notice telling the lead to ask the user to add it; plain
 `claude` is never used as a fallback. Audit and classifier calls pass
 `--tools ""`, so the alias's permission bypass has nothing to bypass. The Claude
-implementer engine in `codex-task.sh` still launches `claude` directly: its
-`ALLOWED_PATHS` write fence relies on `--permission-mode dontAsk`, which
-`--dangerously-skip-permissions` overrides.
+implementer engine in `codex-task.sh` also launches `cc`. Because
+`--dangerously-skip-permissions` overrides `--permission-mode dontAsk` (verified:
+an unlisted write succeeded), the `ALLOWED_PATHS` fence is a PreToolUse hook
+passed with `--settings` (`scripts/lib/allowed-paths-fence`); hooks and
+`--disallowedTools` deny rules still apply under the bypass (verified).
 
 ## Bounded Claude audit and repair handoff
 
