@@ -85,6 +85,8 @@ at most without new evidence. Run at most two parallel workers.
 - Run known local checks that finish in about a minute with short output directly
   and save their logs; avoid worker startup overhead for these commands.
 - Fix compiler/lint/test failures as a batch, then run affected checks once.
+- Format only the files you changed; never run a workspace- or package-wide formatter
+  (`cargo fmt --all`, `prettier --write .`) unless the project declares its tree format-clean.
 - Keep full logs on disk. Return summaries, precise citations and failing lines,
   rather than copying logs or complete files into messages.
 - Plan and audit a coherent deliverable, not each file or exploratory step. Default

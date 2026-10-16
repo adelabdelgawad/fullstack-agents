@@ -113,6 +113,7 @@ conventions_preamble() {
   [ "$engine" = "claude" ] &&
     printf 'You are not the session lead or orchestrator: ignore manual text about planning, delegating, dispatching implementers or edit budgets, and never call scripts/codex-task.sh. Edit the files yourself.\n'
   printf 'CONVENTIONS: before editing, read and obey the repository manuals that apply to the paths you touch: CLAUDE.md, AGENTS.md (root and nested) and .claude/rules/ inside this repository. Never read or write outside the repository root; a denied tool call is final, so do not retry it. The brief wins on scope.\n'
+  printf 'FORMAT: format only the files you changed (for example `rustfmt --edition <edition> <file>` or `prettier --write <file>`); never run a workspace- or package-wide formatter (`cargo fmt --all`, `cargo fmt -p`, `prettier --write .`), even as a check-and-fix step.\n'
   printf 'READING: locate with grep, then read only the line ranges you need (start at the file:line sites the brief names); never read a whole large file to change one spot, and do not re-read a range you already have.\n\n'
   [ "$mode" = "implement" ] &&
     printf 'SCOPE: the edit and write tools accept only the brief'"'"'s ALLOWED_PATHS; never change a file from bash. If the change needs another path, stop and name it in "open_risks".\n\n'

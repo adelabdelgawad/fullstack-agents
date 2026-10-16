@@ -74,7 +74,7 @@ def post(payload):
             args = [executable, "check", "--output-format", "concise", "--", str(path)]
         else:
             # cargo fmt supplies the correct project edition; no guessed edition.
-            messages.append(f"{raw}: run cargo fmt --all --check from {service} (plus the Rust quality gates).")
+            messages.append(f"{raw}: check only this file: rustfmt --check --edition <crate edition> {raw} (never a workspace-wide cargo fmt).")
             continue
         try:
             result = subprocess.run(args, cwd=service, capture_output=True, text=True, timeout=20)

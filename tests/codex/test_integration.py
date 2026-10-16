@@ -913,6 +913,8 @@ class ClaudeImplementerTests(unittest.TestCase):
         self.assertIn("allowed-paths-fence", settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"])
         self.assertEqual(call["env"]["FSA_IMPLEMENTER_ROOT"], str(self.root))
         self.assertEqual(Path(call["env"]["FSA_ALLOWED_PATHS_FILE"]).read_text().split(), ["app.py"])
+        prompt = next((Path(self.case.name) / "runs").glob("*.prompt.md")).read_text()
+        self.assertIn("never run a workspace- or package-wide formatter", prompt)
 
     def test_codex_implementer_gets_project_writable_dirs(self):
         fake = Path(self.case.name) / "bin/codex"

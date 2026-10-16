@@ -73,7 +73,7 @@ If CI and local gates diverge, CI is the source of truth — update the justfile
 
 | Failure | Action |
 |---|---|
-| fmt | `cargo fmt --all` — never hand-format |
+| fmt | Format only the files you changed: `rustfmt --edition <crate edition> <files>` (or `cargo fmt -- <files>`). Run `cargo fmt --all` only when the project declares its tree rustfmt-clean; a workspace-wide reformat in a shared tree rewrites other people's files. Never hand-format |
 | clippy warning | Fix the code; if clippy is genuinely wrong, restructure so the lint doesn't fire — no `#[allow]` |
 | sqlx prepare --check | `cargo sqlx prepare --workspace` and commit `.sqlx/` |
 | audit vulnerability | Upgrade the dependency; if no fix released, document and pin the decision |
