@@ -16,8 +16,10 @@ BUNDLE = Path(__file__).resolve().parents[1]
 
 def claude_argv():
     """The bundle ships claude_cli beside this script; the source tree keeps it in the shared lib."""
-    if not Path(__file__).with_name("claude_cli.py").is_file():
-        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "plugins/fullstack-agents/scripts/lib"))
+    here = Path(__file__).resolve().parent
+    lib = here if (here / "claude_cli.py").is_file() else here.parents[2] / "plugins/fullstack-agents/scripts/lib"
+    if str(lib) not in sys.path:
+        sys.path.insert(0, str(lib))
     import claude_cli
     return claude_cli.argv()
 SYSTEM = """You are the independent auditor of a Codex-led implementation.

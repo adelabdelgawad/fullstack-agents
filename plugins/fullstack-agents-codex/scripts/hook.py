@@ -12,8 +12,10 @@ BUNDLE = Path(__file__).resolve().parents[1]
 
 def shared_lib():
     """The bundle ships the shared helpers beside this script; the source tree keeps them in the plugin lib."""
-    if not Path(__file__).with_name("stop_guard.py").is_file():
-        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "plugins/fullstack-agents/scripts/lib"))
+    here = Path(__file__).resolve().parent
+    lib = here if (here / "stop_guard.py").is_file() else here.parents[2] / "plugins/fullstack-agents/scripts/lib"
+    if str(lib) not in sys.path:
+        sys.path.insert(0, str(lib))
 
 
 def guard():

@@ -752,7 +752,8 @@ class StopGuardTests(unittest.TestCase):
 
     def codex(self, mode, payload, script=None):
         script = script or self.bundle / "scripts/hook.py"
-        result = run([sys.executable, str(script), mode], input=json.dumps(payload), env=self.env)
+        # -I drops the script directory from sys.path, as an isolated hook invocation does.
+        result = run([sys.executable, "-I", str(script), mode], input=json.dumps(payload), env=self.env)
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout) if result.stdout.strip() else None
 

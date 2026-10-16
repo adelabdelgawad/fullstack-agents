@@ -1,6 +1,6 @@
 {
   "name": "fullstack-agents-codex",
-  "version": "3.59.4",
+  "version": "3.59.5",
   "description": "Codex-led Python/Rust/Next.js workflows with progressive skill loading and bounded Claude audit handoffs.",
   "author": {
     "name": "Adel Abdelgawad"
