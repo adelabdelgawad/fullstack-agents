@@ -20,9 +20,9 @@ The complete adapted rules are in [references/engineering-guide.md](references/e
 - Line 9: When to Use
 - Line 17: The Process
 - Line 76: Red Flags — STOP and Return to Phase 1
-- Line 89: Common Rationalizations
-- Line 101: Quick Reference
-- Line 110: Impact
+- Line 91: Common Rationalizations
+- Line 105: Quick Reference
+- Line 114: Impact
 
 ## Workflow reference
 

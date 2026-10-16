@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# stop-guard — Stop/UserPromptSubmit hook: open ledger tasks keep the turn going unless it names what it waits on.
+exec python3 -I "$(dirname "$0")/../scripts/fsa-stop-guard" "$@"

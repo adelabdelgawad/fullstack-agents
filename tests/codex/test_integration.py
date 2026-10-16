@@ -107,7 +107,7 @@ class BundleTests(unittest.TestCase):
         self.assertEqual(manifest["name"], "fullstack-agents-codex")
         self.assertTrue((self.bundle / manifest["skills"]).is_dir())
         hooks = json.loads((self.bundle / manifest["hooks"]).read_text())["hooks"]
-        self.assertEqual(set(hooks), {"SessionStart", "UserPromptSubmit", "PostToolUse"})
+        self.assertEqual(set(hooks), {"SessionStart", "UserPromptSubmit", "PostToolUse", "Stop"})
         for groups in hooks.values():
             self.assertIn('${PLUGIN_ROOT}', groups[0]["hooks"][0]["command"])
             self.assertIn('runpy.run_path', groups[0]["hooks"][0]["command"])
@@ -125,7 +125,7 @@ class BundleTests(unittest.TestCase):
                       ", 'mode':sys.argv[1], 'payload':json.load(sys.stdin)}))")
             env = dict(os.environ, PLUGIN_ROOT=str(old))
             old.rmdir()  # Reproduce cache eviction while the session retains its hook command.
-            for event, mode in (("SessionStart", "start"), ("UserPromptSubmit", "prompt"), ("PostToolUse", "post")):
+            for event, mode in (("SessionStart", "start"), ("UserPromptSubmit", "prompt"), ("PostToolUse", "post"), ("Stop", "stop")):
                 command = hooks[event][0]["hooks"][0]["command"]
                 result = run(["bash", "-c", command], env=env, input='{"cwd":"/fixture"}')
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -311,8 +311,11 @@ class CLITests(unittest.TestCase):
             path.write_text("#!" + sys.executable + "\n" + code)
             path.chmod(0o755)
         self.call = Path(self.scratch.name) / "call.json"
+        self.home = Path(self.scratch.name) / "home"
+        write(self.home / ".bashrc", "alias cc='claude --dangerously-skip-permissions'\n")
         self.env = {**os.environ, "PATH": str(self.bin) + os.pathsep + os.environ["PATH"], "FSA_TEST_CALL": str(self.call),
-                    "CODEX_HOME": str(Path(self.scratch.name) / "codex-home"), "CODEX_THREAD_ID": "test-lead"}
+                    "CODEX_HOME": str(Path(self.scratch.name) / "codex-home"), "CODEX_THREAD_ID": "test-lead",
+                    "HOME": str(self.home)}
         self.runs = Path(self.scratch.name) / "runs"
         self.runs.mkdir()
 
@@ -342,10 +345,18 @@ class CLITests(unittest.TestCase):
         self.assertEqual(call["args"][call["args"].index("--tools") + 1], "")
         self.assertEqual(call["args"][call["args"].index("--setting-sources") + 1], "")
         self.assertIn("--disable-slash-commands", call["args"])
-        self.assertNotIn("--dangerously-skip-permissions", call["args"])
+        # The launch is the user's `cc` alias expansion; the tool-free flags leave it nothing to bypass.
+        self.assertEqual(call["args"][:2], ["--dangerously-skip-permissions", "-p"])
         self.assertIn("-value = 1", call["input"])
         self.assertIn("+value = 2", call["input"])
         self.assertEqual((self.root / "app.py").read_text(), "value = 2\n")
+
+    def test_missing_cc_alias_is_incomplete_names_the_alias_and_never_calls_claude(self):
+        (self.home / ".bashrc").write_text("")
+        result = self.audit()
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("alias cc=", result.stdout + result.stderr)
+        self.assertFalse(self.call.exists())
 
     def test_identical_prior_pass_skips_model_and_changes_invalidate_reuse(self):
         first = self.audit()
@@ -705,6 +716,153 @@ class HookAndValidationTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertIn("missing local TypeScript", result.stderr)
 
+
+CLAUDE_GUARD = REPO / "plugins/fullstack-agents/scripts/fsa-stop-guard"
+
+
+class StopGuardTests(unittest.TestCase):
+    """Open ledger work keeps a turn going on both engines unless the reply names what it waits on."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.scratch = tempfile.TemporaryDirectory(prefix="fsa-stop-guard-")
+        cls.bundle = Path(cls.scratch.name) / "bundle"
+        render(cls.bundle)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.scratch.cleanup()
+
+    def setUp(self):
+        self.case = tempfile.TemporaryDirectory(prefix="fsa-stop-case-")
+        base = Path(self.case.name)
+        self.root = base / "repo"
+        self.root.mkdir()
+        self.env = {**os.environ, "FSA_TASKS_DIR": str(base / "tasks"), "FSA_STOP_GUARD_DIR": str(base / "guard")}
+        self.env.pop("FSA_STOP_GUARD", None)
+
+    def tearDown(self):
+        self.case.cleanup()
+
+    def ledger(self, session, status):
+        result = run([sys.executable, str(self.bundle / "scripts/tasks.py"), "init", "--session", session,
+                      "--root", str(self.root), "--file", f"docs/tasks/{session}.md", "--title", "Work",
+                      "--task", f"T01|{status}|Implement|"], env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def codex(self, mode, payload, script=None):
+        script = script or self.bundle / "scripts/hook.py"
+        result = run([sys.executable, str(script), mode], input=json.dumps(payload), env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout) if result.stdout.strip() else None
+
+    def stop(self, session, message, script=None):
+        return self.codex("stop", {"session_id": session, "cwd": str(self.root),
+                                   "last_assistant_message": message, "stop_hook_active": False}, script)
+
+    def test_bundle_registers_stop_hook_and_ships_guard(self):
+        hooks = json.loads((self.bundle / "hooks/hooks.json").read_text())["hooks"]
+        self.assertIn("stop", hooks["Stop"][0]["hooks"][0]["command"])
+        self.assertTrue((self.bundle / "scripts/stop_guard.py").is_file())
+
+    def test_status_answer_with_open_tasks_is_sent_back_to_work(self):
+        self.ledger("s1", "in_progress")
+        out = self.stop("s1", "No, the last reply ended active work. Nothing runs in the background.")
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("T01 (in_progress)", out["reason"])
+
+    def test_source_tree_hook_resolves_the_shared_guard(self):
+        self.ledger("s1", "pending")
+        out = self.stop("s1", "Progress: 15 of 22 done; lifecycle actions are being implemented.", SCRIPTS / "hook.py")
+        self.assertEqual(out["decision"], "block")
+
+    def test_explicit_wait_on_user_question_or_done_ledger_releases(self):
+        self.ledger("s1", "in_progress")
+        self.assertIsNone(self.stop("s1", "Plan ready.\nWaiting on: you - approve the migration"))
+        self.assertIsNone(self.stop("s1", "Which channel should the trigger use?"))
+        self.assertIsNone(self.stop("s1", "Blocked: the auditor CLI is unavailable"))
+        self.ledger("s2", "done")
+        self.assertIsNone(self.stop("s2", "All done."))
+        self.assertIsNone(self.stop("unbound", "Finished."))
+
+    def test_codex_cannot_end_its_turn_waiting_on_a_worker(self):
+        self.ledger("s1", "in_progress")
+        self.assertEqual(self.stop("s1", "Waiting on: worker chatbot_readiness")["decision"], "block")
+
+    def test_user_pause_releases_and_a_later_prompt_resumes_the_guard(self):
+        self.ledger("s1", "in_progress")
+        self.codex("prompt", {"session_id": "s1", "prompt": "stop here, I will revise the plan"})
+        self.assertIsNone(self.stop("s1", "Paused all work."))
+        self.codex("prompt", {"session_id": "s1", "prompt": "is the task keeping going?"})
+        self.assertEqual(self.stop("s1", "Yes, still running.")["decision"], "block")
+
+    def test_unchanged_ledger_blocks_at_most_three_times(self):
+        self.ledger("s1", "in_progress")
+        decisions = [self.stop("s1", "Still working.") for _ in range(4)]
+        self.assertEqual([bool(d) for d in decisions], [True, True, True, False])
+
+    def test_kill_switch_disables_the_guard(self):
+        self.ledger("s1", "in_progress")
+        self.env["FSA_STOP_GUARD"] = "off"
+        self.assertIsNone(self.stop("s1", "Still working."))
+
+    def test_claude_guard_reads_transcript_and_accepts_background_wait(self):
+        self.ledger("c1", "in_progress")
+        transcript = Path(self.case.name) / "t.jsonl"
+        entry = {"type": "assistant", "message": {"content": [{"type": "text", "text": "Tests are running."}]}}
+        transcript.write_text(json.dumps(entry) + "\n")
+        payload = {"session_id": "c1", "cwd": str(self.root), "transcript_path": str(transcript)}
+        result = run([sys.executable, str(CLAUDE_GUARD), "stop"], input=json.dumps(payload), env=self.env)
+        self.assertEqual(json.loads(result.stdout)["decision"], "block", result.stderr)
+        payload["last_assistant_message"] = "Started the suite.\nWaiting on: background task bt4t8yate"
+        result = run([sys.executable, str(CLAUDE_GUARD), "stop"], input=json.dumps(payload), env=self.env)
+        self.assertEqual(result.stdout.strip(), "", result.stderr)
+
+
+class ClaudeLauncherTests(unittest.TestCase):
+    """Claude starts only through the user's `cc` alias; `/usr/bin/cc` (the C compiler) is never used."""
+
+    LIB = REPO / "plugins/fullstack-agents/scripts/lib/claude_cli.py"
+
+    def setUp(self):
+        self.case = tempfile.TemporaryDirectory(prefix="fsa-cc-")
+        base = Path(self.case.name)
+        self.home, self.bin = base / "home", base / "bin"
+        write(self.bin / "claude", '#!/bin/sh\necho called >> "$FSA_TEST_CALL"\n')
+        (self.bin / "claude").chmod(0o755)
+        self.call = base / "call.txt"
+        self.env = {**os.environ, "HOME": str(self.home), "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
+                    "FSA_TEST_CALL": str(self.call), "CLAUDE_CONFIG_DIR": str(base / "claude")}
+        self.env.pop("FSA_CLASSIFIER_CMD", None)
+
+    def tearDown(self):
+        self.case.cleanup()
+
+    def resolve(self, bashrc):
+        write(self.home / ".bashrc", bashrc)
+        return run([sys.executable, "-I", str(self.LIB)], env=self.env)
+
+    def test_alias_expansion_with_embedded_quotes_is_the_launch_argv(self):
+        result = self.resolve("alias cc=\"claude --dangerously-skip-permissions --name 'a b'\"\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "claude --dangerously-skip-permissions --name 'a b'")
+
+    def test_missing_alias_or_binary_asks_for_the_alias(self):
+        for bashrc in ("", "alias cc='no-such-claude-binary -p'\n"):
+            result = self.resolve(bashrc)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("alias cc='claude --dangerously-skip-permissions'", result.stderr)
+
+    def test_classifier_without_alias_never_calls_claude(self):
+        write(self.home / ".bashrc", "")
+        transcript = Path(self.case.name) / "t.jsonl"
+        entry = {"type": "assistant", "message": {"content": [{"type": "text", "text": "Approve the plan?"}]}}
+        transcript.write_text(json.dumps(entry) + "\n")
+        payload = {"session_id": "s1", "transcript_path": str(transcript), "cwd": self.case.name}
+        result = run([sys.executable, str(REPO / "plugins/fullstack-agents/scripts/fsa-classify"), "reply"],
+                     input=json.dumps(payload), env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(self.call.exists())
 
 if __name__ == "__main__":
     unittest.main()

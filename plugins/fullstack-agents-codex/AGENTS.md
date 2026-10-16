@@ -42,6 +42,33 @@ or development database migration unless the user explicitly says no reload, no
 migration, or no commit. Development authorization never implies permission to
 mutate production.
 
+## Turn ending and continuity
+
+A Codex turn ends at your final message, and nothing restarts it: a finishing
+worker does not wake you. While ledger tasks are open:
+
+- A user question asked mid-work gets a short answer in a commentary message,
+  then the work continues in the same turn. A status question is never a stop.
+- Progress reports are commentary, never the final message.
+- Wait for running workers inside the turn (`wait_agent` with a long timeout);
+  never end the turn on them and never poll with fixed sleeps.
+- End the turn only when the ledger is done, or with a final line
+  `Waiting on: you - <decision>`, `Paused: <user instruction>` or
+  `Blocked: <cause>`. Only an explicit stop/pause from the user pauses work.
+
+The bundle's `Stop` hook enforces this from the session task ledger: it sends the
+turn back with the open task ids (at most three times per unchanged ledger) and
+releases it on those final lines, on a closing question, or after a stop/pause
+prompt. `FSA_STOP_GUARD=off` disables it.
+
+Keep sessions short-lived: one deliverable per session. When the context passes
+about half the window, write the handoff (state, evidence paths, next step) to
+the repository's existing handoff file and continue from a fresh session rather
+than carrying a 200k+ token history into every step. A failing or timing-out
+check is measured before it is rerun: read the retained state, logs and timings
+(for SQL, the plan with `EXPLAIN ANALYZE`), then form one hypothesis; rerun once
+at most without new evidence. Run at most two parallel workers.
+
 ## Token discipline
 
 - Search with `rg` first. Read specific ranges (at most 200 source lines per

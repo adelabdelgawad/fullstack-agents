@@ -141,3 +141,12 @@ each worker fragment; account for automatic watchers before concurrent edits.
 A status question or continuation does not restart intake, planning or completed
 checks. Keep the task registration bound to the session cwd even when operating
 on a second repository; do not overwrite it with that repository's task ledger.
+
+## Ending a turn
+
+Nothing restarts a Codex turn after its final message, and finishing workers do not wake the
+lead. While ledger tasks are open, answer a mid-work question in a commentary message and continue
+in the same turn; progress reports are commentary. Wait for workers in the turn (`wait_agent`, long
+timeout), never with fixed sleeps. End the turn only when the ledger is done or with a final line
+`Waiting on: you - <decision>`, `Paused: <user instruction>` or `Blocked: <cause>`. The bundle's
+`Stop` hook enforces this (see `AGENTS.md`, "Turn ending and continuity").

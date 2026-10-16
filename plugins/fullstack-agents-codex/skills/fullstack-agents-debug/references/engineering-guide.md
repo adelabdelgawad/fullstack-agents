@@ -83,6 +83,8 @@ If any of these are true, you have left the process:
 - The fix works but you cannot explain why
 - You have applied 3+ attempted fixes without success
 - You are editing files not in the stack trace
+- You are rerunning a failing or timing-out check without new evidence
+- You are about to raise a timeout or deadline before measuring where the time goes
 
 **ALL of these mean: STOP. Go back to Phase 2. Re-investigate.**
 
@@ -97,6 +99,8 @@ If any of these are true, you have left the process:
 | "It's probably a library bug" | It's almost never a library bug |
 | "This is too complex to trace" | Break it into smaller steps. Trace each one |
 | "I'll add logging and try again" | Add logging AND read existing logs first |
+| "It's probably load; rerun it" | A repeat failure is data: read the retained state timeline and timings first |
+| "Just raise the timeout" | Measure first; for SQL run `EXPLAIN ANALYZE` (planner estimates, JIT, locks) |
 
 ## Quick Reference
 

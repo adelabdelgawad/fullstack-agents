@@ -10,6 +10,29 @@ from pathlib import Path
 BUNDLE = Path(__file__).resolve().parents[1]
 
 
+def shared_lib():
+    """The bundle ships the shared helpers beside this script; the source tree keeps them in the plugin lib."""
+    if not Path(__file__).with_name("stop_guard.py").is_file():
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "plugins/fullstack-agents/scripts/lib"))
+
+
+def guard():
+    shared_lib()
+    import stop_guard
+    return stop_guard
+
+
+def launcher_hint():
+    """Claude audits run through the user's `cc` alias; a missing alias is relayed to the user up front."""
+    shared_lib()
+    import claude_cli
+    try:
+        claude_cli.argv()
+        return ""
+    except claude_cli.MissingAlias as error:
+        return f"\n\nClaude launcher missing: {error} Tell the user this before any Claude audit."
+
+
 def context(event, text):
     print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}))
 
@@ -71,12 +94,14 @@ def main():
         payload = json.load(sys.stdin)
         mode = sys.argv[1]
         if mode == "start":
+            launcher = launcher_hint()
             if payload.get("source") in {"resume", "compact"}:
-                context("SessionStart", f"Fullstack Agents bundle: {BUNDLE}. Reuse cached profiles and loaded skill sections. Codex leads; Claude audits bounded diffs and returns repair scope. Resume fullstack-agents-task-flow; preserve existing authorization and run required checks.")
+                context("SessionStart", f"Fullstack Agents bundle: {BUNDLE}. Reuse cached profiles and loaded skill sections. Codex leads; Claude audits bounded diffs and returns repair scope. Resume fullstack-agents-task-flow; preserve existing authorization and run required checks." + launcher)
             else:
-                context("SessionStart", f"Fullstack Agents bundle root: {BUNDLE}\n\n" + (BUNDLE / "AGENTS.md").read_text())
+                context("SessionStart", f"Fullstack Agents bundle root: {BUNDLE}\n\n" + (BUNDLE / "AGENTS.md").read_text() + launcher)
         elif mode == "prompt":
             prompt = payload.get("prompt", "")
+            guard().record_prompt(payload.get("session_id"), prompt)
             if any(marker in prompt for marker in ("SYSTEM NOTIFICATION - NOT USER INPUT", "<task-notification>")):
                 return 0
             if len(prompt.split()) < 6:
@@ -84,9 +109,14 @@ def main():
             context("UserPromptSubmit", "Codex leads: reuse the cached scan and skills, route by service/lane, search before bounded reads. Follow fullstack-agents-task-flow: investigate, plan, implement, validate, bounded read-only Opus audit, scoped Codex repair. Record actual phase transitions with scripts/phase.py from this bundle. For multi-step implementation, maintain and register a repository Markdown task list with scripts/tasks.py and update statuses for the dashboard Tasks section; complete only when the work is done. Do not add approval rounds for already authorized work.")
         elif mode == "post":
             post(payload)
+        elif mode == "stop":
+            reason = guard().decide(payload.get("session_id"), payload.get("cwd"),
+                                    payload.get("last_assistant_message"), "codex")
+            if reason:
+                print(json.dumps({"decision": "block", "reason": reason}))
         else:
             raise ValueError("unknown hook mode")
-    except (ValueError, OSError, KeyError, IndexError, TypeError) as error:
+    except (ValueError, OSError, KeyError, IndexError, TypeError, ImportError) as error:
         print(f"Fullstack Agents hook incomplete: {error}", file=sys.stderr)
         return 1
     return 0

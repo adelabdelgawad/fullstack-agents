@@ -36,6 +36,18 @@
         ],
         "matcher": "^apply_patch$"
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I -c 'import re, runpy, sys\nfrom pathlib import Path\nroot = Path(sys.argv.pop(1))\nversions = sorted(\n    (p for p in root.parent.iterdir() if re.fullmatch(r\"[0-9]+\\.[0-9]+\\.[0-9]+\", p.name)),\n    key=lambda p: tuple(map(int, p.name.split(\".\"))), reverse=True,\n) if root.parent.is_dir() else []\nscript = next((p / \"scripts/hook.py\" for p in [root, *versions]\n               if (p / \"scripts/hook.py\").is_file()), None)\nif script is None:\n    sys.exit(\"Fullstack Agents hook unavailable: reinstall the plugin or reload its cache\")\nsys.argv[0] = str(script)\nsys.path.insert(0, str(script.parent))\nrunpy.run_path(str(script), run_name=\"__main__\")\n' \"${PLUGIN_ROOT}\" stop",
+            "timeout": 30,
+            "statusMessage": "Fullstack Agents Codex: stop"
+          }
+        ]
+      }
     ]
   }
 }

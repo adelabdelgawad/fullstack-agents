@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""Claude hook entry for the shared stop guard: `prompt` records pause intent, `stop` blocks premature turn ends."""
+import json
+import os
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+import stop_guard
+
+
+def last_reply(transcript):
+    try:
+        with open(transcript, "rb") as stream:
+            stream.seek(max(0, os.path.getsize(transcript) - 400000))
+            lines = stream.read().decode("utf-8", "replace").splitlines()
+    except (OSError, TypeError):
+        return ""
+    for line in reversed(lines):
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if entry.get("type") != "assistant" or entry.get("isSidechain"):
+            continue
+        texts = [part.get("text", "") for part in (entry.get("message") or {}).get("content") or []
+                 if isinstance(part, dict) and part.get("type") == "text"]
+        if texts and texts[-1].strip():
+            return texts[-1]
+    return ""
+
+
+def main():
+    try:
+        hook = json.load(sys.stdin)
+        mode = sys.argv[1]
+    except (ValueError, IndexError):
+        return 0
+    if mode == "prompt":
+        stop_guard.record_prompt(hook.get("session_id"), hook.get("prompt"))
+    elif mode == "stop":
+        message = hook.get("last_assistant_message") or last_reply(hook.get("transcript_path"))
+        reason = stop_guard.decide(hook.get("session_id"), hook.get("cwd"), message, "claude")
+        if reason:
+            print(json.dumps({"decision": "block", "reason": reason}))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

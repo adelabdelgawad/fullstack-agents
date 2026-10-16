@@ -113,6 +113,39 @@ These are Codex skills, not Claude slash commands. `$fullstack-agents-task-flow`
 holds the Codex-led flow. Skill-local references resolve beside the skill;
 bundle paths resolve inside `.codex/fullstack-agents/`.
 
+## Turn continuity (Stop hook)
+
+A Codex turn ends at the lead's final message and nothing restarts it; finishing
+workers do not wake the lead. The bundle's `Stop` hook (`scripts/hook.py stop`,
+shared logic in `plugins/fullstack-agents/scripts/lib/stop_guard.py`) reads the
+session's registered task ledger. With `pending` or `in_progress` rows it sends
+the turn back with the open ids unless the final line is `Waiting on: you - ...`,
+`Paused: ...` or `Blocked: ...`, or the reply closes with a question. A user
+prompt that asks to stop or pause releases it; every other prompt re-arms it. An
+unchanged ledger is sent back at most three times. `FSA_STOP_GUARD=off` disables
+it. Codex runs a new hook only after it is trusted: open `/hooks` once after
+upgrading and trust the `Stop` entry. Verified on Codex CLI 0.162.1: the hook
+receives `session_id`, `cwd` and `last_assistant_message`, and `decision: block`
+continues the turn with the reason as the next instruction. The Claude plugin
+registers the same guard (`hooks/stop-guard`), where `Waiting on: <background
+task>` also releases the turn because task notifications wake Claude.
+
+## Claude launcher (`cc` alias)
+
+Every Claude call the plugins make (Codex audits in `handoff.py`, the Haiku
+classifier, dashboard-started sessions) runs through the user's `cc` shell
+alias, normally `alias cc='claude --dangerously-skip-permissions'`. Scripts do
+not see shell aliases and `/usr/bin/cc` is the C compiler, so
+`plugins/fullstack-agents/scripts/lib/claude_cli.py` reads the alias from an
+interactive `bash -ic 'alias cc'` and runs its expansion. A missing alias (or
+one naming a missing binary) is an incomplete audit, a skipped classification,
+and a session-start notice telling the lead to ask the user to add it; plain
+`claude` is never used as a fallback. Audit and classifier calls pass
+`--tools ""`, so the alias's permission bypass has nothing to bypass. The Claude
+implementer engine in `codex-task.sh` still launches `claude` directly: its
+`ALLOWED_PATHS` write fence relies on `--permission-mode dontAsk`, which
+`--dangerously-skip-permissions` overrides.
+
 ## Bounded Claude audit and repair handoff
 
 Save a concise plan containing files, acceptance criteria and check results.

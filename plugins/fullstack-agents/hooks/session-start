@@ -116,6 +116,10 @@ fi
 scripts_escaped=$(escape_for_json "${PLUGIN_ROOT}/scripts")
 session_context="${session_context}\n\n**Plugin scripts:** \`${scripts_escaped}\` — \`codex-task.sh\` (Codex dispatch, \`--herdr\` for a visible pane) \`herdr-watch.sh\` (live view of a background worker's transcript) and \`team-board\` (shared claims, locks and notes for the sessions on this repository)."
 
+if [ -n "$PYTHON_BIN" ] && ! cc_hint=$("$PYTHON_BIN" -I "${PLUGIN_ROOT}/scripts/lib/claude_cli.py" 2>&1 >/dev/null); then
+    session_context="${session_context}\n\n**Claude launcher missing:** $(escape_for_json "$cc_hint") Tell the user this before any audit, classifier or Claude worker run."
+fi
+
 # Output context injection as JSON.
 # Keep both shapes for compatibility:
 # - Cursor hooks expect additional_context.

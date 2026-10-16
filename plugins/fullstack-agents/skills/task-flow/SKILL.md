@@ -115,3 +115,12 @@ skills, the cached scan and existing plan across status questions and continuati
 Reload native services once per integrated batch after required checks pass;
 account for automatic watchers before concurrent edits. Keep task registration
 bound to the session cwd when operating on a second repository.
+
+## Ending a turn
+
+While ledger tasks are open, an answer or a progress report is not the end of the work: answer
+briefly and continue. End the turn only when the ledger is done or with a final line
+`Waiting on: you - <decision>`, `Waiting on: <background task>`, `Paused: <user instruction>` or
+`Blocked: <cause>`. The plugin's `stop-guard` hook enforces this from the session ledger (three
+continuations per unchanged ledger; `FSA_STOP_GUARD=off` disables it). Mark finished or abandoned
+tasks in the ledger so it never holds a turn open on stale rows.

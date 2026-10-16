@@ -152,8 +152,15 @@ def last_assistant_text(transcript, limit=1500):
 
 def ask_haiku(system, user, schema):
     cmd = os.environ.get("FSA_CLASSIFIER_CMD")
-    argv = cmd.split() if cmd else [
-        "claude", "-p", "--model", MODEL, "--setting-sources", "", "--strict-mcp-config", "--tools", "",
+    sys.path.insert(0, str(HERE / "lib"))
+    import claude_cli
+    try:
+        launcher = cmd.split() if cmd else claude_cli.argv()
+    except claude_cli.MissingAlias as error:
+        log({"mode": "launch", "error": str(error)})
+        return None, 0.0
+    argv = launcher if cmd else launcher + [
+        "-p", "--model", MODEL, "--setting-sources", "", "--strict-mcp-config", "--tools", "",
         "--no-session-persistence", "--output-format", "json", "--json-schema", json.dumps(schema),
         "--system-prompt", system]
     cwd = tempfile.mkdtemp(prefix="fsa-classify-")
