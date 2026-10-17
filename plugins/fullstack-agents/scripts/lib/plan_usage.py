@@ -1,6 +1,7 @@
 """Subscription plan usage: Claude from the account's usage endpoint, Codex from its newest rollout's rate limits."""
 import json
 import os
+import sqlite3
 import threading
 import time
 import urllib.error
@@ -13,6 +14,7 @@ CACHE_S = 300
 BACKOFF_S = 600
 CACHE_FILE = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "fullstack-agents" / "claude-plan.json"
 BASES = (os.environ.get("CLAUDE_CONFIG_DIR"), "~/.claude", "~/.claude-anthropic")
+OPENCODE_DB = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "opencode" / "opencode.db"
 CODEX_HOME = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
 NAMED = {"five_hour": "5 h", "seven_day": "week", "seven_day_opus": "week · Opus", "seven_day_sonnet": "week · Sonnet"}
 _LOCK, _CACHE = threading.Lock(), {"at": 0.0, "value": None, "busy": False}
@@ -173,5 +175,39 @@ def codex_plan():
     return {"error": "no Codex rate limits recorded yet"}
 
 
+_GROK = {"at": 0.0, "value": None}
+
+
+def grok_usage():
+    """Grok spend, recomputed at most once a minute because the opencode database is large."""
+    if _GROK["value"] is None or time.time() - _GROK["at"] > 60:
+        _GROK.update(at=time.time(), value=_grok_query(time.time()))
+    return _GROK["value"]
+
+
+def _grok_query(now):
+    """Grok spend from opencode's message log; xAI reports no plan limits to opencode, so there are no percentages."""
+    day = time.mktime(time.localtime(now)[:3] + (0, 0, 0, 0, 0, -1))
+    try:
+        db = sqlite3.connect(f"file:{OPENCODE_DB}?mode=ro", uri=True, timeout=2)
+    except sqlite3.Error:
+        return {"error": "no opencode data"}
+    try:
+        query = ("select coalesce(sum(json_extract(data, '$.cost')), 0), coalesce(sum(json_extract(data, '$.tokens.total')), 0) "
+                 "from message where json_extract(data, '$.providerID') = 'xai' and time_created >= ?")
+        today = db.execute(query, (int(day * 1000),)).fetchone()
+        week = db.execute(query, (int((now - 7 * 86400) * 1000),)).fetchone()
+        last = db.execute("select max(time_created) from message where json_extract(data, '$.providerID') = 'xai'").fetchone()[0]
+    except sqlite3.Error as e:
+        return {"error": f"opencode data unreadable ({type(e).__name__})"}
+    finally:
+        db.close()
+    if not last:
+        return {"error": "no Grok runs recorded"}
+    return {"plan": "xAI", "spend": [{"name": "today", "cost": today[0], "tokens": today[1]},
+                                     {"name": "7 days", "cost": week[0], "tokens": week[1]}],
+            "last_at": last / 1000}
+
+
 def plan_usage(wait=False):
-    return {"claude": claude_plan(wait), "codex": codex_plan()}
+    return {"claude": claude_plan(wait), "codex": codex_plan(), "grok": grok_usage()}

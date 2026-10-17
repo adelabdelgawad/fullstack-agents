@@ -88,6 +88,7 @@ function fleetTiles() {
     ${tile("Context blowouts", t.blowouts ?? 0, "compacted or ≥ 90% full", t.blowouts ? "bad" : "")}
     ${planTile("Claude plan", ((state && state.plan) || {}).claude)}
     ${planTile("Codex plan", ((state && state.plan) || {}).codex)}
+    ${spendTile("Grok", ((state && state.plan) || {}).grok)}
     ${tile("Tokens, last minute", fmtTokens(t.tpm), `${fmtTokens(t.tokens_today)} today · ${fmtCost(t.cost_today)} API-equivalent`, "", sparkline(fleet.tpm))}
   </section>`;
 }
@@ -101,6 +102,12 @@ function planTile(label, p) {
     const tip = known ? `${label} ${w.name}: ${w.pct}% used${until ? `, resets in ${until}` : ""}` : `${label} ${w.name}: window reset since the last reading`;
     return `<div class="plan-row" title="${esc(tip)}"><span>${esc(w.name)}</span><span class="orc-bar ctx-${tone}"><span style="width:${known ? Math.min(w.pct, 100) : 0}%"></span></span><b>${known ? Math.round(w.pct) + "%" : "—"}</b><em>${until ? "↻ " + esc(until) : known ? "" : "reset"}</em></div>`; };
   return `<div class="ft plan ${cls}"${p.stale ? ` title="${esc(p.stale)}"` : ""}><div class="ft-l">${esc(label)}${p.plan ? ` · ${esc(p.plan)}` : ""}${p.stale ? ' <span class="stale">· stale</span>' : ""}</div>${p.windows.map(row).join("")}${creditsLine(p)}</div>`;
+}
+
+function spendTile(label, p) {
+  if (!p || !p.spend) return `<div class="ft"><div class="ft-l">${esc(label)}</div><div class="ft-v">—</div><div class="ft-s">${esc((p && p.error) || "no data")}</div></div>`;
+  const row = x => `<div class="plan-row spend"><span>${esc(x.name)}</span><b>${esc(fmtTokens(x.tokens))}</b><em>${esc(fmtCost(x.cost))}</em></div>`;
+  return `<div class="ft plan" title="xAI reports no plan limits to opencode; cost is opencode's API-equivalent estimate"><div class="ft-l">${esc(label)} · ${esc(p.plan)}</div>${p.spend.map(row).join("")}<div class="plan-credits">last used ${esc(ago(p.last_at))} ago · no plan limits reported</div></div>`;
 }
 
 function creditsLine(p) {

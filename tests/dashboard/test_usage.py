@@ -215,6 +215,26 @@ class PlanUsageTests(unittest.TestCase):
         self.assertIn("429", p["stale"])
         self.assertFalse(plan_usage._due({}, time.time()), "a fresh Claude Code copy must spare the endpoint call")
 
+    def test_grok_spend_sums_xai_messages_by_window(self):
+        import sqlite3
+        path = self.dir / "opencode.db"
+        db = sqlite3.connect(path)
+        db.execute("create table message (id text, session_id text, time_created integer, time_updated integer, data text)")
+        now = time.time()
+        rows = [(now - 60, "xai", 1.5, 1000), (now - 3 * 86400, "xai", 2.0, 4000), (now - 60, "openai", 9.0, 9)]
+        for i, (at, provider, cost, tokens) in enumerate(rows):
+            db.execute("insert into message values (?, 's', ?, ?, ?)", (str(i), int(at * 1000), int(at * 1000),
+                       json.dumps({"providerID": provider, "cost": cost, "tokens": {"total": tokens}})))
+        db.commit()
+        db.close()
+        old = plan_usage.OPENCODE_DB
+        plan_usage.OPENCODE_DB = path
+        try:
+            g = plan_usage._grok_query(now)
+        finally:
+            plan_usage.OPENCODE_DB = old
+        self.assertEqual([(x["name"], x["cost"], x["tokens"]) for x in g["spend"]], [("today", 1.5, 1000), ("7 days", 3.5, 5000)])
+
     def test_missing_or_expired_login_reports_instead_of_calling(self):
         plan_usage.BASES = (str(self.dir),)
         self.assertEqual(plan_usage.claude_plan(wait=True), {"error": "no Claude login found"})

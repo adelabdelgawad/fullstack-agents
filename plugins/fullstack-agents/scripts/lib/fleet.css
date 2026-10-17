@@ -1,5 +1,5 @@
 :root { --m-opus: #7c3aed; --m-sonnet: #2563eb; --m-haiku: #0d9488; --m-fable: #ea580c; --m-gpt: #16a34a; --m-grok: #db2777; --m-other: #8b90a3; }
-.fleet-tiles { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0; margin: 14px 32px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow: hidden; }
+.fleet-tiles { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 0; margin: 14px 32px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow: hidden; }
 .ft { padding: 10px 14px; border-right: 1px solid var(--line); min-width: 0; }
 .ft:last-child { border-right: 0; }
 .ft-l { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -7,15 +7,18 @@
 .ft-s { font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .plan-row { display: grid; grid-template-columns: 34px minmax(30px, 1fr) 34px auto; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); margin-top: 4px; }
 .plan-row .orc-bar { margin: 0; }
+.plan-row.spend { grid-template-columns: 44px 1fr auto; }
 .plan-credits { margin-top: 4px; font: 11px var(--mono); color: var(--muted); }
 .plan-credits.on { color: var(--amber); font-weight: 600; }
 .ft-l .stale { color: var(--amber); }
 .plan-row b { font: 600 12px var(--mono); color: var(--ink); text-align: right; }
 .plan-row em { font: 10px var(--mono); font-style: normal; color: var(--faint); white-space: nowrap; }
-.ft.plan.warn .plan-credits { margin-top: 4px; font: 11px var(--mono); color: var(--muted); }
+.ft.plan.warn .plan-row.spend { grid-template-columns: 44px 1fr auto; }
+.plan-credits { margin-top: 4px; font: 11px var(--mono); color: var(--muted); }
 .plan-credits.on { color: var(--amber); font-weight: 600; }
 .ft-l .stale { color: var(--amber); }
-.plan-row b { color: var(--amber); } .ft.plan.bad .plan-credits { margin-top: 4px; font: 11px var(--mono); color: var(--muted); }
+.plan-row b { color: var(--amber); } .ft.plan.bad .plan-row.spend { grid-template-columns: 44px 1fr auto; }
+.plan-credits { margin-top: 4px; font: 11px var(--mono); color: var(--muted); }
 .plan-credits.on { color: var(--amber); font-weight: 600; }
 .ft-l .stale { color: var(--amber); }
 .plan-row b { color: var(--red); }

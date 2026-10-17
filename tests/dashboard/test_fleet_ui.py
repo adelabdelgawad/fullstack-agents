@@ -104,6 +104,15 @@ class FleetUiTests(unittest.TestCase):
         reset = {"plan": "team", "windows": [{"name": "5 h", "pct": None, "resets_at": ""}]}
         self.assertIn("<b>—</b>", self.run_js(f"planTile('Claude plan', {json.dumps(reset)})"))
 
+    def test_grok_tile_shows_spend_without_percentages(self):
+        g = {"plan": "xAI", "spend": [{"name": "today", "cost": 0, "tokens": 0}, {"name": "7 days", "cost": 13.12, "tokens": 19537829}], "last_at": 0}
+        html = self.run_js(f"spendTile('Grok', {json.dumps(g)})")
+        self.assertIn("Grok · xAI", html)
+        self.assertIn("19.5M", html)
+        self.assertIn("$13.12", html)
+        self.assertIn("no plan limits reported", html)
+        self.assertNotIn("%", html)
+
     def test_scripts_share_no_top_level_names(self):
         html = (LIB / "dashboard.html").read_text()
         main = html[html.rindex("<script>"):]

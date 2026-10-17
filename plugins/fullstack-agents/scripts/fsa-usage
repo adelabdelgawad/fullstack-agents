@@ -44,6 +44,8 @@ def main():
           f"est. cost {money(u['total_cost'])} (lead {money(u['cost'])}, subagents {money(u['agent_cost']) if u['agents'] else 'none'}) · "
           f"tokens {u['tokens'] + u['agent_tokens']:,} · model {u['model']}")
     for name, p in plan_usage(wait=True).items():
+        if p.get("spend"):
+            print(f"{name}: " + " · ".join(f"{x['name']} {x['tokens']:,} tokens ${x['cost']:.2f}" for x in p["spend"]) + " (no plan limits reported)")
         if p.get("windows"):
             pct = lambda w: "reset" if w["pct"] is None else f"{round(w['pct'])}%"
             credits = f" · credits {round(p['credits']['balance']):,} left" if p.get("credits") else ""
