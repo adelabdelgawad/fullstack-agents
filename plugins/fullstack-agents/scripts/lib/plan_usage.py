@@ -5,6 +5,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 
 USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
@@ -45,9 +46,24 @@ def _fetch_claude():
         return {"error": f"usage endpoint unavailable ({e.code})", "retry_after": max(wait, BACKOFF_S) if e.code == 429 else BACKOFF_S}
     except (urllib.error.URLError, OSError, ValueError) as e:
         return {"error": f"usage endpoint unavailable ({type(e).__name__})", "retry_after": BACKOFF_S}
-    windows = [{"name": label, "pct": float(w["utilization"]), "resets_at": w.get("resets_at") or ""}
-               for key, label in NAMED.items() if isinstance(w := data.get(key), dict) and w.get("utilization") is not None]
-    return {"plan": oauth.get("subscriptionType") or "", "windows": windows}
+    return {"plan": oauth.get("subscriptionType") or "", "windows": _windows(data)}
+
+
+def _windows(data):
+    return [{"name": label, "pct": float(w["utilization"]), "resets_at": w.get("resets_at") or ""}
+            for key, label in NAMED.items() if isinstance(w := data.get(key), dict) and w.get("utilization") is not None]
+
+
+def _claude_code_copy():
+    """Usage Claude Code itself cached in .claude.json the last time it fetched the same endpoint."""
+    for base in dict.fromkeys(b for b in BASES if b):
+        try:
+            cached = json.loads((Path(base).expanduser() / ".claude.json").read_text()).get("cachedUsageUtilization") or {}
+        except (OSError, ValueError):
+            continue
+        if isinstance(cached.get("utilization"), dict) and cached.get("fetchedAtMs"):
+            return {"windows": _windows(cached["utilization"]), "at": cached["fetchedAtMs"] / 1000}
+    return None
 
 
 def _read_shared():
@@ -68,7 +84,9 @@ def _write_shared(data):
 
 
 def _due(shared, now):
-    return now >= max(shared.get("at", 0) + CACHE_S, shared.get("retry_at", 0))
+    local = _claude_code_copy()
+    fresh_local = local and now - local["at"] < CACHE_S
+    return not fresh_local and now >= max(shared.get("at", 0) + CACHE_S, shared.get("retry_at", 0))
 
 
 def _refresh():
@@ -87,12 +105,25 @@ def _refresh():
 
 
 def _present(shared):
-    good = shared.get("good")
+    now, local = time.time(), _claude_code_copy()
+    good, good_at = shared.get("good"), shared.get("good_at", 0)
+    if local and local["windows"] and local["at"] > good_at:
+        good, good_at = {"plan": (good or {}).get("plan") or (_credentials() or {}).get("subscriptionType") or "", "windows": local["windows"]}, local["at"]
     if not good:
         return {"error": shared.get("error") or "loading plan usage"}
-    if shared.get("error"):
-        return {**good, "stale": f"as of {max(1, round((time.time() - shared.get('good_at', 0)) / 60))} min ago · {shared['error']}"}
-    return good
+    windows = [{**w, "pct": None} if w["resets_at"] and _epoch(w["resets_at"]) < now else w for w in good["windows"]]
+    age = now - good_at
+    if age > 2 * CACHE_S or shared.get("error"):
+        note = f"as of {max(1, round(age / 60))} min ago" + (f" · {shared['error']}" if shared.get("error") else "")
+        return {**good, "windows": windows, "stale": note}
+    return {**good, "windows": windows}
+
+
+def _epoch(iso):
+    try:
+        return datetime.fromisoformat(iso).timestamp()
+    except ValueError:
+        return 0
 
 
 def claude_plan(wait=False):
@@ -134,7 +165,11 @@ def codex_plan():
                 continue
             windows = [w for w in (_window(limits.get("primary"), "5 h"), _window(limits.get("secondary"), "week")) if w]
             if windows:
-                return {"plan": limits.get("plan_type") or "", "windows": windows}
+                credits = limits.get("credits") or {}
+                out = {"plan": limits.get("plan_type") or "", "windows": windows}
+                if credits.get("has_credits") and credits.get("balance") is not None:
+                    out["credits"] = {"balance": float(credits["balance"]), "unlimited": bool(credits.get("unlimited"))}
+                return out
     return {"error": "no Codex rate limits recorded yet"}
 
 

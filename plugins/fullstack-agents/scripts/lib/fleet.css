@@ -7,11 +7,17 @@
 .ft-s { font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .plan-row { display: grid; grid-template-columns: 34px minmax(30px, 1fr) 34px auto; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); margin-top: 4px; }
 .plan-row .orc-bar { margin: 0; }
+.plan-credits { margin-top: 4px; font: 11px var(--mono); color: var(--muted); }
+.plan-credits.on { color: var(--amber); font-weight: 600; }
 .ft-l .stale { color: var(--amber); }
 .plan-row b { font: 600 12px var(--mono); color: var(--ink); text-align: right; }
 .plan-row em { font: 10px var(--mono); font-style: normal; color: var(--faint); white-space: nowrap; }
-.ft.plan.warn .ft-l .stale { color: var(--amber); }
-.plan-row b { color: var(--amber); } .ft.plan.bad .ft-l .stale { color: var(--amber); }
+.ft.plan.warn .plan-credits { margin-top: 4px; font: 11px var(--mono); color: var(--muted); }
+.plan-credits.on { color: var(--amber); font-weight: 600; }
+.ft-l .stale { color: var(--amber); }
+.plan-row b { color: var(--amber); } .ft.plan.bad .plan-credits { margin-top: 4px; font: 11px var(--mono); color: var(--muted); }
+.plan-credits.on { color: var(--amber); font-weight: 600; }
+.ft-l .stale { color: var(--amber); }
 .plan-row b { color: var(--red); }
 .ft.warn .ft-v { color: var(--amber); }
 .ft.bad .ft-v { color: var(--red); }

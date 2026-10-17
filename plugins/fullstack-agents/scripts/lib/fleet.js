@@ -96,10 +96,18 @@ const untilText = iso => { const s = (Date.parse(iso) - Date.now()) / 1000; retu
 
 function planTile(label, p) {
   if (!p || !p.windows) return `<div class="ft"><div class="ft-l">${esc(label)}</div><div class="ft-v">—</div><div class="ft-s">${esc((p && p.error) || "no data")}</div></div>`;
-  const worst = Math.max(...p.windows.map(w => w.pct)), cls = worst >= 90 ? "bad" : worst >= 75 ? "warn" : "";
-  const row = w => { const tone = w.pct >= 90 ? "bad" : w.pct >= 75 ? "warn" : "ok", until = untilText(w.resets_at);
-    return `<div class="plan-row" title="${esc(`${label} ${w.name}: ${w.pct}% used${until ? `, resets in ${until}` : ""}`)}"><span>${esc(w.name)}</span><span class="orc-bar ctx-${tone}"><span style="width:${Math.min(w.pct, 100)}%"></span></span><b>${Math.round(w.pct)}%</b><em>${until ? "↻ " + esc(until) : ""}</em></div>`; };
-  return `<div class="ft plan ${cls}"${p.stale ? ` title="${esc(p.stale)}"` : ""}><div class="ft-l">${esc(label)}${p.plan ? ` · ${esc(p.plan)}` : ""}${p.stale ? ' <span class="stale">· stale</span>' : ""}</div>${p.windows.map(row).join("")}</div>`;
+  const worst = Math.max(0, ...p.windows.map(w => w.pct ?? 0)), cls = worst >= 90 ? "bad" : worst >= 75 ? "warn" : "";
+  const row = w => { const known = w.pct !== null && w.pct !== undefined, tone = !known ? "ok" : w.pct >= 90 ? "bad" : w.pct >= 75 ? "warn" : "ok", until = untilText(w.resets_at);
+    const tip = known ? `${label} ${w.name}: ${w.pct}% used${until ? `, resets in ${until}` : ""}` : `${label} ${w.name}: window reset since the last reading`;
+    return `<div class="plan-row" title="${esc(tip)}"><span>${esc(w.name)}</span><span class="orc-bar ctx-${tone}"><span style="width:${known ? Math.min(w.pct, 100) : 0}%"></span></span><b>${known ? Math.round(w.pct) + "%" : "—"}</b><em>${until ? "↻ " + esc(until) : known ? "" : "reset"}</em></div>`; };
+  return `<div class="ft plan ${cls}"${p.stale ? ` title="${esc(p.stale)}"` : ""}><div class="ft-l">${esc(label)}${p.plan ? ` · ${esc(p.plan)}` : ""}${p.stale ? ' <span class="stale">· stale</span>' : ""}</div>${p.windows.map(row).join("")}${creditsLine(p)}</div>`;
+}
+
+function creditsLine(p) {
+  if (!p.credits) return "";
+  const capped = p.windows.some(w => (w.pct ?? 0) >= 100);
+  const bal = p.credits.unlimited ? "unlimited" : Math.round(p.credits.balance).toLocaleString();
+  return `<div class="plan-credits${capped ? " on" : ""}" title="${esc(capped ? "A plan window is used up; runs are paid from credits" : "Credit balance available after the plan limits")}">${capped ? "on credits · " : "credits · "}${esc(bal)} left</div>`;
 }
 
 function fleetToolbar(shown, total) {

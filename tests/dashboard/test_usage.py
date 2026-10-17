@@ -194,13 +194,26 @@ class PlanUsageTests(unittest.TestCase):
         day = self.dir / "sessions" / "2026" / "10" / "17"
         day.mkdir(parents=True)
         limits = {"plan_type": "plus", "primary": {"used_percent": 12.5, "window_minutes": 300, "resets_at": 1792238809},
-                  "secondary": {"used_percent": 100.0, "window_minutes": 10080, "resets_at": 1792649557}}
+                  "secondary": {"used_percent": 100.0, "window_minutes": 10080, "resets_at": 1792649557},
+                  "credits": {"has_credits": True, "unlimited": False, "balance": "59210.46"}}
         write_lines(day / "rollout-a.jsonl", [{"type": "event_msg", "payload": {"type": "token_count", "rate_limits": limits}}])
         plan_usage.CODEX_HOME = self.dir
         p = plan_usage.codex_plan()
         self.assertEqual(p["plan"], "plus")
         self.assertEqual([(w["name"], w["pct"]) for w in p["windows"]], [("5 h", 12.5), ("week", 100.0)])
         self.assertTrue(p["windows"][0]["resets_at"].endswith("Z"))
+        self.assertEqual(p["credits"], {"balance": 59210.46, "unlimited": False})
+
+    def test_claude_code_copy_is_used_when_newer_and_expired_windows_blank(self):
+        plan_usage.BASES = (str(self.dir),)
+        cached = {"fetchedAtMs": (time.time() - 60) * 1000, "utilization": {
+            "five_hour": {"utilization": 13, "resets_at": "2000-01-01T00:00:00+00:00"},
+            "seven_day": {"utilization": 59, "resets_at": "2999-01-01T00:00:00+00:00"}}}
+        (self.dir / ".claude.json").write_text(json.dumps({"cachedUsageUtilization": cached}))
+        p = plan_usage._present({"error": "usage endpoint unavailable (429)"})
+        self.assertEqual([(w["name"], w["pct"]) for w in p["windows"]], [("5 h", None), ("week", 59.0)])
+        self.assertIn("429", p["stale"])
+        self.assertFalse(plan_usage._due({}, time.time()), "a fresh Claude Code copy must spare the endpoint call")
 
     def test_missing_or_expired_login_reports_instead_of_calling(self):
         plan_usage.BASES = (str(self.dir),)

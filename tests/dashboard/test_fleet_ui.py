@@ -97,6 +97,12 @@ class FleetUiTests(unittest.TestCase):
         self.assertIn("<b>92%</b>", html)
         self.assertIn("Claude plan · team", html)
         self.assertIn("no Claude login", self.run_js("planTile('Claude plan', {error: 'no Claude login found'})"))
+        codex = {"plan": "plus", "windows": [{"name": "week", "pct": 100, "resets_at": ""}], "credits": {"balance": 59210.4, "unlimited": False}}
+        html = self.run_js(f"planTile('Codex plan', {json.dumps(codex)})")
+        self.assertIn("plan-credits on", html)
+        self.assertIn("on credits · 59,210 left", html)
+        reset = {"plan": "team", "windows": [{"name": "5 h", "pct": None, "resets_at": ""}]}
+        self.assertIn("<b>—</b>", self.run_js(f"planTile('Claude plan', {json.dumps(reset)})"))
 
     def test_scripts_share_no_top_level_names(self):
         html = (LIB / "dashboard.html").read_text()
