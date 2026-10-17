@@ -7,9 +7,12 @@
 .ft-s { font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .plan-row { display: grid; grid-template-columns: 34px minmax(30px, 1fr) 34px auto; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); margin-top: 4px; }
 .plan-row .orc-bar { margin: 0; }
+.ft-l .stale { color: var(--amber); }
 .plan-row b { font: 600 12px var(--mono); color: var(--ink); text-align: right; }
 .plan-row em { font: 10px var(--mono); font-style: normal; color: var(--faint); white-space: nowrap; }
-.ft.plan.warn .plan-row b { color: var(--amber); } .ft.plan.bad .plan-row b { color: var(--red); }
+.ft.plan.warn .ft-l .stale { color: var(--amber); }
+.plan-row b { color: var(--amber); } .ft.plan.bad .ft-l .stale { color: var(--amber); }
+.plan-row b { color: var(--red); }
 .ft.warn .ft-v { color: var(--amber); }
 .ft.bad .ft-v { color: var(--red); }
 .ft svg { display: block; width: 100%; height: 22px; margin-top: 2px; }
@@ -160,7 +163,8 @@ html.wall .wall-hint { display: block; }
   html.wall .orc-shell.inline-detail { grid-template-columns: 360px minmax(0, 1fr); }
   .orc-detail { min-width: 0; border-left: 1px solid var(--line); }
   .orc-detail aside#panel { position: static; transform: none; width: auto; height: 100%; border-left: 0; z-index: auto; transition: none; background: transparent; }
-  html.agents-page, html.agents-page body { height: 100%; overflow: hidden; }
+  html.agents-page { height: 100%; overflow: hidden; }
+  html.agents-page body, html.agents-page.lock body { height: 100%; overflow: visible; }
   html.agents-page body { display: flex; flex-direction: column; padding-bottom: 0; }
   html.agents-page body > header { flex: none; }
   html.agents-page #main { flex: 1; min-height: 0; display: flex; flex-direction: column; }

@@ -8,7 +8,9 @@ import urllib.request
 from pathlib import Path
 
 USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
-CACHE_S = 60
+CACHE_S = 300
+BACKOFF_S = 600
+CACHE_FILE = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "fullstack-agents" / "claude-plan.json"
 BASES = (os.environ.get("CLAUDE_CONFIG_DIR"), "~/.claude", "~/.claude-anthropic")
 CODEX_HOME = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
 NAMED = {"five_hour": "5 h", "seven_day": "week", "seven_day_opus": "week · Opus", "seven_day_sonnet": "week · Sonnet"}
@@ -38,23 +40,65 @@ def _fetch_claude():
     try:
         with urllib.request.urlopen(req, timeout=8) as r:
             data = json.load(r)
+    except urllib.error.HTTPError as e:
+        wait = int(e.headers.get("Retry-After") or 0) if str(e.headers.get("Retry-After") or "").isdigit() else 0
+        return {"error": f"usage endpoint unavailable ({e.code})", "retry_after": max(wait, BACKOFF_S) if e.code == 429 else BACKOFF_S}
     except (urllib.error.URLError, OSError, ValueError) as e:
-        return {"error": f"usage endpoint unavailable ({getattr(e, 'code', '') or type(e).__name__})"}
+        return {"error": f"usage endpoint unavailable ({type(e).__name__})", "retry_after": BACKOFF_S}
     windows = [{"name": label, "pct": float(w["utilization"]), "resets_at": w.get("resets_at") or ""}
                for key, label in NAMED.items() if isinstance(w := data.get(key), dict) and w.get("utilization") is not None]
     return {"plan": oauth.get("subscriptionType") or "", "windows": windows}
 
 
+def _read_shared():
+    try:
+        return json.loads(CACHE_FILE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_shared(data):
+    try:
+        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = CACHE_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data))
+        tmp.replace(CACHE_FILE)
+    except OSError:
+        pass
+
+
+def _due(shared, now):
+    return now >= max(shared.get("at", 0) + CACHE_S, shared.get("retry_at", 0))
+
+
 def _refresh():
-    value = _fetch_claude()
+    """One fetch shared by every dashboard and fsa-usage through the cache file; a failure keeps the last good value."""
+    now, shared = time.time(), _read_shared()
+    if _due(shared, now):
+        value = _fetch_claude()
+        shared["at"] = now
+        if value.get("windows") is not None:
+            shared.update(good=value, good_at=now, error="", retry_at=0)
+        else:
+            shared.update(error=value.get("error", ""), retry_at=now + value.get("retry_after", BACKOFF_S))
+        _write_shared(shared)
     with _LOCK:
-        _CACHE.update(at=time.time(), value=value, busy=False)
+        _CACHE.update(at=time.time(), value=_present(shared), busy=False)
+
+
+def _present(shared):
+    good = shared.get("good")
+    if not good:
+        return {"error": shared.get("error") or "loading plan usage"}
+    if shared.get("error"):
+        return {**good, "stale": f"as of {max(1, round((time.time() - shared.get('good_at', 0)) / 60))} min ago · {shared['error']}"}
+    return good
 
 
 def claude_plan(wait=False):
-    """Cached plan usage; a stale value is refreshed in the background unless `wait` asks for a fresh one."""
+    """Plan usage from the shared cache; a due refresh runs in the background unless `wait` asks for it inline."""
     with _LOCK:
-        stale = _CACHE["value"] is None or time.time() - _CACHE["at"] > CACHE_S
+        stale = _CACHE["value"] is None or time.time() - _CACHE["at"] > 30
         start = stale and not _CACHE["busy"]
         if start:
             _CACHE["busy"] = True
@@ -62,7 +106,7 @@ def claude_plan(wait=False):
         _refresh()
     elif start:
         threading.Thread(target=_refresh, daemon=True).start()
-    return _CACHE["value"] or {"error": "loading plan usage"}
+    return _CACHE["value"] or _present(_read_shared())
 
 
 def _window(limit, label):

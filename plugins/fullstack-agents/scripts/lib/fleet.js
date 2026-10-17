@@ -99,7 +99,7 @@ function planTile(label, p) {
   const worst = Math.max(...p.windows.map(w => w.pct)), cls = worst >= 90 ? "bad" : worst >= 75 ? "warn" : "";
   const row = w => { const tone = w.pct >= 90 ? "bad" : w.pct >= 75 ? "warn" : "ok", until = untilText(w.resets_at);
     return `<div class="plan-row" title="${esc(`${label} ${w.name}: ${w.pct}% used${until ? `, resets in ${until}` : ""}`)}"><span>${esc(w.name)}</span><span class="orc-bar ctx-${tone}"><span style="width:${Math.min(w.pct, 100)}%"></span></span><b>${Math.round(w.pct)}%</b><em>${until ? "↻ " + esc(until) : ""}</em></div>`; };
-  return `<div class="ft plan ${cls}"><div class="ft-l">${esc(label)}${p.plan ? ` · ${esc(p.plan)}` : ""}</div>${p.windows.map(row).join("")}</div>`;
+  return `<div class="ft plan ${cls}"${p.stale ? ` title="${esc(p.stale)}"` : ""}><div class="ft-l">${esc(label)}${p.plan ? ` · ${esc(p.plan)}` : ""}${p.stale ? ' <span class="stale">· stale</span>' : ""}</div>${p.windows.map(row).join("")}</div>`;
 }
 
 function fleetToolbar(shown, total) {

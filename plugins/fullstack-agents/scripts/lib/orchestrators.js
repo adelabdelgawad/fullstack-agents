@@ -87,7 +87,9 @@ function mountOrchestrators(cards, total) {
   const sig = [inline, fleet.feed].join();
   if (main.dataset.sig !== sig || !document.getElementById("orc-cards")) {
     if (main.contains(pnl)) document.body.appendChild(pnl);
-    main.innerHTML = `<div id="fleet-top"></div><div class="orc-shell${fleet.feed && !inline ? " with-feed" : ""}${inline ? " inline-detail" : ""}"><div id="orc-side-wrap"></div><div class="orc-main"><div id="orc-cards"></div></div>${inline ? '<div class="orc-detail" id="orc-detail"></div>' : '<div id="feed-wrap"></div>'}</div><div id="orc-legend"></div>`;
+    const box = (id, html) => `<div id="${id}" data-h="${esc(html)}">${html}</div>`;
+    const top = fleetTiles() + fleetToolbar(cards.length, total), side = orcSidebar(cards), wall = orcWall(cards), feed = feedHtml(), legend = legendHtml();
+    main.innerHTML = `${box("fleet-top", top)}<div class="orc-shell${fleet.feed && !inline ? " with-feed" : ""}${inline ? " inline-detail" : ""}">${box("orc-side-wrap", side)}<div class="orc-main">${box("orc-cards", wall)}</div>${inline ? '<div class="orc-detail" id="orc-detail"></div>' : box("feed-wrap", feed)}</div>${box("orc-legend", legend)}`;
     main.dataset.sig = sig;
   }
   setIfChanged("fleet-top", fleetTiles() + fleetToolbar(cards.length, total));

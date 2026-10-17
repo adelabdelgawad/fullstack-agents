@@ -182,11 +182,12 @@ class PlanUsageTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
-        self.old = plan_usage.BASES, plan_usage.CODEX_HOME
+        self.old = plan_usage.BASES, plan_usage.CODEX_HOME, plan_usage.CACHE_FILE, plan_usage._fetch_claude
+        plan_usage.CACHE_FILE = self.dir / "cache" / "claude-plan.json"
         plan_usage._CACHE.update(at=0.0, value=None, busy=False)
 
     def tearDown(self):
-        plan_usage.BASES, plan_usage.CODEX_HOME = self.old
+        plan_usage.BASES, plan_usage.CODEX_HOME, plan_usage.CACHE_FILE, plan_usage._fetch_claude = self.old
         self.tmp.cleanup()
 
     def test_codex_windows_come_from_the_newest_rollout(self):
@@ -206,7 +207,25 @@ class PlanUsageTests(unittest.TestCase):
         self.assertEqual(plan_usage.claude_plan(wait=True), {"error": "no Claude login found"})
         (self.dir / ".credentials.json").write_text(json.dumps({"claudeAiOauth": {"accessToken": "x", "expiresAt": 1000}}))
         plan_usage._CACHE.update(at=0.0, value=None, busy=False)
+        plan_usage.CACHE_FILE.unlink()
         self.assertIn("expired", plan_usage.claude_plan(wait=True)["error"])
+
+    def test_rate_limit_keeps_last_good_value_and_backs_off(self):
+        calls = []
+        good = {"plan": "team", "windows": [{"name": "5 h", "pct": 15.0, "resets_at": ""}]}
+        plan_usage._fetch_claude = lambda: calls.append(1) or good
+        self.assertEqual(plan_usage.claude_plan(wait=True), good)
+        shared = json.loads(plan_usage.CACHE_FILE.read_text())
+        shared["at"] = 0
+        plan_usage.CACHE_FILE.write_text(json.dumps(shared))
+        plan_usage._fetch_claude = lambda: calls.append(1) or {"error": "usage endpoint unavailable (429)", "retry_after": 600}
+        plan_usage._CACHE.update(at=0.0, value=None, busy=False)
+        stale = plan_usage.claude_plan(wait=True)
+        self.assertEqual(stale["windows"], good["windows"])
+        self.assertIn("429", stale["stale"])
+        plan_usage._CACHE.update(at=0.0, value=None, busy=False)
+        plan_usage.claude_plan(wait=True)
+        self.assertEqual(len(calls), 2, "a second process inside the backoff window must not call the endpoint")
 
 
 if __name__ == "__main__":
