@@ -107,7 +107,7 @@ function planTile(label, p) {
 function spendTile(label, p) {
   if (!p || !p.spend) return `<div class="ft"><div class="ft-l">${esc(label)}</div><div class="ft-v">—</div><div class="ft-s">${esc((p && p.error) || "no data")}</div></div>`;
   const row = x => `<div class="plan-row spend"><span>${esc(x.name)}</span><b>${esc(fmtTokens(x.tokens))}</b><em>${esc(fmtCost(x.cost))}</em></div>`;
-  return `<div class="ft plan" title="xAI reports no plan limits to opencode; cost is opencode's API-equivalent estimate"><div class="ft-l">${esc(label)} · ${esc(p.plan)}</div>${p.spend.map(row).join("")}<div class="plan-credits">last used ${esc(ago(p.last_at))} ago · no plan limits reported</div></div>`;
+  return `<div class="ft plan" title="xAI reports no plan limits to opencode; cost is opencode's API-equivalent estimate"><div class="ft-l">${esc(label)} · ${esc(p.plan)}</div>${p.spend.map(row).join("")}<div class="plan-credits">last used ${esc(ago(p.last_at))} ago · <a href="https://grok.com" target="_blank" rel="noopener noreferrer" title="The weekly SuperGrok limit is shown only on grok.com">weekly limit on grok.com ↗</a></div></div>`;
 }
 
 function creditsLine(p) {

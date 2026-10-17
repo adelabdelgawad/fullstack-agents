@@ -9,16 +9,22 @@
 .plan-row .orc-bar { margin: 0; }
 .plan-row.spend { grid-template-columns: 44px 1fr auto; }
 .plan-credits { margin-top: 4px; font: 11px var(--mono); color: var(--muted); }
+.plan-credits a { color: var(--blue); text-decoration: none; }
+.plan-credits a:hover { text-decoration: underline; }
 .plan-credits.on { color: var(--amber); font-weight: 600; }
 .ft-l .stale { color: var(--amber); }
 .plan-row b { font: 600 12px var(--mono); color: var(--ink); text-align: right; }
 .plan-row em { font: 10px var(--mono); font-style: normal; color: var(--faint); white-space: nowrap; }
 .ft.plan.warn .plan-row.spend { grid-template-columns: 44px 1fr auto; }
 .plan-credits { margin-top: 4px; font: 11px var(--mono); color: var(--muted); }
+.plan-credits a { color: var(--blue); text-decoration: none; }
+.plan-credits a:hover { text-decoration: underline; }
 .plan-credits.on { color: var(--amber); font-weight: 600; }
 .ft-l .stale { color: var(--amber); }
 .plan-row b { color: var(--amber); } .ft.plan.bad .plan-row.spend { grid-template-columns: 44px 1fr auto; }
 .plan-credits { margin-top: 4px; font: 11px var(--mono); color: var(--muted); }
+.plan-credits a { color: var(--blue); text-decoration: none; }
+.plan-credits a:hover { text-decoration: underline; }
 .plan-credits.on { color: var(--amber); font-weight: 600; }
 .ft-l .stale { color: var(--amber); }
 .plan-row b { color: var(--red); }

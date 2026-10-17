@@ -110,7 +110,7 @@ class FleetUiTests(unittest.TestCase):
         self.assertIn("Grok · xAI", html)
         self.assertIn("19.5M", html)
         self.assertIn("$13.12", html)
-        self.assertIn("no plan limits reported", html)
+        self.assertIn('href="https://grok.com" target="_blank" rel="noopener noreferrer"', html)
         self.assertNotIn("%", html)
 
     def test_scripts_share_no_top_level_names(self):
