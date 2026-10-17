@@ -140,3 +140,13 @@ automatically; when a task ends without a push, run `team-board phase complete -
 
 Two retries maximum on a failing worker, re-briefing with its raw output rather than a prose
 restatement, then stop and hand the user the failure.
+
+## Context and cost budget
+
+Run the plugin's `scripts/fsa-usage` at each phase change and before any large read or
+delegation. At 85% context fill (it prints `HANDOFF:`), write the handoff into the task file and
+compact or hand off before the next large step; never let auto-compaction land mid-edit. The final
+report of an implementation names the estimated cost from `fsa-usage` (lead plus subagents), marked
+as an estimate. When `fsa-usage` shows a plan window at 90% or more, say so before starting large
+delegated work. The dashboard marks a session stale when its transcript stops growing for five
+minutes while a turn is open; treat a stale worker as the stall rule in `task-flow` says.

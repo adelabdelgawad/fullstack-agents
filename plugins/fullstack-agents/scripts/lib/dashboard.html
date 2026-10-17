@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agents</title>
 <link rel="stylesheet" href="/static/xterm/xterm.css">
+<link rel="stylesheet" href="/static/fleet.css">
+<script src="/static/fleet.js"></script>
+<script src="/static/orchestrators.js"></script>
 <style>
 :root {
   --bg: #f4f5f8; --panel: #ffffff; --card: #ffffff; --card-hover: #f7f8fb; --ink: #1b1d26; --muted: #5d6273; --faint: #8b90a3; --line: #dfe2ea;
@@ -14,12 +17,18 @@
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0b0f17; --panel: #0f1520; --card: #141b27; --card-hover: #18212f; --ink: #e5e9f0; --muted: #8c96a8; --faint: #5d6779; --line: #222b3a;
     --active: #4f8ff7; --pass: #4ade80; --changes: #f2b24c; --human: #f472b6;
     --amber: #f2b24c; --amber-bg: #2e2412; --blue: #4f8ff7; --blue-bg: #14233d;
     --red: #f47272; --red-bg: #33171b; --green: #4ade80; --green-bg: #12291c; --chip: #1b2331; --yellow: #f2b24c;
   }
+}
+:root[data-theme="dark"] {
+    --bg: #0b0f17; --panel: #0f1520; --card: #141b27; --card-hover: #18212f; --ink: #e5e9f0; --muted: #8c96a8; --faint: #5d6779; --line: #222b3a;
+    --active: #4f8ff7; --pass: #4ade80; --changes: #f2b24c; --human: #f472b6;
+    --amber: #f2b24c; --amber-bg: #2e2412; --blue: #4f8ff7; --blue-bg: #14233d;
+    --red: #f47272; --red-bg: #33171b; --green: #4ade80; --green-bg: #12291c; --chip: #1b2331; --yellow: #f2b24c;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
@@ -51,28 +60,12 @@ header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01e
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 @keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 main { padding: 0; }
-.board { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; padding: 18px 32px 40px; align-items: start; }
-.col { min-width: 0; }
-.col-head { display: flex; align-items: baseline; gap: 8px; padding: 0 2px 10px; border-bottom: 1px solid var(--line); margin-bottom: 12px; position: relative; }
-.col-head h2 { margin: 0; font-size: 13px; font-weight: 600; white-space: nowrap; }
-.col-head .who { font: 11px var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.col-head .count { margin-left: auto; font: 11px var(--mono); color: var(--muted); }
-.col.flow .col-head::after { content: "›"; position: absolute; right: -11px; top: -3px; color: var(--faint); font-size: 16px; }
-.col.human .col-head { border-bottom-color: color-mix(in srgb, var(--human) 55%, transparent); }
-.col.human h2 { color: var(--human); }
-.col .none { color: var(--faint); font-size: 12px; padding: 4px 2px; }
-.more { width: 100%; border: 1px dashed var(--line); background: none; color: var(--muted); border-radius: 8px; padding: 6px; font: inherit; font-size: 12px; cursor: pointer; }
-.more:hover { color: var(--ink); border-color: var(--muted); }
-.board .card { display: flex; flex-direction: column; height: 250px; overflow: hidden; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px 9px; margin-bottom: 10px; cursor: pointer; transition: background .15s, border-color .15s, transform .15s; }
 .card:hover { background: var(--card-hover); transform: translateY(-1px); }
 .card:focus-visible { outline: 2px solid var(--active); outline-offset: 2px; }
 .card.live { border-color: color-mix(in srgb, var(--active) 40%, var(--line)); }
 .card.human { border-color: var(--human); box-shadow: 0 0 0 1px color-mix(in srgb, var(--human) 40%, transparent), 0 8px 24px -12px color-mix(in srgb, var(--human) 60%, transparent); }
 .card.quiet:not(:hover):not(:focus-within) { opacity: .72; }
-.card-top { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; min-width: 0; }
-.card-top .num { font: 11px var(--mono); color: var(--muted); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.blink { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--active); animation: blink 1.6s ease-in-out infinite; }
 .star { margin-left: auto; flex: none; border: 0; background: none; padding: 0 2px; font-size: 15px; line-height: 1; color: var(--faint); cursor: pointer; }
 .star:hover { color: var(--amber); }
 .star:focus-visible { outline: 2px solid var(--active); outline-offset: 1px; border-radius: 4px; }
@@ -82,10 +75,6 @@ main { padding: 0; }
 .card .t { font-size: 13px; font-weight: 600; line-height: 1.4; word-break: break-word; }
 .card .s { color: var(--muted); font-size: 12px; margin-top: 2px; word-break: break-word; }
 .feature { font-size: 13px; line-height: 1.4; margin: 0 0 4px; word-break: break-word; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; flex: none; }
-.cbody { flex: 1; min-height: 0; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); }
-.cbody > .s { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.card > .cardhint, .card > .foot { flex: none; }
-.wts { display: grid; gap: 4px; margin-top: 6px; }
 .wt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; width: 100%; min-width: 0; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; font: 11px var(--mono); text-align: left; cursor: pointer; }
 .wt:hover, .wt:focus-visible, .wt[aria-current="true"] { background: var(--card-hover); border-color: var(--blue); }
 .wt .wt-name { flex: 1 1 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -96,11 +85,6 @@ main { padding: 0; }
 .branch { font: 11px var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rounds { margin-top: 10px; display: grid; gap: 5px; }
 .round { display: grid; gap: 2px; }
-.round .rl { display: flex; gap: 6px; font: 10px var(--mono); color: var(--muted); min-width: 0; }
-.round .rl b { font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.round .rl span { flex: none; }
-.round .cells { display: flex; gap: 3px; }
-.rounds .earlier { font: 10px var(--mono); color: var(--muted); }
 .cell { flex: 1; min-width: 0; text-align: center; font: 10px/1.3 var(--mono); padding: 2px 0; border-radius: 4px; border: 1px dashed var(--faint); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: clip; }
 .cell.wait, .cell.live { border-style: solid; border-color: color-mix(in srgb, var(--active) 55%, transparent); color: var(--active); animation: breathe 1.6s ease-in-out infinite; }
 .cell.PASS { border: 1px solid transparent; color: var(--pass); background: color-mix(in srgb, var(--pass) 14%, transparent); }
@@ -109,17 +93,12 @@ main { padding: 0; }
 .cell[role="button"] { cursor: pointer; }
 .cell[role="button"]:hover, .cell[role="button"]:focus-visible { text-decoration: underline; outline: 1px solid var(--active); }
 .cell.done { border: 1px solid var(--line); color: var(--muted); }
-.cell.skip { border: 1px dotted var(--line); color: var(--faint); opacity: .7; }
-.cardhint { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); font: 10.5px/1.6 var(--mono); color: var(--muted); overflow-wrap: anywhere; user-select: all; }
 .chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
 .chips:empty { display: none; }
 .chip { font: 10.5px var(--mono); padding: 1px 6px; border-radius: 4px; background: var(--chip); color: var(--muted); }
 .chip.ok { background: color-mix(in srgb, var(--pass) 14%, transparent); color: var(--pass); }
 .chip.bad { background: color-mix(in srgb, var(--human) 14%, transparent); color: var(--human); }
 .chip.st-working { background: color-mix(in srgb, var(--active) 14%, transparent); color: var(--active); }
-.chip.st-stopped { background: none; border: 1px solid var(--line); }
-.foot { display: flex; gap: 8px; align-items: center; margin-top: 9px; padding-top: 7px; border-top: 1px solid var(--line); font: 11px var(--mono); color: var(--muted); }
-.foot .action-button { font-family: inherit; }
 .paths { font: 11px/1.4 var(--mono); color: var(--human); margin-top: 6px; word-break: break-all; }
 @media (hover: hover) { .card .foot .action-button { opacity: 0; } .card:hover .foot .action-button, .card:focus-within .foot .action-button { opacity: 1; } }
 .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
@@ -173,22 +152,12 @@ aside pre { background: var(--chip); padding: 10px; border-radius: 8px; white-sp
 .lead-act { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ask-q { color: var(--amber); font-size: 12px; overflow-wrap: anywhere; }
 .card .ask-q { margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.work-list { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
 .work { display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; padding: 5px 7px; cursor: pointer; font: inherit; }
 .work:hover, .work:focus-visible { border-color: var(--active); }
-.work-goal { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 12px; line-height: 1.35; }
-.work-meta { display: flex; gap: 5px; align-items: center; margin-top: 3px; color: var(--muted); font: 10.5px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.board .card.has-work { height: 330px; }
 .overview { margin-top: 6px; }
-.ov-bar { display: flex; height: 5px; border-radius: 3px; overflow: hidden; background: var(--chip); gap: 1px; }
 .ov-live { background: var(--active); }
 .ov-done { background: var(--pass); opacity: .7; }
 .ov-bad { background: var(--red); }
-.ov-text { margin-top: 3px; color: var(--muted); font: 10.5px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.work-meta b { color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.work-meta > span:last-child { margin-left: auto; flex: none; }
-.work-goal { margin-top: 2px; }
-.work-more { margin-top: 4px; color: var(--muted); font-size: 10.5px; }
 .live-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .live-top > .action-button { margin-left: 0; }
 .live-top > div { flex: 1; min-width: 0; }
@@ -442,8 +411,7 @@ html.herdr-page .herdr-view { height: 100%; }
 #ctx button.danger { color: var(--red); border-top: 1px solid var(--line); border-radius: 0 0 5px 5px; margin-top: 3px; }
 #ctx button.danger:disabled { color: var(--muted); }
 @keyframes slide { from { transform: translateX(30px); opacity: 0; } }
-@media (max-width: 1100px) { .board { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 28px; } .col.flow .col-head::after { display: none; } }
-@media (max-width: 640px) { header { padding: 18px 16px 4px; } .board { grid-template-columns: 1fr; padding: 14px 16px 32px; } .herdr-view { grid-template-columns: 1fr; grid-template-rows: minmax(0, 30vh) minmax(62vh, 1fr); height: auto; } .herdr-list { max-height: 30vh; } .herdr-sidebar-edge { display: none; } .herdr-detail { min-height: 62vh; } .terminal-head { align-items: flex-start; flex-wrap: wrap; } .terminal-source { margin-left: 0; } }
+@media (max-width: 640px) { header { padding: 18px 16px 4px; } .herdr-view { grid-template-columns: 1fr; grid-template-rows: minmax(0, 30vh) minmax(62vh, 1fr); height: auto; } .herdr-list { max-height: 30vh; } .herdr-sidebar-edge { display: none; } .herdr-detail { min-height: 62vh; } .terminal-head { align-items: flex-start; flex-wrap: wrap; } .terminal-source { margin-left: 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .card:hover { transform: none; } }
 .tracked-plan + .tracked-plan { margin-top: 16px; }
 .tracked-plan progress { display: block; width: 100%; height: 8px; margin: 10px 0; accent-color: var(--blue); }
@@ -605,16 +573,21 @@ aside .tracked-plan progress::-moz-progress-bar { background: var(--blue); borde
   <div class="viewtabs" role="tablist" aria-label="Dashboard view">
     <button class="viewtab" id="view-agents" role="tab" data-view="agents">Agents</button>
     <button class="viewtab" id="view-herdr" role="tab" data-view="herdr">Herdr</button>
+    <button class="viewtab" id="view-history" role="tab" data-view="history">History</button>
   </div>
   <div class="hright">
     <button class="newsess" id="newsess" title="Open a new herdr tab and start Claude, Codex or Grok in it">+ New session</button>
     <button class="favsw" id="favsw" role="switch" aria-checked="false"><span class="track" aria-hidden="true"></span>Favourites only</button>
+    <button class="tbtn" id="ffeed" aria-pressed="true" title="Show or hide the activity feed">Activity</button>
+    <button class="favsw" id="fwall" role="switch" aria-checked="false" title="Wall mode: hide the sidebar, filters and feed (key w)"><span class="track" aria-hidden="true"></span>Wall mode</button>
+    <div class="fseg" role="group" aria-label="Theme"><button data-ftheme="light">Light</button><button data-ftheme="dark">Dark</button><button data-ftheme="system">System</button></div>
     <div class="status" id="meta"><span class="dot"></span>loading…</div>
   </div>
 </header>
 <main id="main"></main>
 <aside id="panel" aria-label="Details"></aside>
 <div id="toasts" aria-live="polite"></div>
+<div class="wall-hint">wall mode · press w or Esc to exit</div>
 <dialog id="out" aria-labelledby="out-title">
   <div class="oh"><h3 id="out-title"></h3><span class="s" id="out-meta"></span>
     <button class="action-button" id="out-copy" style="margin-left:0">Copy</button>
@@ -643,13 +616,10 @@ const STAGES = [
 ];
 const QUIET = new Set(["idle", "complete"]);
 const FLAG_TEXT = {failed:"run failed", stalled:"run stalled", out_of_scope:"edited files outside its brief", no_changes:"changed nothing", retries_exhausted:"retries used up"};
-const SHOWN = 3;
-let expanded = new Set();
-try { expanded = new Set(JSON.parse(localStorage.getItem("fsa-expanded") || "[]")); } catch (e) {}
 let favOnly = false;
 try { favOnly = localStorage.getItem("fsa-fav-only") === "1"; } catch (e) {}
 let view = "agents";
-try { view = localStorage.getItem("fsa-view") === "herdr" ? "herdr" : "agents"; } catch (e) {}
+try { const v = localStorage.getItem("fsa-view"); view = ["herdr", "history"].includes(v) ? v : "agents"; } catch (e) {}
 let uiSeen = null, state = null, seen = null, herdrData = null, herdrLoading = null, selectedHerdrPane = null, herdrKnownTabs = null;
 let herdrSidebarRatio = .5, herdrOverlay = null, herdrDragging = false, herdrActionError = "";
 try { const storedRatio = localStorage.getItem("fsa-herdr-sidebar-ratio"), value = Number(storedRatio); if (storedRatio !== null && Number.isFinite(value)) herdrSidebarRatio = Math.max(.1, Math.min(.9, value)); } catch (e) {}
@@ -1687,14 +1657,16 @@ function renderHerdrPage() {
 
 function setView(next) {
   closeHerdrOverlay(false);
-  view = next === "herdr" ? "herdr" : "agents";
+  view = ["herdr", "history"].includes(next) ? next : "agents";
   document.documentElement.classList.toggle("herdr-page", view === "herdr");
+  document.documentElement.classList.toggle("agents-page", view === "agents");
   try { localStorage.setItem("fsa-view", view); } catch (e) {}
   document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === view)));
   document.getElementById("favsw").hidden = document.getElementById("newsess").hidden = view !== "agents";
+  syncNav();
   stopTerminal();
   closePanel();
-  if (view === "herdr") renderHerdrPage(); else render();
+  if (view === "herdr") renderHerdrPage(); else if (view === "history") renderHistory(); else render();
 }
 document.addEventListener("pointerdown", event => {
   if (herdrOverlay?.type === "menu" && !herdrOverlay.root.contains(event.target)) closeHerdrOverlay(false);
@@ -1727,7 +1699,6 @@ const rank = c => c.fresh ? -1 : c.sessions.some(s => s.state === "working") || 
 const needsHuman = c => c.phase !== "complete" && (c.phase === "review" || c.needs_you.length > 0 || c.sessions.some(s => s.state === "waiting"));
 const stageOf = c => needsHuman(c) ? "human" : (STAGES.find(s => s.phases.includes(c.phase)) || STAGES[0]).key;
 
-const LENSES = [["security", "sec"], ["ux", "ux"], ["code", "code"]];
 const cell = (tone, label, title, attrs = "") => `<span class="cell ${tone}" title="${esc(title)}"${attrs ? ` role="button" tabindex="0" ${attrs}` : ""}>${esc(label)}</span>`;
 const agentAttrs = a => a ? `data-asid="${esc(a.sid)}" data-agent="${esc(a.id)}"` : "";
 const verdictTone = v => /^(GREEN|PASS)$/.test(v) ? "PASS" : /^(RED|CHANGES|FAIL)$/.test(v) ? "CHANGES" : "done";
@@ -1739,153 +1710,29 @@ const unitPrefix = units => {
   return n ? parts[0].slice(0, n).join("-") + "-" : "";
 };
 
-function roundOf(rounds, at) {
-  let i = -1;
-  rounds.forEach((r, n) => { if ((r.started || r.updated) <= at) i = n; });
-  return i;
-}
-
-function roundsHtml(c, keep = 3) {
-  const runs = c.rounds || [];
-  const agents = (c.now || []).flatMap(s => (s.agents || []).map(a => ({...a, sid: s.id})));
-  if (!runs.length) {
-    const scan = agents.filter(a => a.label.startsWith("bounded-extractor"));
-    const lead = c.sessions.some(s => s.state === "working") ? "live" : c.sessions.some(s => s.state === "waiting") ? "bad" : c.sessions.length ? "done" : "";
-    const session = c.sessions.find(s => s.engine === "codex") || c.sessions[0] || {};
-    const leadLabel = ["lead", session.engine || "claude", session.model || (session.engine === "codex" ? "" : "opus")].filter(Boolean).join(" · ");
-    return `<div class="rounds"><div class="round"><div class="cells">${cell(lead, leadLabel, leadLabel + ": " + (lead || "no session"))}${scan.length ? cell(scan.some(a => a.state === "running") ? "live" : "done", "haiku scan", `bounded-extractor (haiku): ${scan.length} scan(s)`) : ""}</div></div></div>`;
-  }
-  const last = runs.length - 1, stage = stageOf(c), prefix = unitPrefix(runs.map(r => r.unit).filter(Boolean));
-  const rows = runs.map((r, n) => {
-    const at = x => roundOf(runs, x.at) === n;
-    const chips = c.chips.filter(at), ags = agents.filter(at);
-    const runTone = r.flags.length || r.state === "stalled" || r.state === "failed" ? "bad" : r.state === "running" ? "live" : "PASS";
-    const after = n < last || r.state !== "running" && stage !== "build";
-    const party = (kind, chipOf, label, name) => {
-      const ch = chips.filter(chipOf).slice(-1)[0], ag = ags.filter(a => a.label.startsWith(kind));
-      const open = agentAttrs(ag.find(a => a.state === "running") || ag[0]);
-      if (ag.some(a => a.state === "running")) return cell("live", label, `${name}: running`, open);
-      if (ch) return cell(verdictTone(ch.verdict), label, `${name}: ${ch.verdict} · ${ch.label}`, open);
-      if (ag.length) return cell("done", label, `${name}: ${ag.map(a => a.state).join(", ")}`, open);
-      return cell(after ? "skip" : "", label, `${name}: ${after ? "not run" : "pending"}`);
-    };
-    const lead = n < last ? (r.sent_back ? "CHANGES" : "PASS") : stage === "review" ? "wait" : ["human", "complete"].includes(stage) ? "PASS" : "";
-    const leadTitle = {CHANGES: "lead audit: sent back for a fix", PASS: "lead audit: accepted", wait: "lead audit: in progress", "": "lead audit: pending"}[lead];
-    const label = r.unit ? r.unit.slice(prefix.length) || r.unit : "no brief recorded";
-    return `<div class="round" title="${esc(r.unit || r.id)}"><div class="rl"><span>${n + 1}</span><b>${esc(label)}</b><span>${esc(r.model || r.engine)}</span></div><div class="cells">${cell(runTone, "run", `implementer ${r.engine} ${r.model || ""} · ${r.unit}: ${r.state}${r.flags.length ? " · " + r.flags.join(", ") : ""} · open log`, `data-run-log="${esc(r.id)}" data-run-card="${esc(c.key)}"`)}${party("test-runner", x => x.kind === "tests", "test", "test-runner")}${LENSES.map(([k, s]) => party("diff-reviewer", x => x.kind === k, s, "diff-reviewer " + k)).join("")}${cell(lead, "lead", leadTitle)}</div></div>`;
-  });
-  const hidden = keep > 1 ? rows.length - keep : 0;
-  return `<div class="rounds">${hidden > 0 ? `<div class="earlier">+${hidden} earlier run${hidden > 1 ? "s" : ""}</div>` : ""}${rows.slice(-keep).join("")}</div>`;
-}
-
-function briefOverview(c) {
-  const all = c.rounds || [];
-  if (!all.length) return "";
-  const n = st => all.filter(r => st.includes(r.state)).length;
-  const parts = [["live", n(["running", "stalled"]), "running"], ["done", n(["done"]), "done"], ["bad", n(["failed"]), "failed"]];
-  const flagged = all.filter(r => r.flags && r.flags.length).length;
-  const bar = parts.filter(([, k]) => k).map(([tone, k, label]) => `<span class="ov-${tone}" style="flex:${k}" title="${k} ${label}"></span>`).join("");
-  const text = [`${all.length} brief${all.length === 1 ? "" : "s"}`, ...parts.filter(([, k]) => k).map(([, k, label]) => `${k} ${label}`), flagged ? `${flagged} flagged` : ""].filter(Boolean).join(" · ");
-  return `<div class="overview"><div class="ov-bar" aria-hidden="true">${bar}</div><div class="ov-text" title="${esc(text)}">${esc(text)}</div></div>`;
-}
-
-function cardWork(c, sid) {
-  const runs = (c.runs || []).filter(LIVE).sort((a, b) => (b.started || 0) - (a.started || 0));
-  if (!runs.length) return briefOverview(c) + roundsHtml(c, 1);
-  const model = r => (r.model || r.engine || "").split("/").pop();
-  const rows = runs.slice(0, 2).map(r => `<button class="work" data-asid="${esc(r.session || sid)}" data-agent="${esc(r.id)}" aria-haspopup="dialog" title="${esc([r.unit, model(r)].filter(Boolean).join(" · ") + "\n" + (r.desc || r.goal || ""))}"><span class="work-meta"><span class="live-dot"></span><b>${esc(r.unit || r.id)}</b><span>${esc(r.started ? ago(r.started) : "")}</span></span><span class="work-goal">${esc(r.desc || r.goal || "")}</span></button>`).join("");
-  const more = runs.length > 2 ? `<div class="work-more">+${runs.length - 2} more running</div>` : "";
-  return `${briefOverview(c)}<div class="work-list">${rows}</div>${more}`;
-}
 
 
 
-function cardState(c) {
-  const order = ["waiting", "working", "quiet", "idle", "still_open"], st = order.find(x => c.sessions.some(s => s.state === x));
-  return st ? STATE_TEXT[st] || st : c.key.startsWith("session:") ? "session " + c.key.slice(8, 16) : c.key.split("/").pop();
-}
 
-function cardHtml(c) {
-  const human = needsHuman(c);
-  const live = c.sessions.some(s => s.state === "working") || c.runs.some(r => r.state === "running");
-  const branch = c.tree ? c.tree.branch : (c.sessions[0] || {}).branch;
-  const sess = c.sessions.map(s => s.name).filter(n => n !== c.title).join(", ");
-  const sub = [c.label && c.label !== c.title && c.label !== branch ? c.label : "", sess, c.declared ? c.declared.note : ""].filter(Boolean).join(" · ");
-  const flag = c.needs_you.length ? FLAG_TEXT[c.needs_you[0]] || c.needs_you[0] : human ? "your call" : "";
-  const stopped = !live && c.sessions.length && c.sessions.every(s => s.state === "still_open") ? `<span class="chip st-stopped">stopped ${ago(Math.max(...c.sessions.map(s => s.updated)))} ago</span>` : "";
-  const chips = [
-    stopped,
-    c.phase !== stageOf(c) && !["idle", "investigate"].includes(c.phase) ? `<span class="chip">${esc(c.phase)}</span>` : "",
-    c.steps.length ? `<span class="chip" title="steps the lead listed">${stepsDone(c)}/${c.steps.length} steps</span>` : "",
-    c.round > 1 ? `<span class="chip">round ${c.round}</span>` : "",
-    ...c.needs_you.slice(1).map(f => `<span class="chip bad">${esc(FLAG_TEXT[f] || f)}</span>`),
-    gitBadge(c) ? `<span class="chip">${gitBadge(c)} uncommitted</span>` : "",
-  ].join("");
-  const paths = c.outside && c.outside.length ? `<div class="paths">${c.outside.slice(0, 4).map(esc).join("<br>")}${c.outside.length > 4 ? `<br>+${c.outside.length - 4} more` : ""}</div>` : "";
-  const sid = ((c.now || [])[0] || c.sessions[0] || {}).id || "";
-  return `<div class="card${live ? " live" : ""}${c.runs.some(LIVE) ? " has-work" : ""}${human ? " human" : ""}${QUIET.has(c.phase) && !human ? " quiet" : ""}" tabindex="0" data-key="${esc(c.key)}" data-sid="${esc(sid)}">
-    <div class="card-top">${live ? '<span class="blink" aria-label="running"></span>' : ""}<span class="num" title="${esc(c.key)}">${esc(cardState(c))}</span>${flag ? `<span class="flag">${esc(flag)}</span>` : ""}<button class="star" data-fav="${esc(c.key)}" aria-pressed="${!!c.favourite}" aria-label="${c.favourite ? "Remove from favourites" : "Add to favourites"}" title="${c.favourite ? "Remove from favourites" : "Add to favourites"}">${c.favourite ? "★" : "☆"}</button></div>
-    <p class="feature">${esc(c.title)}</p>
-    ${taskProgressHtml(c, true)}
-    ${c.repo && state && c.repo !== state.repo ? `<div class="branch">${esc(c.repo.split("/").pop())}</div>` : ""}
-    ${branch ? `<div class="branch">${esc(branch)}</div>` : ""}
-    <div class="cbody">${sub && !c.runs.some(LIVE) ? `<div class="s">${esc(sub)}</div>` : ""}
-    ${cardWork(c, sid)}
-    ${c.sessions.filter(s => s.engine === "codex" && s.workflow_history?.length).map(s => `<div class="s" title="Recorded workflow progress for ${esc(s.name)}">${s.workflow_history.map(e => `<span title="${esc(new Date(e.timestamp * 1000).toLocaleString())}">${esc(e.phase)}</span>`).join(" → ")}</div>`).join("")}
-    <div class="chips">${chips}</div>
-    ${questionLine(c)}${c.runs.some(LIVE) ? "" : cardNow(c)}
-    ${paths}
-    ${agentTiles(c)}</div>
-    ${human && sid ? `<div class="cardhint">${esc(resumeCmd(sessionOf(sid) || { id: sid }))}</div>` : ""}
-    <div class="foot"><span>${ago(c.updated)} ago</span></div></div>`;
-}
+
+
+
 
 const soleSid = c => c.tree && c.sessions.length === 1 ? c.sessions[0].id : "";
 const worktreesOf = c => { const sid = soleSid(c); return sid ? ((state && state.cards) || []).filter(x => soleSid(x) === sid).sort((a, b) => rank(a) - rank(b) || b.updated - a.updated) : []; };
-const lead = x => x.group ? x.primary : x;
 const STAGE_LABEL = c => (STAGES.find(s => s.key === stageOf(c)) || {}).label || c.phase;
 
-function groupBySession(cards) {
-  const bySid = new Map();
-  cards.forEach(c => { const sid = soleSid(c); if (sid) bySid.set(sid, [...(bySid.get(sid) || []), c]); });
-  const out = [], done = new Set();
-  for (const c of cards) {
-    const sid = soleSid(c), kids = sid ? bySid.get(sid) : null;
-    if (!kids || kids.length < 2) { out.push(c); continue; }
-    if (done.has(sid)) continue;
-    done.add(sid);
-    const children = [...kids].sort((a, b) => rank(a) - rank(b) || b.updated - a.updated);
-    out.push({group: true, sid, children, primary: children[0], key: children[0].key, updated: Math.max(...kids.map(k => k.updated))});
-  }
-  return out;
-}
 
 function wtRowHtml(c, current) {
   const n = gitBadge(c);
   return `<button class="wt" data-wt="${esc(c.key)}" aria-current="${c.key === current}" title="${esc(c.key)}"><span class="wt-name">${esc(c.tree.branch || c.key.split("/").pop())}</span>${n ? `<span class="chip">${n} uncommitted</span>` : ""}<span class="chip">${esc(STAGE_LABEL(c))}</span></button>`;
 }
 
-function groupHtml(g) {
-  const c = g.primary, kids = g.children;
-  const live = kids.some(k => k.sessions.some(s => s.state === "working") || k.runs.some(r => r.state === "running"));
-  const human = kids.some(needsHuman), name = c.sessions[0].name;
-  const flag = c.needs_you.length ? FLAG_TEXT[c.needs_you[0]] || c.needs_you[0] : human ? "your call" : "";
-  return `<div class="card group${live ? " live" : ""}${human ? " human" : ""}" tabindex="0" data-key="${esc(c.key)}" data-sid="${esc(g.sid)}">
-    <div class="card-top">${live ? '<span class="blink" aria-label="running"></span>' : ""}<span class="num">session ${esc(g.sid.slice(0, 8))} · ${kids.length} worktrees</span>${flag ? `<span class="flag">${esc(flag)}</span>` : ""}<button class="star" data-fav="${esc(c.key)}" aria-pressed="${!!c.favourite}" aria-label="${c.favourite ? "Remove from favourites" : "Add to favourites"}" title="${c.favourite ? "Remove from favourites" : "Add to favourites"}">${c.favourite ? "★" : "☆"}</button></div>
-    <p class="feature">${esc(name)}</p>
-    <div class="cbody"><div class="wts">${kids.map(k => wtRowHtml(k, "")).join("")}</div>
-    ${cardNow(c)}</div>
-    <div class="foot"><span>${ago(g.updated)} ago</span></div></div>`;
-}
 
 const cardOfSession = sid => ((state && state.cards) || []).find(c => (c.now || []).some(s => s.id === sid)) || null;
 const sessionOf = sid => { for (const c of (state && state.cards) || []) for (const s of c.now || []) if (s.id === sid) return s; return null; };
 const AGENT_NAMES = {"shell": "bg shell", "bounded-extractor": "haiku scan", "test-runner": "test-runner", "diff-reviewer": "diff-review", "general-purpose": "general", "Explore": "explore"};
 
-function agentTiles(c) {
-  const tiles = ownAgents(c).filter(a => a.state === "running");
-  return tiles.length ? `<div class="agents">${tiles.map(agentTile).join("")}</div>` : "";
-}
 
 function toolLine(s) {
   if (!s.action) return "";
@@ -2030,23 +1877,12 @@ function render() {
   const sw = document.getElementById("favsw");
   sw.setAttribute("aria-checked", String(favOnly));
   sw.lastChild.textContent = `Favourites only (${state.cards.filter(c => c.favourite).length})`;
-  const cards = groupBySession(favOnly ? state.cards.filter(c => c.favourite) : state.cards);
-  const cols = STAGES.map(s => ({...s, cards: cards.filter(c => stageOf(lead(c)) === s.key).sort((a, b) => rank(lead(a)) - rank(lead(b)) || b.updated - a.updated)}));
-  document.getElementById("main").innerHTML = `<div class="board">${cols.map(s => {
-    const loud = s.cards.filter(c => rank(lead(c)) < 3), quiet = s.cards.filter(c => rank(lead(c)) === 3);
-    const open = expanded.has(s.key), shown = loud.concat(open ? quiet : quiet.slice(0, SHOWN));
-    const more = quiet.length > SHOWN ? `<button class="more" data-more="${s.key}" aria-expanded="${open}">${open ? "Show fewer" : `Show all ${s.cards.length}`}</button>` : "";
-    return `<section class="col ${s.key}${s.flow ? " flow" : ""}" aria-label="${s.label}">
-      <div class="col-head"><h2>${s.label}</h2><span class="who" title="${esc(s.who)}">${esc(s.who)}</span><span class="count">${s.cards.length || ""}</span></div>
-      ${shown.map(c => c.group ? groupHtml(c) : cardHtml(c)).join("") || '<div class="none">—</div>'}${more}</section>`;
-  }).join("")}</div>`;
-  document.querySelectorAll("[data-key]").forEach(el => {
+  const pool = favOnly ? state.cards.filter(c => c.favourite) : state.cards;
+  const cards = pool.filter(fleetMatches).sort(fleetCompare);
+  mountOrchestrators(cards, pool.length);
+  document.querySelectorAll("#main [data-key]").forEach(el => {
     el.onclick = () => openCard(el.dataset.key);
     el.onkeydown = e => { if ((e.key === "Enter" || e.key === " ") && e.target === el) { e.preventDefault(); openCard(el.dataset.key); } };
-  });
-  document.querySelectorAll("#main [data-wt]").forEach(el => {
-    el.onclick = ev => { ev.stopPropagation(); openCard(el.dataset.wt); };
-    el.onkeydown = ev => ev.stopPropagation();
   });
   document.querySelectorAll("[data-fav]").forEach(el => {
     el.onclick = ev => toggleFavourite(el.dataset.fav, ev);
@@ -2060,12 +1896,8 @@ function render() {
     el.onclick = ev => { ev.stopPropagation(); openRunLog(el.dataset.runCard, el.dataset.runLog); };
     el.onkeydown = ev => { ev.stopPropagation(); if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); el.click(); } };
   });
-  document.querySelectorAll("[data-more]").forEach(el => el.onclick = () => {
-    const k = el.dataset.more;
-    expanded.has(k) ? expanded.delete(k) : expanded.add(k);
-    try { localStorage.setItem("fsa-expanded", JSON.stringify([...expanded])); } catch (e) {}
-    render();
-  });
+  wireFleet();
+  wireOrchestrators();
 }
 
 const freshGit = () => ({sig: "", at: 0, items: null, open: {unc: true, com: true, other: false}, item: null, files: null, file: null, diff: ""});
@@ -2078,7 +1910,7 @@ const dur = r => {
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s` : `${Math.floor(s / 3600)}h ${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}m`;
 };
 const STEP_MARK = {done: "✓", active: "▸", skipped: "–", pending: "○"};
-const STATE_TEXT = {working: "working", waiting: "waiting on you", idle: "just finished a turn", still_open: "stopped", quiet: "no output for 5+ min"};
+const STATE_TEXT = {working: "working", waiting: "waiting on you", idle: "just finished a turn", still_open: "stopped", quiet: "stale · no output for 5+ min"};
 const stepsDone = c => c.steps.filter(x => x.state === "done" || x.state === "skipped").length;
 const activeStep = c => c.steps.find(x => x.state === "active");
 const panel = () => document.getElementById("panel");
@@ -2116,11 +1948,7 @@ function ensureBody(kind, html, onNew) {
   if (onNew) onNew();
 }
 
-const paneHead = c => `<button class="action-button close" id="close">Close</button>
-  <h3>${esc(c.title)}</h3>
-  ${c.tree ? `<div style="font:12px ui-monospace,monospace;color:var(--blue)">${esc(c.tree.branch)}</div>` : ""}
-  <div class="s">${esc(c.phase)}${c.tree ? ` · ${c.tree.ahead} ahead · ${gitBadge(c)} uncommitted` : ""}</div>
-  ${worktreesOf(c).length > 1 ? `<div class="wtbar" role="group" aria-label="Worktrees of session ${esc(c.sessions[0].name)}">${worktreesOf(c).map(k => wtRowHtml(k, c.key)).join("")}</div>` : ""}`;
+const paneHead = c => `${worktreesOf(c).length > 1 ? `<div class="wtbar" role="group" aria-label="Worktrees of session ${esc(c.sessions[0].name)}">${worktreesOf(c).map(k => wtRowHtml(k, c.key)).join("")}</div>` : ""}`;
 
 const tabsHtml = c => `<button class="tab2" role="tab" data-t="info" aria-selected="${tab2 === "info"}">Information</button>
   <button class="tab2" role="tab" data-t="git" aria-selected="${tab2 === "git"}" ${c.tree ? "" : "disabled"}>Git changes${gitBadge(c) ? ` <span class="badge">${gitBadge(c)}</span>` : ""}</button>
@@ -2370,11 +2198,14 @@ function infoHtml(c) {
   const doneN = tracked.reduce((n, t) => n + t.completed, 0), allN = tracked.reduce((n, t) => n + t.total, 0);
   const tone = {working: "live", blocked: "bad", done: "done"}[status] || "";
   const tile = (label, value, cls = "", extra = "") => `<div class="so-tile ${cls}"><div class="so-l">${esc(label)}</div><div class="so-v">${esc(value)}</div>${extra}</div>`;
+  const u = c.usage, ctx = u ? `${Math.round(u.fill * 100)}%${u.compactions ? ` · ${u.compactions}×` : ""}` : "—";
   const overview = `<section class="session-overview" aria-label="Session overview"><div class="so-head"><span class="so-ico" aria-hidden="true"></span><b>Session health</b><span class="pill ${tone}">${esc(status)}</span><span class="so-right">${need ? `<span class="pill bad">${need} need${need === 1 ? "s" : ""} you</span>` : ""}<span class="pill">${esc(phase)}</span></span></div>
-    <div class="so-tiles">${tile("Phase", phase)}${tile("Tasks done", allN ? `${doneN}/${allN}` : "—", "", allN ? `<div class="so-bar" aria-hidden="true"><span style="width:${Math.round(doneN / allN * 100)}%"></span></div>` : "")}${tile("Running now", liveTotal(liveSets(c)), "live")}${tile("Needs you", need, need ? "bad" : "")}${tile("Latest activity", stamp(activity.updated || c.updated), "time")}</div></section>`;
+    <div class="so-tiles">${tile("Phase", phase)}${tile("Tasks done", allN ? `${doneN}/${allN}` : "—", "", allN ? `<div class="so-bar" aria-hidden="true"><span style="width:${Math.round(doneN / allN * 100)}%"></span></div>` : "")}${tile("Running now", liveTotal(liveSets(c)), "live")}${tile("Needs you", need, need ? "bad" : "")}${tile("Context", ctx, u && u.blowout ? "bad" : "", u ? `<div class="so-bar" aria-hidden="true"><span style="width:${Math.round(u.fill * 100)}%"></span></div>` : "")}${tile("Est. cost", fmtCost(u && u.cost))}${tile("Tokens / min", fmtTokens(u && u.tpm))}${tile("Latest activity", stamp(activity.updated || c.updated), "time")}</div></section>`;
   return `<div class="info-grid">
     ${overview}
     ${taskProgressHtml(c)}
+    ${workersSection(c)}
+    ${activitySection(c)}
     <div class="session-activity">${liveHtml(c)}</div>
     ${infoSection(c, "summary", "Summary", `<b>${esc(c.title)}</b><dl class="info-facts"><dt>State</dt><dd>${esc(status)}</dd><dt>Phase</dt><dd>${esc(lead.workflow_phase || c.phase || "unknown")}</dd><dt>Lead</dt><dd>${esc(engineName(lead.engine))}${lead.model ? " · " + esc(lead.model) : ""}</dd><dt>Auditor</dt><dd>${esc(auditor)}</dd><dt>Latest activity</dt><dd>${esc(stamp(activity.updated || c.updated))}</dd></dl>`)}
     ${infoSection(c, "progress", "Progress", `${history.length ? timeline(history.slice(-8)) + (history.length > 8 ? infoDisclosure(c, "history", "Earlier phase history", timeline(history.slice(0, -8))) : "") : '<div class="s">No phase history recorded.</div>'}${activity.action ? `<div class="snip"><b>${activity.action_running ? "Running now" : "Latest action"}</b> ${esc(activity.action)}</div>` : ""}${c.steps?.length ? stepsHtml(c) : ""}${c.declared?.note ? `<div class="snip">${esc(c.declared.note)}</div>` : ""}`)}
@@ -2627,11 +2458,11 @@ function paintPanel() {
   if (!c) return closePanel();
   const p = panel();
   if (!document.getElementById("pbody")) {
-    p.innerHTML = '<div id="phead"></div><div class="ptabs" id="ptabs" role="tablist"></div><div class="pbody" id="pbody"></div>';
+    p.innerHTML = '<div class="ptop"><div class="ptabs" id="ptabs" role="tablist"></div><button class="action-button close" id="close">Close</button></div><div id="phead"></div><div class="pbody" id="pbody"></div>';
     bodyKind = "";
   }
+  document.getElementById("close").onclick = closePanel;
   if (setIfChanged("phead", paneHead(c))) {
-    document.getElementById("close").onclick = closePanel;
     document.querySelectorAll("#phead [data-wt]").forEach(b => b.onclick = () => { if (b.dataset.wt !== openKey) openCard(b.dataset.wt, true); });
   }
   if (setIfChanged("ptabs", tabsHtml(c))) document.querySelectorAll("#ptabs [data-t]").forEach(b => b.onclick = () => { tab2 = b.dataset.t; paintPanel(); });
@@ -2659,7 +2490,9 @@ function openCard(key, keepTab = false) {
   panel().innerHTML = "";
   panel().classList.add("open");
   document.documentElement.classList.add("lock");
+  document.documentElement.classList.toggle("split", view === "agents");
   paintPanel();
+  render();
 }
 
 function openRunLog(key, id) {
@@ -2692,7 +2525,8 @@ function closePanel() {
   git = {...freshGit(), hide1: git.hide1, hide2: git.hide2};
   panel().classList.remove("open");
   panel().innerHTML = "";
-  document.documentElement.classList.remove("lock");
+  document.documentElement.classList.remove("lock", "split");
+  render();
 }
 
 function sessionHerdrPane(session) {
@@ -2751,7 +2585,9 @@ async function load() {
     meta.className = "status";
     meta.innerHTML = `<span class="dot"></span>${esc(state.repo.split("/").pop())} · ${state.locks.deploy ? '<span class="lock">deploy lock held</span> · ' : ""}${new Date(state.generated * 1000).toLocaleTimeString()}`;
     notify();
-    render();
+    noteTpm();
+    noteCardTpm();
+    if (document.activeElement?.id !== "fsort") rerenderKeepingFocus();
     if (openKey) paintPanel();
     if (view === "herdr" || openKey && tab2 === "terminal") loadHerdr();
   } catch (e) {

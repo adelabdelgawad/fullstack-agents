@@ -32,6 +32,9 @@ from datetime import datetime, timezone
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "lib"))
 from task_tracking import load_tasks
+from usage import redact, session_usage, transcript_usage
+from activity import ActivityFeed, card_usage, history_rows, run_cause, totals
+from plan_usage import plan_usage
 HTML = HERE / "lib" / "dashboard.html"
 FIRST_PROMPTS = {}
 LAST_ASKS = {}
@@ -97,6 +100,9 @@ XTERM_FILES = {
     "/static/xterm/xterm.js": (HERE / "lib" / "vendor" / "xterm" / "xterm.js", "application/javascript"),
     "/static/xterm/addon-fit.js": (HERE / "lib" / "vendor" / "xterm" / "addon-fit.js", "application/javascript"),
     "/static/xterm/xterm.css": (HERE / "lib" / "vendor" / "xterm" / "xterm.css", "text/css"),
+    "/static/fleet.js": (HERE / "lib" / "fleet.js", "application/javascript"),
+    "/static/fleet.css": (HERE / "lib" / "fleet.css", "text/css"),
+    "/static/orchestrators.js": (HERE / "lib" / "orchestrators.js", "application/javascript"),
 }
 
 
@@ -888,6 +894,7 @@ def read_run(runs, rid, log_mtime, now, projects):
         "touched": touched or [], "outside": outside, "open_risks": (result or {}).get("open_risks", []),
         "allowed": sorted(read_allow(runs, rid)),
         "summary": ((result or {}).get("summary") or "")[:1500],
+        "cause": run_cause(runs / f"{rid}.log", result) if state in ("failed", "stalled", "abandoned") else "",
     }
 
 
@@ -1279,6 +1286,9 @@ def read_session(path, now, wt_re, names, waits):
         state = "quiet"
     worktree = max(mentions, key=mentions.get) if mentions else ""
     agents = agent_items(path.with_suffix(""), finished, now)
+    use = session_usage(path, now)
+    for a in agents:
+        a.update({k: v for k, v in (use or {}).get("agents", {}).get(a["id"], {}).items() if k != "label"})
     bg["pending"] = [f for u, f in bg["bash"].items() if u not in answered and u not in bg["labels"]]
     return {
         "id": sid, "name": title or names.get(sid) or first_prompt(path) or f"{Path(cwd).name or 'session'} {sid[:8]}",
@@ -1292,6 +1302,7 @@ def read_session(path, now, wt_re, names, waits):
         "ask": snippet(ask, 600), "need": need, "action": action, "action_at": iso_epoch(action_at),
         "action_running": state == "working" and bool(action_id) and action_id not in answered, "said_at": iso_epoch(said_at),
         "said": snippet(text, 600), "said_full": text[-SAID_MAX:], "docs": message_docs(text, cwd),
+        "usage": use,
     }
 
 
@@ -1890,7 +1901,7 @@ def read_codex_session(repo, path, meta, now, names, waits, pane, pane_status, a
         "action": action, "action_at": iso_epoch(action_at),
         "action_running": state == "working" and bool(action_id) and action_id not in answered,
         "said_at": iso_epoch(said_at), "said": snippet(said, 600), "said_full": said[-SAID_MAX:],
-        "docs": message_docs(said, cwd),
+        "docs": message_docs(said, cwd), "usage": transcript_usage(path, "codex", now),
     }
 
 
@@ -2025,16 +2036,21 @@ def pane_session(pane, root, now):
 
 def merge_states(home, parts, now):
     board = load_json(home.board) or {}
-    st = {"generated": now, "ui": int(HTML.stat().st_mtime), "repo": str(home.root), "main": home.main,
+    st = {"generated": now, "ui": ui_stamp(), "repo": str(home.root), "main": home.main,
           "cards": [], "waiting": [], "still_open": [], "_sources": {}, "_docs": {}, "_scopes": {},
           "session_panes": {}, "abandoned": [],
-          "locks": board.get("locks") or {}, "events": (board.get("events") or [])[-12:]}
+          "locks": board.get("locks") or {}, "events": (board.get("events") or [])[-12:],
+          "totals": totals([], [], [], now), "history": []}
     for p in parts:
+        for k, v in p["totals"].items():
+            st["totals"][k] = v if st["totals"][k] is None else st["totals"][k] + (v or 0)
+        st["history"] += p["history"]
         for k in ("cards", "waiting", "still_open", "abandoned"):
             st[k] += p[k]
         for k in ("_sources", "_docs", "_scopes", "session_panes"):
             st[k].update(p[k])
     st["cards"].sort(key=lambda c: -c["updated"])
+    st["history"].sort(key=lambda h: -h["updated"])
     return st
 
 
@@ -2109,6 +2125,10 @@ def needs_you(card, runs):
     return flags
 
 
+def ui_stamp():
+    return int(max((HERE / "lib" / f).stat().st_mtime for f in ("dashboard.html", "fleet.js", "fleet.css", "orchestrators.js")))
+
+
 def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
     now = time.time()
     trees = gc.worktrees(now)
@@ -2120,6 +2140,7 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
     sessions += fresh_sessions(repo, trees, now)
     sessions += collect_codex_sessions(repo, trees, now, board.get("waits") or {})
     sessions += extra
+    every = list(sessions)
     if only is not None:
         sessions = [s for s in sessions if s["id"] in only]
     if pane_bindings:
@@ -2207,7 +2228,7 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
         title = (owner or {}).get("name") or label or (latest_run or {}).get("goal", "")[:90] or key
         card = {"key": key, "repo": main_root, "title": title, "label": label, "tree": tree, "worktree": tree_key if tree else "",
                 "goal": (latest_run or {}).get("goal", ""), "desc": (latest_run or {}).get("desc", ""),
-                "sessions": [{**{k: s.get(k) for k in ("id", "name", "state", "updated", "branch", "model", "workflow_phase", "workflow_at", "workflow_history", "workflow_checks", "workflow_summary", "workflow_auditor", "workflow_runs", "task_tracking")},
+                "sessions": [{**{k: s.get(k) for k in ("id", "name", "state", "updated", "branch", "model", "workflow_phase", "workflow_at", "workflow_history", "workflow_checks", "workflow_summary", "workflow_auditor", "workflow_runs", "task_tracking", "usage")},
                               "engine": s.get("engine") or "claude"} for s in g["sessions"]],
                 "workflow_runs": [r for s in g["sessions"] for r in s.get("workflow_runs", [])],
                 "runs": g["runs"][-6:],
@@ -2223,11 +2244,12 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
         card["now"] = [{**{k: s[k] for k in ("id", "name", "title", "state", "updated", "ask", "need", "action", "action_at", "action_running", "said", "said_at", "said_full", "docs")},
                         "question": s.get("question", ""),
                         "engine": s.get("engine", "claude"),
-                        "agents": [{**{f: x[f] for f in ("id", "label", "state", "at")}, **{k: x[k] for k in ("shell", "task") if x.get(k)}} for x in s["agents"]]}
+                        "agents": [{**{f: x[f] for f in ("id", "label", "state", "at")}, **{k: x[k] for k in ("shell", "task", "model", "tokens", "cost", "fill") if x.get(k)}} for x in s["agents"]]}
                        for s in sorted(g["sessions"], key=lambda s: -s["updated"])]
         card["declared"] = max((declared[s["id"]] for s in g["sessions"] if s["id"] in declared),
                                key=lambda d: d["at"], default=None)
         card["phase"] = phase_of(card, g["runs"], g["sessions"])
+        card["usage"] = card_usage(g["sessions"])
         card["needs_you"] = [] if card["phase"] == "complete" else needs_you(card, g["runs"])
         impl = [r for r in g["runs"] if r["mode"] == "implement"]
         card["outside"] = impl[-1]["outside"] if impl and "out_of_scope" in card["needs_you"] else []
@@ -2257,7 +2279,7 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
         return sorted(out, key=lambda x: -x["updated"])
 
     return {
-        "generated": now, "ui": int(HTML.stat().st_mtime), "repo": main_root, "main": repo.main,
+        "generated": now, "ui": ui_stamp(), "repo": main_root, "main": repo.main,
         "cards": sorted(cards, key=lambda c: -c["updated"]),
         "waiting": attention("waiting"), "still_open": attention("still_open"),
         "_sources": output_sources(sessions),
@@ -2268,6 +2290,7 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
         "session_panes": {**session_panes(repo), **{s["id"]: s["pane"] for s in sessions if s.get("pane")}},
         "abandoned": sorted(old, key=lambda r: -r["updated"])[:30],
         "locks": board.get("locks") or {}, "events": (board.get("events") or [])[-12:],
+        "totals": totals(sessions, every, runs, now), "history": history_rows(every),
     }
 
 
@@ -2303,6 +2326,7 @@ class Server(http.server.ThreadingHTTPServer):
         self.lock, self.cached, self.cached_at, self.sources, self.docs, self.scopes = threading.Lock(), None, 0.0, {}, {}, {}
         self.herdr_lock, self.herdr_cached, self.herdr_cached_at = threading.Lock(), None, 0.0
         self.herdr_live_lock, self.herdr_live = threading.Lock(), {}
+        self.feed = ActivityFeed()
         self.roots, self.cwd_roots, self.card_roots, self.card_worktrees = {str(repo.root): (repo, self.gc)}, {}, {}, {}
 
     def repo_at(self, cwd):
@@ -2359,6 +2383,8 @@ class Server(http.server.ThreadingHTTPServer):
                 self.card_roots = {k: c["repo"] for c in st["cards"]
                                    for k in [c["key"], *(f"session:{s['id']}" for s in c["now"])]}
                 self.card_worktrees = {c["key"]: c["worktree"] for c in st["cards"] if c.get("worktree")}
+                st["activity"] = self.feed.update(st)
+                st["plan"] = plan_usage()
                 self.cached = json.dumps(st).encode()
                 self.cached_at = time.time()
             return self.cached
@@ -2392,6 +2418,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return secrets.compare_digest(given, self.server.token)
 
     def send(self, code, body, ctype="application/json", extra=None):
+        if ctype.startswith(("application/json", "text/plain")):
+            body = redact(body)
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Cache-Control", "no-store")

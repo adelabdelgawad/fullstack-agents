@@ -1,10 +1,10 @@
 """Behavior of the Information renderer using projected dashboard fixtures."""
 import json
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import unittest
+from pathlib import Path
 
 HTML = Path(__file__).resolve().parents[2] / "plugins/fullstack-agents/scripts/lib/dashboard.html"
 
@@ -32,6 +32,10 @@ const resumeHtml = s => '<div>' + esc(s.id) + ' codex resume ' + esc(s.id) + '</
 const stepsHtml = c => c.steps.map(s => esc(s.text)).join('');
 const AGENT_NAMES = {shell: 'bg shell'};
 const toolLine = s => s.action || '';
+const workersSection = () => '';
+const activitySection = () => '';
+const fmtCost = c => c == null ? '—' : '$' + c.toFixed(2);
+const fmtTokens = n => String(n || 0);
 '''
         script = "const vm = require('vm'); const ctx = vm.createContext({});\n"
         script += "vm.runInContext(" + json.dumps(helpers + renderer) + ", ctx);\n"
