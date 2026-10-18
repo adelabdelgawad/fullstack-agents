@@ -89,6 +89,7 @@ skill_files() {
     n="${n#fullstack-agents:}"; [[ "$seen" == *" $n "* ]] && continue; seen+="$n "
     [ -f "$dir/$n/SKILL.md" ] && printf '%s/SKILL.md\n' "$(cd "$dir/$n" && pwd)"
   done
+  return 0
 }
 
 # Codex reads the skill paths itself; Grok receives them as opencode attachments because reads outside the repo are denied.
@@ -184,7 +185,7 @@ if [ "$engine" = "grok" ]; then
   cat > "$runner" <<EOF
 set -o pipefail
 cd '$root' && OPENCODE_CONFIG='$cfg' '$opencode_bin' run -m '$model'${variant:+ --variant '$variant'} --title '$id'$attach -- "\$(cat '$prompt')" < /dev/null 2>&1 | tee '$log'
-rc=\${PIPESTATUS[0]}
+rc=\${PIPESTATUS[0]}; echo \$rc > '$runs/$id.engine_exit'
 python3 '$here/lib/extract-result.py' '$log' '$last' || rc=1
 exit \$rc
 EOF
@@ -211,7 +212,7 @@ elif [ "$engine" = "claude" ]; then
 set -o pipefail
 export BASH_DEFAULT_TIMEOUT_MS=\${BASH_DEFAULT_TIMEOUT_MS:-600000} BASH_MAX_TIMEOUT_MS=\${BASH_MAX_TIMEOUT_MS:-1800000}
 cd $(printf %q "$root") && FSA_IMPLEMENTER_RUN=$(printf %q "$id") FSA_IMPLEMENTER_ROOT=$(printf %q "$root") FSA_ALLOWED_PATHS_FILE=$(printf %q "$runs/$id.allow") $cc_cmd $(printf '%q ' "${args[@]}") < '$prompt' 2>&1 | tee '$log'
-rc=\${PIPESTATUS[0]}
+rc=\${PIPESTATUS[0]}; echo \$rc > '$runs/$id.engine_exit'
 jq -nRe '[inputs | fromjson? | select(.type == "result")] | last | select(.is_error | not) | .structured_output // empty' '$log' > '$last' || { : > '$last'; rc=1; }
 exit \$rc
 EOF
@@ -225,7 +226,8 @@ else
   cat > "$runner" <<EOF
 set -o pipefail
 codex exec --cd '$root' -m '$model' -s '$sandbox'$add_dirs --output-schema '$schema' -o '$last' - < '$prompt' 2>&1 | tee '$log'
-exit \${PIPESTATUS[0]}
+rc=\${PIPESTATUS[0]}; echo \$rc > '$runs/$id.engine_exit'
+exit \$rc
 EOF
 fi
 
@@ -242,6 +244,20 @@ run_in_herdr_pane() {
 fsa_event "$runs" "$id" running
 # Every engine process and its children inherit the run marker; the runner leads its own process group.
 export FSA_RUN_ID="$id"
+# Cancellation stops the runner's group and every marked process, then still records what the run changed.
+cancelled=0; runner_pid=""
+liveness() { python3 -I "$here/lib/liveness.py" "$1" "$runs" "$id" "${@:2}" 2>/dev/null; }
+on_cancel() {
+  cancelled=1
+  [ -n "$runner_pid" ] && kill -TERM -- "-$runner_pid" 2>/dev/null
+  liveness signal TERM > /dev/null
+  local waited=0
+  while [ -n "$(liveness pids)" ] && [ "$waited" -lt "${FSA_CANCEL_WAIT_S:-10}" ]; do sleep 1; waited=$((waited + 1)); done
+  liveness signal KILL > /dev/null
+  [ -n "$runner_pid" ] && kill -KILL -- "-$runner_pid" 2>/dev/null
+  return 0
+}
+trap on_cancel INT TERM
 set +e
 if [ "$herdr_mode" = 1 ]; then
   run_in_herdr_pane
@@ -252,6 +268,8 @@ else
   wait "$runner_pid"
 fi
 codex_exit=$?
+[ "$cancelled" = 1 ] && [ -n "$runner_pid" ] && { wait "$runner_pid" 2>/dev/null; codex_exit=130; }
+trap - INT TERM
 set -e
 
 fsa_event "$runs" "$id" engine_exited "exit $codex_exit"
@@ -283,4 +301,36 @@ noop=0; [ "$mode" = "implement" ] && [ -z "$touched" ] && { noop=1; echo "STATUS
 [ "$instructions_changed" = true ] && echo "STATUS=INSTRUCTIONS_CHANGED (project instructions changed during the run; review the result against the current rules)"
 [ "$codex_exit" -eq 0 ] && [ -s "$last" ] && [ "${summary_len:-0}" -lt 11500 ] && [ -z "${outside:-}" ] && [ "$noop" = 0 ] \
   && [ "$instructions_changed" = false ] && echo "STATUS=OK (audit the diff before trusting it)"
+
+# Terminal state: the first that applies; `succeeded` means a valid in-scope result, never an accepted change.
+engine_exit=$(cat "$runs/$id.engine_exit" 2>/dev/null || echo "$codex_exit")
+details=()
+[ "$cancelled" = 1 ] && details+=(cancelled)
+[ "$engine_exit" -ne 0 ] && details+=(engine_failed)
+{ [ ! -s "$last" ] || [ "${summary_len:-0}" -ge 11500 ]; } && details+=(invalid_output)
+[ -n "${outside:-}" ] && details+=(scope_violation)
+[ "$noop" = 1 ] && details+=(no_changes)
+state=${details[0]:-succeeded}
+after=$(liveness state || echo '{"state":"uncertain"}')
+held=$(jq -r 'if .state == "running" or ((.processes // []) | length > 0) then "held" else "free" end' <<<"$after")
+[ "$held" = held ] && echo "STATUS=OWNERSHIP_HELD (run processes are still alive; paths stay owned until \`codex-task.sh release $id\`)"
+jq -n --arg state "$state" --argjson engine_exit "$engine_exit" --arg details "${details[*]}" --arg touched "$touched" \
+  --arg outside "${outside:-}" --argjson changed "$instructions_changed" --argjson after "$after" --arg held "$held" \
+  --arg started "$(jq -r .started "$runs/$id.meta.json")" --arg ended "$(date -u +%FT%TZ)" \
+  '{state: $state, engine_exit: $engine_exit, details: ($details | split(" ") | map(select(. != ""))),
+    touched: ($touched | split("\n") | map(select(. != ""))), outside: ($outside | split("\n") | map(select(. != ""))),
+    review: (if $changed then ["instructions_changed"] else [] end), liveness_after: $after, ownership: $held,
+    started: $started, ended: $ended}' > "$runs/$id.result.json"
+fsa_event "$runs" "$id" "$state"
+
+# Exit codes: legacy (default) keeps 0 for every completed run; strict maps the terminal state (D4).
+[ "$cancelled" = 1 ] && exit 130
+[ "${FSA_DISPATCH_EXIT:-legacy}" = strict ] || exit 0
+case "$state" in
+  engine_failed) exit 10 ;;
+  invalid_output) exit 11 ;;
+  scope_violation) exit 12 ;;
+  no_changes) exit 13 ;;
+esac
+[ "$instructions_changed" = true ] && exit 14
 exit 0

@@ -12,7 +12,7 @@ SCRIPTS = REPO / "plugins/fullstack-agents/scripts"
 # Each fake records argv, selected env and stdin to $FSA_TEST_CALL, then behaves as $FSA_FAKE_MODE says.
 FAKE = r'''import json, os, sys, time
 engine = os.path.basename(sys.argv[0])
-mode = os.environ.get("FSA_FAKE_MODE", "ok")
+modes = os.environ.get("FSA_FAKE_MODE", "ok").split(",")
 stdin = "" if sys.stdin.isatty() else sys.stdin.read()
 keys = ("FSA_RUN_ID", "FSA_ROLE", "FSA_IMPLEMENTER_RUN", "FSA_IMPLEMENTER_ROOT", "FSA_ALLOWED_PATHS_FILE", "OPENCODE_CONFIG")
 calls = os.environ["FSA_TEST_CALL"]
@@ -25,23 +25,25 @@ if engine == "opencode" and sys.argv[1:3] == ["session", "list"]:
     print(json.dumps([{"id": "ses_other", "title": "unrelated", "directory": os.getcwd()},
                       {"id": "ses_fake1", "title": title, "directory": os.getcwd()}]))
     sys.exit(0)
-if mode == "touch":
+if "touch" in modes:
     for p in os.environ.get("FSA_FAKE_TOUCH", "").split(":"):
         if p:
             os.makedirs(os.path.dirname(p) or ".", exist_ok=True)
             open(p, "a").write("x\n")
-if mode == "detach":
+if "detach" in modes:
     import subprocess
     subprocess.Popen(["sleep", os.environ.get("FSA_FAKE_SLEEP", "30")], start_new_session=True,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-if mode == "sleep":
+if "sleep" in modes:
     time.sleep(float(os.environ.get("FSA_FAKE_SLEEP", "30")))
-if mode == "fail":
+if "fail" in modes:
     print("engine failed", file=sys.stderr)
     sys.exit(3)
 result = {"summary": "done", "files": [], "tests": [], "open_risks": []}
-if mode == "malformed":
+if "malformed" in modes:
     result = None
+if "truncated" in modes:
+    result["summary"] = "x" * 11600
 if engine == "codex":
     print("session id: 01a14614-0000-7000-8000-000000000001")
     print("reasoning effort: none")

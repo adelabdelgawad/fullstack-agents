@@ -2,6 +2,7 @@
 """Whether a dispatched run can still edit files: running, stopped, uncertain, or legacy (a v1 record)."""
 import json
 import os
+import signal
 import sqlite3
 import sys
 from pathlib import Path
@@ -173,11 +174,24 @@ def main(argv):
     if len(argv) >= 3 and argv[0] == "state":
         print(json.dumps(run_state(argv[1], argv[2])))
         return 0
+    if len(argv) >= 3 and argv[0] in ("pids", "signal"):
+        meta = json.loads(_read(Path(argv[1], f"{argv[2]}.meta.json")) or "{}")
+        hits, _, _ = editing_processes(argv[2], meta.get("cwd") or meta.get("root") or "", meta.get("runner_pgid"))
+        if argv[0] == "pids":
+            print("\n".join(map(str, hits)))
+            return 0
+        sig = getattr(signal, f"SIG{argv[3] if len(argv) > 3 else 'TERM'}")
+        for pid in hits:
+            try:
+                os.kill(pid, sig)
+            except OSError:
+                continue
+        return 0
     if len(argv) >= 3 and argv[0] == "release":
         code, message = release(argv[1], argv[2], "--confirm" in argv[3:])
         print(message)
         return code
-    print("usage: liveness.py state|release <runs-dir> <run-id> [--confirm]", file=sys.stderr)
+    print("usage: liveness.py state|pids|signal|release <runs-dir> <run-id> [SIG|--confirm]", file=sys.stderr)
     return 2
 
 

@@ -54,7 +54,7 @@ class RegistryRecordTests(unittest.TestCase):
         self.assertTrue(meta["plugin"]["version"])
         self.assertEqual(len(meta["brief_sha256"]), 64)
         states = [json.loads(line)["state"] for line in (runs / f"{rid}.events.jsonl").read_text().splitlines()]
-        self.assertEqual(states, ["created", "running", "engine_exited", "collected"])
+        self.assertEqual(states, ["created", "running", "engine_exited", "collected", "no_changes"])
 
     def test_codex_session_id_comes_from_the_log_banner(self):
         _, meta, _, _ = self.dispatch("codex")
