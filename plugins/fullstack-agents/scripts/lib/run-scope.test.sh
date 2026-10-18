@@ -11,7 +11,8 @@ mkdir -p "$runs" "$root/.codex-briefs" "$other"
 brief="$root/.codex-briefs/unit.md"
 : > "$brief"
 
-export CLAUDE_CONFIG_DIR="$tmp/config"
+export CLAUDE_CONFIG_DIR="$tmp/config" HOME="$tmp/home"
+unset FSA_CODEX_RUNS_DIR
 mkdir -p "$CLAUDE_CONFIG_DIR/projects/repo"
 
 # run <id> <root> <start> <end|live> <allowed paths...>; touched paths go in <id>.post.txt via touch_paths.
@@ -68,5 +69,23 @@ chk "own, overlapping-run, live-run, brief and in-window lead-edit paths are cla
 run implement-6-clean "$root" $((now - 50)) $((now - 40)) src/clean.rs
 touch_paths implement-6-clean src/clean.rs
 chk "a run touching only its own paths has nothing out of scope" "" "$(run_outside "$runs" implement-6-clean "$root" "$brief")"
+
+# A concurrent run recorded in a legacy registry directory still claims its paths.
+legacy="$tmp/legacy"
+mkdir -p "$legacy" "$root/.claude"
+printf 'runs_dir=%s\nlegacy_runs_dirs=%s\n' "$runs" "$legacy" > "$root/.claude/fsa-team.conf"
+run implement-7-mine "$root" $((now - 30)) $((now - 10)) src/seven.rs
+printf '%s\n' src/legacy.rs > "$legacy/implement-8-legacy.allow"
+jq -n --arg root "$root" '{root: $root, session: "lead-2"}' > "$legacy/implement-8-legacy.meta.json"
+: > "$legacy/implement-8-legacy.pre.txt"; touch -d "@$((now - 25))" "$legacy/implement-8-legacy.pre.txt"
+touch_paths implement-7-mine src/seven.rs src/legacy.rs
+chk "a live-window run in a legacy registry directory claims its paths" "" "$(run_outside "$runs" implement-7-mine "$root" "$brief")"
+
+chk "resolver: env wins" "/x/env" "$(FSA_CODEX_RUNS_DIR=/x/env fsa_runs_dir "$root")"
+chk "resolver: binding when no env" "$runs" "$(fsa_runs_dir "$root")"
+chk "resolver: default without binding" "$HOME/.codex/fsa-runs" "$(fsa_runs_dir "$other")"
+chk "resolver: read dirs list primary then existing legacy" "$runs $legacy " "$(fsa_runs_read_dirs "$root" | tr '\n' ' ')"
+printf 'runs_dir=~/kc\n' > "$other/.claude-conf.tmp"; mkdir -p "$other/.claude"; mv "$other/.claude-conf.tmp" "$other/.claude/fsa-team.conf"
+chk "resolver: ~ expands to HOME" "$HOME/kc" "$(fsa_runs_dir "$other")"
 
 exit $fail

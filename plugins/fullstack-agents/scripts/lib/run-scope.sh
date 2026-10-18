@@ -1,5 +1,7 @@
 # Sourced by codex-task.sh: which changed paths a finished implement run cannot account for.
 
+. "$(dirname "${BASH_SOURCE[0]}")/runs-dir.sh"
+
 run_touched() {
   { comm -13 "$1/$2.pre.txt" "$1/$2.post.txt"; comm -23 "$1/$2.pre.txt" "$1/$2.post.txt"; } | cut -d' ' -f2- | sort -u
 }
@@ -11,17 +13,20 @@ run_window() {
   printf '%s %s\n' "$(date -r "$1/$2.pre.txt" +%s)" "$end"
 }
 
+# Concurrent runs may sit in any registry directory readers scan (the primary and the binding's legacy dirs).
 concurrent_allow() {
-  local runs=$1 id=$2 root=$3 start end f oid os oe
+  local runs=$1 id=$2 root=$3 start end f d oid os oe
   read -r start end < <(run_window "$runs" "$id")
-  for f in "$runs"/implement-*.allow; do
-    [ -f "$f" ] || continue
-    oid=$(basename "$f" .allow)
-    [ "$oid" != "$id" ] && [ -f "$runs/$oid.pre.txt" ] && [ -f "$runs/$oid.meta.json" ] || continue
-    read -r os oe < <(run_window "$runs" "$oid")
-    [ "$os" -le "$end" ] && [ "$oe" -ge "$start" ] || continue
-    [ "$(jq -r '.root // ""' "$runs/$oid.meta.json")" = "$root" ] && cat "$f"
-  done
+  while IFS= read -r d; do
+    for f in "$d"/implement-*.allow; do
+      [ -f "$f" ] || continue
+      oid=$(basename "$f" .allow)
+      [ "$oid" != "$id" ] && [ -f "$d/$oid.pre.txt" ] && [ -f "$d/$oid.meta.json" ] || continue
+      read -r os oe < <(run_window "$d" "$oid")
+      [ "$os" -le "$end" ] && [ "$oe" -ge "$start" ] || continue
+      [ "$(jq -r '.root // ""' "$d/$oid.meta.json")" = "$root" ] && cat "$f"
+    done
+  done < <(fsa_runs_read_dirs "$root" "$runs" | awk -v r="$runs" 'BEGIN { print r } $0 != r')
   return 0
 }
 

@@ -41,7 +41,8 @@ esac
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root=${FSA_CODEX_ROOT:-$(git rev-parse --show-toplevel)}
-runs=${FSA_CODEX_RUNS_DIR:-$HOME/.codex/fsa-runs}; mkdir -p "$runs"
+. "$here/lib/runs-dir.sh"
+runs=$(fsa_runs_dir "$root"); mkdir -p "$runs"
 schema="$root/.claude/codex-result.schema.json"; [ -f "$schema" ] || schema="$here/codex-result.schema.json"
 id="$mode-$(date +%Y%m%d-%H%M%S)-$$"
 last="$runs/$id.last.txt"; log="$runs/$id.log"

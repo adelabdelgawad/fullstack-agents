@@ -35,6 +35,7 @@ from task_tracking import load_tasks
 from usage import redact, session_usage, transcript_usage
 from activity import ActivityFeed, card_usage, history_rows, run_cause, totals
 from plan_usage import plan_usage
+from runs_dir import read_dirs, runs_dir
 HTML = HERE / "lib" / "dashboard.html"
 FIRST_PROMPTS = {}
 LAST_ASKS = {}
@@ -494,8 +495,8 @@ class Repo:
         self.state.mkdir(exist_ok=True)
         self.board = self.state / "board.json"
         self.favourites = self.state / "dashboard-favourites.json"
-        self.runs = Path(runs or os.environ.get("FSA_CODEX_RUNS_DIR") or self.binding_runs()
-                         or Path.home() / ".codex" / "fsa-runs")
+        self.runs = runs_dir(self.root, runs, self.binding_runs())
+        self.run_dirs = read_dirs(self.root, self.runs)
         bases = projects or CLAUDE_BASES
         self.projects = list(dict.fromkeys(Path(b).expanduser() / "projects" for b in bases if b))
         head = (git(self.root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD") or "").strip()
@@ -508,6 +509,9 @@ class Repo:
             return None
         m = re.search(r'FSA_CODEX_RUNS_DIR="?([^"\n]+)"?', text)
         return os.path.expandvars(m.group(1)) if m else None
+
+    def run_home(self, rid):
+        return next((d for d in self.run_dirs if (d / f"{rid}.meta.json").exists()), self.runs)
 
 
 def newest_edit(path, status):
@@ -803,8 +807,9 @@ def lead_edits(projects, session, root, window):
 def card_scope(repo, root, scope, files):
     own, shell = set(), []
     for rid in scope["runs"]:
-        own |= read_allow(repo.runs, rid) or set(touched_paths(repo.runs, rid) or [])
-        brief = (load_json(repo.runs / f"{rid}.meta.json") or {}).get("brief", "")
+        home = repo.run_home(rid)
+        own |= read_allow(home, rid) or set(touched_paths(home, rid) or [])
+        brief = (load_json(home / f"{rid}.meta.json") or {}).get("brief", "")
         own |= under(root, [brief])
     for sid in scope["sessions"]:
         edits = [t for _, t in session_edits(repo.projects, sid)]
@@ -814,18 +819,18 @@ def card_scope(repo, root, scope, files):
     return own | {f["path"] for f in files if any(named(f["path"], cmd) for cmd in shell)}
 
 
-def claimed_paths(runs, rid, meta, projects):
+def claimed_paths(runs, rid, meta, projects, others=()):
     root, mine = meta.get("root", ""), run_window(runs, rid)
     claimed = read_allow(runs, rid)
     if not claimed:
         return {p for p in touched_paths(runs, rid) or []}
-    for allow in runs.glob("implement-*.allow"):
-        oid = allow.name[:-len(".allow")]
-        other = run_window(runs, oid)
+    for allow in (a for d in dict.fromkeys([runs, *others]) for a in d.glob("implement-*.allow")):
+        oid, home = allow.name[:-len(".allow")], allow.parent
+        other = run_window(home, oid)
         if oid == rid or not other or not mine or other[0] > mine[1] or other[1] < mine[0]:
             continue
-        if (load_json(runs / f"{oid}.meta.json") or {}).get("root") == root:
-            claimed |= read_allow(runs, oid)
+        if (load_json(home / f"{oid}.meta.json") or {}).get("root") == root:
+            claimed |= read_allow(home, oid)
     claimed |= lead_edits(projects, meta.get("session", ""), root, mine)
     brief = meta.get("brief", "")
     prefix = os.path.relpath(os.path.dirname(brief), root) + "/" if brief and root else None
@@ -854,7 +859,7 @@ def fix_depth(units):
     return depth
 
 
-def read_run(runs, rid, log_mtime, now, projects):
+def read_run(runs, rid, log_mtime, now, projects, others=()):
     mode = rid.split("-", 1)[0]
     meta = load_json(runs / f"{rid}.meta.json") or {}
     brief = meta.get("brief") or ""
@@ -879,7 +884,7 @@ def read_run(runs, rid, log_mtime, now, projects):
             outside = recorded.read_text().split()
         else:
             if rid not in OUTSIDE_CACHE:
-                OUTSIDE_CACHE[rid] = sorted(set(touched) - claimed_paths(runs, rid, meta, projects))
+                OUTSIDE_CACHE[rid] = sorted(set(touched) - claimed_paths(runs, rid, meta, projects, others))
             outside = OUTSIDE_CACHE[rid]
         if outside:
             flags.append("out_of_scope")
@@ -899,19 +904,21 @@ def read_run(runs, rid, log_mtime, now, projects):
 
 
 def collect_runs(repo, now):
-    out = []
-    try:
-        entries = os.scandir(repo.runs)
-    except OSError:
-        return out
-    with entries:
-        for e in entries:
-            if not e.name.endswith(".log"):
-                continue
-            mtime = e.stat().st_mtime
-            rid = e.name[:-4]
-            if now - mtime <= RUN_WINDOW_S and RUN_ID_RE.match(rid):
-                out.append(read_run(repo.runs, rid, mtime, now, repo.projects))
+    out, seen = [], set()
+    for runs in repo.run_dirs:
+        try:
+            entries = os.scandir(runs)
+        except OSError:
+            continue
+        with entries:
+            for e in entries:
+                rid = e.name[:-4]
+                if not e.name.endswith(".log") or rid in seen:
+                    continue
+                mtime = e.stat().st_mtime
+                if now - mtime <= RUN_WINDOW_S and RUN_ID_RE.match(rid):
+                    seen.add(rid)
+                    out.append(read_run(runs, rid, mtime, now, repo.projects, repo.run_dirs))
     return sorted(out, key=lambda r: r["updated"])
 
 
@@ -2676,7 +2683,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             rid = (q.get("id") or [""])[0]
             if not RUN_ID_RE.match(rid):
                 return self.send(400, b"bad run id", "text/plain")
-            runs = dict.fromkeys(r.runs for r, _ in self.server.roots.values())
+            runs = dict.fromkeys(d for r, _ in self.server.roots.values() for d in r.run_dirs)
             log = next((d / f"{rid}.log" for d in runs if (d / f"{rid}.log").exists()), self.server.repo.runs / f"{rid}.log")
             full = (q.get("full") or [""])[0] == "1"
             lines = tail_lines(log, 400000 if full else 12000)
