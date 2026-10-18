@@ -67,6 +67,62 @@ class CodexRoleHookTests(unittest.TestCase):
         start = hook(bundle / "scripts/hook.py", "start", {"source": "startup"}, "implementer", self.home)
         self.assertIn("dispatched implementer run", json.loads(start.stdout)["hookSpecificOutput"]["additionalContext"])
 
+    def init_repo(self, conf=None):
+        repo = Path(self.tmp.name) / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        if conf is not None:
+            (repo / ".claude").mkdir()
+            (repo / ".claude/fsa-team.conf").write_text(conf)
+        return repo
+
+    def test_standalone_start_delivers_the_configured_policy_profile(self):
+        repo = self.init_repo("policy_profile=engineering-conventions\n")
+        start = hook(SCRIPTS / "hook.py", "start", {"source": "startup", "cwd": str(repo)}, home=self.home)
+        text = json.loads(start.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("Policy profile engineering-conventions", text)
+        self.assertIn("Repro before hypothesis", text)
+
+    def test_unconfigured_repo_gets_no_profile_text(self):
+        repo = self.init_repo()
+        start = hook(SCRIPTS / "hook.py", "start", {"source": "startup", "cwd": str(repo)}, home=self.home)
+        no_conf = hook(SCRIPTS / "hook.py", "start", {"source": "startup"}, home=self.home)
+        self.assertEqual(start.stdout, no_conf.stdout)
+        self.assertNotIn("Policy profile", start.stdout)
+
+    def test_dispatched_implementer_gets_no_profile_text_even_when_configured(self):
+        repo = self.init_repo("policy_profile=engineering-conventions\n")
+        start = hook(SCRIPTS / "hook.py", "start", {"source": "startup", "cwd": str(repo)}, "implementer", self.home)
+        text = json.loads(start.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertNotIn("Policy profile", text)
+        self.assertIn("dispatched implementer run", text)
+
+    def test_unknown_policy_profile_name_appends_one_warning_line(self):
+        repo = self.init_repo("policy_profile=does-not-exist\n")
+        start = hook(SCRIPTS / "hook.py", "start", {"source": "startup", "cwd": str(repo)}, home=self.home)
+        text = json.loads(start.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertNotIn("Policy profile", text)
+        warnings = [line for line in text.splitlines() if "policy profile" in line.lower()]
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("does-not-exist", warnings[0])
+
+    def test_resume_also_delivers_the_configured_policy_profile(self):
+        repo = self.init_repo("policy_profile=engineering-conventions\n")
+        start = hook(SCRIPTS / "hook.py", "start", {"source": "resume", "cwd": str(repo)}, home=self.home)
+        text = json.loads(start.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("Policy profile engineering-conventions", text)
+
+    def test_the_rendered_bundle_ships_policy_files_and_delivers_the_profile(self):
+        bundle = Path(self.tmp.name) / "bundle"
+        render(bundle)
+        self.assertTrue((bundle / "scripts/team_conf.py").is_file())
+        self.assertTrue((bundle / "policies/engineering-conventions.md").is_file())
+        repo = self.init_repo("policy_profile=engineering-conventions\n")
+        start = hook(bundle / "scripts/hook.py", "start", {"source": "startup", "cwd": str(repo)}, home=self.home)
+        text = json.loads(start.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("Policy profile engineering-conventions", text)
+        self.assertIn("Repro before hypothesis", text)
+
 
 if __name__ == "__main__":
     unittest.main()

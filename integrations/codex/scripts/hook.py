@@ -40,6 +40,28 @@ def context(event, text):
     print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}))
 
 
+def policy_addition(cwd):
+    """The repo's configured policy profile text; empty when unset, one warning line when unknown or invalid."""
+    root = subprocess.run(["git", "-C", str(cwd), "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    if root.returncode != 0:
+        return ""
+    shared_lib()
+    import team_conf
+    try:
+        name = team_conf.get(root.stdout.strip(), "policy_profile")
+    except team_conf.ConfError as error:
+        return f"\n\nFullstack Agents policy profile invalid: {error}"
+    if not name:
+        return ""
+    profile = BUNDLE / "policies" / f"{name}.md"
+    if not profile.is_file():
+        # Source tree: the policies directory still lives beside the plugin, not yet copied next to this script.
+        profile = BUNDLE.parents[1] / "plugins/fullstack-agents/policies" / f"{name}.md"
+    if not profile.is_file():
+        return f"\n\nFullstack Agents policy profile unknown: {name}"
+    return f"\n\nPolicy profile {name}:\n" + profile.read_text()
+
+
 def patch_paths(command):
     paths = []
     for line in command.splitlines():
@@ -115,10 +137,11 @@ def main():
             return implementer_hook(mode, payload)
         if mode == "start":
             launcher = launcher_hint()
+            profile = policy_addition(payload.get("cwd", os.getcwd()))
             if payload.get("source") in {"resume", "compact"}:
-                context("SessionStart", f"Fullstack Agents bundle: {BUNDLE}. Reuse cached profiles and loaded skill sections. Codex leads; Claude audits bounded diffs and returns repair scope. Resume fullstack-agents-task-flow; preserve existing authorization and run required checks." + launcher)
+                context("SessionStart", f"Fullstack Agents bundle: {BUNDLE}. Reuse cached profiles and loaded skill sections. Codex leads; Claude audits bounded diffs and returns repair scope. Resume fullstack-agents-task-flow; preserve existing authorization and run required checks." + launcher + profile)
             else:
-                context("SessionStart", f"Fullstack Agents bundle root: {BUNDLE}\n\n" + (BUNDLE / "AGENTS.md").read_text() + launcher)
+                context("SessionStart", f"Fullstack Agents bundle root: {BUNDLE}\n\n" + (BUNDLE / "AGENTS.md").read_text() + launcher + profile)
         elif mode == "prompt":
             prompt = payload.get("prompt", "")
             guard().record_prompt(payload.get("session_id"), prompt)

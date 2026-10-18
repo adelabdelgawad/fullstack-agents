@@ -222,6 +222,8 @@ def render(output):
     shutil.copy2(SOURCE / "scripts/lib/task_tracking.py", output / "scripts/task_tracking.py")
     shutil.copy2(SOURCE / "scripts/lib/stop_guard.py", output / "scripts/stop_guard.py")
     shutil.copy2(SOURCE / "scripts/lib/claude_cli.py", output / "scripts/claude_cli.py")
+    shutil.copy2(SOURCE / "scripts/lib/team_conf.py", output / "scripts/team_conf.py")
+    shutil.copytree(SOURCE / "policies", output / "policies")
     for path in sorted((ADAPTER / "schemas").glob("*.json")):
         write(output / "schemas" / path.name, path.read_text())
     version = json.loads((SOURCE / ".claude-plugin/plugin.json").read_text())["version"]
