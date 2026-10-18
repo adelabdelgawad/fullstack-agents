@@ -99,6 +99,17 @@ root=${FSA_CODEX_ROOT:-$(git rev-parse --show-toplevel)}
 . "$here/lib/runs-dir.sh"
 runs=$(fsa_runs_dir "$root"); mkdir -p "$runs"
 schema="$root/.claude/codex-result.schema.json"; [ -f "$schema" ] || schema="$here/codex-result.schema.json"
+
+# Optional policy profile (conf key `policy_profile`): its "## Every agent" section is appended to the
+# implementer contract for every engine; an unknown name refuses the dispatch before any engine starts.
+policy_profile=$(python3 -I "$here/lib/team_conf.py" get "$root" policy_profile) ||
+  { echo "invalid fsa-team.conf: policy_profile" >&2; exit 2; }
+policy_file=""; policy_section=""
+if [ -n "$policy_profile" ]; then
+  policy_file="$plugin_src/policies/$policy_profile.md"
+  [ -f "$policy_file" ] || { echo "unknown policy_profile: $policy_profile (no $policy_file)" >&2; exit 2; }
+  policy_section=$(awk '/^## Every agent/{flag=1; print; next} /^## /{if (flag) exit} flag' "$policy_file")
+fi
 id="$mode-${FSA_DISPATCH_STAMP:-$(date +%Y%m%d-%H%M%S)}-$$"
 last="$runs/$id.last.txt"; log="$runs/$id.log"
 
@@ -170,6 +181,7 @@ allow_tests=${FSA_IMPLEMENTER_ALLOW_TESTS:-${FSA_GROK_ALLOW_TESTS:-0}}
 # The implementer contract (lib/roles/implementer.md) goes to every engine; only enforcement wording differs per engine.
 conventions_preamble() {
   cat "$here/lib/roles/implementer.md"
+  [ -n "$policy_section" ] && printf '\n%s\n' "$policy_section"
   if [ "$mode" = "implement" ]; then
     if [ "$engine" = "codex" ]; then
       printf 'SCOPE: edit only the brief'"'"'s ALLOWED_PATHS; any other changed path is reported as a scope violation after the run. Never change a file from bash. If the change needs another path, stop and name it in "open_risks".\n\n'
@@ -208,11 +220,13 @@ fsa_meta_merge "$runs" "$id" "$(jq -n --argjson plugin "${FSA_PLUGIN_PIN:-$(fsa_
   --arg brief_sha "$(fsa_sha256 "$brief")" --arg prompt_sha "$(fsa_sha256 "$prompt")" --arg unit "$unit" \
   --arg sid "$engine_sid" --argjson instructions "$instructions_start" --arg cwd "$root" \
   --arg role_sha "$(fsa_sha256 "$here/lib/roles/implementer.md")" --arg docs "$project_docs" \
+  --arg pname "$policy_profile" --arg psha "$(fsa_sha256 "$policy_file")" \
   '{schema: 2, plugin: $plugin, cwd: $cwd, unit: $unit, parent_run: null,
     requested: {engine_source: $es, model: $model, variant: (if $variant == "" then null else $variant end),
                 allow_tests: ($tests == "1"), sandbox: $sandbox},
     brief_sha256: $brief_sha, prompt_sha256: $prompt_sha, instructions_at_dispatch: $instructions,
     role_contract: {name: "implementer", sha256: $role_sha}, project_docs: (if $docs == "" then null else $docs end),
+    policy_profile: (if $pname == "" then null else {name: $pname, sha256: $psha} end),
     engine_session_id: (if $sid == "" then null else $sid end)}')"
 fsa_event "$runs" "$id" created
 trap - EXIT
@@ -276,7 +290,13 @@ else
   # Implementer runs drop Codex plugins (the Codex-led edition's lead doctrine); project rules still load.
   codex_docs=""; [ "$project_docs" = CLAUDE.md ] && codex_docs=" -c 'project_doc_fallback_filenames=[\"CLAUDE.md\"]'"
   if [ "$sandbox" = "workspace-write" ]; then
-    IFS=: read -ra extra <<<"${FSA_CODEX_ADD_DIRS:-}"
+    extra=()
+    if [ -n "${FSA_CODEX_ADD_DIRS+x}" ]; then
+      IFS=: read -ra extra <<<"${FSA_CODEX_ADD_DIRS}"
+    else
+      while IFS= read -r d; do [ -n "$d" ] && extra+=("$d"); done \
+        < <(python3 -I "$here/lib/team_conf.py" get "$root" codex_add_dirs 2>/dev/null || true)
+    fi
     for d in "${extra[@]}"; do [ -n "$d" ] && mkdir -p "$d" && add_dirs+=" --add-dir $(printf %q "$d")"; done
   fi
   cat > "$runner" <<EOF

@@ -107,6 +107,20 @@ else
     doctrine_escaped=$(escape_for_json "$(cat "${PLUGIN_ROOT}/hooks/session-doctrine.md")")
     session_context="<EXTREMELY_IMPORTANT>\n**Project Detection:** ${project_info_escaped}\n\n${doctrine_escaped}\n</EXTREMELY_IMPORTANT>"
 fi
+# Optional policy profile (conf key `policy_profile`): the conf is read only through team_conf.py, never evaluated as shell.
+if command -v python3 > /dev/null 2>&1; then
+    policy_name=$(python3 -I "${PLUGIN_ROOT}/scripts/lib/team_conf.py" get . policy_profile 2>/dev/null) ||
+        { policy_name=""; session_context="${session_context}\n\nWARNING: .claude/fsa-team.conf has an invalid policy_profile value; no policy profile was loaded."; }
+    if [ -n "$policy_name" ]; then
+        policy_file="${PLUGIN_ROOT}/policies/${policy_name}.md"
+        if [ -f "$policy_file" ]; then
+            policy_escaped=$(escape_for_json "$(cat "$policy_file")")
+            session_context="${session_context}\n\n**Policy profile ${policy_name}:**\n${policy_escaped}"
+        else
+            session_context="${session_context}\n\nWARNING: policy_profile=${policy_name} is set but plugins/fullstack-agents/policies/${policy_name}.md does not exist."
+        fi
+    fi
+fi
 board_session=$(printf '%s' "$hook_input" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 board_summary=$("${PLUGIN_ROOT}/scripts/team-board" --session "${board_session:-none}" status 2>/dev/null | head -12 || true)
 if [ -n "$board_summary" ] && [ "$board_summary" != "board empty" ]; then
