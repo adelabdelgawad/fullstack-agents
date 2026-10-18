@@ -209,6 +209,49 @@ def _lock(root, path):
         yield
 
 
+def _summary(path):
+    text = _read(path)
+    items, _, _ = _parse(text)
+    title = next((line[2:].strip() for line in text.splitlines() if line.startswith("# ")), path.stem)
+    updated = path.stat().st_mtime
+    now = time.time()
+    for item in items:
+        item["is_active"] = bool(item["status"] == "in_progress" and item["owner"] and item["activity"]
+                                 and min(_deadline(item["active_until"]), updated + MAX_ACTIVE_SECONDS) > now)
+    counts = dict.fromkeys(STATUSES, 0)
+    counts.update(Counter(item["status"] for item in items))
+    return {"title": title, "updated": updated, "items": items, "counts": counts, "total": len(items),
+            "completed": counts["done"], "active": sum(item["is_active"] for item in items)}
+
+
+def _show_text(summary):
+    counts = summary["counts"]
+    lines = [f"done {counts['done']}/{summary['total']} · in_progress {counts['in_progress']} · blocked {counts['blocked']}"
+             f" · pending {counts['pending']} · active {summary['active']}"]
+    for item in summary["items"]:
+        if item["status"] == "done":
+            continue
+        line = f"{item['id']}  {item['status']}  "
+        if item["owner"] or item["activity"]:
+            line += f"[{item['owner']}: {item['activity']}]  "
+        line += item["title"]
+        if item["note"]:
+            note = item["note"] if len(item["note"]) <= 100 else item["note"][:99] + "…"
+            line += f" — {note}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _task_specs(values):
+    items = []
+    for task in values:
+        parts = task.split("|", 3)
+        if len(parts) != 4:
+            raise ValueError("--task requires ID|status|title|note")
+        items.append(_item(*(part.strip() for part in parts)))
+    return items
+
+
 def bind_tasks(session_id, root, filename):
     binding = _binding_path(session_id)
     root = _root(root)
@@ -237,19 +280,7 @@ def load_tasks(session_id, cwd):
             raise ValueError("Task registration root must be the session cwd or a git repository root")
         path = _file(root, record["file"])
         info = {"file": str(path), "relative_file": str(path.relative_to(root))}
-        text = _read(path)
-        items, _, _ = _parse(text)
-        title = next((line[2:].strip() for line in text.splitlines() if line.startswith("# ")), path.stem)
-        updated = path.stat().st_mtime
-        now = time.time()
-        for item in items:
-            item["is_active"] = bool(item["status"] == "in_progress" and item["owner"] and item["activity"]
-                                     and min(_deadline(item["active_until"]), updated + MAX_ACTIVE_SECONDS) > now)
-        counts = dict.fromkeys(STATUSES, 0)
-        counts.update(Counter(item["status"] for item in items))
-        return {**info, "title": title, "updated": path.stat().st_mtime, "items": items,
-                "counts": counts, "total": len(items), "completed": counts["done"],
-                "active": sum(item["is_active"] for item in items)}
+        return {**info, **_summary(path)}
     except (OSError, ValueError, TypeError, KeyError, RuntimeError) as error:
         return {**info, "error": str(error)}
 
@@ -257,17 +288,20 @@ def load_tasks(session_id, cwd):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Register and update an explicit Markdown task ledger")
     actions = parser.add_subparsers(dest="command", required=True)
-    for command in ("init", "bind", "set"):
+    for command in ("init", "bind", "set", "add", "show"):
         sub = actions.add_parser(command)
         sub.add_argument("--root", required=True)
         sub.add_argument("--file", required=True)
         sub.add_argument("--session", default=os.environ.get("CODEX_THREAD_ID") or os.environ.get("CLAUDE_SESSION_ID"))
         if command == "init":
             sub.add_argument("--title", default="Tasks")
-            sub.add_argument("--task", action="append", default=[], help="ID|status|title|note (repeatable)")
+        if command in ("init", "add"):
+            sub.add_argument("--task", action="append", default=[], required=command == "add", help="ID|status|title|note (repeatable)")
+        if command == "show":
+            sub.add_argument("--json", action="store_true", help="Print the machine-readable summary")
         if command == "set":
-            sub.add_argument("--id", required=True)
-            sub.add_argument("--status", required=True, choices=(*STATUSES, "running"))
+            sub.add_argument("--id", action="append", required=True, help="Task ID (repeatable)")
+            sub.add_argument("--status", choices=(*STATUSES, "running"), help="Omit to keep each row's status")
             sub.add_argument("--note")
             sub.add_argument("--owner")
             sub.add_argument("--activity")
@@ -280,12 +314,7 @@ def main(argv=None):
         path = _file(root, args.file, existing=args.command != "init")
         if args.command == "init":
             _item("title", "pending", args.title, "")
-            items = []
-            for task in args.task:
-                values = task.split("|", 3)
-                if len(values) != 4:
-                    raise ValueError("--task requires ID|status|title|note")
-                items.append(_item(*(value.strip() for value in values)))
+            items = _task_specs(args.task)
             text = f"# {args.title}\n\n{START}{_render(items)}{END}\n"
             _parse(text)
             with _lock(root, path):
@@ -296,25 +325,51 @@ def main(argv=None):
             result = bind_tasks(args.session, root, path)
         elif args.command == "bind":
             result = bind_tasks(args.session, root, path)
-        else:
+        elif args.command == "show":
+            summary = {"file": str(path), **_summary(path)}
+            print(json.dumps(summary, ensure_ascii=False) if args.json else _show_text(summary))
+            return 0
+        elif args.command == "add":
+            specs = _task_specs(args.task)
             with _lock(root, path):
                 path = _file(root, args.file)
                 text = _read(path)
                 items, start, end = _parse(text)
-                task = next((item for item in items if item["id"] == args.id), None)
-                if task is None:
-                    raise ValueError(f"Unknown task ID: {args.id}")
-                owner = task["owner"] if args.owner is None else args.owner
-                activity = (task["activity"] if owner == task["owner"] else "") if args.activity is None else args.activity
-                active_until = task["active_until"] if owner == task["owner"] else ""
-                if args.active_for is not None:
-                    if not 0 <= args.active_for <= MAX_ACTIVE_SECONDS:
-                        raise ValueError("--active-for must be between 0 and 300 seconds")
-                    if args.active_for and args.status not in ("in_progress", "running"):
-                        raise ValueError("Active execution requires in_progress status")
-                    active_until = datetime.fromtimestamp(time.time() + args.active_for, timezone.utc).isoformat() if args.active_for else ""
-                task.update(_item(task["id"], args.status, task["title"], task["note"] if args.note is None else args.note,
-                                  owner, activity, active_until))
+                for spec in specs:
+                    task = next((item for item in items if item["id"] == spec["id"]), None)
+                    if task is None:
+                        items.append(spec)
+                    else:
+                        task.update(_item(task["id"], spec["status"], spec["title"], spec["note"],
+                                          task["owner"], task["activity"], task["active_until"]))
+                if len(items) > MAX_ROWS:
+                    raise ValueError(f"Task table exceeds {MAX_ROWS} rows")
+                changed = text[:start] + _render(items) + text[end:]
+                _parse(changed)
+                _file(root, args.file)
+                _atomic(path, changed)
+            result = {"file": str(path), "updated": path.stat().st_mtime}
+        else:
+            if args.active_for is not None and not 0 <= args.active_for <= MAX_ACTIVE_SECONDS:
+                raise ValueError("--active-for must be between 0 and 300 seconds")
+            with _lock(root, path):
+                path = _file(root, args.file)
+                text = _read(path)
+                items, start, end = _parse(text)
+                for identifier in dict.fromkeys(args.id):
+                    task = next((item for item in items if item["id"] == identifier), None)
+                    if task is None:
+                        raise ValueError(f"Unknown task ID: {identifier}")
+                    status = task["status"] if args.status is None else args.status
+                    owner = task["owner"] if args.owner is None else args.owner
+                    activity = (task["activity"] if owner == task["owner"] else "") if args.activity is None else args.activity
+                    active_until = task["active_until"] if owner == task["owner"] else ""
+                    if args.active_for is not None:
+                        if args.active_for and status not in ("in_progress", "running"):
+                            raise ValueError("Active execution requires in_progress status")
+                        active_until = datetime.fromtimestamp(time.time() + args.active_for, timezone.utc).isoformat() if args.active_for else ""
+                    task.update(_item(task["id"], status, task["title"], task["note"] if args.note is None else args.note,
+                                      owner, activity, active_until))
                 changed = text[:start] + _render(items) + text[end:]
                 _parse(changed)
                 _file(root, args.file)
@@ -326,3 +381,7 @@ def main(argv=None):
         return 0
     except (OSError, ValueError, TypeError, RuntimeError) as error:
         parser.error(str(error))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

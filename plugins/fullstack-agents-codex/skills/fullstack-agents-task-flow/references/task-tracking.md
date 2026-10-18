@@ -44,3 +44,15 @@ Update the file when work starts, finishes, blocks or changes scope, including a
 After wiring a task file or changing dashboard support, verify the live session shows it and invite the user to check the dashboard UI. Do not claim a dashboard update based only on a file write.
 
 The dashboard renders task status as an icon with an accessible name and hover label. Owner/activity text stays visible; progress and expiring execution counts remain separate.
+
+## Granularity and update cadence
+
+Track the work at the size it is audited: one row per implementer unit (brief), per repair, and per verification step (compile check, focused tests, lint, visual check, docs), never one row per phase. Rows of one phase share its prefix: `S4a`, `S4b` for units, `V1`, `V2` for checks. A brief carries `TASK: <ledger.md>#<ROW-ID>` (path relative to the repository root, or absolute); the dispatcher then adds the row if it is missing, marks it `in_progress` with the engine as owner and a lease at dispatch, and at finish hands it to `lead` with the note `succeeded: awaiting lead audit (run <id>)`, or marks it `blocked` with `<state>: see run <id>`. A ledger failure only warns; it never changes the dispatch. The lead marks a row `done` only after its audit and checks pass, citing the evidence in the note. Update at every event: dispatch, return, check pass or fail, blocker.
+
+Add or upsert several rows in one write (an existing ID keeps its owner and activity), apply one change to several rows (an omitted `--status` keeps each row's status), and report status from the compact summary (`--json` for machine output); Codex passes the same arguments to `python3 scripts/tasks.py`:
+
+```bash
+scripts/fsa-task add --root /absolute/project --file docs/tasks/example.md --task 'S4a|pending|Unit A: API handler|' --task 'V1|pending|Compile check|cargo check --workspace'
+scripts/fsa-task set --root /absolute/project --file docs/tasks/example.md --id V1 --id V2 --note 'Waiting for S4a and S4b'
+scripts/fsa-task show --root /absolute/project --file docs/tasks/example.md
+```
