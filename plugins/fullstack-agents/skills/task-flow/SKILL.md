@@ -28,6 +28,11 @@ suite (about a minute, small output) the lead runs itself and tees to a log. The
    do not repeat a worker's suite solely because the lead owns acceptance.
    Finish all writers and required checks before one audit of the coherent
    deliverable. Serialize checks sharing fixture databases or native build state.
+   After each implementer batch run one fast compile/type check across all touched
+   crates/packages before any test; then affected test targets first and one
+   whole-crate/package suite per deliverable, at the end. Dispatch independent units
+   while long test runs execute. A mechanical change repeated across many files is one
+   unit with `FSA_MAX_ALLOWED_PATHS` raised to the file count, never several 8-path units.
    Mark every acceptance item with evidence. Worker findings stay
    hypotheses until verified; confirmed repairs go back in bounded briefs.
 5. Loop: pass raw failing lines, not entire logs. Two retries maximum, then
@@ -37,7 +42,8 @@ suite (about a minute, small output) the lead runs itself and tees to a log. The
 
 Briefs are at most 30 lines: goal, `PLAN:`, exact `ALLOWED_PATHS:` (eight by
 default), authoritative document, known-red baseline, numbered `ACCEPTANCE:`
-with runnable checks, one `BUILD:` command, forbidden moves. Name known sites/
+with runnable checks, one `BUILD:` command the implementer sandbox can run (no `sg`,
+`docker` or host-group tricks; a project "Implementer BUILD" binding wins), forbidden moves. Name known sites/
 ranges; test changes get a `PATTERN:` example. Attach only needed skills.
 Frontend briefs state first-paint data and post-hydration request budget
 (zero for primary content). The lead loads `nextjs` before writing the brief.
@@ -96,6 +102,8 @@ Markdown links are relocated.
 For multi-step implementation, create and register a dedicated repository Markdown task file,
 update task statuses as work changes, and verify the live session Tasks section. Read
 [task tracking](references/task-tracking.md) for the helper, format and completion rules.
+Keep one row per brief, repair and verification step, never one per phase (its "Granularity and
+update cadence"). A brief's `TASK: <ledger.md>#<ROW-ID>` line lets the dispatcher update that row.
 
 ## Keep work moving
 

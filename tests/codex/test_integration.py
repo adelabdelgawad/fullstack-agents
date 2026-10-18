@@ -934,6 +934,39 @@ open(out, "w").write(json.dumps({"summary": "done"}))
         self.assertEqual(dirs, [str(cache), str(journal)])
         self.assertTrue(cache.is_dir() and journal.is_dir())
 
+    def test_task_line_drives_the_ledger_row_without_counting_as_a_touched_path(self):
+        tracker = [sys.executable, str(self.SCRIPTS / "fsa-task")]
+        self.env.update(FSA_TASKS_DIR=str(Path(self.case.name) / "tasks"), CODEX_THREAD_ID="lead-1")
+        subprocess.run([*tracker, "init", "--root", str(self.root), "--file", "docs/tasks/t.md"], env=self.env, check=True, capture_output=True)
+        self.brief.write_text(self.brief.read_text() + "TASK: docs/tasks/t.md#S4a\nBUILD: sg docker -c 'make check'\n")
+        result = self.dispatch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("BUILD must run inside the implementer sandbox; drop sg/docker", result.stderr)
+        runs = Path(self.case.name) / "runs"
+        record = json.loads(next(runs.glob("*.result.json")).read_text())
+        self.assertEqual((record["state"], record["touched"], record["outside"]), ("no_changes", [], []))
+        show = lambda: json.loads(subprocess.run([*tracker, "show", "--json", "--root", str(self.root), "--file", "docs/tasks/t.md"], env=self.env, check=True, capture_output=True, text=True).stdout)
+        row = show()["items"][0]
+        run_id = next(runs.glob("*.result.json")).name.removesuffix(".result.json")
+        self.assertEqual((row["id"], row["title"], row["status"], row["owner"], row["is_active"]), ("S4a", "brief", "blocked", "lead", False))
+        self.assertEqual(row["note"], f"no_changes: see run {run_id}")
+        fake = Path(self.case.name) / "bin/codex"
+        write(fake, "#!" + sys.executable + "\n" + r'''import json, os, sys
+open(os.path.join(sys.argv[sys.argv.index("--cd") + 1], "app.py"), "a").write("value = 2\\n")
+open(sys.argv[sys.argv.index("-o") + 1], "w").write(json.dumps({"summary": "done"}))
+''')
+        fake.chmod(0o755)
+        self.brief.write_text("IMPLEMENTER: codex\nPLAN: none: test\nALLOWED_PATHS:\napp.py\n\nTASK: docs/tasks/t.md#S4a\n")
+        result = self.dispatch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("BUILD must run", result.stderr)
+        latest = next(path for path in runs.glob("*.result.json") if not path.name.startswith(run_id))
+        record = json.loads(latest.read_text())
+        self.assertEqual((record["state"], record["touched"]), ("succeeded", ["app.py"]))
+        row = show()["items"][0]
+        self.assertEqual((row["status"], row["owner"], row["activity"], row["title"]), ("in_progress", "lead", "", "brief"))
+        self.assertEqual(row["note"], f"succeeded: awaiting lead audit (run {latest.name.removesuffix('.result.json')})")
+
     def test_missing_alias_refuses_dispatch_before_any_claude_call(self):
         (self.home / ".bashrc").write_text("")
         result = self.dispatch()

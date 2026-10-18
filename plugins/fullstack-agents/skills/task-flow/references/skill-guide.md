@@ -51,7 +51,11 @@ its paths locked, or the budget never applies to exactly the files under active 
 A brief is the contract and the audit scope. It states: goal; the plan reference; every path the
 implementer may touch; the one document to read; the known-red baseline; an `ACCEPTANCE:` block;
 a `BUILD:` line (one compile or type-check command the implementer runs once at the end); forbidden moves. Keep it under 30
-lines.
+lines. A brief may carry `TASK: <ledger.md>#<ROW-ID>` so the dispatcher updates that task row.
+
+`BUILD:` must run inside the implementer sandbox: no `sg`, no `docker`, no host-group or
+privilege tricks (the dispatcher warns when it sees `sg` or `docker`). A project "Implementer
+BUILD" binding wins over the generic command.
 
 `ACCEPTANCE:` is a numbered list written before dispatch. Each item is one observable behaviour
 plus the exact check that proves it: a named test, a command and its expected output, a query, or
@@ -114,6 +118,11 @@ A coherent change larger than 8 paths becomes sequential units, each with its ow
 one verification at the deliverable boundary. The user may raise `FSA_MAX_ALLOWED_PATHS` for one change instead. Never split
 coherent work only to make units smaller, and record the reason for any split in the brief.
 
+A mechanical change repeated across many files (adding a field to every literal, a rename) is one
+unit with `FSA_MAX_ALLOWED_PATHS` raised to the file count, never several 8-path units: the edit is
+uniform, so one run and one audit cover it. While a long test run executes, dispatch the next
+independent units: the test binaries are already built, so new edits no longer race them.
+
 ## Visible workers (only when the user says "use herdr")
 
 Workers stay headless unless the user explicitly asks to use herdr and `HERDR_ENV=1`. Then each
@@ -172,6 +181,11 @@ keyboard reach, focus, contrast). Then have `fullstack-agents:test-runner` (Sonn
 logs it names yourself — grep the result and failure lines, never trust the table alone. A targeted run that skips a surface the
 diff touched is not a green result. The implementer does not run test suites (they are denied to the implementer); it runs only the brief's
 `BUILD:` compile or type check, so test output never inflates its context.
+
+After every implementer batch, run one fast compile or type check across all touched
+crates/packages before any test run; a compile failure goes back as a repair, not into a test run.
+Verification then runs the affected test targets first and one whole-crate/package suite per
+deliverable, once, at the end.
 
 Close the audit by marking each `ACCEPTANCE:` item met or not met, citing its evidence: the log
 line, the command output or the diff line. One item not met means the unit is not done.

@@ -130,6 +130,10 @@ if [ "$mode" = "implement" ]; then
   [ "$path_count" -le "$max_paths" ] || { echo "brief lists $path_count ALLOWED_PATHS, limit $max_paths: split it into sequential units (FSA_MAX_ALLOWED_PATHS overrides)" >&2; exit 2; }
   printf '%s\n' "$allow" > "$runs/$id.allow"
 fi
+. "$here/lib/task-row.sh"
+fsa_build_warn "$brief"
+fsa_task_row_init "$brief" "$root"
+task_rel=$(fsa_task_row_relpath "$root")
 
 # The implementer never loads Claude plugin skills, so an implement brief carries only the lane skills its paths need.
 skill_files() {
@@ -167,9 +171,10 @@ if [ "$mode" = "investigate" ]; then
   [ -n "$report" ] || { echo "brief needs a 'REPORT: <table columns>' line: file:line plus values, never prose" >&2; exit 2; }
 fi
 
-# Content hashes, not status lines: a file already dirty before the run must still register.
+# Content hashes, not status lines: a file already dirty before the run must still register; the dispatcher's own ledger never does.
 snapshot() {
   { git -C "$root" diff HEAD --name-only; git -C "$root" ls-files -o --exclude-standard; } | sort -u |
+  { if [ -n "$task_rel" ]; then grep -vxF -- "$task_rel" || true; else cat; fi; } |
   while IFS= read -r f; do printf '%s %s\n' "$(git -C "$root" hash-object -- "$root/$f" 2>/dev/null || echo absent)" "$f"; done | sort
 }
 
@@ -316,10 +321,12 @@ run_in_herdr_pane() {
   herdr_pane=$(herdr_worker_pane "$root") || return 2
   herdr pane rename "$herdr_pane" "$engine $(basename "$brief" .md)" > /dev/null
   herdr pane run "$herdr_pane" "bash '$runner'; echo \$? > '$status'" > /dev/null || return 2
-  until [ -f "$status" ]; do sleep 5; done
+  until [ -f "$status" ]; do sleep 5; fsa_task_row_renew "$engine" "$task_stem"; done
   return "$(cat "$status")"
 }
 
+task_stem=$(basename "$brief" .md)
+fsa_task_row_dispatch "$engine" "$task_stem" "$id" || true
 fsa_event "$runs" "$id" running
 # Every engine process and its children inherit the run marker; the runner leads its own process group.
 export FSA_RUN_ID="$id" FSA_ROLE=implementer
@@ -400,6 +407,7 @@ jq -n --arg state "$state" --argjson engine_exit "$engine_exit" --arg details "$
     touched: ($touched | split("\n") | map(select(. != ""))), outside: ($outside | split("\n") | map(select(. != ""))),
     review: (if $changed then ["instructions_changed"] else [] end), liveness_after: $after, ownership: $held,
     started: $started, ended: $ended}' > "$runs/$id.result.json"
+fsa_task_row_finish "$state" "$id" || true
 fsa_event "$runs" "$id" "$state"
 
 # Exit codes: legacy (default) keeps 0 for every completed run; strict maps the terminal state (D4).

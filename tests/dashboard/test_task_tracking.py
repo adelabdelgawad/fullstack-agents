@@ -367,5 +367,62 @@ class TaskTrackingTests(unittest.TestCase):
             self.assertEqual(self.path.read_bytes(), original)
 
 
+    def show(self, *args):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(tasks.main(["show", "--root", str(self.root), "--file", str(self.path), *args]), 0)
+        return output.getvalue()
+
+    def test_add_appends_new_rows_and_upserts_existing_ones_keeping_owner_and_activity(self):
+        self.bind(self.ledger([tasks._item("T1", "in_progress", "Old title", "Old note", owner="lead", activity="Checks", active_until=self.deadline())]))
+        before = self.path.read_text()
+        self.invoke("add", "--root", str(self.root), "--file", "TASKS.md", "--task", "T1|in_progress|New title|New note", "--task", "S4a|pending|Brief A|", "--task", "V1|running|Compile check|cargo check")
+        after = self.path.read_text()
+        self.assertEqual(before.split(tasks.START)[0], after.split(tasks.START)[0])
+        self.assertEqual(before.split(tasks.END)[1], after.split(tasks.END)[1])
+        items = tasks.load_tasks("session-1", self.root)["items"]
+        self.assertEqual([item["id"] for item in items], ["T1", "S4a", "V1"])
+        self.assertEqual((items[0]["title"], items[0]["note"], items[0]["owner"], items[0]["activity"]), ("New title", "New note", "lead", "Checks"))
+        self.assertTrue(items[0]["is_active"])
+        self.assertEqual(items[2]["status"], "in_progress")
+        self.invoke("add", "--root", str(self.root), "--file", "TASKS.md", "--task", "T1|done|New title|Verified")
+        item = tasks.load_tasks("session-1", self.root)["items"][0]
+        self.assertEqual((item["status"], item["owner"], item["active_until"]), ("done", "lead", ""))
+
+    def test_add_rejects_malformed_specs_and_row_overflow_without_writes(self):
+        self.bind(self.ledger([tasks._item(str(index), "pending", "Task", "") for index in range(tasks.MAX_ROWS - 1)]))
+        original = self.path.read_bytes()
+        for specs in (["X|pending|Title"], ["X|complete|Title|"], ["X|pending| |"], ["X|pending|One|", "Y|pending|Two|"]):
+            with self.subTest(specs=specs), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                tasks.main(["add", "--root", str(self.root), "--file", "TASKS.md", *[arg for spec in specs for arg in ("--task", spec)]])
+            self.assertEqual(self.path.read_bytes(), original)
+        self.invoke("add", "--root", str(self.root), "--file", "TASKS.md", "--task", "0|done|Task|Upsert at the limit", "--task", "X|pending|Last|")
+        self.assertEqual(tasks.load_tasks("session-1", self.root)["total"], tasks.MAX_ROWS)
+
+    def test_set_applies_one_change_to_several_ids_and_keeps_status_when_omitted(self):
+        self.bind(self.ledger([tasks._item("T1", "pending", "First", ""), tasks._item("T2", "blocked", "Second", "Waits on T1"), tasks._item("T3", "pending", "Third", "")]))
+        self.invoke("set", "--root", str(self.root), "--file", "TASKS.md", "--id", "T1", "--id", "T2", "--note", "Batch note", "--owner", "lead")
+        items = tasks.load_tasks("session-1", self.root)["items"]
+        self.assertEqual([(item["status"], item["note"], item["owner"]) for item in items],
+                         [("pending", "Batch note", "lead"), ("blocked", "Batch note", "lead"), ("pending", "", "")])
+        self.invoke("set", "--root", str(self.root), "--file", "TASKS.md", "--id", "T1", "--id", "T3", "--status", "done")
+        self.assertEqual([item["status"] for item in tasks.load_tasks("session-1", self.root)["items"]], ["done", "blocked", "done"])
+        original = self.path.read_bytes()
+        for arguments in (["--id", "T2", "--id", "missing", "--status", "done"], ["--id", "T2", "--activity", "Checks", "--active-for", "60"]):
+            with self.subTest(arguments=arguments), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                tasks.main(["set", "--root", str(self.root), "--file", "TASKS.md", *arguments])
+            self.assertEqual(self.path.read_bytes(), original)
+
+    def test_show_prints_compact_summary_and_json_on_request(self):
+        long_note = "n" * 150
+        self.bind(self.ledger([tasks._item("S4a", "done", "Brief A", "Audited"), tasks._item("S4b", "in_progress", "Brief B", long_note, owner="codex", activity="implementing S4b", active_until=self.deadline()),
+                               tasks._item("V1", "blocked", "Compile check", ""), tasks._item("V2", "pending", "Focused tests", "")]))
+        lines = self.show().splitlines()
+        self.assertEqual(lines[0], "done 1/4 · in_progress 1 · blocked 1 · pending 1 · active 1")
+        self.assertEqual(lines[1], "S4b  in_progress  [codex: implementing S4b]  Brief B — " + "n" * 99 + "…")
+        self.assertEqual(lines[2:], ["V1  blocked  Compile check", "V2  pending  Focused tests"])
+        summary = json.loads(self.show("--json"))
+        self.assertEqual((summary["total"], summary["completed"], summary["active"], summary["file"]), (4, 1, 1, str(self.path)))
+
 if __name__ == "__main__":
     unittest.main()
