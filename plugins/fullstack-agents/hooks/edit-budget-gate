@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# edit-budget-gate — PreToolUse (Write|Edit|MultiEdit): caps new uncommitted gated-extension edits per change and
-# always refuses configured carve-out paths. Off unless the project sets edit_budget or carve_outs
-# in .claude/fsa-team.conf. Escape hatches: FSA_SKIP_EDIT_BUDGET=1, legacy KC_CODEX_GATE_OFF=1.
+# edit-budget-gate — caps the gated-extension files THIS session hand-edits per change and always refuses configured
+# carve-out paths. Off unless the project sets edit_budget or carve_outs in .claude/fsa-team.conf.
+#   PreToolUse (Write|Edit|MultiEdit):  edit-budget-gate          -> refuse a carve-out, or a new path over budget
+#   PostToolUse (Write|Edit|MultiEdit): edit-budget-gate record   -> record the path the session just edited
+# Only successful edits are recorded (PostToolUse fires after success), keyed by session id under the plugin state
+# home, so other sessions' dirty files never spend this session's budget and a resumed session keeps its count.
+# The budget counts recorded paths that are still uncommitted: committing what is done frees it.
+# Escape hatches: FSA_SKIP_EDIT_BUDGET=1, legacy KC_CODEX_GATE_OFF=1.
 set -uo pipefail
 
 source "$(dirname "$0")/lib.sh"
@@ -11,10 +16,12 @@ source "$(dirname "$0")/lib.sh"
 # A dispatched implementer edits its own ALLOWED_PATHS under the engine's own fence.
 [ -n "${FSA_IMPLEMENTER_RUN:-}" ] && exit 0
 
+mode="${1:-check}"
 HOOK_INPUT="$(cat)"
-json_fields "$HOOK_INPUT" tool_input.file_path tool_input.notebook_path
+json_fields "$HOOK_INPUT" tool_input.file_path tool_input.notebook_path session_id
 file_path="${JSON_FIELDS[0]}"
 [ -n "$file_path" ] || file_path="${JSON_FIELDS[1]}"
+session_id="${JSON_FIELDS[2]}"
 [ -n "$file_path" ] || exit 0
 
 case "$file_path" in /*) abs=$file_path ;; *) abs="$(pwd)/$file_path" ;; esac
@@ -65,7 +72,7 @@ BLOCK
 gated "$rel" || exit 0
 
 # Carve-outs always refuse, regardless of budget: size never makes them safe to hand-edit.
-while IFS= read -r glob; do
+[ "$mode" = record ] || while IFS= read -r glob; do
   [ -n "$glob" ] || continue
   case "$rel" in
     $glob) refuse "Matches a configured carve-out ($glob) — always brief the implementer." ;;
@@ -74,21 +81,46 @@ done <<<"$carve_outs"
 
 [ -n "$edit_budget" ] || exit 0
 
+# Per-session record of edited gated paths: "<repo root>\t<relative path>" lines, appended (atomic for short lines).
+ledger=""
+if [ -n "$session_id" ]; then
+  state="${FSA_STATE_HOME:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/fullstack-agents}/edit-budget"
+  mkdir -p "$state" 2>/dev/null && find "$state" -type f -mtime +14 -delete 2>/dev/null
+  ledger="$state/$(printf '%s' "$session_id" | tr -c 'A-Za-z0-9_-' '_').paths"
+fi
+
+if [ "$mode" = record ]; then
+  [ -n "$ledger" ] || exit 0
+  grep -Fqx -- "$root	$rel" "$ledger" 2>/dev/null || printf '%s\t%s\n' "$root" "$rel" >> "$ledger"
+  exit 0
+fi
+
 limit="${KC_DIRECT_EDIT_LIMIT:-$edit_budget}"
 
-dirty=$( { git -C "$root" diff HEAD --name-only; git -C "$root" ls-files -o --exclude-standard; } 2>/dev/null)
-mine=""
-while IFS= read -r f; do
-  [ -n "$f" ] || continue
-  gated "$f" && mine="${mine}${f}
+if [ -n "$ledger" ]; then
+  # This session's recorded paths in this repository that are still uncommitted.
+  recorded=$(awk -F'\t' -v r="$root" '$1 == r { print $2 }' "$ledger" 2>/dev/null | sort -u)
+  mine=""
+  if [ -n "$recorded" ]; then
+    mapfile -t rec_paths <<<"$recorded"
+    mine=$( { git -C "$root" diff HEAD --name-only -- "${rec_paths[@]}"; git -C "$root" ls-files -o --exclude-standard -- "${rec_paths[@]}"; } 2>/dev/null | sort -u)
+  fi
+else
+  # No session identity (not a Claude Code hook call): fall back to every uncommitted gated file in the tree.
+  dirty=$( { git -C "$root" diff HEAD --name-only; git -C "$root" ls-files -o --exclude-standard; } 2>/dev/null)
+  mine=""
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    gated "$f" && mine="${mine}${f}
 "
-done <<<"$dirty"
+  done <<<"$dirty"
+fi
 
 # Re-editing a file this change already opened is free; only a NEW path spends budget.
-printf '%s' "$mine" | grep -Fqx -- "$rel" && exit 0
+printf '%s\n' "$mine" | grep -Fqx -- "$rel" && exit 0
 
-count=$(printf '%s' "$mine" | grep -cE '\S')
+count=$(printf '%s\n' "$mine" | grep -cE '\S')
 [ "$count" -lt "$limit" ] && exit 0
 
-refuse "Direct-edit budget spent: $count uncommitted gated file(s) already open, limit $limit.
+refuse "Direct-edit budget spent: $count uncommitted gated file(s) already open${ledger:+ in this session}, limit $limit.
 This change is too big to hand-edit. Commit what is done, or brief the implementer for the whole change."

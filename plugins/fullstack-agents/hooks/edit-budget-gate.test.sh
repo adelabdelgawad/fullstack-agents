@@ -25,7 +25,7 @@ reset_tree() { find "$R" -mindepth 1 -type f ! -name seed.txt -not -path '*/.git
 
 run() { node -e '
 process.stdout.on("error",()=>{});
-process.stdout.write(JSON.stringify({session_id:"s",tool_name:"Edit",tool_input:{file_path:process.argv[1]}}));
+process.stdout.write(JSON.stringify({tool_name:"Edit",tool_input:{file_path:process.argv[1]}}));
 ' "$R/$1" | KC_DIRECT_EDIT_LIMIT="${LIM:-}" bash "$H" >/dev/null 2>&1; echo $?; }
 check() { want=$1; got=$(run "$2"); if [ "$got" = "$want" ]; then echo "ok   ($got) $3"; else echo "FAIL want=$want got=$got :: $3"; FAILED=1; fi; }
 
@@ -104,6 +104,39 @@ got=$(node -e 'process.stdout.on("error",()=>{});process.stdout.write(JSON.strin
 echo "--- a repository path containing a space ---"
 reset_tree; noenv
 check 2 services/rustpbx/src/a.rs "carve-out inside a spaced repo path"
+
+echo "--- P5: per-session budget (session_id present) ---"
+export FSA_STATE_HOME="$T/state"
+sess() {  # mode session path -> exit code
+  node -e 'process.stdout.on("error",()=>{});process.stdout.write(JSON.stringify({session_id:process.argv[2],tool_name:"Edit",tool_input:{file_path:process.argv[1]}}))' "$R/$3" "$2" \
+    | bash "$H" $([ "$1" = record ] && echo record) >/dev/null 2>&1; echo $?; }
+edit_ok() {  # session path: a successful edit = gate allows, file changes, PostToolUse records
+  [ "$(sess check "$1" "$2")" = 0 ] || return 1; dirty "$2"; sess record "$1" "$2" >/dev/null; }
+scheck() { want=$1; got=$(sess check "$2" "$3"); if [ "$got" = "$want" ]; then echo "ok   ($got) $4"; else echo "FAIL want=$want got=$got :: $4"; FAILED=1; fi; }
+reset_tree; noenv; rm -rf "$T/state"; write_conf
+dirty src/o1.rs src/o2.ts src/o3.tsx src/o4.rs src/o5.rs   # another session's uncommitted work
+scheck 0 A src/a.rs "other sessions' 5 dirty files spend nothing"
+edit_ok A src/a.rs; edit_ok A src/b.ts; edit_ok A src/c.tsx
+scheck 2 A src/d.rs "4th new path for session A, 3 recorded and open"
+scheck 0 A src/b.ts "re-edit of a recorded open path is free"
+scheck 0 B src/d.rs "session B is isolated from A's count"
+scheck 2 A src/o1.rs "another session's dirty file is a NEW path for A, and A is at its limit"
+echo "--- refused attempts are never recorded ---"
+scheck 2 A src/e.rs "refused"
+n=$(grep -c . "$T/state/edit-budget/A.paths"); [ "$n" = 3 ] && echo "ok   ledger holds 3 successful edits" || { echo "FAIL ledger has $n"; FAILED=1; }
+echo "--- committing what is done frees the budget ---"
+git -C "$R" add src/a.rs src/b.ts src/c.tsx && git -C "$R" commit -qm done
+scheck 0 A src/d.rs "after commit the recorded paths are clean"
+echo "--- resume keeps the count (same session id, new hook processes) ---"
+edit_ok A src/f.rs; edit_ok A src/g.rs; edit_ok A src/h.rs
+scheck 2 A src/i.rs "resumed session still at limit"
+echo "--- carve-outs still refuse a session, record mode never refuses ---"
+scheck 2 A services/rustpbx/src/z.rs "carve-out with a session id"
+got=$(sess record A services/rustpbx/src/z.rs); [ "$got" = 0 ] && echo "ok   (0) record mode never blocks" || { echo "FAIL record blocked"; FAILED=1; }
+echo "--- concurrent records from parallel tool calls keep every path ---"
+rm -rf "$T/state"; for i in $(seq 1 12); do (dirty "src/p$i.rs"; sess record C "src/p$i.rs" >/dev/null) & done; wait
+n=$(sort -u "$T/state/edit-budget/C.paths" | grep -c .); [ "$n" = 12 ] && echo "ok   12 concurrent records" || { echo "FAIL concurrent records: $n"; FAILED=1; }
+unset FSA_STATE_HOME
 
 echo
 if [ "$FAILED" = 0 ]; then echo "ALL PASS"; else echo "FAILURES PRESENT"; fi
