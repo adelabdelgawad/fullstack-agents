@@ -91,5 +91,58 @@ class RegistryRecordTests(unittest.TestCase):
         self.assertNotIn("STATUS=OK", result.stdout)
 
 
+class RoleContractTests(unittest.TestCase):
+    """One implementer contract for every engine; project rules reach each engine its own way."""
+
+    CONTRACT = Path(__file__).resolve().parents[2] / "plugins/fullstack-agents/scripts/lib/roles/implementer.md"
+
+    def run_engine(self, engine, docs=()):
+        case = DispatchCase(engine)
+        self.addCleanup(case.cleanup)
+        for name in docs:
+            (case.root / name).write_text(f"# {name}\n")
+        result = case.dispatch(env={"FSA_FAKE_MODE": "touch", "FSA_FAKE_TOUCH": "app.py"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        m = case.manifest(result)
+        runs = Path(m["log"]).parent
+        meta = json.loads((runs / f"{m['run']}.meta.json").read_text())
+        prompt = (runs / f"{m['run']}.prompt.md").read_text()
+        call = next(c for c in case.call_log() if c["engine"] in ("codex", "claude") or "run" in c["args"])
+        return meta, prompt, call
+
+    def test_every_engine_gets_the_same_contract_and_role(self):
+        contract = self.CONTRACT.read_text()
+        hashes = set()
+        for engine in ("claude", "codex", "grok"):
+            with self.subTest(engine=engine):
+                meta, prompt, call = self.run_engine(engine)
+                self.assertTrue(prompt.startswith(contract))
+                self.assertEqual(call["env"]["FSA_ROLE"], "implementer")
+                hashes.add(meta["role_contract"]["sha256"])
+        self.assertEqual(len(hashes), 1)
+
+    def test_codex_scope_wording_matches_its_enforcement(self):
+        _, prompt, _ = self.run_engine("codex")
+        self.assertIn("reported as a scope violation after the run", prompt)
+        _, prompt, _ = self.run_engine("grok")
+        self.assertIn("the edit and write tools accept only", prompt)
+
+    def test_codex_drops_plugins_and_falls_back_to_claude_md_only_without_agents_md(self):
+        _, _, call = self.run_engine("codex", docs=("CLAUDE.md",))
+        args = call["args"]
+        self.assertEqual(args[args.index("--disable") + 1], "plugins")
+        self.assertIn('project_doc_fallback_filenames=["CLAUDE.md"]', args)
+        _, _, call = self.run_engine("codex", docs=("CLAUDE.md", "AGENTS.md"))
+        self.assertFalse(any("project_doc_fallback_filenames" in a for a in call["args"]))
+
+    def test_grok_config_lists_the_project_rules_file(self):
+        for docs, expected in ((("CLAUDE.md",), ["CLAUDE.md"]), (("CLAUDE.md", "AGENTS.md"), ["AGENTS.md"]), ((), [])):
+            with self.subTest(docs=docs):
+                meta, _, call = self.run_engine("grok", docs)
+                config = json.loads(Path(call["env"]["OPENCODE_CONFIG"]).read_text())
+                self.assertEqual(config["instructions"], expected)
+                self.assertEqual(meta["project_docs"], expected[0] if expected else None)
+
+
 if __name__ == "__main__":
     unittest.main()

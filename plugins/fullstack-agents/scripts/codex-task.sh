@@ -163,18 +163,18 @@ snapshot > "$runs/$id.pre.txt"
 
 allow_tests=${FSA_IMPLEMENTER_ALLOW_TESTS:-${FSA_GROK_ALLOW_TESTS:-0}}
 
+# The implementer contract (lib/roles/implementer.md) goes to every engine; only enforcement wording differs per engine.
 conventions_preamble() {
-  [ "$engine" = "codex" ] && return 0
-  printf 'ROLE: you are the implementer; Claude planned this brief and will review your git diff and re-run the tests.\n'
-  [ "$engine" = "claude" ] &&
-    printf 'You are not the session lead or orchestrator: ignore manual text about planning, delegating, dispatching implementers or edit budgets, and never call scripts/codex-task.sh. Edit the files yourself.\n'
-  printf 'CONVENTIONS: before editing, read and obey the repository manuals that apply to the paths you touch: CLAUDE.md, AGENTS.md (root and nested) and .claude/rules/ inside this repository. Never read or write outside the repository root; a denied tool call is final, so do not retry it. The brief wins on scope.\n'
-  printf 'FORMAT: format only the files you changed (for example `rustfmt --edition <edition> <file>` or `prettier --write <file>`); never run a workspace- or package-wide formatter (`cargo fmt --all`, `cargo fmt -p`, `prettier --write .`), even as a check-and-fix step.\n'
-  printf 'READING: locate with grep, then read only the line ranges you need (start at the file:line sites the brief names); never read a whole large file to change one spot, and do not re-read a range you already have.\n\n'
-  [ "$mode" = "implement" ] &&
-    printf 'SCOPE: the edit and write tools accept only the brief'"'"'s ALLOWED_PATHS; never change a file from bash. If the change needs another path, stop and name it in "open_risks".\n\n'
+  cat "$here/lib/roles/implementer.md"
+  if [ "$mode" = "implement" ]; then
+    if [ "$engine" = "codex" ]; then
+      printf 'SCOPE: edit only the brief'"'"'s ALLOWED_PATHS; any other changed path is reported as a scope violation after the run. Never change a file from bash. If the change needs another path, stop and name it in "open_risks".\n\n'
+    else
+      printf 'SCOPE: the edit and write tools accept only the brief'"'"'s ALLOWED_PATHS; never change a file from bash. If the change needs another path, stop and name it in "open_risks".\n\n'
+    fi
+  fi
   [ "$mode" = "implement" ] && [ "$allow_tests" != 1 ] &&
-    printf 'CHECKS: do not run test suites (test runners are denied); Claude runs the tests when it reviews your diff. At the end run only the brief'"'"'s BUILD command once (a compile or type check), filter its output to errors, fix what it reports, and list it in "tests".\n\n'
+    printf 'CHECKS: do not run test suites; Claude runs the tests when it reviews your diff. At the end run only the brief'"'"'s BUILD command once (a compile or type check), filter its output to errors, fix what it reports, and list it in "tests".\n\n'
   return 0
 }
 
@@ -188,6 +188,11 @@ result_contract() {
 . "$here/lib/registry.sh"
 engine_sid=""; [ "$engine" = "claude" ] && engine_sid=$(python3 -c 'import uuid; print(uuid.uuid4())')
 instructions_start=$(fsa_instruction_hashes "$root")
+# Project rules every engine must receive: AGENTS.md (read natively), else CLAUDE.md as the fallback.
+project_docs=""
+if [ -f "$root/AGENTS.md" ]; then project_docs=AGENTS.md; elif [ -f "$root/CLAUDE.md" ]; then project_docs=CLAUDE.md; fi
+[ -n "$project_docs" ] && [ "$(wc -c < "$root/$project_docs")" -gt 32768 ] &&
+  echo "fullstack-agents: $project_docs exceeds Codex's 32768-byte project_doc_max_bytes; Codex truncates it" >&2
 jq -n --arg id "$id" --arg mode "$mode" --arg engine "$engine" --arg model "$model" --arg brief "$(realpath "$brief")" \
   --arg root "$root" --arg session "${CLAUDE_CODE_SESSION_ID:-${CLAUDE_SESSION_ID:-}}" --arg started "$(date -u +%FT%TZ)" \
   '{id:$id,mode:$mode,engine:$engine,model:$model,brief:$brief,root:$root,session:$session,started:$started}' > "$runs/$id.meta.json" || true
@@ -198,10 +203,12 @@ fsa_meta_merge "$runs" "$id" "$(jq -n --argjson plugin "${FSA_PLUGIN_PIN:-$(fsa_
   --arg es "$engine_source" --arg model "$model" --arg variant "$variant" --arg tests "$allow_tests" --arg sandbox "$sandbox" \
   --arg brief_sha "$(fsa_sha256 "$brief")" --arg prompt_sha "$(fsa_sha256 "$prompt")" --arg unit "$unit" \
   --arg sid "$engine_sid" --argjson instructions "$instructions_start" --arg cwd "$root" \
+  --arg role_sha "$(fsa_sha256 "$here/lib/roles/implementer.md")" --arg docs "$project_docs" \
   '{schema: 2, plugin: $plugin, cwd: $cwd, unit: $unit, parent_run: null,
     requested: {engine_source: $es, model: $model, variant: (if $variant == "" then null else $variant end),
                 allow_tests: ($tests == "1"), sandbox: $sandbox},
     brief_sha256: $brief_sha, prompt_sha256: $prompt_sha, instructions_at_dispatch: $instructions,
+    role_contract: {name: "implementer", sha256: $role_sha}, project_docs: (if $docs == "" then null else $docs end),
     engine_session_id: (if $sid == "" then null else $sid end)}')"
 fsa_event "$runs" "$id" created
 
@@ -217,7 +224,8 @@ if [ "$engine" = "grok" ]; then
   else
     perms='{"edit":'"$edit_rules"',"bash":{"*":"allow","*cargo test*":"deny","*cargo nextest*":"deny","*test-backend.sh*":"deny","*vitest*":"deny","*jest*":"deny","*playwright*":"deny","*pytest*":"deny","*npm test*":"deny","*pnpm test*":"deny","*yarn test*":"deny","*bun test*":"deny"},"webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
   fi
-  printf '{"$schema":"https://opencode.ai/config.json","permission":%s}\n' "$perms" > "$cfg"
+  instructions='[]'; [ -n "$project_docs" ] && instructions="[\"$project_docs\"]"
+  printf '{"$schema":"https://opencode.ai/config.json","instructions":%s,"permission":%s}\n' "$instructions" "$perms" > "$cfg"
   attach=""; while IFS= read -r f; do [ -n "$f" ] && attach+=" -f '$f'"; done <<<"$(skill_files)"
   cat > "$runner" <<EOF
 set -o pipefail
@@ -256,13 +264,15 @@ EOF
 else
   # Build caches and journals outside the root stay read-only in workspace-write unless the project names them.
   add_dirs=""
+  # Implementer runs drop Codex plugins (the Codex-led edition's lead doctrine); project rules still load.
+  codex_docs=""; [ "$project_docs" = CLAUDE.md ] && codex_docs=" -c 'project_doc_fallback_filenames=[\"CLAUDE.md\"]'"
   if [ "$sandbox" = "workspace-write" ]; then
     IFS=: read -ra extra <<<"${FSA_CODEX_ADD_DIRS:-}"
     for d in "${extra[@]}"; do [ -n "$d" ] && mkdir -p "$d" && add_dirs+=" --add-dir $(printf %q "$d")"; done
   fi
   cat > "$runner" <<EOF
 set -o pipefail
-codex exec --cd '$root' -m '$model' -s '$sandbox'$add_dirs --output-schema '$schema' -o '$last' - < '$prompt' 2>&1 | tee '$log'
+codex exec --cd '$root' -m '$model' -s '$sandbox'$add_dirs --disable plugins$codex_docs --output-schema '$schema' -o '$last' - < '$prompt' 2>&1 | tee '$log'
 rc=\${PIPESTATUS[0]}; echo \$rc > '$runs/$id.engine_exit'
 exit \$rc
 EOF
@@ -280,7 +290,7 @@ run_in_herdr_pane() {
 
 fsa_event "$runs" "$id" running
 # Every engine process and its children inherit the run marker; the runner leads its own process group.
-export FSA_RUN_ID="$id"
+export FSA_RUN_ID="$id" FSA_ROLE=implementer
 # Cancellation stops the runner's group and every marked process, then still records what the run changed.
 cancelled=0; runner_pid=""
 liveness() { python3 -I "$here/lib/liveness.py" "$1" "$runs" "$id" "${@:2}" 2>/dev/null; }
