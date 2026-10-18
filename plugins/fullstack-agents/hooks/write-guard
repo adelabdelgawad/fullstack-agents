@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# write-guard — PreToolUse (Bash): blocks shell writes (redirects, tee, sed -i) to gated-extension source, which
+# would bypass the plugin's edit-tracking gates. Off unless the project sets gated_extensions in
+# .claude/fsa-team.conf. Escape hatches: FSA_SKIP_WRITE_GUARD=1, legacy KC_CODEX_GATE_OFF=1.
+# ponytail: catches redirects, sed -i and tee only; an interpreter that writes a file walks through.
+set -uo pipefail
+
+source "$(dirname "$0")/lib.sh"
+
+[ "${KC_CODEX_GATE_OFF:-0}" = "1" ] && exit 0
+[ "${FSA_SKIP_WRITE_GUARD:-0}" = "1" ] && exit 0
+
+HOOK_INPUT="$(cat)"
+json_fields "$HOOK_INPUT" tool_input.command cwd
+CMD="${JSON_FIELDS[0]}"
+hook_cwd="${JSON_FIELDS[1]}"
+[ -n "$CMD" ] || exit 0
+
+root=""
+[ -n "$hook_cwd" ] && root=$(git -C "$hook_cwd" rev-parse --show-toplevel 2>/dev/null)
+[ -n "$root" ] || root="${CLAUDE_PROJECT_DIR:-}"
+[ -n "$root" ] || root="$(pwd)"
+
+# conf_get KEY: the typed value, or return 3 on an invalid value (never sourced or eval'd).
+conf_get() {
+  local key=$1 out rc
+  out=$(python3 -I "$(dirname "$0")/../scripts/lib/team_conf.py" get "$root" "$key" 2>/dev/null)
+  rc=$?
+  [ "$rc" -eq 3 ] && return 3
+  printf '%s' "$out"
+  return 0
+}
+refuse_bad_conf() {
+  printf '[fullstack-agents] BLOCKED: invalid .claude/fsa-team.conf value for %s.\n' "$1" >&2
+  exit 2
+}
+
+gated_extensions=$(conf_get gated_extensions) || refuse_bad_conf gated_extensions
+[ -n "$gated_extensions" ] || exit 0
+
+# A heredoc body is data, not commands; its redirect target still precedes the marker.
+CMD="${CMD%%<<*}"
+# Quotes only wrap the targets we look for, so drop them before scanning.
+CMD="${CMD//\"/}"
+CMD="${CMD//\'/}"
+[ -n "$CMD" ] || exit 0
+TOKEN="[^[:space:];|&<>()]+"
+
+gated() {
+  local f=$1 ext
+  while IFS= read -r ext; do
+    [ -n "$ext" ] || continue
+    case "$f" in *".$ext") return 0 ;; esac
+  done <<<"$gated_extensions"
+  return 1
+}
+
+hits=""
+for t in $(printf '%s\n' "$CMD" | grep -oE ">>?[[:space:]]*${TOKEN}" | sed -E 's/^>>?[[:space:]]*//'); do
+    gated "$t" && hits="${hits}${t} "
+done
+for t in $(printf '%s\n' "$CMD" | grep -oE "\btee\b([[:space:]]+-[^[:space:]]+)*[[:space:]]+${TOKEN}" | awk '{print $NF}'); do
+    gated "$t" && hits="${hits}${t} "
+done
+if printf '%s\n' "$CMD" | grep -qE '\bsed\b[^|;]*[[:space:]]-i\b'; then
+    ext_alt=$(printf '%s' "$gated_extensions" | tr ' \n' '||' | sed -E 's/^\|+//; s/\|+$//')
+    [ -n "$ext_alt" ] && for t in $(printf '%s\n' "$CMD" | grep -oE "${TOKEN}\.(${ext_alt})\b"); do
+        hits="${hits}${t} "
+    done
+fi
+
+[ -n "$hits" ] || exit 0
+
+cat >&2 <<BLOCK
+[fullstack-agents] BLOCKED: shell write to source file(s): ${hits}
+Source files change through Write/Edit only, so the plugin's edit-tracking gates can see the
+change. A shell write skips them silently.
+(Override only when the user says so: FSA_SKIP_WRITE_GUARD=1)
+BLOCK
+exit 2

@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# scan-gate — PreToolUse (Agent|Task): a delegated scan carries a FILES: block and a REPORT: table contract, or it
+# is refused. On only when the project sets scan_gate=on in .claude/fsa-team.conf. Escape hatches:
+# FSA_SKIP_SCAN_GATE=1, legacy KC_CODEX_GATE_OFF=1.
+set -uo pipefail
+
+source "$(dirname "$0")/lib.sh"
+
+[ "${KC_CODEX_GATE_OFF:-0}" = "1" ] && exit 0
+[ "${FSA_SKIP_SCAN_GATE:-0}" = "1" ] && exit 0
+
+HOOK_INPUT="$(cat)"
+json_fields "$HOOK_INPUT" tool_input.subagent_type tool_input.prompt cwd
+type="${JSON_FIELDS[0]}"
+prompt="${JSON_FIELDS[1]}"
+hook_cwd="${JSON_FIELDS[2]}"
+[ -n "$prompt" ] || exit 0
+
+root=""
+[ -n "$hook_cwd" ] && root=$(git -C "$hook_cwd" rev-parse --show-toplevel 2>/dev/null)
+[ -n "$root" ] || root="${CLAUDE_PROJECT_DIR:-}"
+[ -n "$root" ] || root="$(pwd)"
+
+# conf_get KEY: the typed value, or return 3 on an invalid value (never sourced or eval'd).
+conf_get() {
+  local key=$1 out rc
+  out=$(python3 -I "$(dirname "$0")/../scripts/lib/team_conf.py" get "$root" "$key" 2>/dev/null)
+  rc=$?
+  [ "$rc" -eq 3 ] && return 3
+  printf '%s' "$out"
+  return 0
+}
+refuse_bad_conf() {
+  printf '[fullstack-agents] BLOCKED: invalid .claude/fsa-team.conf value for %s.\n' "$1" >&2
+  exit 2
+}
+
+scan_gate=$(conf_get scan_gate) || refuse_bad_conf scan_gate
+[ "$scan_gate" = on ] || exit 0
+
+# A fork is the orchestrator itself; the others never read source (test-runner only runs given commands).
+case "$type" in fork | claude-code-guide | statusline-setup | fullstack-agents:test-runner) exit 0 ;; esac
+
+refuse() {
+  cat >&2 <<BLOCK
+[fullstack-agents] BLOCKED: subagent brief (${type:-general-purpose})
+$1
+A delegated scan is context relief, never the conclusion: give it a FILES: block naming every
+file to read and a REPORT: line naming the table columns (file:line plus values). The bound tool
+for a wide read-only scan is fullstack-agents:bounded-extractor:
+  scripts/codex-task.sh investigate <brief-file>
+See the task-flow skill ("Scanning wide").
+(Override only when the user says so: FSA_SKIP_SCAN_GATE=1)
+BLOCK
+  exit 2
+}
+
+files=$(printf '%s\n' "$prompt" | sed -n '/^FILES:/,/^$/p' | sed '1d' | sed -E 's/^[-*[:space:]]+//' | grep -E '\S' || true)
+[ -n "$files" ] || refuse "Missing a 'FILES:' block listing the files to read."
+report=$(printf '%s\n' "$prompt" | sed -nE 's/^REPORT:[[:space:]]*//p' | head -1)
+[ -n "$report" ] || refuse "Missing a 'REPORT: <table columns>' line."
+bad=$(printf '%s\n' "$prompt" | grep -oiwE 'why|assess|recommend|propose|conclude|explain' | head -1)
+[ -z "$bad" ] || refuse "The brief asks for a conclusion ('$bad'); ask for facts in a table and decide yourself."
+exit 0
