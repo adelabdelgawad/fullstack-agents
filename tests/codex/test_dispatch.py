@@ -24,6 +24,13 @@ class RegistryLocationTests(unittest.TestCase):
         self.case.binding(runs_dir="~/.codex/kc-runs")
         self.assertEqual(self.run_dir_of(self.case.dispatch()), self.case.home / ".codex/kc-runs")
 
+    def test_a_refused_dispatch_leaves_no_copied_lib_dir(self):
+        self.case.brief.write_text("IMPLEMENTER: codex\nPLAN: none: test\n\nGOAL: no paths\n")
+        result = self.case.dispatch()
+        self.assertEqual(result.returncode, 2)
+        runs = self.case.home / ".codex/fsa-runs"
+        self.assertEqual(list(runs.glob("dispatch-*.lib")) if runs.exists() else [], [])
+
     def test_env_wins_over_the_binding(self):
         self.case.binding(runs_dir="~/.codex/kc-runs")
         chosen = self.case.base / "explicit"

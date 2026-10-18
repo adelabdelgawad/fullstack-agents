@@ -51,6 +51,8 @@ if [ -z "${FSA_DISPATCH_LIB:-}" ]; then
     exec bash "$lib/codex-task.sh" "$@"
 fi
 plugin_src=${FSA_PLUGIN_SRC:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)}
+# A dispatch refused before its run record exists leaves no copied lib dir behind.
+trap '[ -n "${FSA_DISPATCH_LIB:-}" ] && rm -rf "$FSA_DISPATCH_LIB"' EXIT
 
 herdr_mode=0
 [ "${1:-}" = "--herdr" ] && { herdr_mode=1; shift; }
@@ -211,6 +213,7 @@ fsa_meta_merge "$runs" "$id" "$(jq -n --argjson plugin "${FSA_PLUGIN_PIN:-$(fsa_
     role_contract: {name: "implementer", sha256: $role_sha}, project_docs: (if $docs == "" then null else $docs end),
     engine_session_id: (if $sid == "" then null else $sid end)}')"
 fsa_event "$runs" "$id" created
+trap - EXIT
 
 if [ "$engine" = "grok" ]; then
   cfg="$runs/$id.opencode.json"
