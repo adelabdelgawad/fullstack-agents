@@ -40,8 +40,13 @@ full path is everything below, including the ledger and team-board lifecycle.
    it finishes. Vendored forks, migrations and ownership/lifecycle code always
    go to the implementer; scope these risks to the actual process-owning tree.
 4. Audit: read touched-path diff; check scope, architecture, lanes, wire contract
-   and UI accessibility. Reuse successful test-runner logs for unchanged code;
-   do not repeat a worker's suite solely because the lead owns acceptance.
+   and UI accessibility. Reuse a passing check (decision D6) only when its
+   inputs were protected for the whole run — an isolated snapshot no other
+   writer can reach — and its recorded fingerprint matches the current inputs.
+   A shared working tree is never protected (other sessions, editors,
+   implementers writing outside ALLOWED_PATHS, shared build caches): rerun the
+   affected checks there and report "reuse unavailable: shared tree". Reading
+   the log of a check commissioned for the current state is evidence, not reuse.
    Finish all writers and required checks before one audit of the coherent
    deliverable. Serialize checks sharing fixture databases or native build state.
    After each implementer batch run one fast compile/type check across all touched

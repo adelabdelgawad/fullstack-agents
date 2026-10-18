@@ -182,7 +182,7 @@ Runtime bindings win over the historical dispatcher rules below: in the Codex-le
 the lead and native workers may run assigned checks within their actual tool permissions;
 the independent auditor only performs the bounded read-only audit. Test-suite denial below
 applies to the historical headless implementer dispatcher, not native workers. Never bypass
-an enforced tool restriction. Reuse completed evidence; do not rerun solely to change the runner.
+an enforced tool restriction. Evidence for the current tree state is not rerun solely to change the runner; a result from an earlier state is reused only under the D6 rule in SKILL.md (protected inputs plus a matching fingerprint), never on a fingerprint alone.
 
 The implementer's completion report is not evidence. Read the git diff restricted to the paths the
 run reports as touched and review it for conformity: the brief's scope, the project's architecture

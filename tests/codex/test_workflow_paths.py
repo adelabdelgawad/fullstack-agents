@@ -41,6 +41,14 @@ class WorkflowPathTests(unittest.TestCase):
         self.assertIn("For full-path multi-step implementation, create and register", flat(SKILL))
         self.assertIn("on a full-path task", flat(DOCTRINE).lower())
 
+    def test_verification_reuse_follows_d6(self):
+        skill = flat(SKILL)
+        self.assertNotIn("Reuse successful test-runner logs for unchanged code", skill)
+        self.assertIn("inputs were protected for the whole run", skill)
+        self.assertIn('report "reuse unavailable: shared tree"', skill)
+        guide = flat((PLUGIN / "skills/task-flow/references/skill-guide.md").read_text())
+        self.assertIn("never on a fingerprint alone", guide)
+
     def test_questions_and_research_skip_task_flow(self):
         self.assertIn("A question or web research that ends in an answer needs no task-flow load", flat(LEAD))
 
