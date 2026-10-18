@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# edit-budget-gate — PreToolUse (Write|Edit|MultiEdit): caps new uncommitted gated-extension edits per change and
+# always refuses configured carve-out paths. Off unless the project sets edit_budget or carve_outs
+# in .claude/fsa-team.conf. Escape hatches: FSA_SKIP_EDIT_BUDGET=1, legacy KC_CODEX_GATE_OFF=1.
+set -uo pipefail
+
+source "$(dirname "$0")/lib.sh"
+
+[ "${KC_CODEX_GATE_OFF:-0}" = "1" ] && exit 0
+[ "${FSA_SKIP_EDIT_BUDGET:-0}" = "1" ] && exit 0
+# A dispatched implementer edits its own ALLOWED_PATHS under the engine's own fence.
+[ -n "${FSA_IMPLEMENTER_RUN:-}" ] && exit 0
+
+HOOK_INPUT="$(cat)"
+json_fields "$HOOK_INPUT" tool_input.file_path tool_input.notebook_path
+file_path="${JSON_FIELDS[0]}"
+[ -n "$file_path" ] || file_path="${JSON_FIELDS[1]}"
+[ -n "$file_path" ] || exit 0
+
+case "$file_path" in /*) abs=$file_path ;; *) abs="$(pwd)/$file_path" ;; esac
+dir=$(dirname "$abs")
+while [ -n "$dir" ] && [ ! -d "$dir" ]; do dir=$(dirname "$dir"); done
+root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || exit 0
+rel=${abs#"$root"/}
+
+# conf_get KEY: the typed value, or return 3 on an invalid value (never sourced or eval'd).
+conf_get() {
+  local key=$1 out rc
+  out=$(python3 -I "$(dirname "$0")/../scripts/lib/team_conf.py" get "$root" "$key" 2>/dev/null)
+  rc=$?
+  [ "$rc" -eq 3 ] && return 3
+  printf '%s' "$out"
+  return 0
+}
+refuse_bad_conf() {
+  printf '[fullstack-agents] BLOCKED: invalid .claude/fsa-team.conf value for %s.\n' "$1" >&2
+  exit 2
+}
+
+edit_budget=$(conf_get edit_budget) || refuse_bad_conf edit_budget
+carve_outs=$(conf_get carve_outs) || refuse_bad_conf carve_outs
+[ -n "$edit_budget" ] || [ -n "$carve_outs" ] || exit 0
+
+gated_extensions=$(conf_get gated_extensions) || refuse_bad_conf gated_extensions
+
+gated() {
+  local f=$1 ext
+  while IFS= read -r ext; do
+    [ -n "$ext" ] || continue
+    case "$f" in *".$ext") return 0 ;; esac
+  done <<<"$gated_extensions"
+  return 1
+}
+
+refuse() {
+  cat >&2 <<BLOCK
+[fullstack-agents] BLOCKED: $rel
+$1
+(Override only when the user says so: FSA_SKIP_EDIT_BUDGET=1)
+BLOCK
+  exit 2
+}
+
+# Only gated-extension source counts; everything else is out of scope for this gate.
+gated "$rel" || exit 0
+
+# Carve-outs always refuse, regardless of budget: size never makes them safe to hand-edit.
+while IFS= read -r glob; do
+  [ -n "$glob" ] || continue
+  case "$rel" in
+    $glob) refuse "Matches a configured carve-out ($glob) — always brief the implementer." ;;
+  esac
+done <<<"$carve_outs"
+
+[ -n "$edit_budget" ] || exit 0
+
+limit="${KC_DIRECT_EDIT_LIMIT:-$edit_budget}"
+
+dirty=$( { git -C "$root" diff HEAD --name-only; git -C "$root" ls-files -o --exclude-standard; } 2>/dev/null)
+mine=""
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  gated "$f" && mine="${mine}${f}
+"
+done <<<"$dirty"
+
+# Re-editing a file this change already opened is free; only a NEW path spends budget.
+printf '%s' "$mine" | grep -Fqx -- "$rel" && exit 0
+
+count=$(printf '%s' "$mine" | grep -cE '\S')
+[ "$count" -lt "$limit" ] && exit 0
+
+refuse "Direct-edit budget spent: $count uncommitted gated file(s) already open, limit $limit.
+This change is too big to hand-edit. Commit what is done, or brief the implementer for the whole change."

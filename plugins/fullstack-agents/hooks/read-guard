@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# read-guard — PreToolUse (Bash): blocks unranged shell dumps of gated-extension source; the task flow reads
+# source by grep or ranged Read. Off unless the project sets read_range_max in .claude/fsa-team.conf.
+# Escape hatches: FSA_SKIP_READ_GUARD=1, legacy KC_CODEX_GATE_OFF=1.
+# ponytail: covers cat/nl/less/more/bat/tac, head/tail and sed; awk and grep stay filters.
+set -uo pipefail
+
+source "$(dirname "$0")/lib.sh"
+
+[ "${KC_CODEX_GATE_OFF:-0}" = "1" ] && exit 0
+[ "${FSA_SKIP_READ_GUARD:-0}" = "1" ] && exit 0
+
+HOOK_INPUT="$(cat)"
+json_fields "$HOOK_INPUT" tool_input.command cwd
+CMD="${JSON_FIELDS[0]}"
+hook_cwd="${JSON_FIELDS[1]}"
+[ -n "$CMD" ] || exit 0
+
+root=""
+[ -n "$hook_cwd" ] && root=$(git -C "$hook_cwd" rev-parse --show-toplevel 2>/dev/null)
+[ -n "$root" ] || root="${CLAUDE_PROJECT_DIR:-}"
+[ -n "$root" ] || root="$(pwd)"
+
+# conf_get KEY: the typed value, or return 3 on an invalid value (never sourced or eval'd).
+conf_get() {
+  local key=$1 out rc
+  out=$(python3 -I "$(dirname "$0")/../scripts/lib/team_conf.py" get "$root" "$key" 2>/dev/null)
+  rc=$?
+  [ "$rc" -eq 3 ] && return 3
+  printf '%s' "$out"
+  return 0
+}
+refuse_bad_conf() {
+  printf '[fullstack-agents] BLOCKED: invalid .claude/fsa-team.conf value for %s.\n' "$1" >&2
+  exit 2
+}
+
+read_range_max=$(conf_get read_range_max) || refuse_bad_conf read_range_max
+[ -n "$read_range_max" ] || exit 0
+gated_extensions=$(conf_get gated_extensions) || refuse_bad_conf gated_extensions
+
+MAX="${KC_READ_RANGE_MAX:-$read_range_max}"
+
+# A heredoc body is data, not commands.
+CMD="${CMD%%<<*}"
+CMD="${CMD//\"/}"
+CMD="${CMD//\'/}"
+[ -n "$CMD" ] || exit 0
+
+gated() {
+  local f=$1 ext
+  while IFS= read -r ext; do
+    [ -n "$ext" ] || continue
+    case "$f" in *".$ext") return 0 ;; esac
+  done <<<"$gated_extensions"
+  return 1
+}
+
+# A loop variable hides the file name, so a dump of a variable counts when source is in scope.
+mentions_source=0
+for t in $CMD; do gated "$t" && mentions_source=1 && break; done
+
+hits=""
+while IFS= read -r seg; do
+  # shellcheck disable=SC2086
+  set -- $seg
+  # Skip loop/branch keywords and leading assignments to reach the command word.
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      do | then | else | \{ | \( | \! | time | env | sudo | *=*) shift ;;
+      *) break ;;
+    esac
+  done
+  [ $# -gt 0 ] || continue
+  cmd="${1##*/}"; shift
+  case "$cmd" in cat | nl | less | more | bat | tac | head | tail | sed) ;; *) continue ;; esac
+
+  targets=""; hasvar=0; args=""
+  for a in "$@"; do
+    case "$a" in
+      -*) args="$args $a" ;;
+      # A variable path that spells out a non-gated extension is not a hidden source file.
+      *\$*.[A-Za-z0-9]*) gated "$a" && targets="$targets $a" ;;
+      *\$*) hasvar=1 ;;
+      *) gated "$a" && targets="$targets $a"; args="$args $a" ;;
+    esac
+  done
+  if [ -z "$targets" ]; then
+    # Only a pure dump of a bare variable counts; head/tail/sed on a variable are bounded filters.
+    case "$cmd" in head | tail | sed) continue ;; esac
+    { [ "$hasvar" = 1 ] && [ "$mentions_source" = 1 ]; } || continue
+    targets=" \$variable"
+  fi
+
+  case "$cmd" in
+    head | tail)
+      n=$(printf '%s\n' "$seg" | grep -oE '(-n[[:space:]]*|--lines=|-)[0-9]+' | head -1 | grep -oE '[0-9]+$')
+      [ "${n:-10}" -le "$MAX" ] && continue ;;
+    sed)
+      printf '%s\n' "$seg" | grep -qE '(^|[[:space:]])-i' && continue
+      # `=` prints line numbers only, so an address-range `=` script is a locate, not a dump.
+      printf '%s\n' "$seg" | grep -qE '(^|[[:space:]])-n([[:space:]]|$)' &&
+        printf '%s\n' "$seg" | grep -qE '(^|[[:space:]])[^-[:space:]][^[:space:]]*=([[:space:]]|$)' && continue
+      script=$(printf '%s\n' "$seg" | grep -oE '(^|[[:space:]])(-n[[:space:]]+|-e[[:space:]]+)?[0-9]+(,(\+?[0-9]+|\$))?[p=]([[:space:]]|$)' | head -1 | grep -oE '[0-9]+(,(\+?[0-9]+|\$))?[p=]')
+      if printf '%s\n' "$seg" | grep -qE '(^|[[:space:]])-n([[:space:]]|$)' && [ -n "$script" ]; then
+        case "$script" in
+          *=) continue ;;
+          *,\$p) ;;
+          *,+*p) n=${script#*,+}; n=${n%p}; [ "$((n + 1))" -le "$MAX" ] && continue ;;
+          *,*p) a=${script%%,*}; b=${script#*,}; b=${b%p}; [ "$((b - a + 1))" -le "$MAX" ] && continue ;;
+          *p) continue ;;
+        esac
+      fi ;;
+  esac
+  hits="${hits}${targets}"
+done < <(printf '%s\n' "$CMD" | sed -E 's/\|\||&&|;|\|/\n/g')
+
+[ -n "$hits" ] || exit 0
+
+cat >&2 <<BLOCK
+[fullstack-agents] BLOCKED: unranged shell dump of source:${hits}
+The task flow reads source in three rungs: grep to locate, then Read with offset/limit
+(at most ${MAX} lines per read), then fullstack-agents:bounded-extractor for a surface still too wide.
+See the task-flow skill ("Scanning wide").
+(Override only when the user says so: FSA_SKIP_READ_GUARD=1)
+BLOCK
+exit 2
