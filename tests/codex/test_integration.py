@@ -894,7 +894,9 @@ class ClaudeImplementerTests(unittest.TestCase):
         self.home = base / "home"
         write(self.home / ".bashrc", "alias cc='claude --dangerously-skip-permissions'\n")
         self.call = base / "call.json"
-        self.env = {**os.environ, "HOME": str(self.home), "PATH": f"{base / 'bin'}{os.pathsep}{os.environ['PATH']}",
+        # The calling session's FSA_* (e.g. FSA_SESSION_PIN) would re-execute an installed release instead of this tree.
+        inherited = {k: v for k, v in os.environ.items() if not k.startswith(("FSA_", "CLAUDE_CODE_SESSION"))}
+        self.env = {**inherited, "HOME": str(self.home), "PATH": f"{base / 'bin'}{os.pathsep}{os.environ['PATH']}",
                     "FSA_TEST_CALL": str(self.call), "FSA_CODEX_ROOT": str(self.root),
                     "FSA_CODEX_RUNS_DIR": str(base / "runs")}
 
