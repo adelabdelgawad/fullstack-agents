@@ -78,11 +78,16 @@ fi
 # --- Assemble the context as plain text; hook_context.py encodes it and enforces the hook-size limit ---
 PYTHON_BIN=$(find_python || true)
 board_session=$(printf '%s' "$hook_input" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+# The session's main agent (Claude Code 2.1 passes agent_type to SessionStart).
+agent_type=$(printf '%s' "$hook_input" | sed -n 's/.*"agent_type"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 nl=$'\n'
 
 if [ "$project_info" = "No FastAPI/Next.js project detected. Fullstack-agents skills are available if needed." ]; then
     # Token economy: ungoverned project — a 2-line notice instead of the doctrine. Skills stay invocable on demand.
     essential="fullstack-agents installed but no FastAPI/Rust/Next.js project detected here. If stack work comes up, invoke 'fullstack-agents:using-fullstack-agents' via the Skill tool for the routing gate. For any investigation, plan or change, invoke 'fullstack-agents:task-flow' first."
+elif [ "$agent_type" = "fullstack-agents:fullstack-agent" ]; then
+    # The lead agent prompt already carries every doctrine rule; repeating it costs context and nothing else.
+    essential="**Project Detection:** ${project_info}"
 else
     essential="<EXTREMELY_IMPORTANT>${nl}$(cat "${PLUGIN_ROOT}/hooks/session-doctrine.md")${nl}${nl}**Project Detection:** ${project_info}${nl}</EXTREMELY_IMPORTANT>"
 fi

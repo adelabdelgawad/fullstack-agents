@@ -135,6 +135,19 @@ Manual commands (`/generate entity`, `/review patterns`, etc.) still work exactl
 
 Every session source (startup, resume, clear, compact) gets the same compact doctrine, so a compaction never loses it; the policy profile arrives as a separate block from `session-policy`. Projects with no FastAPI/Rust/Next.js markers get a 2-line notice instead of the full doctrine — token-efficient by design, with the quality floor (dialogue, confirmation, pattern review, validation, tests) never cut. The `using-fullstack-agents` skill carries an explicit Token Discipline section (scan once, skills load once, batch error fixes, parallel tool calls, targeted reads).
 
+## Where rules live
+
+Each rule has one home; the others point to it. Precedence, highest first: the user's explicit instruction, the
+project's `CLAUDE.md` / `AGENTS.md`, the lead prompt, the `task-flow` skill, then the policy profile and other skills.
+
+| Rule | Home | Reaches the model through |
+|---|---|---|
+| Ownership: who decides, evidence handling, precedence, engineering standard | `agents/lead/fullstack-agent.md` | the lead agent's system prompt |
+| How work runs: light and full paths, briefs, audit, retries, verification | `skills/task-flow/` | the skill, loaded on demand |
+| Summary for sessions whose main agent is not the lead | `hooks/session-doctrine.md` | `session-start`, skipped when `agent_type` is the lead |
+| Reusable conventions a project opts into | `policies/<profile>.md` | `session-policy` (own context block) and implementer prompts |
+| Project hard rails, development mode, bindings | the project's `AGENTS.md` / `CLAUDE.md` | Claude Code's project memory; engines natively |
+
 ## Enforced Validation Gates (PostToolUse Hook)
 
 The generate → review → validate chain is enforced by the harness, not just by prompt instructions:

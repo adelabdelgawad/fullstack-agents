@@ -15,10 +15,11 @@ HOOKS = json.loads((PLUGIN / "hooks/hooks.json").read_text())["hooks"]
 CAP = 10_000
 
 
-def run(hook, case, extra_env=None, source="startup"):
+def run(hook, case, extra_env=None, source="startup", agent_type=None):
     env = {**case.env, "CLAUDE_CONFIG_DIR": str(case.base / "cfg"), "FSA_STATE_HOME": str(case.base / "state"),
            "TMPDIR": str(case.base), **(extra_env or {})}
-    proc = subprocess.run(["bash", str(PLUGIN / "hooks" / hook)], input=json.dumps({"session_id": "s1", "source": source}),
+    payload = {"session_id": "s1", "source": source, **({"agent_type": agent_type} if agent_type else {})}
+    proc = subprocess.run(["bash", str(PLUGIN / "hooks" / hook)], input=json.dumps(payload),
                           capture_output=True, text=True, cwd=case.root, env=env)
     assert proc.returncode == 0, proc.stderr
     return json.loads(proc.stdout)["hookSpecificOutput"]["additionalContext"] if proc.stdout.strip() else ""
@@ -82,6 +83,48 @@ class SessionStartDeliveryTests(unittest.TestCase):
         self.assertNotIn("Work in your own\nworktree", core)
         self.assertNotIn("Work in your own worktree", core)
         self.assertIn("project's development mode", core)
+
+
+class RuleHomeTests(unittest.TestCase):
+    """P2: each always-loaded rule has one home, and the doctrine never doubles the lead prompt."""
+    LEAD = (PLUGIN / "agents/lead/fullstack-agent.md").read_text()
+    DOCTRINE = (PLUGIN / "hooks/session-doctrine.md").read_text()
+    POLICY = (PLUGIN / "policies/engineering-conventions.md").read_text()
+    FLOW = (PLUGIN / "skills/task-flow/SKILL.md").read_text()
+
+    def setUp(self):
+        self.case = DispatchCase("codex")
+        self.addCleanup(self.case.cleanup)
+        write(self.case.root / "Cargo.toml", "[workspace]\n")
+
+    def test_lead_session_gets_detection_without_the_doctrine(self):
+        core = run("session-start", self.case, agent_type="fullstack-agents:fullstack-agent")
+        self.assertIn("**Project Detection:**", core)
+        self.assertNotIn("You have fullstack-agents", core)
+
+    def test_other_main_agents_still_get_the_doctrine(self):
+        for agent in (None, "general-purpose"):
+            with self.subTest(agent=agent):
+                self.assertIn("You have fullstack-agents", run("session-start", self.case, agent_type=agent))
+
+    def test_worktree_rules_are_conditional_on_the_development_mode(self):
+        for name, text in (("lead", self.LEAD), ("doctrine", self.DOCTRINE), ("policy", self.POLICY)):
+            flat = " ".join(text.split())
+            for sentence in flat.split(". "):
+                if "own worktree" in sentence:
+                    with self.subTest(source=name, sentence=sentence[:80]):
+                        self.assertRegex(sentence, r"development mode|Default mode|[Bb]are-metal")
+
+    def test_retry_limit_lives_only_in_task_flow(self):
+        self.assertIn("Two retries maximum", self.FLOW)
+        for text in (self.LEAD, self.DOCTRINE, self.POLICY):
+            self.assertNotIn("Two retries", text)
+
+    def test_lead_prompt_states_the_precedence_order(self):
+        flat = " ".join(self.LEAD.split())
+        order = ["the user's explicit instruction", "`CLAUDE.md`", "this prompt", "the `task-flow` skill", "the policy profile"]
+        positions = [flat.index(item, flat.index("Precedence")) for item in order]
+        self.assertEqual(positions, sorted(positions))
 
 
 class HookContextHelperTests(unittest.TestCase):
