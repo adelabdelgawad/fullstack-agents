@@ -31,6 +31,14 @@ class RegistryLocationTests(unittest.TestCase):
         runs = self.case.home / ".codex/fsa-runs"
         self.assertEqual(list(runs.glob("dispatch-*.lib")) if runs.exists() else [], [])
 
+    def test_a_nested_dispatch_never_deletes_an_inherited_lib_dir(self):
+        parent = self.case.base / "runs" / "dispatch-20990101-000000-1.lib"
+        parent.mkdir(parents=True)
+        self.case.brief.write_text("IMPLEMENTER: codex\nGOAL: no plan line\n")
+        result = self.case.dispatch(env={"FSA_DISPATCH_LIB": str(parent)})
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertTrue(parent.is_dir())
+
     def test_env_wins_over_the_binding(self):
         self.case.binding(runs_dir="~/.codex/project-runs")
         chosen = self.case.base / "explicit"

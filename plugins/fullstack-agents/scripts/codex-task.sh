@@ -53,8 +53,11 @@ if [ -z "${FSA_DISPATCH_LIB:-}" ]; then
     exec bash "$lib/codex-task.sh" "$@"
 fi
 plugin_src=${FSA_PLUGIN_SRC:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)}
-# A dispatch refused before its run record exists leaves no copied lib dir behind.
-trap '[ -n "${FSA_DISPATCH_LIB:-}" ] && rm -rf "$FSA_DISPATCH_LIB" 2> /dev/null || true' EXIT
+# The copy's private variables never reach engines or nested dispatches.
+dispatch_lib=${FSA_DISPATCH_LIB:-}; dispatch_stamp=${FSA_DISPATCH_STAMP:-}; plugin_pin=${FSA_PLUGIN_PIN:-}
+unset FSA_DISPATCH_LIB FSA_PLUGIN_SRC FSA_DISPATCH_STAMP FSA_PLUGIN_PIN
+# A dispatch refused before its run record exists removes only its own copied lib dir.
+trap 'case "$dispatch_lib" in */dispatch-*-$$.lib) rm -rf "$dispatch_lib" 2> /dev/null ;; esac; true' EXIT
 
 herdr_mode=0
 [ "${1:-}" = "--herdr" ] && { herdr_mode=1; shift; }
@@ -110,7 +113,7 @@ if [ -n "$policy_profile" ]; then
   [ -f "$policy_file" ] || { echo "unknown policy_profile: $policy_profile (no $policy_file)" >&2; exit 2; }
   policy_section=$(awk '/^## Every agent/{flag=1; print; next} /^## /{if (flag) exit} flag' "$policy_file")
 fi
-id="$mode-${FSA_DISPATCH_STAMP:-$(date +%Y%m%d-%H%M%S)}-$$"
+id="$mode-${dispatch_stamp:-$(date +%Y%m%d-%H%M%S)}-$$"
 last="$runs/$id.last.txt"; log="$runs/$id.log"
 
 # An implement brief is the audit scope and the edit gate's allowlist, so both lines are mandatory.
@@ -215,7 +218,7 @@ jq -n --arg id "$id" --arg mode "$mode" --arg engine "$engine" --arg model "$mod
 prompt="$runs/$id.prompt.md"; runner="$runs/$id.runner.sh"
 { conventions_preamble; skills_preamble; cat "$brief"; result_contract; } > "$prompt"
 unit=$(basename "$brief" .md); unit=${unit%-r[0-9]*}
-fsa_meta_merge "$runs" "$id" "$(jq -n --argjson plugin "${FSA_PLUGIN_PIN:-$(fsa_plugin_identity "$plugin_src/scripts")}" \
+fsa_meta_merge "$runs" "$id" "$(jq -n --argjson plugin "${plugin_pin:-$(fsa_plugin_identity "$plugin_src/scripts")}" \
   --arg es "$engine_source" --arg model "$model" --arg variant "$variant" --arg tests "$allow_tests" --arg sandbox "$sandbox" \
   --arg brief_sha "$(fsa_sha256 "$brief")" --arg prompt_sha "$(fsa_sha256 "$prompt")" --arg unit "$unit" \
   --arg sid "$engine_sid" --argjson instructions "$instructions_start" --arg cwd "$root" \
