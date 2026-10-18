@@ -211,7 +211,7 @@ fenced JSON is extracted into the same result file Codex writes.
 A project may keep a thin wrapper that sets these and `exec`s the plugin script.
 Optional gates driven by `.claude/fsa-team.conf` (parsed by `scripts/lib/team_conf.py`, never sourced): `edit-budget-gate`
 (`edit_budget` — recommended 5 — counts only gated files the current session edited successfully and has not committed, recorded per session id by its PostToolUse `record` mode, so other sessions' dirty files never spend it; `carve_outs`, `gated_extensions`), `read-guard` (`read_range_max`), `write-guard` (`gated_extensions`) and `scan-gate`
-(`scan_gate=on`), each with its own `FSA_SKIP_*` flag; `policy_profile=engineering-conventions` enables the optional conventions profile
+(`scan_gate=on`), each with its own `FSA_SKIP_*` flag; `generated_globs` (e.g. `.agent-cargo-cache/*`) keeps untracked generated output out of a run's out-of-scope report, listed instead as an informational `GENERATED:` count, while tracked files under those globs are still scope-checked; `runs_keep_days`/`runs_keep_failed_days`/`runs_keep_last` set `scripts/fsa-runs prune` retention (preview unless `--apply`); `policy_profile=engineering-conventions` enables the optional conventions profile
 for the lead and every implementer. The `run-owner-gate` hook blocks hand edits to paths a live or uncertain implementer run owns, in any repository
 (`FSA_SKIP_RUN_GATE=1` overrides on the user's word). A project's `AGENTS.md` reaches every engine: natively for Codex and
 opencode, appended to the Claude implementer's system prompt unless `CLAUDE.md` imports it with `@AGENTS.md`.

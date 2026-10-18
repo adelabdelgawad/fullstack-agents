@@ -171,15 +171,34 @@ if [ "$mode" = "investigate" ]; then
   [ -n "$report" ] || { echo "brief needs a 'REPORT: <table columns>' line: file:line plus values, never prose" >&2; exit 2; }
 fi
 
+# Generated output (conf `generated_globs`, e.g. `.agent-cargo-cache/*`) is reporting noise, never source: only
+# UNTRACKED paths matching a glob are left out of the snapshot; tracked files are always hashed and scope-checked.
+generated_globs=$(python3 -I "$here/lib/team_conf.py" get "$root" generated_globs) ||
+  { echo "invalid fsa-team.conf: generated_globs" >&2; exit 2; }
+is_generated() {
+  local g
+  while IFS= read -r g; do [ -n "$g" ] || continue; case "$1" in $g) return 0 ;; esac; done <<<"$generated_globs"
+  return 1
+}
+untracked_source() {
+  git -C "$root" ls-files -o --exclude-standard | while IFS= read -r f; do if ! is_generated "$f"; then printf '%s\n' "$f"; fi; done
+}
+generated_count() {
+  [ -n "$generated_globs" ] || { echo 0; return; }
+  git -C "$root" ls-files -o --exclude-standard | while IFS= read -r f; do if is_generated "$f"; then echo x; fi; done | wc -l
+}
+
 # Content hashes, not status lines: a file already dirty before the run must still register; the dispatcher's own ledger never does.
 snapshot() {
-  { git -C "$root" diff HEAD --name-only; git -C "$root" ls-files -o --exclude-standard; } | sort -u |
+  { git -C "$root" diff HEAD --name-only
+    if [ -n "$generated_globs" ]; then untracked_source; else git -C "$root" ls-files -o --exclude-standard; fi; } | sort -u |
   { if [ -n "$task_rel" ]; then grep -vxF -- "$task_rel" || true; else cat; fi; } |
   while IFS= read -r f; do printf '%s %s\n' "$(git -C "$root" hash-object -- "$root/$f" 2>/dev/null || echo absent)" "$f"; done | sort
 }
 
 base=$(git -C "$root" rev-parse HEAD)
 snapshot > "$runs/$id.pre.txt"
+generated_pre=$(generated_count)
 
 . "$here/lib/herdr-grid.sh"
 . "$here/lib/run-scope.sh"
@@ -382,6 +401,9 @@ if [ "$mode" = "implement" ]; then
   outside=$(run_outside "$runs" "$id" "$root" "$brief")
   printf '%s' "${outside:+$outside$'\n'}" > "$runs/$id.outside"
   [ -n "$outside" ] && printf 'STATUS=OUT_OF_SCOPE (changed outside ALLOWED_PATHS during the run; confirm the author before auditing):\n%s\n' "$outside"
+  generated_post=$(generated_count)
+  [ "$generated_post" != "$generated_pre" ] &&
+    printf 'GENERATED: %s -> %s untracked paths under generated_globs (informational, excluded from scope checks)\n' "$generated_pre" "$generated_post"
 fi
 noop=0; [ "$mode" = "implement" ] && [ -z "$touched" ] && { noop=1; echo "STATUS=NO_CHANGES (the run changed no file; read the summary before re-briefing)"; }
 [ "$instructions_changed" = true ] && echo "STATUS=INSTRUCTIONS_CHANGED (project instructions changed during the run; review the result against the current rules)"
