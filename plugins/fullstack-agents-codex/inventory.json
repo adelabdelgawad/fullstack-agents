@@ -214,7 +214,7 @@
   ],
   "source_hashes": {
     ".claude-plugin/marketplace.json": "88540c3d139cc6b4a0594b35273ad2fb90523eb0becec24146df9e130e0a19cb",
-    ".claude-plugin/plugin.json": "3f2cffd967973ab9a505c09c4e452784b14050e0b43628201221e958d56f414a",
+    ".claude-plugin/plugin.json": "20e9631c7b2fa73eced816cfb811686fc625f93ba3345886d3dc3f038a5206bb",
     "README.md": "b0d4c96dc94f588387a9c57ec61ed57d91754411dd9087673538d687d3d8e505",
     "agents/_core/AGENT_BASE.md": "c29fe50773b1f705354beadd48af6018d39bfb830599ff3190e26b6bd9188f1a",
     "agents/_core/detection-patterns.md": "5f4b2d3bf8a5e1559725f60a86d0fa9ea0d4df4ce2e1e622713c26a0a9639389",
@@ -297,7 +297,7 @@
     "hooks/write-guard.test.sh": "e78739534923935f40dc5893a4a1f29a4a9fe129766979cfcdd880ff512c3b53",
     "policies/engineering-conventions.md": "58ef9e8bc5a149a3166d11e460d95ceb437cd856d89f789d98efb47a73b386d3",
     "scripts/codex-result.schema.json": "31546c15e65da0d17fe14f8602ef03882b2a9582698bb9d52782617e7902655c",
-    "scripts/codex-task.sh": "6ed102bc11f3b0f658f2995be702bf1bad0c7735b5989b136c30d5f53d3fd65b",
+    "scripts/codex-task.sh": "477f510006f58e5cf3a09317bc7a564b519e5124cc8038b95bdc12b93c56ad5d",
     "scripts/fsa-classify": "5ba9c9f9c0755bb60a5f2c1d84b76e72fb817ea7b630d66447dad7dde8da4f6e",
     "scripts/fsa-dashboard": "8cc624214de330372cda03f6c1afbb9603dee1217e9e2ba2787c67efb743507c",
     "scripts/fsa-release": "24fdd722e70dde13aab7a0c48f3cafad1a3a7d745387f75c7bda4bfb8193a048",
