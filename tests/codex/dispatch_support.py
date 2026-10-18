@@ -20,7 +20,10 @@ with open(calls, "a") as fh:
     fh.write(json.dumps({"engine": engine, "args": sys.argv[1:], "env": {k: os.environ.get(k) for k in keys},
                          "stdin": stdin, "cwd": os.getcwd()}) + "\n")
 if engine == "opencode" and sys.argv[1:3] == ["session", "list"]:
-    print(json.dumps([{"id": "ses_fake1", "title": os.environ.get("FSA_FAKE_TITLE", ""), "directory": os.getcwd()}]))
+    runs = [json.loads(line)["args"] for line in open(calls) if '"opencode"' in line and '"--title"' in line]
+    title = runs[-1][runs[-1].index("--title") + 1] if runs else ""
+    print(json.dumps([{"id": "ses_other", "title": "unrelated", "directory": os.getcwd()},
+                      {"id": "ses_fake1", "title": title, "directory": os.getcwd()}]))
     sys.exit(0)
 if mode == "touch":
     for p in os.environ.get("FSA_FAKE_TOUCH", "").split(":"):
@@ -89,7 +92,8 @@ class DispatchCase:
 
     def dispatch(self, *extra, env=None, mode="implement", timeout=120):
         return subprocess.run(["bash", str(SCRIPTS / "codex-task.sh"), *extra, mode, str(self.brief)],
-                              env={**self.env, **(env or {})}, capture_output=True, text=True, timeout=timeout)
+                              env={**self.env, **(env or {})}, capture_output=True, text=True, timeout=timeout,
+                              cwd=self.root, stdin=subprocess.DEVNULL)
 
     def call_log(self):
         if not self.calls.exists():

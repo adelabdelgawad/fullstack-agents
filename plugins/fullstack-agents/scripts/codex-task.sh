@@ -12,6 +12,7 @@ fi
 
 # Engine precedence: the brief's IMPLEMENTER: line (per task), then FSA_IMPLEMENTER (per session), then claude.
 engine=$(sed -nE 's/^IMPLEMENTER:[[:space:]]*([a-z]+).*/\1/p' "$brief" | head -1)
+engine_source=brief; [ -n "$engine" ] || { [ -n "${FSA_IMPLEMENTER:-}" ] && engine_source=env || engine_source=default; }
 engine=${engine:-${FSA_IMPLEMENTER:-claude}}
 # Grok reasoning effort: the brief's EFFORT: line, then FSA_GROK_VARIANT; empty keeps the model default.
 variant=$(sed -nE 's/^EFFORT:[[:space:]]*([a-z]+).*/\1/p' "$brief" | head -1)
@@ -133,11 +134,25 @@ result_contract() {
   cat "$schema"
 }
 
+. "$here/lib/registry.sh"
+engine_sid=""; [ "$engine" = "claude" ] && engine_sid=$(python3 -c 'import uuid; print(uuid.uuid4())')
+instructions_start=$(fsa_instruction_hashes "$root")
 jq -n --arg id "$id" --arg mode "$mode" --arg engine "$engine" --arg model "$model" --arg brief "$(realpath "$brief")" \
   --arg root "$root" --arg session "${CLAUDE_CODE_SESSION_ID:-${CLAUDE_SESSION_ID:-}}" --arg started "$(date -u +%FT%TZ)" \
   '{id:$id,mode:$mode,engine:$engine,model:$model,brief:$brief,root:$root,session:$session,started:$started}' > "$runs/$id.meta.json" || true
 prompt="$runs/$id.prompt.md"; runner="$runs/$id.runner.sh"
 { conventions_preamble; skills_preamble; cat "$brief"; result_contract; } > "$prompt"
+unit=$(basename "$brief" .md); unit=${unit%-r[0-9]*}
+fsa_meta_merge "$runs" "$id" "$(jq -n --argjson plugin "$(fsa_plugin_identity "$here")" \
+  --arg es "$engine_source" --arg model "$model" --arg variant "$variant" --arg tests "$allow_tests" --arg sandbox "$sandbox" \
+  --arg brief_sha "$(fsa_sha256 "$brief")" --arg prompt_sha "$(fsa_sha256 "$prompt")" --arg unit "$unit" \
+  --arg sid "$engine_sid" --argjson instructions "$instructions_start" --arg cwd "$root" \
+  '{schema: 2, plugin: $plugin, cwd: $cwd, unit: $unit, parent_run: null,
+    requested: {engine_source: $es, model: $model, variant: (if $variant == "" then null else $variant end),
+                allow_tests: ($tests == "1"), sandbox: $sandbox},
+    brief_sha256: $brief_sha, prompt_sha256: $prompt_sha, instructions_at_dispatch: $instructions,
+    engine_session_id: (if $sid == "" then null else $sid end)}')"
+fsa_event "$runs" "$id" created
 
 if [ "$engine" = "grok" ]; then
   cfg="$runs/$id.opencode.json"
@@ -155,7 +170,7 @@ if [ "$engine" = "grok" ]; then
   attach=""; while IFS= read -r f; do [ -n "$f" ] && attach+=" -f '$f'"; done <<<"$(skill_files)"
   cat > "$runner" <<EOF
 set -o pipefail
-cd '$root' && OPENCODE_CONFIG='$cfg' '$opencode_bin' run -m '$model'${variant:+ --variant '$variant'}$attach -- "\$(cat '$prompt')" 2>&1 | tee '$log'
+cd '$root' && OPENCODE_CONFIG='$cfg' '$opencode_bin' run -m '$model'${variant:+ --variant '$variant'} --title '$id'$attach -- "\$(cat '$prompt')" < /dev/null 2>&1 | tee '$log'
 rc=\${PIPESTATUS[0]}
 python3 '$here/lib/extract-result.py' '$log' '$last' || rc=1
 exit \$rc
@@ -165,7 +180,7 @@ elif [ "$engine" = "claude" ]; then
   # so the PreToolUse fence (not the Edit/Write allow rules) is what keeps file tools inside ALLOWED_PATHS.
   fence=$(jq -cn --arg c "python3 -I $(printf %q "$here/lib/allowed-paths-fence")" \
     '{hooks:{PreToolUse:[{matcher:"Edit|Write|MultiEdit|NotebookEdit",hooks:[{type:"command",command:$c}]}]}}')
-  args=(-p --model "$model" --setting-sources project,local --settings "$fence" --strict-mcp-config --permission-mode dontAsk
+  args=(-p --model "$model" --session-id "$engine_sid" --setting-sources project,local --settings "$fence" --strict-mcp-config --permission-mode dontAsk
         --output-format stream-json --verbose --json-schema "$(cat "$schema")"
         --tools Read Grep Glob Edit Write Bash --allowedTools Read Grep Glob Bash)
   # Permission paths are gitignore globs, so Next.js segments like [id] must be escaped to match literally.
@@ -211,6 +226,7 @@ run_in_herdr_pane() {
   return "$(cat "$status")"
 }
 
+fsa_event "$runs" "$id" running
 set +e
 if [ "$herdr_mode" = 1 ]; then
   run_in_herdr_pane
@@ -220,8 +236,15 @@ fi
 codex_exit=$?
 set -e
 
+fsa_event "$runs" "$id" engine_exited "exit $codex_exit"
 snapshot > "$runs/$id.post.txt"
 touched=$(run_touched "$runs" "$id")
+[ "$engine" = "claude" ] || engine_sid=$(fsa_engine_session_id "$engine" "$log" "$id" "$root" "${opencode_bin:-opencode}")
+instructions_end=$(fsa_instruction_hashes "$root")
+instructions_changed=false; [ "$instructions_start" = "$instructions_end" ] || instructions_changed=true
+fsa_meta_merge "$runs" "$id" "$(jq -n --arg sid "$engine_sid" --argjson end "$instructions_end" --argjson changed "$instructions_changed" \
+  '{engine_session_id: (if $sid == "" then null else $sid end), instructions_at_completion: $end, instructions_changed: $changed}')"
+fsa_event "$runs" "$id" collected
 
 printf 'run=%s\nengine=%s\nmodel=%s\ncodex_exit=%s\nbase=%s\nlast_message=%s\nlog=%s\ntouched_by_this_run:\n%s\n' \
   "$id" "$engine" "$model${variant:+ (variant $variant)}" "$codex_exit" "$base" "$last" "$log" "${touched:-(none)}"
@@ -239,5 +262,7 @@ if [ "$mode" = "implement" ]; then
   [ -n "$outside" ] && printf 'STATUS=OUT_OF_SCOPE (changed outside ALLOWED_PATHS during the run; confirm the author before auditing):\n%s\n' "$outside"
 fi
 noop=0; [ "$mode" = "implement" ] && [ -z "$touched" ] && { noop=1; echo "STATUS=NO_CHANGES (the run changed no file; read the summary before re-briefing)"; }
-[ "$codex_exit" -eq 0 ] && [ -s "$last" ] && [ "${summary_len:-0}" -lt 11500 ] && [ -z "${outside:-}" ] && [ "$noop" = 0 ] && echo "STATUS=OK (audit the diff before trusting it)"
+[ "$instructions_changed" = true ] && echo "STATUS=INSTRUCTIONS_CHANGED (project instructions changed during the run; review the result against the current rules)"
+[ "$codex_exit" -eq 0 ] && [ -s "$last" ] && [ "${summary_len:-0}" -lt 11500 ] && [ -z "${outside:-}" ] && [ "$noop" = 0 ] \
+  && [ "$instructions_changed" = false ] && echo "STATUS=OK (audit the diff before trusting it)"
 exit 0
