@@ -138,6 +138,23 @@ class ReleaseTests(unittest.TestCase):
         self.pin("resume")
         self.assertEqual(pin.read_text(), before)
 
+    def test_resume_adopts_the_loaded_release_over_a_stale_release_pin(self):
+        release = self.export()
+        hook_path = release / "plugins/fullstack-agents/hooks/session-start"
+        pins = self.base / "cfg/fullstack-agents/pins"
+        pins.mkdir(parents=True, exist_ok=True)
+        pin = pins / "session-s3.json"
+        pin.write_text(json.dumps({"mode": "release", "root": "/stale/release/plugins/fullstack-agents", "version": "0.0.1"}))
+        env_file = self.base / "env-s3"
+        hook = subprocess.run(["bash", str(hook_path)], input=json.dumps({"session_id": "s3", "source": "resume"}),
+                              capture_output=True, text=True, cwd=self.case.root,
+                              env={**self.case.env, "CLAUDE_CONFIG_DIR": str(self.base / "cfg"), "CLAUDE_ENV_FILE": str(env_file)})
+        self.assertEqual(hook.returncode, 0, hook.stderr)
+        loaded = str((release / "plugins/fullstack-agents").resolve())
+        self.assertEqual(json.loads(pin.read_text())["root"], loaded)
+        self.assertIn(f"FSA_PLUGIN_ROOT={loaded}", env_file.read_text())
+        self.assertIn("Plugin pin updated", json.loads(hook.stdout)["hookSpecificOutput"]["additionalContext"])
+
     def test_a_running_dispatch_is_immune_to_source_rewrites(self):
         script = self.plugin / "scripts/codex-task.sh"
         proc = subprocess.Popen(["bash", str(script), "implement", str(self.case.brief)],
