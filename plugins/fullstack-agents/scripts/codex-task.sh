@@ -47,12 +47,14 @@ if [ -z "${FSA_DISPATCH_LIB:-}" ]; then
   find "$src/lib" -maxdepth 1 -type f \( -name '*.sh' -o -name '*.py' -o -name '*.jq' -o -name allowed-paths-fence \) \
     -exec cp {} "$lib/lib/" \;
   [ -d "$src/lib/roles" ] && cp -r "$src/lib/roles" "$lib/lib/"
+  # Copies from a read-only release stay private run files: writable, so cleanup and retention can remove them.
+  chmod -R u+w "$lib"
   FSA_DISPATCH_LIB="$lib" FSA_PLUGIN_SRC="$(cd "$src/.." && pwd -P)" FSA_DISPATCH_STAMP="$stamp" FSA_PLUGIN_PIN="$pin_now" \
     exec bash "$lib/codex-task.sh" "$@"
 fi
 plugin_src=${FSA_PLUGIN_SRC:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)}
 # A dispatch refused before its run record exists leaves no copied lib dir behind.
-trap '[ -n "${FSA_DISPATCH_LIB:-}" ] && rm -rf "$FSA_DISPATCH_LIB"' EXIT
+trap '[ -n "${FSA_DISPATCH_LIB:-}" ] && rm -rf "$FSA_DISPATCH_LIB" 2> /dev/null || true' EXIT
 
 herdr_mode=0
 [ "${1:-}" = "--herdr" ] && { herdr_mode=1; shift; }

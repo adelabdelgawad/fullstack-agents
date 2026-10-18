@@ -214,7 +214,7 @@
   ],
   "source_hashes": {
     ".claude-plugin/marketplace.json": "88540c3d139cc6b4a0594b35273ad2fb90523eb0becec24146df9e130e0a19cb",
-    ".claude-plugin/plugin.json": "dbbe299744c7a105f2f1c52910e2c244d4ab540dd2e02089da96a56e15f75e7d",
+    ".claude-plugin/plugin.json": "c400b43ed1bad27e9bb8e7fb718be6dd7686b4b29d5f9567f9f92116ac27257f",
     "README.md": "447fb44b903516c48a0f29982d0908376b6b9868aa3aca46d95e1d8bb70c4fd8",
     "agents/_core/AGENT_BASE.md": "c29fe50773b1f705354beadd48af6018d39bfb830599ff3190e26b6bd9188f1a",
     "agents/_core/detection-patterns.md": "5f4b2d3bf8a5e1559725f60a86d0fa9ea0d4df4ce2e1e622713c26a0a9639389",
@@ -286,7 +286,7 @@
     "hooks/team-guard": "d2e4334400375a243a8d8d6a7649ee3899e893df3055008c1604ca7a12026681",
     "hooks/team-guard.test.sh": "8077d00fb7cb02709731b661ba0848f2ffc41b639b54b558c8d7c82365aaa5de",
     "scripts/codex-result.schema.json": "31546c15e65da0d17fe14f8602ef03882b2a9582698bb9d52782617e7902655c",
-    "scripts/codex-task.sh": "8d726a14ec6c49d6ddfabbef4d008f93b9dae33b84e98082e17c21803faf2f59",
+    "scripts/codex-task.sh": "32b3b12639e7aa6fe4c818362aab7fedd61c800977efd906b6d904afd9b2dab9",
     "scripts/fsa-classify": "5ba9c9f9c0755bb60a5f2c1d84b76e72fb817ea7b630d66447dad7dde8da4f6e",
     "scripts/fsa-dashboard": "8cc624214de330372cda03f6c1afbb9603dee1217e9e2ba2787c67efb743507c",
     "scripts/fsa-release": "24fdd722e70dde13aab7a0c48f3cafad1a3a7d745387f75c7bda4bfb8193a048",

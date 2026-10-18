@@ -78,6 +78,15 @@ class ReleaseTests(unittest.TestCase):
         meta = json.loads((Path(m["log"]).parent / f"{m['run']}.meta.json").read_text())
         self.assertEqual(meta["plugin"]["mode"], "release")
 
+    def test_a_refused_dispatch_from_a_read_only_release_exits_2_and_cleans_up(self):
+        release = self.export()
+        self.case.brief.write_text("IMPLEMENTER: codex\nGOAL: no plan line\n")
+        result = self.dispatch(release / "plugins/fullstack-agents/scripts/codex-task.sh")
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("PLAN:", result.stderr)
+        runs = self.case.home / ".codex/fsa-runs"
+        self.assertEqual(list(runs.glob("dispatch-*.lib")) if runs.exists() else [], [])
+
     def test_tampered_release_refuses(self):
         release = self.export()
         target = release / "plugins/fullstack-agents/scripts/lib/extract-result.py"
