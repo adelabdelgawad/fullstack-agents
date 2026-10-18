@@ -214,7 +214,7 @@
   ],
   "source_hashes": {
     ".claude-plugin/marketplace.json": "88540c3d139cc6b4a0594b35273ad2fb90523eb0becec24146df9e130e0a19cb",
-    ".claude-plugin/plugin.json": "e119000dcdf24d5f7c2b8792bbed3fc90a49892f5e5652ac08c1ee73edafd94f",
+    ".claude-plugin/plugin.json": "e93eddeac8a74e3cd96da6c5b31af623836042c462cd1c5be000ba84d1a57078",
     "README.md": "b0d4c96dc94f588387a9c57ec61ed57d91754411dd9087673538d687d3d8e505",
     "agents/_core/AGENT_BASE.md": "c29fe50773b1f705354beadd48af6018d39bfb830599ff3190e26b6bd9188f1a",
     "agents/_core/detection-patterns.md": "5f4b2d3bf8a5e1559725f60a86d0fa9ea0d4df4ce2e1e622713c26a0a9639389",
@@ -286,7 +286,7 @@
     "hooks/scan-gate.test.sh": "659dc943a0b7849a2f2e34d83b78e569f3e2b38f77237262427f211430a8dd06",
     "hooks/session-doctrine.md": "6b82cfc4ed2ddf33ba0ec4fdcfbcf6db9063c171b7bd680e2fa5cebc13e8cc3e",
     "hooks/session-end": "7a8855b5991fafe14fc9cc64fa255c84c742b3c688c8bd52fd59a49e9ea00454",
-    "hooks/session-start": "cf664c57f5452d4e695fa9e1b834f4b0d5b0411fd0e0f3cc974638de01c4f94b",
+    "hooks/session-start": "4904864a55fb61d16b3f4c084c8aff7d302cc4fb66008a1003ed3ca9ed40b1b0",
     "hooks/skill-gate": "710801d6380dd785a22cbc9e547022b17551dcf80da1a8822bba7b94a9bf285f",
     "hooks/skill-gate.test.sh": "13097adcf89a2c91293f4758f491995ebc4c3d2a460e47a5ad1d723a049f6687",
     "hooks/stop-guard": "550af8ebed00b213714755ccd0f3ba8a299f02c786b5fb1402b4e4ae090a735c",
