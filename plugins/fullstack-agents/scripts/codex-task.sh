@@ -15,6 +15,43 @@ if [ "${1:-}" = "release" ]; then
   exit 2
 fi
 
+# Run immutability: verify the plugin against its release manifest or the session pin, copy the dispatcher and its
+# helpers into the run's lib dir, and re-execute from that copy so later plugin edits cannot change this run.
+if [ -z "${FSA_DISPATCH_LIB:-}" ]; then
+  src="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  . "$src/lib/runs-dir.sh"
+  . "$src/lib/plugin-pin.sh"
+  pin_now=$(fsa_plugin_pin "$src/..")
+  case "$(jq -r .mode <<<"$pin_now")" in
+    release)
+      rel=$(jq -r .release_root <<<"$pin_now")
+      python3 -I "$src/fsa-release" verify "$rel" > /dev/null ||
+        { echo "STATUS=PLUGIN_TAMPERED (release $rel no longer matches RELEASE.json)"; exit 2; } ;;
+    dev)
+      if [ -n "${FSA_SESSION_PIN:-}" ] && [ -s "$FSA_SESSION_PIN" ]; then
+        pinned=$(jq -r .fingerprint "$FSA_SESSION_PIN")
+        if [ "$pinned" != "$(jq -r .fingerprint <<<"$pin_now")" ] && [ "${FSA_ACCEPT_PLUGIN_CHANGE:-0}" != 1 ]; then
+          echo "STATUS=PLUGIN_CHANGED pinned=$(jq -r .git_sha "$FSA_SESSION_PIN") current=$(jq -r .git_sha <<<"$pin_now") (the plugin source changed since this session started; FSA_ACCEPT_PLUGIN_CHANGE=1 only for explicit plugin development)"
+          exit 2
+        fi
+      else
+        echo "fullstack-agents: no session pin; dispatching from the live plugin source $src/.." >&2
+      fi ;;
+  esac
+  root0=${FSA_CODEX_ROOT:-$(git rev-parse --show-toplevel)}
+  runs0=$(fsa_runs_dir "$root0"); mkdir -p "$runs0"
+  stamp=$(date +%Y%m%d-%H%M%S)
+  lib="$runs0/dispatch-$stamp-$$.lib"
+  mkdir -p "$lib/lib"
+  cp "$src/codex-task.sh" "$src/codex-result.schema.json" "$src/fsa-skill-map" "$lib/"
+  find "$src/lib" -maxdepth 1 -type f \( -name '*.sh' -o -name '*.py' -o -name '*.jq' -o -name allowed-paths-fence \) \
+    -exec cp {} "$lib/lib/" \;
+  [ -d "$src/lib/roles" ] && cp -r "$src/lib/roles" "$lib/lib/"
+  FSA_DISPATCH_LIB="$lib" FSA_PLUGIN_SRC="$(cd "$src/.." && pwd -P)" FSA_DISPATCH_STAMP="$stamp" FSA_PLUGIN_PIN="$pin_now" \
+    exec bash "$lib/codex-task.sh" "$@"
+fi
+plugin_src=${FSA_PLUGIN_SRC:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)}
+
 herdr_mode=0
 [ "${1:-}" = "--herdr" ] && { herdr_mode=1; shift; }
 mode=${1:-}; brief=${2:-}
@@ -58,7 +95,7 @@ root=${FSA_CODEX_ROOT:-$(git rev-parse --show-toplevel)}
 . "$here/lib/runs-dir.sh"
 runs=$(fsa_runs_dir "$root"); mkdir -p "$runs"
 schema="$root/.claude/codex-result.schema.json"; [ -f "$schema" ] || schema="$here/codex-result.schema.json"
-id="$mode-$(date +%Y%m%d-%H%M%S)-$$"
+id="$mode-${FSA_DISPATCH_STAMP:-$(date +%Y%m%d-%H%M%S)}-$$"
 last="$runs/$id.last.txt"; log="$runs/$id.log"
 
 # An implement brief is the audit scope and the edit gate's allowlist, so both lines are mandatory.
@@ -79,7 +116,7 @@ fi
 # The implementer never loads Claude plugin skills, so an implement brief carries only the lane skills its paths need.
 skill_files() {
   [ "$mode" = "implement" ] || return 0
-  local dir="$here/../skills" names=() explicit
+  local dir="$plugin_src/skills" names=() explicit
   explicit=$(sed -nE 's/^SKILLS:[[:space:]]*//p' "$brief" | head -1)
   [ -n "$explicit" ] && read -ra names <<<"${explicit//,/ }"
   # The path map is the floor; a SKILLS: line only adds to it (scripts/fsa-skill-map is shared with skill-gate).
@@ -157,7 +194,7 @@ jq -n --arg id "$id" --arg mode "$mode" --arg engine "$engine" --arg model "$mod
 prompt="$runs/$id.prompt.md"; runner="$runs/$id.runner.sh"
 { conventions_preamble; skills_preamble; cat "$brief"; result_contract; } > "$prompt"
 unit=$(basename "$brief" .md); unit=${unit%-r[0-9]*}
-fsa_meta_merge "$runs" "$id" "$(jq -n --argjson plugin "$(fsa_plugin_identity "$here")" \
+fsa_meta_merge "$runs" "$id" "$(jq -n --argjson plugin "${FSA_PLUGIN_PIN:-$(fsa_plugin_identity "$plugin_src/scripts")}" \
   --arg es "$engine_source" --arg model "$model" --arg variant "$variant" --arg tests "$allow_tests" --arg sandbox "$sandbox" \
   --arg brief_sha "$(fsa_sha256 "$brief")" --arg prompt_sha "$(fsa_sha256 "$prompt")" --arg unit "$unit" \
   --arg sid "$engine_sid" --argjson instructions "$instructions_start" --arg cwd "$root" \

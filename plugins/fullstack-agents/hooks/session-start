@@ -113,6 +113,19 @@ if [ -n "$board_summary" ] && [ "$board_summary" != "board empty" ]; then
     board_escaped=$(escape_for_json "$board_summary")
     session_context="${session_context}\n\n**Team board** — other Claude sessions on this repository. Invoke 'fullstack-agents:team-coordination' before a deploy, a default-branch merge, a migration or any shared change:\n${board_escaped}"
 fi
+# Session pin: the plugin identity this session started with; dispatches compare against it (scripts/lib/plugin-pin.sh).
+# Resume and compact keep the existing pin, so an active task never silently adopts newer plugin code.
+if [ -n "$board_session" ] && command -v jq > /dev/null 2>&1; then
+    . "${PLUGIN_ROOT}/scripts/lib/plugin-pin.sh"
+    pin_file="$(fsa_pin_dir)/session-${board_session}.json"
+    if [ ! -s "$pin_file" ] || [ "$session_source" = "startup" ] || [ "$session_source" = "clear" ]; then
+        mkdir -p "$(fsa_pin_dir)" && fsa_plugin_pin "$PLUGIN_ROOT" > "$pin_file" 2>/dev/null || rm -f "$pin_file"
+    fi
+    if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -s "$pin_file" ]; then
+        printf 'export FSA_PLUGIN_ROOT=%q FSA_PLUGIN_MODE=%q FSA_SESSION_PIN=%q\n' \
+            "$(jq -r .root "$pin_file")" "$(jq -r .mode "$pin_file")" "$pin_file" >> "$CLAUDE_ENV_FILE"
+    fi
+fi
 scripts_escaped=$(escape_for_json "${PLUGIN_ROOT}/scripts")
 session_context="${session_context}\n\n**Plugin scripts:** \`${scripts_escaped}\` — \`codex-task.sh\` (Codex dispatch, \`--herdr\` for a visible pane) \`herdr-watch.sh\` (live view of a background worker's transcript) and \`team-board\` (shared claims, locks and notes for the sessions on this repository)."
 

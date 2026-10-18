@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""Immutable plugin releases: `export <git-ref>` writes a read-only directory with RELEASE.json; `verify` re-hashes it."""
+import argparse
+import hashlib
+import io
+import json
+import os
+import stat
+import subprocess
+import sys
+import tarfile
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[2]
+DEST = Path.home() / ".local/share/fullstack-agents/releases"
+CONTENT = (".claude-plugin", "plugins/fullstack-agents")
+
+
+def sha256(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def manifest_files(root):
+    return {str(p.relative_to(root)): sha256(p) for p in sorted(root.rglob("*"))
+            if p.is_file() and not p.is_symlink() and p.name != "RELEASE.json"}
+
+
+def export(ref, repo, dest):
+    sha = subprocess.run(["git", "-C", str(repo), "rev-parse", f"{ref}^{{commit}}"], capture_output=True, text=True,
+                         check=True).stdout.strip()
+    plugin_json = subprocess.run(["git", "-C", str(repo), "show", f"{sha}:plugins/fullstack-agents/.claude-plugin/plugin.json"],
+                                 capture_output=True, text=True, check=True).stdout
+    version = json.loads(plugin_json)["version"]
+    target = dest / f"{version}-{sha[:12]}"
+    if target.exists():
+        print(f"release exists: {target}", file=sys.stderr)
+        return 2
+    archive = subprocess.run(["git", "-C", str(repo), "archive", sha, *CONTENT], capture_output=True, check=True).stdout
+    staging = dest / f".{target.name}.partial"
+    staging.mkdir(parents=True)
+    tarfile.open(fileobj=io.BytesIO(archive)).extractall(staging, filter="data")
+    record = {"version": version, "git_sha": sha, "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+              "files": manifest_files(staging)}
+    (staging / "RELEASE.json").write_text(json.dumps(record, indent=1, sort_keys=True) + "\n")
+    staging.rename(target)
+    for p in [target, *target.rglob("*")]:
+        if not p.is_symlink():
+            p.chmod(p.stat().st_mode & ~(stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
+    print(target)
+    return 0
+
+
+def verify(root, paths):
+    record = json.loads((root / "RELEASE.json").read_text())
+    files = record["files"]
+    wanted = paths or list(files)
+    bad = [p for p in wanted if p not in files or not (root / p).is_file() or sha256(root / p) != files[p]]
+    if not paths:
+        bad += [p for p in manifest_files(root) if p not in files]
+    for p in bad:
+        print(f"mismatch: {p}")
+    return 1 if bad else 0
+
+
+def main(argv):
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    e = sub.add_parser("export")
+    e.add_argument("ref")
+    e.add_argument("--repo", default=str(REPO))
+    e.add_argument("--dest", default=os.environ.get("FSA_RELEASES_DIR", str(DEST)))
+    v = sub.add_parser("verify")
+    v.add_argument("root")
+    v.add_argument("paths", nargs="*")
+    args = parser.parse_args(argv)
+    if args.cmd == "export":
+        return export(args.ref, Path(args.repo), Path(args.dest))
+    return verify(Path(args.root), args.paths)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
