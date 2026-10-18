@@ -30,25 +30,26 @@ while [ -n "$dir" ] && [ ! -d "$dir" ]; do dir=$(dirname "$dir"); done
 root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || exit 0
 rel=${abs#"$root"/}
 
-# conf_get KEY: the typed value, or return 3 on an invalid value (never sourced or eval'd).
-conf_get() {
-  local key=$1 out rc
-  out=$(python3 -I "$(dirname "$0")/../scripts/lib/team_conf.py" get "$root" "$key" 2>/dev/null)
-  rc=$?
-  [ "$rc" -eq 3 ] && return 3
-  printf '%s' "$out"
-  return 0
-}
 refuse_bad_conf() {
   printf '[fullstack-agents] BLOCKED: invalid .claude/fsa-team.conf value for %s.\n' "$1" >&2
   exit 2
 }
 
-edit_budget=$(conf_get edit_budget) || refuse_bad_conf edit_budget
-carve_outs=$(conf_get carve_outs) || refuse_bad_conf carve_outs
+# One parse for all three keys (no cache: the file is re-read on every call).
+conf_load "$root" edit_budget carve_outs gated_extensions
+conf_rc=$?
+edit_budget=${CONF[edit_budget]:-}
+carve_outs=${CONF[carve_outs]:-}
+gated_extensions=${CONF[gated_extensions]:-}
+if [ "$conf_rc" -ne 0 ]; then
+  # Same order as before: edit_budget and carve_outs decide whether the gate is on at all.
+  [ "$CONF_BAD" != gated_extensions ] && refuse_bad_conf "$CONF_BAD"
+  conf_load "$root" edit_budget carve_outs || refuse_bad_conf "$CONF_BAD"
+  edit_budget=${CONF[edit_budget]:-}; carve_outs=${CONF[carve_outs]:-}
+  [ -n "$edit_budget" ] || [ -n "$carve_outs" ] || exit 0
+  refuse_bad_conf gated_extensions
+fi
 [ -n "$edit_budget" ] || [ -n "$carve_outs" ] || exit 0
-
-gated_extensions=$(conf_get gated_extensions) || refuse_bad_conf gated_extensions
 
 gated() {
   local f=$1 ext

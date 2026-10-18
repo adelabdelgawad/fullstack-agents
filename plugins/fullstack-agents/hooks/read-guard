@@ -21,23 +21,20 @@ root=""
 [ -n "$root" ] || root="${CLAUDE_PROJECT_DIR:-}"
 [ -n "$root" ] || root="$(pwd)"
 
-# conf_get KEY: the typed value, or return 3 on an invalid value (never sourced or eval'd).
-conf_get() {
-  local key=$1 out rc
-  out=$(python3 -I "$(dirname "$0")/../scripts/lib/team_conf.py" get "$root" "$key" 2>/dev/null)
-  rc=$?
-  [ "$rc" -eq 3 ] && return 3
-  printf '%s' "$out"
-  return 0
-}
 refuse_bad_conf() {
   printf '[fullstack-agents] BLOCKED: invalid .claude/fsa-team.conf value for %s.\n' "$1" >&2
   exit 2
 }
 
-read_range_max=$(conf_get read_range_max) || refuse_bad_conf read_range_max
+# One parse for both keys (no cache). read_range_max decides first whether the guard is on, as before.
+if ! conf_load "$root" read_range_max gated_extensions; then
+  [ "$CONF_BAD" = read_range_max ] && refuse_bad_conf read_range_max
+  [ -n "${CONF[read_range_max]:-}" ] || exit 0
+  refuse_bad_conf gated_extensions
+fi
+read_range_max=${CONF[read_range_max]:-}
 [ -n "$read_range_max" ] || exit 0
-gated_extensions=$(conf_get gated_extensions) || refuse_bad_conf gated_extensions
+gated_extensions=${CONF[gated_extensions]:-}
 
 MAX="${KC_READ_RANGE_MAX:-$read_range_max}"
 

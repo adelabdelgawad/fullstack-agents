@@ -23,6 +23,31 @@ class TeamConfTests(unittest.TestCase):
     def write(self, text):
         self.conf.write_text(text)
 
+    def get_many(self, *keys):
+        out = subprocess.run([sys.executable, "-I", str(SCRIPTS / "lib" / "team_conf.py"), "get-many", str(self.repo),
+                              *keys], capture_output=True, text=True)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        parts = out.stdout.split("\0")[:-1]
+        return [(parts[i], parts[i + 1]) for i in range(0, len(parts), 2)]
+
+    def test_get_many_reads_every_key_in_one_call_and_is_never_cached(self):
+        self.write("edit_budget=5\ngated_extensions=rs ts\n")
+        self.assertEqual(self.get_many("edit_budget", "gated_extensions", "carve_outs"),
+                         [("ok", "5"), ("ok", "rs\nts"), ("ok", "")])
+        self.write("edit_budget=7\n")
+        self.assertEqual(self.get_many("edit_budget", "gated_extensions"), [("ok", "7"), ("ok", "")])
+
+    def test_get_many_marks_an_invalid_key_and_keeps_the_others(self):
+        self.write("edit_budget=lots\nread_range_max=200\n")
+        self.assertEqual(self.get_many("read_range_max", "edit_budget"), [("ok", "200"), ("invalid", "")])
+
+    def test_conf_load_in_parallel_hook_processes(self):
+        self.write("edit_budget=5\ncarve_outs=services/*\n")
+        lib = SCRIPTS.parent / "hooks" / "lib.sh"
+        script = f'source "{lib}"; conf_load "{self.repo}" edit_budget carve_outs && echo "${{CONF[edit_budget]}}|${{CONF[carve_outs]}}"'
+        procs = [subprocess.Popen(["bash", "-c", script], stdout=subprocess.PIPE, text=True) for _ in range(8)]
+        self.assertEqual({p.communicate()[0].strip() for p in procs}, {"5|services/*"})
+
     def test_missing_file_has_no_bindings(self):
         self.assertEqual(team_conf.load(self.repo), {})
         self.assertIsNone(team_conf.get(self.repo, "runs_dir"))

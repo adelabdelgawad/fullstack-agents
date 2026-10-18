@@ -152,12 +152,32 @@ def _cmd_check(repo):
     return 3 if problems else 0
 
 
+def _cmd_get_many(repo, keys):
+    """One parse for several keys (hooks call this once instead of once per key). Output, per key in order:
+    "ok" or "invalid", NUL, the value (list items on their own lines), NUL. The file is re-read on every call."""
+    raw = _parse(repo)
+    for key in keys:
+        status, text = "ok", ""
+        if key in raw and key in SCHEMA:
+            try:
+                value = SCHEMA[key](key, raw[key])
+                text = "\n".join(value) if isinstance(value, list) else \
+                    ("on" if value else "off") if isinstance(value, bool) else str(value)
+            except ConfError as exc:
+                status = "invalid"
+                print(f"invalid fsa-team.conf: {exc}", file=sys.stderr)
+        sys.stdout.write(f"{status}\0{text}\0")
+    return 0
+
+
 def main(argv):
     if len(argv) == 3 and argv[0] == "get":
         return _cmd_get(argv[1], argv[2])
+    if len(argv) >= 3 and argv[0] == "get-many":
+        return _cmd_get_many(argv[1], argv[2:])
     if len(argv) == 2 and argv[0] == "check":
         return _cmd_check(argv[1])
-    print("usage: team_conf.py get <repo> <key> | check <repo>", file=sys.stderr)
+    print("usage: team_conf.py get <repo> <key> | get-many <repo> <key>... | check <repo>", file=sys.stderr)
     return 2
 
 

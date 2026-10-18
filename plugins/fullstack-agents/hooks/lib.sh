@@ -170,6 +170,25 @@ find_constitution() {
     return 1
 }
 
+# conf_load ROOT KEY...
+#   Read several .claude/fsa-team.conf keys with ONE interpreter start (scripts/lib/team_conf.py get-many).
+#   Sets CONF[<key>] to each typed value ("" when absent). Returns 3 and sets CONF_BAD=<key> on the first
+#   invalid value. Never cached: the file is parsed on every call, so edits apply immediately.
+conf_load() {
+    local root=$1 i=0 status value key
+    shift
+    declare -gA CONF=()
+    CONF_BAD=""
+    local -a out=()
+    mapfile -d '' -t out < <(python3 -I "$(dirname "${BASH_SOURCE[0]}")/../scripts/lib/team_conf.py" get-many "$root" "$@" 2>/dev/null)
+    for key in "$@"; do
+        status="${out[$i]:-ok}"; value="${out[$((i + 1))]:-}"; i=$((i + 2))
+        if [ "$status" = invalid ]; then CONF_BAD=$key; return 3; fi
+        CONF[$key]=$value
+    done
+    return 0
+}
+
 # state_dir
 #   Echo the per-plugin state directory (for session-scoped flags) and ensure
 #   it exists. Prunes stale flags older than a day.
