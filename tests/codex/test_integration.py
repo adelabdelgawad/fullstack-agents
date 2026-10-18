@@ -786,6 +786,16 @@ class StopGuardTests(unittest.TestCase):
         self.assertIsNone(self.stop("s2", "All done."))
         self.assertIsNone(self.stop("unbound", "Finished."))
 
+    def test_explicit_ask_without_question_mark_releases(self):
+        self.ledger("s1", "in_progress")
+        self.assertIsNone(self.stop("s1", "Plan below.\nApprove the plan and I will start P1."))
+        self.assertIsNone(self.stop("s1", "Three options listed; this needs your decision before the migration."))
+        self.assertEqual(self.stop("s1", "Approved items are being implemented now.")["decision"], "block")
+
+    def test_light_task_without_a_ledger_never_blocks(self):
+        for message in ("Fixed the typo in hooks/lib.sh; bash hooks/lib.test.sh passes.", "Still working.", ""):
+            self.assertIsNone(self.stop("light-session", message))
+
     def test_codex_cannot_end_its_turn_waiting_on_a_worker(self):
         self.ledger("s1", "in_progress")
         self.assertEqual(self.stop("s1", "Waiting on: worker chatbot_readiness")["decision"], "block")

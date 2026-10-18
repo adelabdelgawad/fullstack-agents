@@ -13,6 +13,22 @@ conclusion never transfer to the implementer. Tests run through
 suite (about a minute, small output) the lead runs itself and tees to a log. The project's
 `CLAUDE.md` supplies bindings and wins over defaults.
 
+## Light path and full path
+
+Pick the path at intake and say which in one line. **Light** is the default for:
+a question; web or documentation research; a direct edit within the project's
+`edit_budget`, outside every carve-out, with known sites and a focused check.
+On the light path: no task ledger, no `fsa-usage` calls, no detailed-guide read,
+no test-runner (run the focused check yourself and tee it to a log), no manual
+`team-board` calls (the `reply-classify` Stop hook marks a waiting reply). Lane
+skills, the evidence rules and the audit of your own diff still apply.
+
+Escalate to **full** the moment any of these holds: a delegated implementer or
+parallel workers; a carve-out path; more files than the budget; a migration,
+deploy, service reload or production action; a wire-contract or ownership change;
+another session working on the same paths; or the user asks for tracking. The
+full path is everything below, including the ledger and team-board lifecycle.
+
 ## Always-loaded contract
 
 1. Investigate: load lane skills; search then bounded reads. Measure server vs
@@ -99,7 +115,7 @@ Markdown links are relocated.
 
 ## Task list visible in the dashboard
 
-For multi-step implementation, create and register a dedicated repository Markdown task file,
+For full-path multi-step implementation, create and register a dedicated repository Markdown task file,
 update task statuses as work changes, and verify the live session Tasks section. Read
 [task tracking](references/task-tracking.md) for the helper, format and completion rules.
 Keep one row per brief, repair and verification step, never one per phase (its "Granularity and

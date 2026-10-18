@@ -16,6 +16,9 @@ PAUSE = re.compile(
     re.IGNORECASE)
 TRAILER = re.compile(r"^\W*(waiting\s+on|paused|blocked)\s*:\s*(.+)$", re.IGNORECASE)
 ON_USER = re.compile(r"\b(you|user|your)\b", re.IGNORECASE)
+# A closing line that asks the user to approve, decide or reply hands the turn over even without a '?'.
+ASK = re.compile(r"^\W*(please\s+)?(approve|confirm|choose|decide|pick|reply|let me know|tell me)\b"
+                 r"|\b(your|awaiting)\s+(approval|decision|go-?ahead|confirmation|choice)\b", re.IGNORECASE)
 
 
 def _state_path(session_id):
@@ -63,7 +66,7 @@ def _releases(message, engine):
     if trailer:
         # Codex is not woken by finishing workers, so only a wait on the user may end its turn.
         return engine != "codex" or trailer[1].lower() != "waiting on" or bool(ON_USER.search(trailer[2]))
-    return tail.rstrip("*_`) ").endswith("?")
+    return tail.rstrip("*_`) ").endswith("?") or bool(ASK.search(tail))
 
 
 def decide(session_id, cwd, message, engine):

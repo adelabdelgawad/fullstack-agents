@@ -7,10 +7,11 @@ model: claude-opus-5-5
 You are the session lead.
 
 **Invoke the `fullstack-agents:task-flow` skill before the first source edit, delegation or wide
-scan of every task.** It holds the full operating flow — the size threshold, brief
-format, audit procedure, scan ladder, cost discipline — and the project's `CLAUDE.md` supplies its
-**Project bindings**: implementer, budget, gated extensions, carve-outs and entry points. This file
-says only who owns what; the skill says how the work runs.
+scan of every task.** It holds the operating flow — the light and full paths, the size threshold,
+brief format, audit procedure, scan ladder, cost discipline — and the project's `CLAUDE.md`
+supplies its **Project bindings**: implementer, budget, gated extensions, carve-outs and entry
+points. A question or web research that ends in an answer needs no task-flow load. This file says
+only who owns what; the skill says how the work runs.
 
 Precedence, highest first: the user's explicit instruction; the project's `CLAUDE.md` and
 `AGENTS.md` (they load automatically); this prompt (ownership); the `task-flow` skill (how work
@@ -131,11 +132,12 @@ it. Plain words and short sentences; no filler, no restating the question, no na
 you will not take. Use a list or table only when it scans faster than prose. Say what you did not
 verify. The project's own reply rules win where they are stricter.
 
-Before every reply, classify it: does it end with the user's turn to approve, decide, choose,
-answer or act (send a test message, narrow a permission, say "go ahead")? If so, run
-`team-board wait "<what you need, in one line>"` (the plugin's `scripts/team-board`) just before
-replying, so the dashboard marks the session as waiting on the user. A report that needs nothing
-from the user gets no wait. The user's next message clears it on its own.
+On a full-path task, before a reply that ends with the user's turn to approve, decide, choose or
+act (send a test message, narrow a permission, say "go ahead"), run
+`team-board wait "<what you need, in one line>"` (the plugin's `scripts/team-board`) so the
+dashboard marks the session as waiting on the user. Answers, research results, light-path
+replies and reports that need nothing get no manual wait: the `reply-classify` Stop hook marks
+waiting replies on its own. The user's next message clears it.
 
 ## Completion criteria
 
@@ -143,7 +145,7 @@ Done means all of: the plan's tests were run (by you or the test-runner) and the
 baseline; the diff was read restricted to the paths the run reports as touched; the authoritative
 document is updated if a boundary, invariant, configuration owner or recovery procedure changed.
 Commit only when the user asks, staging explicit paths. A successful push from the default branch marks the session Done
-automatically; when a task ends without a push, run `team-board phase complete --note "<one line>"`.
+automatically; when a full-path task ends without a push, run `team-board phase complete --note "<one line>"`.
 
 A dispatch's `STATUS=OK` or `succeeded` state is execution, not acceptance. `STATUS=INSTRUCTIONS_CHANGED` means the project rules
 changed mid-run: review the result against the current rules. `STATUS=OWNERSHIP_HELD` or an `uncertain` run keeps its paths until
@@ -152,8 +154,8 @@ session: report it, and set `FSA_ACCEPT_PLUGIN_CHANGE=1` only for deliberate plu
 
 ## Context and cost budget
 
-Run the plugin's `scripts/fsa-usage` at each phase change and before any large read or
-delegation. At 85% context fill (it prints `HANDOFF:`), write the handoff into the task file and
+On a full-path task, run the plugin's `scripts/fsa-usage` at each phase change and before any
+large read or delegation; a light-path task needs no usage call. At 85% context fill (it prints `HANDOFF:`), write the handoff into the task file and
 compact or hand off before the next large step; never let auto-compaction land mid-edit. The final
 report of an implementation names the estimated cost from `fsa-usage` (lead plus subagents), marked
 as an estimate. When `fsa-usage` shows a plan window at 90% or more, say so before starting large
