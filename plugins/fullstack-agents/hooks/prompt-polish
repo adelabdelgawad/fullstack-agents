@@ -1,30 +1,23 @@
 #!/usr/bin/env bash
 # prompt-polish — UserPromptSubmit hook for fullstack-agents.
-# Keeps prompt refinement in the loop on every request: the user's raw
-# instruction is refined into a precise spec (intent / scope / success criteria
-# / constraints / format) before it drives work or is handed to worker subagents.
-# Method lives in the prompt-polish skill; this hook injects the standing
-# directive. Token economy mirrors prompt-scan: full directive once per session,
-# a one-line reminder afterward.
+# Asks the lead to refine a request into a spec (intent / scope / success criteria / constraints / format) only
+# when the request needs it. scripts/lib/route.py decides, from the clauses that ask for something:
+#   - polish: an action request (implement, debug, performance, plan, review, deploy, investigate+implement) of
+#     25+ words that names fewer than two paths and no acceptance criterion, or a shorter one with open-scope
+#     wording ("the attached", "similar to", "clean up", "better" ...);
+#   - never: questions, research, control replies ("continue", "yes"), notifications, prompts that are already a
+#     structured spec (two or more Goal/Context/Requirements/Constraints/... headings), precise requests.
+# The full directive goes in once per session; later qualifying prompts get a one-line reminder.
 set -uo pipefail
 
 source "$(dirname "$0")/lib.sh"
 
 HOOK_INPUT="$(cat)"
-json_fields "$HOOK_INPUT" prompt session_id
-prompt="${JSON_FIELDS[0]}"
-session_id="${JSON_FIELDS[1]}"
-[ -n "$prompt" ] || exit 0
-case "$prompt" in *"SYSTEM NOTIFICATION - NOT USER INPUT"*|*"<task-notification>"*) exit 0 ;; esac
-
-# Skip pure control replies — there is nothing to refine in an affirmation or a
-# bare continuation, and padding them wastes a turn.
-prompt_trimmed="$(printf '%s' "$prompt" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:][:punct:]')"
-case "$prompt_trimmed" in
-    yes|y|ok|okay|yep|yeah|sure|no|n|nope|continue|go|proceed|stop|cancel|thanks|ty) exit 0 ;;
-esac
-# Short commands ("commit and push", "run the tests") are already a spec.
-[ "$(printf '%s' "$prompt" | wc -w)" -ge "${FSA_POLISH_MIN_WORDS:-6}" ] || exit 0
+case "$HOOK_INPUT" in *"SYSTEM NOTIFICATION - NOT USER INPUT"*|*"<task-notification>"*) exit 0 ;; esac
+mapfile -t ROUTE < <(printf '%s' "$HOOK_INPUT" | python3 -I "$(dirname "$0")/../scripts/lib/route.py" classify --lines 2>/dev/null)
+[ "${#ROUTE[@]}" -ge 7 ] || exit 0
+[ "${ROUTE[4]}" = "1" ] || exit 0
+session_id="${ROUTE[5]}"
 
 polished_flag=""
 [ -n "$session_id" ] && polished_flag="$(state_dir)/polished-${session_id}"

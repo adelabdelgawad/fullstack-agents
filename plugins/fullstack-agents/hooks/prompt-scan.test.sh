@@ -90,6 +90,7 @@ check "no Next.js project -> no 'load these NOW'" "$(printf '%s' "$out" | grep -
 stub="$tmp/plugin"
 mkdir -p "$stub/scripts"
 cp -r "$(dirname "$hook")" "$stub/hooks"
+cp -r "$(dirname "$hook")/../scripts/lib" "$stub/scripts/lib"  # route.py classifies before any Haiku call
 printf 'print("[stub] haiku routed")\nprint("")\n' > "$stub/scripts/fsa-classify"
 routed_by() {  # router prompt
     python3 -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1]}))' "$2" | FSA_ROUTER="$1" bash "$stub/hooks/prompt-scan" | head -1
@@ -101,6 +102,28 @@ check "auto: unclassified short prompt stays silent" "$([ -z "$(routed_by auto '
 check "haiku: always asks Haiku" "$(haiku_used haiku 'the login button is broken on the settings page')"
 check "regex: never asks Haiku" "$([ -z "$(routed_by regex 'is this dashboard secured enough to publish on my public address')" ] && echo 1 || echo 0)"
 check "default router is auto" "$(python3 -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1]}))' 'is this dashboard secured enough to publish on my public address' | env -u FSA_ROUTER bash "$stub/hooks/prompt-scan" | grep -qF '[stub] haiku' && echo 1 || echo 0)"
+
+# P3: clause routing. Questions and research route without task-flow; isolated words never decide intent.
+expect "what does the edit budget gate count?" "intent: question"
+expect "do github and online research for such plugin like fullstack-agent, compare it against it, find the bottle neck on the fsa, and wrong created setup" "intent: research"
+expect "do github and online research for such plugin like fullstack-agent, compare it against it" "web-researcher"
+expect "fix the flaky dashboard test; do not deploy and do not push" "intent: debug"
+expect "fix the flaky dashboard test; do not deploy and do not push" "Prohibited by the prompt (constraints, not intents): deploy"
+expect "deploy the frontend" "intent: deploy"
+expect "investigate why the users page is slow, then fix the cause" "intent: investigate+implement"
+expect "$(printf '## Goal\nImplement the complete overhead-reduction plan.\n## Context\n- SQLx and Axum crates.\n## Constraints\n- No deployment, release or push.\n## Done when\n- Commits ready.')" "intent: implement, lane: any"
+expect "$(printf '%s\n\nsummarise this' "$(printf 'The deploy failed in the rust worker and nginx crashed. %.0s' $(seq 12))")" "intent: question, lane: any"
+expect "$(printf 'Report: %s\n\nfix the second item' "$(printf 'deploy step broke. %.0s' $(seq 30))")" "intent: debug"
+none_of() {  # prompt unwanted
+    local got; got="$(route "$1")"
+    if printf '%s' "$got" | grep -qF -- "$2"; then echo "FAIL not '$2' <- ${1:0:60}"; echo "     got: $got"; fail=1; else echo "ok   not '$2' <- ${1:0:60}"; fi
+}
+none_of "do not deploy" "intent: deploy"
+none_of "the setup was created wrong, find out why" "intent: implement"
+none_of "$(printf '## Goal\nDetermine whether data improved transcription.\n## Constraints\n- No training, annotation changes or deployment.')" "intent: deploy"
+none_of "$(printf '## Goal\nCompare two runs.\n## Context\nThe SQLx and Axum crates are unrelated.')" "lane: rust"
+check "question skips Haiku in auto mode" "$([ "$(haiku_used auto 'what does the edit budget gate count in this repository?')" = 0 ] && echo 1 || echo 0)"
+check "research skips Haiku in auto mode" "$([ "$(haiku_used auto 'research online how other plugins size their hook output')" = 0 ] && echo 1 || echo 0)"
 
 reject "change the campaign form label"
 reject "add a feature flag for exports"

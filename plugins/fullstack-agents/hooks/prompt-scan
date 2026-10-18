@@ -5,12 +5,14 @@ set -uo pipefail
 source "$(dirname "$0")/lib.sh"
 
 HOOK_INPUT="$(cat)"
-json_fields "$HOOK_INPUT" prompt transcript_path session_id
-prompt="${JSON_FIELDS[0]}"
-transcript_path="${JSON_FIELDS[1]}"
-session_id="${JSON_FIELDS[2]}"
-[ -n "$prompt" ] || exit 0
-case "$prompt" in *"SYSTEM NOTIFICATION - NOT USER INPUT"*|*"<task-notification>"*) exit 0 ;; esac
+case "$HOOK_INPUT" in *"SYSTEM NOTIFICATION - NOT USER INPUT"*|*"<task-notification>"*) exit 0 ;; esac
+# One interpreter start: route.py parses the hook input and classifies by clause (requested actions only;
+# negated clauses become prohibitions; pasted reports and fenced code are context).
+mapfile -t ROUTE < <(printf '%s' "$HOOK_INPUT" | python3 -I "$(dirname "$0")/../scripts/lib/route.py" classify --lines 2>/dev/null)
+[ "${#ROUTE[@]}" -ge 7 ] || exit 0
+intent="${ROUTE[0]}"; lane="${ROUTE[1]}"; prohibited="${ROUTE[2]}"; words="${ROUTE[3]}"
+session_id="${ROUTE[5]}"; transcript_path="${ROUTE[6]}"
+[ "${words:-0}" -gt 0 ] || exit 0
 
 skill_loaded() { session_has_skill "$transcript_path" "fullstack-agents:$1"; }
 lane_core_skill() {
@@ -22,12 +24,9 @@ lane_core_skill() {
     esac
 }
 
-prompt_lower="$(printf '%s' "$prompt" | tr '[:upper:]' '[:lower:]')"
-has() { printf '%s' "$prompt_lower" | grep -qE "$1"; }
-
-# Routing: FSA_ROUTER=auto (default) classifies with the regexes below and calls the Haiku
-# router only when they match nothing and the prompt has at least FSA_ROUTER_MIN_WORDS words;
-# FSA_ROUTER=haiku always calls Haiku (about 5 s per prompt); FSA_ROUTER=regex never does.
+# Routing: FSA_ROUTER=auto (default) classifies by clause and calls the Haiku router only when nothing matched and
+# the prompt has at least FSA_ROUTER_MIN_WORDS words; FSA_ROUTER=haiku always calls Haiku (about 5 s per prompt);
+# FSA_ROUTER=regex never does.
 router="${FSA_ROUTER:-auto}"
 routed=""
 if [ "$router" = "haiku" ]; then
@@ -39,38 +38,7 @@ if [ -n "$routed" ]; then
     out_line="$(printf '%s\n' "$routed" | sed -n 1p)"
     lane="$(printf '%s\n' "$routed" | sed -n 2p)"
 else
-# Intent: the first match wins, most specific first; stems tolerate common typos.
-intent=""
-if has 'deploy|release|roll ?out|restart (the )?(backend|frontend|service|container)'; then
-    intent="deploy"
-elif has '\bslow|\blag(s|gy|ging)?\b|latenc|\bperf(orm|\b)|skele?ton|spinner|\bloading\b|\bfreez|\bhang(s|ing)?\b|\bstuck\b|\bjank|re-?render|prefetch|takes? (around |about |almost )?[0-9]+ ?(s\b|sec|ms)|[0-9]+ ?seconds'; then
-    intent="performance"
-elif has 'error|broken|bug|crash|fail|not working|doesn.?t work|regression|\bfix'; then
-    intent="debug"
-elif has 'i?n?v[ie]st[ie]?g|root cause|diagnos|look into|find out|\bwhy\b|trace|what happened|analy[sz]|slow|took (so |too )?(long|large)'; then
-    intent="investigate"
-elif has 'review|audit|verify|inspect|double.?check'; then
-    intent="review"
-elif has '\bplan\b|design|approach|propos|architect|strategy'; then
-    intent="plan"
-elif has 'implement|\badd\b|create|build|scaffold|generate|refactor|change|update|rename|remove|delete|migrat|\bmake\b|\bnew\b'; then
-    intent="implement"
-fi
-
-lane=""
-if has 'rust|cargo|axum|sqlx|clippy|borrow|lifetime|tokio|\.rs\b'; then
-    lane="rust"
-elif has 'fastapi|pydantic|sqlalchemy|celery|alembic|python|\.py\b'; then
-    lane="python"
-elif has 'next\.?js|react|component|\.tsx?\b|frontend|data.?table|\bpages?\b|\bui\b|nav ?bar|sidebar|skele?ton|browser|\bclick|eventsource|\bsse\b|router\.refresh|\bfacets?\b'; then
-    lane="frontend"
-elif has 'docker|compose|nginx|\bssl\b|container'; then
-    lane="infra"
-fi
-
 if [ -z "$intent" ] && [ -z "$lane" ]; then
-    words=0
-    for _ in $prompt; do words=$((words + 1)); done
     [ "$router" = "auto" ] && [ "$words" -ge "${FSA_ROUTER_MIN_WORDS:-6}" ] || exit 0
     routed="$(printf '%s' "$HOOK_INPUT" | python3 "$(dirname "$0")/../scripts/fsa-classify" prompt 2>/dev/null)" || routed=""
     [ -n "$routed" ] || exit 0
@@ -86,6 +54,9 @@ case "$intent" in
     plan)        skills="task-flow (Plan), senior-engineer" ;;
     implement)   skills="task-flow (size threshold decides direct edit or delegation), codebase-scanning, senior-engineer" ;;
     review)      skills="task-flow (Audit), review" ;;
+    investigate+implement) skills="task-flow (Investigate first: establish the cause before any change; then the size threshold decides direct edit or delegation), debug" ;;
+    question)    skills="none required: answer from the source (grep and bounded reads); load task-flow only if the answer needs an investigation or a change" ;;
+    research)    skills="none required: delegate web sources to fullstack-agents:web-researcher (no FILES: block needed) and repository facts to grep; load task-flow only when the research turns into a change" ;;
     deploy)      skills="task-flow (deploy class), the project's deploy rules in CLAUDE.md" ;;
     *)           skills="codebase-scanning" ;;
 esac
@@ -102,6 +73,7 @@ esac
 
 line="[fullstack-agents] intent: ${intent:-general}, lane: ${lane:-any} -> invoke via the Skill tool (fullstack-agents:*): ${skills}"
 [ -n "$lane_skills" ] && line="${line}; lane: ${lane_skills} — load these NOW, before the root cause, the plan or any code"
+[ -n "$prohibited" ] && line="${line}. Prohibited by the prompt (constraints, not intents): ${prohibited}"
 out_line="${line}. Take the cheapest rung that answers it; the conclusion, plan and audit stay yours."
 fi
 fi
