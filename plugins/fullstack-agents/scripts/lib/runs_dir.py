@@ -1,16 +1,18 @@
 """Python twin of runs-dir.sh: the run registry is FSA_CODEX_RUNS_DIR, then the project binding, then the default."""
 import os
+import sys
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import team_conf  # noqa: E402
 
 
 def binding(root, key):
-    """Last `key=value` line of <root>/.claude/fsa-team.conf, or None."""
-    try:
-        lines = (Path(root) / ".claude" / "fsa-team.conf").read_text().splitlines()
-    except OSError:
-        return None
-    values = [line.split("=", 1)[1] for line in lines if line.startswith(f"{key}=")]
-    return values[-1] if values else None
+    """Typed value of <root>/.claude/fsa-team.conf's `key`, or None; ':'-joined for list keys."""
+    value = team_conf.get(root, key)
+    if isinstance(value, list):
+        return ":".join(value) if value else None
+    return value
 
 
 def runs_dir(root, explicit=None, fallback=None):

@@ -1,10 +1,8 @@
 # Sourced: one run registry for dispatchers, gates and readers (FSA_CODEX_RUNS_DIR, then the project binding, then the default).
 
-# fsa_binding <root> <key>: last `key=value` line of <root>/.claude/fsa-team.conf, or nothing.
+# fsa_binding <root> <key>: value of <root>/.claude/fsa-team.conf's `key`, or nothing; list keys print one item per line.
 fsa_binding() {
-  local conf="$1/.claude/fsa-team.conf"
-  [ -f "$conf" ] || return 0
-  sed -nE "s/^$2=(.*)$/\1/p" "$conf" | tail -1
+  python3 -I "$(dirname "${BASH_SOURCE[0]}")/team_conf.py" get "$1" "$2"
 }
 
 fsa_expand_home() {
@@ -32,9 +30,10 @@ fsa_runs_dir() {
 
 # fsa_runs_read_dirs <root> [extra-dir]: every directory readers must scan, primary first, existing legacy dirs after.
 fsa_runs_read_dirs() {
-  local d seen=" " legacy dirs=()
-  legacy=$(fsa_binding "$1" legacy_runs_dirs)
-  IFS=: read -ra dirs <<<"$legacy"
+  local d seen=" " dirs=()
+  while IFS= read -r d; do
+    [ -n "$d" ] && dirs+=("$d")
+  done < <(fsa_binding "$1" legacy_runs_dirs)
   for d in "$(fsa_runs_dir "$1")" ${2:+"$2"} "${dirs[@]}"; do
     [ -n "$d" ] || continue
     d=$(fsa_expand_home "$d")
