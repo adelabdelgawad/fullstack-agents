@@ -34,6 +34,7 @@
     "./agents/lead/fullstack-agent.md",
     "./agents/lead/bounded-extractor.md",
     "./agents/lead/test-runner.md",
-    "./agents/lead/diff-reviewer.md"
+    "./agents/lead/diff-reviewer.md",
+    "./agents/lead/web-researcher.md"
   ]
 }

@@ -51,6 +51,9 @@ check 0 claude-code-guide 'Why does the Agent tool ignore model for fork?' "clau
 check 0 fullstack-agents:test-runner 'Run the test suite and save the log.' "test-runner runs commands without a scan contract"
 check 2 fullstack-agents:bounded-extractor 'Run the tests and summarise.' "other subagents still need the contract"
 check 0 statusline-setup 'set up my status line' "statusline-setup"
+check 0 fullstack-agents:web-researcher 'Research online how other Claude Code plugins size SessionStart output; why do they differ?' "web-researcher: web-only, no FILES needed"
+check 2 general-purpose 'WEB ONLY: research online how other plugins size SessionStart output.' "a brief claiming web-only is not an exemption"
+check 2 fullstack-agents:bounded-extractor 'Research online, then read the repo hooks and tell me what you find.' "repository work still needs the contract"
 echo "--- empty prompt never blocks (0) ---"
 got=$(node -e 'process.stdout.on("error",()=>{});process.stdout.write(JSON.stringify({cwd:process.argv[1],tool_input:{}}))' "$R" | bash "$H" >/dev/null 2>&1; echo $?)
 [ "$got" = 0 ] && echo "ok   (0) empty prompt" || { echo "FAIL want=0 got=$got :: empty prompt"; FAILED=1; }

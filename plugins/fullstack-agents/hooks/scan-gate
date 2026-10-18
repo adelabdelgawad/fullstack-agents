@@ -38,8 +38,10 @@ refuse_bad_conf() {
 scan_gate=$(conf_get scan_gate) || refuse_bad_conf scan_gate
 [ "$scan_gate" = on ] || exit 0
 
-# A fork is the orchestrator itself; the others never read source (test-runner only runs given commands).
-case "$type" in fork | claude-code-guide | statusline-setup | fullstack-agents:test-runner) exit 0 ;; esac
+# A fork is the orchestrator itself; the others never read source (test-runner only runs given commands;
+# web-researcher has only WebSearch/WebFetch, so it cannot turn into a repository scan without a new brief).
+# A brief's own claim to be "web only" is never an exemption: only the tool-restricted agent type is.
+case "$type" in fork | claude-code-guide | statusline-setup | fullstack-agents:test-runner | fullstack-agents:web-researcher) exit 0 ;; esac
 
 refuse() {
   cat >&2 <<BLOCK

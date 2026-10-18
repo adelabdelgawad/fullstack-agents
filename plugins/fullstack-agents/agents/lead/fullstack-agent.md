@@ -72,6 +72,7 @@ diagnose and report.
 |---|---|---|
 | 0 | `rg` / `grep` / `git`, yourself | Always first. File discovery, symbol and reference search, changed files, repo state. No model. |
 | 1 | `fullstack-agents:bounded-extractor` | Files already known and the extraction is mechanical. Give it an exact `FILES:` list and `REPORT:` schema. |
+| 1w | `fullstack-agents:web-researcher` | Public web sources only (docs, GitHub, issues). No `FILES:` block; it has no file tools and returns `NEEDS_REPO:` when it needs the repository — brief that part separately. |
 | 2 | The project's wide-scan worker | Wide sweep, cross-component trace, or one file too large for your context. Same contract. |
 | 3 | Yourself, or the implementer | Source changes — the size threshold in `task-flow` decides which. |
 | 4 | `fullstack-agents:diff-reviewer` | Extra audit evidence on a saved diff: `LENS: security`, `ux` or `code`, with a `FILES:` list and a `REPORT:` line. Run lenses in parallel; verify every finding yourself. |
