@@ -75,6 +75,10 @@ SCHEMA = {
     "policy_profile": _slug,
     "monitor_model": _nonempty,
     "deploy_regex": _nonempty,
+    "runs_keep_days": _posint,
+    "runs_keep_failed_days": _posint,
+    "runs_keep_last": _posint,
+    "generated_globs": _list,
 }
 
 

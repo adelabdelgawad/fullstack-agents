@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Run-registry retention. Preview by default; nothing is deleted without --apply.
+
+    fsa-runs prune [--root REPO] [--runs-dir DIR] [--keep-days N] [--keep-failed-days N] [--keep-last N] [--apply]
+
+A run is every `<id>.*` file and `<id>.lib/` directory sharing one run id. It is kept when any of these holds:
+- it is among the newest --keep-last runs (default 50, conf `runs_keep_last`);
+- it is younger than --keep-days (default 14, conf `runs_keep_days`), or --keep-failed-days (default 30, conf
+  `runs_keep_failed_days`) when it did not succeed or its outcome is unknown;
+- liveness reports it running or uncertain, it still owns paths, or (pre-v2 record) its files changed in the last day.
+Dispatcher copies (`dispatch-*.lib/`) older than --keep-days are removed with the same preview/apply rule.
+"""
+import argparse
+import json
+import re
+import shutil
+import sys
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE / "lib"))
+import liveness  # noqa: E402
+import runs_dir as runs_dir_mod  # noqa: E402
+import team_conf  # noqa: E402
+
+RUN_ID = re.compile(r"^((?:implement|investigate|plan|verify|review)-\d{8}-\d{6}-\d+)(\..+)$")
+DISPATCH = re.compile(r"^dispatch-\d{8}-\d{6}-\d+\.lib$")
+DAY = 86400
+
+
+def group(runs):
+    runs_, dispatch = {}, []
+    for entry in runs.iterdir():
+        m = RUN_ID.match(entry.name)
+        if m:
+            runs_.setdefault(m.group(1), []).append(entry)
+        elif DISPATCH.match(entry.name):
+            dispatch.append(entry)
+    return runs_, dispatch
+
+
+def size(paths):
+    total = 0
+    for p in paths:
+        if p.is_dir():
+            total += sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+        elif p.exists():
+            total += p.stat().st_size
+    return total
+
+
+def outcome(runs, run_id):
+    """succeeded | failed | unknown, from the v2 result record or the legacy STATUS line."""
+    try:
+        state = json.loads((runs / f"{run_id}.result.json").read_text()).get("state")
+        return "succeeded" if state == "succeeded" else "failed"
+    except (OSError, ValueError):
+        pass
+    try:
+        last = (runs / f"{run_id}.last.txt").read_text(errors="replace")
+    except OSError:
+        return "unknown"
+    statuses = re.findall(r"^STATUS=(\w+)", last, re.M)
+    if not statuses:
+        return "unknown"
+    return "succeeded" if statuses[-1] == "OK" else "failed"
+
+
+def protected(runs, run_id, files, now):
+    """Reason to keep regardless of age, or None."""
+    meta = {}
+    try:
+        meta = json.loads((runs / f"{run_id}.meta.json").read_text())
+    except (OSError, ValueError):
+        pass
+    if meta.get("schema", 1) >= 2:
+        state = liveness.run_state(runs, run_id).get("state")
+        if state in ("running", "uncertain"):
+            return f"liveness {state}"
+        try:
+            ownership = json.loads((runs / f"{run_id}.result.json").read_text()).get("ownership")
+        except (OSError, ValueError):
+            ownership = None
+        if ownership not in (None, "free"):
+            return f"ownership {ownership}"
+    elif now - max(p.stat().st_mtime for p in files) < DAY:
+        return "pre-v2 record changed within a day"
+    return None
+
+
+def plan(runs, keep_days, keep_failed_days, keep_last, now):
+    groups, dispatch = group(runs)
+    order = sorted(groups, key=lambda rid: rid.split("-", 1)[1], reverse=True)
+    newest = set(order[:keep_last])
+    rows = []
+    for rid in order:
+        files = groups[rid]
+        age = (now - max(p.stat().st_mtime for p in files)) / DAY
+        result = outcome(runs, rid)
+        limit = keep_days if result == "succeeded" else keep_failed_days
+        reason = protected(runs, rid, files, now)
+        if reason:
+            action = "keep: " + reason
+        elif rid in newest:
+            action = "keep: newest"
+        elif age < limit:
+            action = f"keep: younger than {limit}d"
+        else:
+            action = "delete"
+        rows.append({"run": rid, "outcome": result, "age_days": round(age, 1), "bytes": size(files),
+                     "action": action, "paths": [str(p) for p in files]})
+    for d in sorted(dispatch):
+        age = (now - d.stat().st_mtime) / DAY
+        rows.append({"run": d.name, "outcome": "dispatcher copy", "age_days": round(age, 1), "bytes": size([d]),
+                     "action": "delete" if age >= keep_days else f"keep: younger than {keep_days}d",
+                     "paths": [str(d)]})
+    return rows
+
+
+def setting(arg, root, key, default):
+    if arg is not None:
+        return arg
+    try:
+        value = team_conf.get(root, key) if root else None
+    except team_conf.ConfError as exc:
+        sys.exit(f"invalid fsa-team.conf: {exc}")
+    return value if value is not None else default
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(prog="fsa-runs")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    pr = sub.add_parser("prune")
+    pr.add_argument("--root", default=".")
+    pr.add_argument("--runs-dir")
+    pr.add_argument("--keep-days", type=int)
+    pr.add_argument("--keep-failed-days", type=int)
+    pr.add_argument("--keep-last", type=int)
+    pr.add_argument("--apply", action="store_true")
+    pr.add_argument("--json", action="store_true")
+    args = ap.parse_args(argv)
+
+    root = str(Path(args.root).resolve())
+    runs = Path(args.runs_dir or runs_dir_mod.runs_dir(root, fallback=str(Path.home() / ".codex" / "fsa-runs")))
+    if not runs.is_dir():
+        print(f"no run registry at {runs}")
+        return 0
+    keep_days = setting(args.keep_days, root, "runs_keep_days", 14)
+    keep_failed = max(setting(args.keep_failed_days, root, "runs_keep_failed_days", 30), keep_days)
+    keep_last = setting(args.keep_last, root, "runs_keep_last", 50)
+    rows = plan(runs, keep_days, keep_failed, keep_last, time.time())
+    doomed = [r for r in rows if r["action"] == "delete"]
+    if args.json:
+        print(json.dumps({"runs_dir": str(runs), "apply": args.apply, "rows": rows}, indent=1))
+    else:
+        for r in rows:
+            print(f"{r['action'][:34]:<34} {r['outcome']:<15} {r['age_days']:>6}d {r['bytes'] / 1e6:>8.2f} MB  {r['run']}")
+        print(f"{'APPLY' if args.apply else 'PREVIEW'}: {len(doomed)} of {len(rows)} entries, "
+              f"{sum(r['bytes'] for r in doomed) / 1e6:.1f} MB in {runs}"
+              + ("" if args.apply else " (nothing deleted; rerun with --apply)"))
+    if args.apply:
+        for r in doomed:
+            for p in map(Path, r["paths"]):
+                if p.is_dir():
+                    shutil.rmtree(p, ignore_errors=True)
+                else:
+                    p.unlink(missing_ok=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
