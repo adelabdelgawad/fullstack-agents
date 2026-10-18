@@ -2,6 +2,19 @@
 # Dispatch one implementer unit (headless Claude Sonnet by default; FSA_IMPLEMENTER=grok|codex swaps the engine); prints only the manifest.
 set -euo pipefail
 
+# `release <run-id> [--confirm]`: free a run's paths only when no process can still edit for it (lib/liveness.py).
+if [ "${1:-}" = "release" ]; then
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  . "$here/lib/runs-dir.sh"
+  [ -n "${2:-}" ] || { echo "usage: codex-task.sh release <run-id> [--confirm]" >&2; exit 2; }
+  root=${FSA_CODEX_ROOT:-$(git rev-parse --show-toplevel)}
+  while IFS= read -r d; do
+    [ -f "$d/$2.meta.json" ] && exec python3 -I "$here/lib/liveness.py" release "$d" "$2" "${@:3}"
+  done < <(fsa_runs_read_dirs "$root")
+  echo "run $2 not found in the registry" >&2
+  exit 2
+fi
+
 herdr_mode=0
 [ "${1:-}" = "--herdr" ] && { herdr_mode=1; shift; }
 mode=${1:-}; brief=${2:-}
@@ -227,11 +240,16 @@ run_in_herdr_pane() {
 }
 
 fsa_event "$runs" "$id" running
+# Every engine process and its children inherit the run marker; the runner leads its own process group.
+export FSA_RUN_ID="$id"
 set +e
 if [ "$herdr_mode" = 1 ]; then
   run_in_herdr_pane
 else
-  bash "$runner" > /dev/null
+  setsid bash "$runner" > /dev/null &
+  runner_pid=$!
+  fsa_meta_merge "$runs" "$id" "{\"runner_pid\": $runner_pid, \"runner_pgid\": $runner_pid}"
+  wait "$runner_pid"
 fi
 codex_exit=$?
 set -e

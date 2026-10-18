@@ -61,6 +61,15 @@ class RunRegistryTests(unittest.TestCase):
         self.assertEqual(sorted(ids), sorted([rid, other]))
         self.assertEqual(self.repo().run_home(other), self.legacy)
 
+    def test_v2_run_without_result_or_engine_record_is_uncertain_not_failed(self):
+        rid = "implement-20261018-070000-1"
+        (self.primary / f"{rid}.log").write_text("x\n")
+        (self.primary / f"{rid}.meta.json").write_text(json.dumps(
+            {"root": str(self.root), "cwd": str(self.root), "schema": 2, "engine": "codex"}))
+        run = next(r for r in dash.collect_runs(self.repo(), time.time()) if r["id"] == rid)
+        self.assertEqual(run["state"], "stalled")
+        self.assertIn("uncertain", run["flags"])
+
 
 if __name__ == "__main__":
     unittest.main()

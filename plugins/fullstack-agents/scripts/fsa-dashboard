@@ -36,6 +36,7 @@ from usage import redact, session_usage, transcript_usage
 from activity import ActivityFeed, card_usage, history_rows, run_cause, totals
 from plan_usage import plan_usage
 from runs_dir import read_dirs, runs_dir
+import liveness
 HTML = HERE / "lib" / "dashboard.html"
 FIRST_PROMPTS = {}
 LAST_ASKS = {}
@@ -868,8 +869,15 @@ def read_run(runs, rid, log_mtime, now, projects, others=()):
     result = None
     if last.exists() and last.stat().st_size:
         result = load_json(last) or {"summary": last.read_text(errors="replace")[:2000]}
+    live = liveness.run_state(runs, rid)["state"] if not result and meta.get("schema", 1) >= 2 else "legacy"
     if result:
         state = "done"
+    elif live == "running":
+        state = "stalled" if now - log_mtime > STALL_S else "running"
+    elif live == "uncertain":
+        state = "stalled"
+    elif live == "stopped":
+        state = "abandoned" if now - log_mtime > ABANDON_S else "failed"
     elif pid_alive(rid.rsplit("-", 1)[-1]):
         state = "stalled" if now - log_mtime > STALL_S else "running"
     else:
@@ -878,6 +886,8 @@ def read_run(runs, rid, log_mtime, now, projects, others=()):
     flags, outside = [], []
     if state in ("failed", "stalled"):
         flags.append(state)
+    if live == "uncertain":
+        flags.append("uncertain")
     if state == "done" and touched is not None:
         recorded = runs / f"{rid}.outside"
         if recorded.exists():

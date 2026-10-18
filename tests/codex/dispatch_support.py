@@ -30,6 +30,10 @@ if mode == "touch":
         if p:
             os.makedirs(os.path.dirname(p) or ".", exist_ok=True)
             open(p, "a").write("x\n")
+if mode == "detach":
+    import subprocess
+    subprocess.Popen(["sleep", os.environ.get("FSA_FAKE_SLEEP", "30")], start_new_session=True,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 if mode == "sleep":
     time.sleep(float(os.environ.get("FSA_FAKE_SLEEP", "30")))
 if mode == "fail":
