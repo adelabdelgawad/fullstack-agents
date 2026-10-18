@@ -141,6 +141,11 @@ automatically; when a task ends without a push, run `team-board phase complete -
 Two retries maximum on a failing worker, re-briefing with its raw output rather than a prose
 restatement, then stop and hand the user the failure.
 
+A dispatch's `STATUS=OK` or `succeeded` state is execution, not acceptance. `STATUS=INSTRUCTIONS_CHANGED` means the project rules
+changed mid-run: review the result against the current rules. `STATUS=OWNERSHIP_HELD` or an `uncertain` run keeps its paths until
+you confirm nothing can still edit and run `codex-task.sh release`. `STATUS=PLUGIN_CHANGED` means the plugin moved under this
+session: report it, and set `FSA_ACCEPT_PLUGIN_CHANGE=1` only for deliberate plugin development.
+
 ## Context and cost budget
 
 Run the plugin's `scripts/fsa-usage` at each phase change and before any large read or

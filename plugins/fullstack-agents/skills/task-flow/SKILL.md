@@ -79,17 +79,17 @@ sections still in context. Prose/code paths resolve beside this `SKILL.md`;
 Markdown links are relocated.
 
 - Line 12: Roles
-- Line 26: The size threshold
-- Line 47: Briefs
-- Line 94: Parallel implementation
-- Line 106: Visible workers (only when the user says "use herdr")
-- Line 124: Watching a run
-- Line 140: Auditing
-- Line 190: Scanning wide
-- Line 210: Cost discipline
-- Line 219: Reporting the phase
-- Line 247: Working alongside other sessions
-- Line 257: Project bindings
+- Line 28: The size threshold
+- Line 49: Briefs
+- Line 101: Parallel implementation
+- Line 117: Visible workers (only when the user says "use herdr")
+- Line 135: Watching a run
+- Line 160: Auditing
+- Line 210: Scanning wide
+- Line 230: Cost discipline
+- Line 239: Reporting the phase
+- Line 273: Working alongside other sessions
+- Line 283: Project bindings
 
 ## Task list visible in the dashboard
 

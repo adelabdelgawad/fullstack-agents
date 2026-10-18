@@ -185,7 +185,7 @@ need a Herdr-managed pane (`HERDR_ENV=1`).
 | `herdr-watch.sh <transcript> [label]` | Read-only live view of a background worker's transcript in a grid pane; no model reads it. |
 
 Optional environment: `FSA_CODEX_ROOT` (repository root, default the current git toplevel),
-`FSA_CODEX_RUNS_DIR` (default `~/.codex/fsa-runs`), `FSA_IMPLEMENTER` (`claude`, the default, `grok` or `codex`; a brief's `IMPLEMENTER:` line overrides it for that task),
+`FSA_CODEX_RUNS_DIR` (else `runs_dir=` in the project's `.claude/fsa-team.conf`, else `~/.codex/fsa-runs`; readers also scan `legacy_runs_dirs=`), `FSA_DISPATCH_EXIT` (`legacy`, the default, exits 0; `strict` maps the terminal state in `<run>.result.json` to exit codes 10-14, 130 when cancelled), `FSA_CANCEL_WAIT_S` (seconds to wait for a cancelled run's processes, default 10), `FSA_ACCEPT_PLUGIN_CHANGE=1` (dev mode only: dispatch although the plugin source changed since the session pin), `FSA_IMPLEMENTER` (`claude`, the default, `grok` or `codex`; a brief's `IMPLEMENTER:` line overrides it for that task),
 `FSA_CLAUDE_MODEL_IMPLEMENT` (default `claude-sonnet-5`; the Claude engine only implements),
 `FSA_GROK_MODEL_INVESTIGATE|IMPLEMENT` (opencode `provider/model`, default `xai/grok-4.7`; Grok has no plan mode because Claude plans),
 `FSA_GROK_VARIANT` (opencode `--variant` reasoning effort such as `minimal`, `low`, `high`, `max`; unset keeps the model default; a brief's `EFFORT:` line overrides it for that task) and
@@ -196,6 +196,8 @@ the result file. The Grok engine needs the `opencode` CLI and `XAI_API_KEY`;
 investigate runs (opt-in with `FSA_GROK_INVESTIGATE=1`; wide scans default to the Haiku bounded-extractor) deny opencode edits and shell, implement runs allow both and are told to read by grep and line range, lane skills are trimmed to what the brief's paths need (a `SKILLS:` line overrides), and the final answer's
 fenced JSON is extracted into the same result file Codex writes.
 A project may keep a thin wrapper that sets these and `exec`s the plugin script.
+`codex-task.sh release <run-id> [--confirm]` frees a run's paths only when `scripts/lib/liveness.py` finds no process that can still
+edit for it. `scripts/fsa-release export <ref>` and `verify <dir>` build and check immutable, read-only plugin releases.
 
 ## License
 
