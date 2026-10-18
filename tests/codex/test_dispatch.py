@@ -21,8 +21,8 @@ class RegistryLocationTests(unittest.TestCase):
         self.assertEqual(self.run_dir_of(self.case.dispatch()), self.case.home / ".codex/fsa-runs")
 
     def test_project_binding_selects_the_registry(self):
-        self.case.binding(runs_dir="~/.codex/kc-runs")
-        self.assertEqual(self.run_dir_of(self.case.dispatch()), self.case.home / ".codex/kc-runs")
+        self.case.binding(runs_dir="~/.codex/project-runs")
+        self.assertEqual(self.run_dir_of(self.case.dispatch()), self.case.home / ".codex/project-runs")
 
     def test_a_refused_dispatch_leaves_no_copied_lib_dir(self):
         self.case.brief.write_text("IMPLEMENTER: codex\nPLAN: none: test\n\nGOAL: no paths\n")
@@ -32,7 +32,7 @@ class RegistryLocationTests(unittest.TestCase):
         self.assertEqual(list(runs.glob("dispatch-*.lib")) if runs.exists() else [], [])
 
     def test_env_wins_over_the_binding(self):
-        self.case.binding(runs_dir="~/.codex/kc-runs")
+        self.case.binding(runs_dir="~/.codex/project-runs")
         chosen = self.case.base / "explicit"
         result = self.case.dispatch(env={"FSA_CODEX_RUNS_DIR": str(chosen)})
         self.assertEqual(self.run_dir_of(result), chosen)
@@ -149,6 +149,19 @@ class RoleContractTests(unittest.TestCase):
                 config = json.loads(Path(call["env"]["OPENCODE_CONFIG"]).read_text())
                 self.assertEqual(config["instructions"], expected)
                 self.assertEqual(meta["project_docs"], expected[0] if expected else None)
+
+    def test_claude_gets_agents_md_unless_claude_md_imports_it(self):
+        _, _, call = self.run_engine("claude", docs=("AGENTS.md",))
+        args = call["args"]
+        self.assertEqual(args[args.index("--append-system-prompt") + 1], "# AGENTS.md")
+        case = DispatchCase("claude")
+        self.addCleanup(case.cleanup)
+        (case.root / "AGENTS.md").write_text("# AGENTS.md\n")
+        (case.root / "CLAUDE.md").write_text("# CLAUDE.md\n\n@AGENTS.md\n")
+        result = case.dispatch(env={"FSA_FAKE_MODE": "touch", "FSA_FAKE_TOUCH": "app.py"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        call = next(c for c in case.call_log() if c["engine"] == "claude")
+        self.assertNotIn("--append-system-prompt", call["args"])
 
 
 if __name__ == "__main__":

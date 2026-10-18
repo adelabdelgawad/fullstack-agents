@@ -88,7 +88,7 @@ class DispatchCase:
         for name in ("claude", "codex", "opencode"):
             write(self.base / "bin" / name, "#!" + sys.executable + "\n" + FAKE, 0o755)
         self.calls = self.base / "calls.jsonl"
-        env = {k: v for k, v in os.environ.items() if not k.startswith(("FSA_", "CLAUDE_CODE_SESSION", "KC_"))}
+        env = {k: v for k, v in os.environ.items() if not k.startswith(("FSA_", "CLAUDE_CODE_SESSION"))}
         self.env = {**env, "HOME": str(self.home), "PATH": f"{self.base / 'bin'}{os.pathsep}{env['PATH']}",
                     "FSA_TEST_CALL": str(self.calls), "FSA_CODEX_ROOT": str(self.root),
                     "XDG_DATA_HOME": str(self.home / ".local/share")}

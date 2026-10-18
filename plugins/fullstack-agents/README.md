@@ -196,6 +196,9 @@ the result file. The Grok engine needs the `opencode` CLI and `XAI_API_KEY`;
 investigate runs (opt-in with `FSA_GROK_INVESTIGATE=1`; wide scans default to the Haiku bounded-extractor) deny opencode edits and shell, implement runs allow both and are told to read by grep and line range, lane skills are trimmed to what the brief's paths need (a `SKILLS:` line overrides), and the final answer's
 fenced JSON is extracted into the same result file Codex writes.
 A project may keep a thin wrapper that sets these and `exec`s the plugin script.
+The `run-owner-gate` hook blocks hand edits to paths a live or uncertain implementer run owns, in any repository
+(`FSA_SKIP_RUN_GATE=1` overrides on the user's word). A project's `AGENTS.md` reaches every engine: natively for Codex and
+opencode, appended to the Claude implementer's system prompt unless `CLAUDE.md` imports it with `@AGENTS.md`.
 `codex-task.sh release <run-id> [--confirm]` frees a run's paths only when `scripts/lib/liveness.py` finds no process that can still
 edit for it. `scripts/fsa-release export <ref>` and `verify <dir>` build and check immutable, read-only plugin releases.
 

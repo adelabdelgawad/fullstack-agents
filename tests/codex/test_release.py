@@ -120,6 +120,17 @@ class ReleaseTests(unittest.TestCase):
         accepted = self.dispatch(script, FSA_SESSION_PIN=str(pin), FSA_ACCEPT_PLUGIN_CHANGE="1")
         self.assertEqual(accepted.returncode, 0, accepted.stderr)
 
+    def test_session_start_points_the_lead_at_an_unimported_agents_md(self):
+        def context():
+            hook = subprocess.run(["bash", str(self.plugin / "hooks/session-start")],
+                                  input=json.dumps({"session_id": "s2", "source": "startup"}), capture_output=True,
+                                  text=True, cwd=self.case.root, env={**self.case.env, "CLAUDE_CONFIG_DIR": str(self.base / "cfg")})
+            return json.loads(hook.stdout)["hookSpecificOutput"]["additionalContext"]
+        (self.case.root / "AGENTS.md").write_text("# rules\n")
+        self.assertIn("Project rules:", context())
+        (self.case.root / "CLAUDE.md").write_text("@AGENTS.md\n")
+        self.assertNotIn("Project rules:", context())
+
     def test_resume_keeps_the_original_pin(self):
         pin = self.pin()
         before = pin.read_text()

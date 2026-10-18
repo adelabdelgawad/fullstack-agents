@@ -254,6 +254,10 @@ elif [ "$engine" = "claude" ]; then
     args+=("Edit($lit)" "Write($lit)")
   done < "$runs/$id.allow"
   args+=(--disallowedTools Agent Task WebFetch WebSearch NotebookEdit "Bash(*codex-task.sh*)")
+  # Claude reads CLAUDE.md, not AGENTS.md: shared project rules are appended unless CLAUDE.md already imports them.
+  if [ "$project_docs" = AGENTS.md ] && ! grep -qx '@AGENTS.md' "$root/CLAUDE.md" 2>/dev/null; then
+    args+=(--append-system-prompt "$(cat "$root/AGENTS.md")")
+  fi
   [ "$allow_tests" = 1 ] || args+=("Bash(*cargo test*)" "Bash(*cargo nextest*)" "Bash(*test-backend.sh*)" "Bash(*vitest*)"
     "Bash(*jest*)" "Bash(*playwright*)" "Bash(*pytest*)" "Bash(*npm test*)" "Bash(*pnpm test*)" "Bash(*yarn test*)" "Bash(*bun test*)")
   dirs=$(skill_files | xargs -r -n1 dirname | sort -u)

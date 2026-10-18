@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# run-owner-gate — PreToolUse (Write|Edit|MultiEdit): a path a dispatched implementer run owns is not hand-edited
+# until that run can no longer edit (scripts/lib/liveness.py). Off switch, on the user's word: FSA_SKIP_RUN_GATE=1.
+set -uo pipefail
+
+source "$(dirname "$0")/lib.sh"
+[ "${FSA_SKIP_RUN_GATE:-0}" = "1" ] && exit 0
+# A dispatched implementer edits its own ALLOWED_PATHS under the engine's own fence.
+[ -n "${FSA_IMPLEMENTER_RUN:-}" ] && exit 0
+
+HOOK_INPUT="$(cat)"
+file_path="$(json_get_field "tool_input.file_path" "$HOOK_INPUT")"
+[ -n "$file_path" ] || exit 0
+dir=$(dirname "$file_path")
+while [ -n "$dir" ] && [ ! -d "$dir" ]; do dir=$(dirname "$dir"); done
+root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || exit 0
+case "$file_path" in /*) abs=$file_path ;; *) abs="$(pwd)/$file_path" ;; esac
+rel=${abs#"$root"/}
+
+scripts="$(dirname "$0")/../scripts"
+. "$scripts/lib/runs-dir.sh"
+live_min=${FSA_RUN_GATE_LIVE_MIN:-60}
+
+owner=""
+while IFS= read -r d; do
+  while IFS= read -r allow; do
+    base=${allow%.allow}; id=$(basename "$base")
+    [ "$(jq -r '.root // ""' "$base.meta.json" 2>/dev/null)" = "$root" ] || continue
+    if [ "$(jq -r '.schema // 1' "$base.meta.json" 2>/dev/null)" = 2 ]; then
+      [ -f "$base.released" ] && continue
+      state=$(python3 -I "$scripts/lib/liveness.py" state "$d" "$id" 2>/dev/null | jq -r '.state // "uncertain"' 2>/dev/null)
+      [ "$state" = stopped ] && continue
+      owner="$id (${state:-uncertain})"
+    else
+      [ -f "$base.last.txt" ] && continue
+      [ -n "$(find "$base.log" -mmin "-$live_min" 2>/dev/null)" ] || continue
+      owner="$id (v1, log active within ${live_min} min)"
+    fi
+    break 2
+  done < <(grep -lFx -- "$rel" "$d"/implement-*.allow 2>/dev/null)
+done < <(fsa_runs_read_dirs "$root")
+
+[ -n "$owner" ] || exit 0
+{
+  printf '[fullstack-agents] BLOCKED: %s is owned by implementer run %s.\n' "$rel" "$owner"
+  printf 'Re-brief that run instead of hand-patching its work. Once nothing can still edit for it: codex-task.sh release <run-id> [--confirm].\n'
+  printf '(Override only on the user'"'"'s word: FSA_SKIP_RUN_GATE=1)\n'
+} >&2
+exit 2

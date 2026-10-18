@@ -22,7 +22,7 @@ class RunRegistryTests(unittest.TestCase):
         base = Path(self.tmp.name)
         self.root = base / "repo"
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
-        self.primary, self.legacy = base / "kc-runs", base / "fsa-runs"
+        self.primary, self.legacy = base / "project-runs", base / "legacy-runs"
         self.primary.mkdir()
         self.legacy.mkdir()
         (self.root / ".claude").mkdir()

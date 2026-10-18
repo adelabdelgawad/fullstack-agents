@@ -126,6 +126,10 @@ if [ -n "$board_session" ] && command -v jq > /dev/null 2>&1; then
             "$(jq -r .root "$pin_file")" "$(jq -r .mode "$pin_file")" "$pin_file" >> "$CLAUDE_ENV_FILE"
     fi
 fi
+# Shared project rules in AGENTS.md reach a Claude lead only through CLAUDE.md; say so when it is not imported.
+if [ -f AGENTS.md ] && ! grep -qx '@AGENTS.md' CLAUDE.md 2>/dev/null; then
+    session_context="${session_context}\n\n**Project rules:** \`AGENTS.md\` holds this repository's rules for every agent and \`CLAUDE.md\` does not import it. Read \`AGENTS.md\` before acting; it is binding."
+fi
 scripts_escaped=$(escape_for_json "${PLUGIN_ROOT}/scripts")
 session_context="${session_context}\n\n**Plugin scripts:** \`${scripts_escaped}\` — \`codex-task.sh\` (Codex dispatch, \`--herdr\` for a visible pane) \`herdr-watch.sh\` (live view of a background worker's transcript) and \`team-board\` (shared claims, locks and notes for the sessions on this repository)."
 

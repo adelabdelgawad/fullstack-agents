@@ -291,6 +291,11 @@ hash manifest, and a session started from it never changes behaviour mid-task. E
 live source tree (**dev mode**) is only for working on the plugin itself. There the session pin makes a later source change refuse
 dispatch with `STATUS=PLUGIN_CHANGED` until `FSA_ACCEPT_PLUGIN_CHANGE=1` is set deliberately. Each dispatch runs from a copy of
 the dispatcher and helpers in its run directory, so no plugin edit can alter a run already in flight.
+
+Two protections need no project binding. The plugin's `run-owner-gate` hook refuses a lead edit to a path that a live or
+uncertain implementer run owns (any registry directory, this repository only; `FSA_SKIP_RUN_GATE=1` on the user's word).
+Shared project rules may live in `AGENTS.md`: Codex and opencode read it, the Codex implementer receives it appended to its
+system prompt unless `CLAUDE.md` has an `@AGENTS.md` import line, and a Codex lead is told to read it at session start.
 A binding the project leaves unset means that route is unavailable, not that a default applies.
 
 | Binding | Value |
