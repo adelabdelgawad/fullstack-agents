@@ -154,7 +154,7 @@ if [ "$engine" = "grok" ]; then
   attach=""; while IFS= read -r f; do [ -n "$f" ] && attach+=" -f '$f'"; done <<<"$(skill_files)"
   cat > "$runner" <<EOF
 set -o pipefail
-cd '$root' && OPENCODE_CONFIG='$cfg' '$opencode_bin' run -m '$model'${variant:+ --variant '$variant'}$attach --"\$(cat '$prompt')" 2>&1 | tee '$log'
+cd '$root' && OPENCODE_CONFIG='$cfg' '$opencode_bin' run -m '$model'${variant:+ --variant '$variant'}$attach -- "\$(cat '$prompt')" 2>&1 | tee '$log'
 rc=\${PIPESTATUS[0]}
 python3 '$here/lib/extract-result.py' '$log' '$last' || rc=1
 exit \$rc
