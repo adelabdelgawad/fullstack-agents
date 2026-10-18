@@ -75,58 +75,37 @@ if [ -z "$project_info" ]; then
     project_info="No FastAPI/Next.js project detected. Fullstack-agents skills are available if needed."
 fi
 
-# --- Escape for JSON ---
-# Prefer a real JSON encoder; the manual fallback covers the common escapes
-# but cannot handle every control character.
+# --- Assemble the context as plain text; hook_context.py encodes it and enforces the hook-size limit ---
 PYTHON_BIN=$(find_python || true)
-
-escape_for_json() {
-    local s="$1"
-    if [ -n "$PYTHON_BIN" ]; then
-        printf '%s' "$s" | "$PYTHON_BIN" -c 'import json,sys; print(json.dumps(sys.stdin.read())[1:-1])'
-    elif command -v jq >/dev/null 2>&1; then
-        printf '%s' "$s" | jq -Rs '.' | sed 's/^"//; s/"$//'
-    else
-        s="${s//\\/\\\\}"
-        s="${s//\"/\\\"}"
-        s="${s//$'\n'/\\n}"
-        s="${s//$'\r'/\\r}"
-        s="${s//$'\t'/\\t}"
-        printf '%s' "$s"
-    fi
-}
-
-project_info_escaped=$(escape_for_json "$project_info")
+board_session=$(printf '%s' "$hook_input" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+nl=$'\n'
 
 if [ "$project_info" = "No FastAPI/Next.js project detected. Fullstack-agents skills are available if needed." ]; then
-    # Token economy: ungoverned project — a 2-line notice instead of the full
-    # ~3.6k-token doctrine. The skills remain invocable on demand.
-    session_context="fullstack-agents installed but no FastAPI/Rust/Next.js project detected here. If stack work comes up, invoke 'fullstack-agents:using-fullstack-agents' via the Skill tool for the routing gate. For any investigation, plan or change, invoke 'fullstack-agents:task-flow' first."
+    # Token economy: ungoverned project — a 2-line notice instead of the doctrine. Skills stay invocable on demand.
+    essential="fullstack-agents installed but no FastAPI/Rust/Next.js project detected here. If stack work comes up, invoke 'fullstack-agents:using-fullstack-agents' via the Skill tool for the routing gate. For any investigation, plan or change, invoke 'fullstack-agents:task-flow' first."
 else
-    # Stays under the 10 KB hook-output cap; anything larger reaches the model only as a 2 KB preview.
-    doctrine_escaped=$(escape_for_json "$(cat "${PLUGIN_ROOT}/hooks/session-doctrine.md")")
-    session_context="<EXTREMELY_IMPORTANT>\n**Project Detection:** ${project_info_escaped}\n\n${doctrine_escaped}\n</EXTREMELY_IMPORTANT>"
+    essential="<EXTREMELY_IMPORTANT>${nl}$(cat "${PLUGIN_ROOT}/hooks/session-doctrine.md")${nl}${nl}**Project Detection:** ${project_info}${nl}</EXTREMELY_IMPORTANT>"
 fi
-# Optional policy profile (conf key `policy_profile`): the conf is read only through team_conf.py, never evaluated as shell.
-if command -v python3 > /dev/null 2>&1; then
-    policy_name=$(python3 -I "${PLUGIN_ROOT}/scripts/lib/team_conf.py" get . policy_profile 2>/dev/null) ||
-        { policy_name=""; session_context="${session_context}\n\nWARNING: .claude/fsa-team.conf has an invalid policy_profile value; no policy profile was loaded."; }
-    if [ -n "$policy_name" ]; then
-        policy_file="${PLUGIN_ROOT}/policies/${policy_name}.md"
-        if [ -f "$policy_file" ]; then
-            policy_escaped=$(escape_for_json "$(cat "$policy_file")")
-            session_context="${session_context}\n\n**Policy profile ${policy_name}:**\n${policy_escaped}"
-        else
-            session_context="${session_context}\n\nWARNING: policy_profile=${policy_name} is set but plugins/fullstack-agents/policies/${policy_name}.md does not exist."
-        fi
-    fi
+# Shared project rules in AGENTS.md reach a Claude lead only through CLAUDE.md; say so when it is not imported.
+if [ -f AGENTS.md ] && ! grep -qx '@AGENTS.md' CLAUDE.md 2>/dev/null; then
+    essential="${essential}${nl}${nl}**Project rules:** \`AGENTS.md\` holds this repository's rules for every agent and \`CLAUDE.md\` does not import it. Read \`AGENTS.md\` before acting; it is binding."
 fi
-board_session=$(printf '%s' "$hook_input" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+if [ -n "$PYTHON_BIN" ] && ! cc_hint=$("$PYTHON_BIN" -I "${PLUGIN_ROOT}/scripts/lib/claude_cli.py" 2>&1 >/dev/null); then
+    essential="${essential}${nl}${nl}**Claude launcher missing:** ${cc_hint} Tell the user this before any audit, classifier or Claude worker run."
+fi
+essential="${essential}${nl}${nl}**Plugin scripts:** \`${PLUGIN_ROOT}/scripts\` — \`codex-task.sh\` (Codex dispatch, \`--herdr\` for a visible pane) \`herdr-watch.sh\` (live view of a background worker's transcript) and \`team-board\` (shared claims, locks and notes for the sessions on this repository). The policy profile, when the project sets one, arrives as a separate context block."
+
+# The board is informational and comes last, capped, so it can never push the essential text out of the hook limit.
+session_context="$essential"
 board_summary=$("${PLUGIN_ROOT}/scripts/team-board" --session "${board_session:-none}" status 2>/dev/null | head -12 || true)
 if [ -n "$board_summary" ] && [ "$board_summary" != "board empty" ]; then
-    board_escaped=$(escape_for_json "$board_summary")
-    session_context="${session_context}\n\n**Team board** — other Claude sessions on this repository. Invoke 'fullstack-agents:team-coordination' before a deploy, a default-branch merge, a migration or any shared change:\n${board_escaped}"
+    board_cap=${FSA_BOARD_CONTEXT_MAX:-1000}
+    if [ "${#board_summary}" -gt "$board_cap" ]; then
+        board_summary="${board_summary:0:$board_cap}${nl}... (board truncated; run \`team-board status\` for the rest)"
+    fi
+    session_context="${session_context}${nl}${nl}**Team board** — other Claude sessions on this repository. Invoke 'fullstack-agents:team-coordination' before a deploy, a default-branch merge, a migration or any shared change:${nl}${board_summary}"
 fi
+
 # Session pin: the plugin identity this session started with; dispatches compare against it (scripts/lib/plugin-pin.sh).
 # Resume and compact keep the existing pin, so an active task never silently adopts newer plugin code.
 if [ -n "$board_session" ] && command -v jq > /dev/null 2>&1; then
@@ -150,29 +129,12 @@ if [ -n "$board_session" ] && command -v jq > /dev/null 2>&1; then
             "$(jq -r .root "$pin_file")" "$(jq -r .mode "$pin_file")" "$pin_file" >> "$CLAUDE_ENV_FILE"
     fi
 fi
-# Shared project rules in AGENTS.md reach a Claude lead only through CLAUDE.md; say so when it is not imported.
-if [ -f AGENTS.md ] && ! grep -qx '@AGENTS.md' CLAUDE.md 2>/dev/null; then
-    session_context="${session_context}\n\n**Project rules:** \`AGENTS.md\` holds this repository's rules for every agent and \`CLAUDE.md\` does not import it. Read \`AGENTS.md\` before acting; it is binding."
-fi
-scripts_escaped=$(escape_for_json "${PLUGIN_ROOT}/scripts")
-session_context="${session_context}\n\n**Plugin scripts:** \`${scripts_escaped}\` — \`codex-task.sh\` (Codex dispatch, \`--herdr\` for a visible pane) \`herdr-watch.sh\` (live view of a background worker's transcript) and \`team-board\` (shared claims, locks and notes for the sessions on this repository)."
 
-if [ -n "$PYTHON_BIN" ] && ! cc_hint=$("$PYTHON_BIN" -I "${PLUGIN_ROOT}/scripts/lib/claude_cli.py" 2>&1 >/dev/null); then
-    session_context="${session_context}\n\n**Claude launcher missing:** $(escape_for_json "$cc_hint") Tell the user this before any audit, classifier or Claude worker run."
+if [ -n "$PYTHON_BIN" ]; then
+    printf '%s' "$session_context" | "$PYTHON_BIN" -I "${PLUGIN_ROOT}/scripts/lib/hook_context.py" emit \
+        --event SessionStart --name session-start --session "${board_session:-}" --keep "${#essential}"
+elif command -v jq > /dev/null 2>&1; then
+    printf '%s' "$session_context" | jq -Rs '{additional_context: ., hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: .}}'
 fi
-
-# Output context injection as JSON.
-# Keep both shapes for compatibility:
-# - Cursor hooks expect additional_context.
-# - Claude hooks expect hookSpecificOutput.additionalContext.
-cat <<EOF
-{
-  "additional_context": "${session_context}",
-  "hookSpecificOutput": {
-    "hookEventName": "SessionStart",
-    "additionalContext": "${session_context}"
-  }
-}
-EOF
 
 exit 0

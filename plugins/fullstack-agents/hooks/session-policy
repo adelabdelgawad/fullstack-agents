@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# session-policy — SessionStart hook: delivers the project's policy profile (conf key `policy_profile`) as its own
+# context block. Claude Code caps each hook's context string at 10,000 characters, measured per hook, so keeping the
+# profile out of session-start gives each block its own allowance instead of one oversized, previewed string.
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/lib.sh"
+
+hook_input=""
+[ -t 0 ] || hook_input=$(cat || true)
+session_id=$(printf '%s' "$hook_input" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+
+PYTHON_BIN=$(find_python || true)
+[ -n "$PYTHON_BIN" ] || exit 0
+
+# The conf is read only through team_conf.py, never evaluated as shell.
+if ! policy_name=$("$PYTHON_BIN" -I "${PLUGIN_ROOT}/scripts/lib/team_conf.py" get . policy_profile 2>/dev/null); then
+    text="WARNING: .claude/fsa-team.conf has an invalid policy_profile value; no policy profile was loaded."
+elif [ -z "$policy_name" ]; then
+    exit 0
+elif [ -f "${PLUGIN_ROOT}/policies/${policy_name}.md" ]; then
+    text="**Policy profile ${policy_name}:**
+$(cat "${PLUGIN_ROOT}/policies/${policy_name}.md")"
+else
+    text="WARNING: policy_profile=${policy_name} is set but plugins/fullstack-agents/policies/${policy_name}.md does not exist."
+fi
+
+printf '%s' "$text" | "$PYTHON_BIN" -I "${PLUGIN_ROOT}/scripts/lib/hook_context.py" emit \
+    --event SessionStart --name "policy-${policy_name:-invalid}" --session "$session_id" --keep 2000
+exit 0

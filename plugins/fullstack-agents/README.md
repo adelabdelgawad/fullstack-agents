@@ -133,7 +133,7 @@ No manual `/generate entity` commands needed — just say "create a Product enti
 
 Manual commands (`/generate entity`, `/review patterns`, etc.) still work exactly as before for explicit invocation.
 
-On `resume`/`compact` the hook injects only a short reminder instead of the full guide, and projects with no FastAPI/Rust/Next.js markers get a 2-line notice instead of the full doctrine — token-efficient by design, with the quality floor (dialogue, confirmation, pattern review, validation, tests) never cut. The `using-fullstack-agents` skill carries an explicit Token Discipline section (scan once, skills load once, batch error fixes, parallel tool calls, targeted reads).
+Every session source (startup, resume, clear, compact) gets the same compact doctrine, so a compaction never loses it; the policy profile arrives as a separate block from `session-policy`. Projects with no FastAPI/Rust/Next.js markers get a 2-line notice instead of the full doctrine — token-efficient by design, with the quality floor (dialogue, confirmation, pattern review, validation, tests) never cut. The `using-fullstack-agents` skill carries an explicit Token Discipline section (scan once, skills load once, batch error fixes, parallel tool calls, targeted reads).
 
 ## Enforced Validation Gates (PostToolUse Hook)
 

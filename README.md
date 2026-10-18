@@ -111,7 +111,8 @@ After generation, the chain `REVIEW PATTERNS → FIX → VALIDATE` runs automati
 
 | Hook | When | What it enforces |
 |------|------|------------------|
-| `session-start` | Session start | Detects your stack + constitution, injects the compact doctrine (`hooks/session-doctrine.md`, kept under the 10 KB hook-output cap) |
+| `session-start` | Session start | Detects your stack + constitution, injects the compact doctrine (`hooks/session-doctrine.md`) and a capped team-board summary |
+| `session-policy` | Session start | Injects the project's policy profile (`policy_profile` in `.claude/fsa-team.conf`) as its own block. Claude Code caps each hook's context at 10,000 characters and shows the model only a 2,000-character preview of anything longer, so every block goes through `scripts/lib/hook_context.py`: at most 9,000 characters, and longer text is written to a file the model is told to read |
 | `prompt-polish` | Every prompt | Refine the request into a precise spec before acting / delegating |
 | `prompt-scan` | Every prompt | Routes by intent and lane to the skills to invoke. Keyword rules classify first; only when they match nothing and the prompt has at least `FSA_ROUTER_MIN_WORDS` (6) words does the Haiku classifier (`scripts/fsa-classify prompt`, about 5 s) pick from the real skill list. `FSA_ROUTER=haiku` always uses Haiku, `FSA_ROUTER=regex` never does; re-arms the 5-step gate for stack work |
 | `reply-classify` | Every finished reply (async) | Haiku decides whether the reply waits on the user (approval, decision, answer, action) and runs `team-board wait`; `FSA_WAIT_CLASSIFIER=off` disables it. Decisions are logged to `<config dir>/fullstack-agents/classifier.jsonl` |

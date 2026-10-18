@@ -10,6 +10,7 @@ from dispatch_support import REPO, SCRIPTS, DispatchCase
 PLUGIN = SCRIPTS.parent
 PROFILE = PLUGIN / "policies/engineering-conventions.md"
 HOOK = PLUGIN / "hooks/session-start"
+POLICY_HOOK = PLUGIN / "hooks/session-policy"
 
 
 class PromptDeliveryTests(unittest.TestCase):
@@ -90,11 +91,18 @@ class SessionStartProfileTests(unittest.TestCase):
         self.addCleanup(self.case.cleanup)
 
     def context(self):
-        hook = subprocess.run(["bash", str(HOOK)], input=json.dumps({"session_id": "s", "source": "startup"}),
-                              capture_output=True, text=True, cwd=self.case.root,
-                              env={**self.case.env, "CLAUDE_CONFIG_DIR": str(self.case.base / "cfg")})
-        self.assertEqual(hook.returncode, 0, hook.stderr)
-        return json.loads(hook.stdout)["hookSpecificOutput"]["additionalContext"]
+        """Every SessionStart block the model receives: session-start plus the separate session-policy hook."""
+        blocks = []
+        for hook_path in (HOOK, POLICY_HOOK):
+            hook = subprocess.run(["bash", str(hook_path)], input=json.dumps({"session_id": "s", "source": "startup"}),
+                                  capture_output=True, text=True, cwd=self.case.root,
+                                  env={**self.case.env, "CLAUDE_CONFIG_DIR": str(self.case.base / "cfg")})
+            self.assertEqual(hook.returncode, 0, hook.stderr)
+            if hook.stdout.strip():
+                block = json.loads(hook.stdout)["hookSpecificOutput"]["additionalContext"]
+                self.assertLessEqual(len(block), 9000)
+                blocks.append(block)
+        return "\n".join(blocks)
 
     def test_session_start_includes_the_profile_when_set(self):
         self.case.binding(policy_profile="engineering-conventions")
