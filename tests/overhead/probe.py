@@ -92,11 +92,13 @@ def sync_hooks(hooks, event, tool=None):
     return out
 
 
-def session_start(hooks, env, project, session):
+def session_start(hooks, env, project, session, agent_type=None):
     rows = []
     for command in sync_hooks(hooks, "SessionStart"):
-        proc, ms = run_hook(command, {"session_id": session, "source": "startup", "cwd": str(project),
-                                      "hook_event_name": "SessionStart"}, env, project)
+        payload = {"session_id": session, "source": "startup", "cwd": str(project), "hook_event_name": "SessionStart"}
+        if agent_type:
+            payload["agent_type"] = agent_type
+        proc, ms = run_hook(command, payload, env, project)
         rows.append({"command": command.split("run-hook.cmd\"")[-1].strip(), "ms": round(ms),
                      "strings": measure_strings(context_strings(proc.stdout))})
     return rows
@@ -181,7 +183,8 @@ def main():
         session = "probe-" + uuid.uuid4().hex[:12]
         report = {
             "plugin": str(plugin), "project": str(project),
-            "session_start": session_start(hooks, env, project, session),
+            "session_start": session_start(hooks, env, project, session, "fullstack-agents:fullstack-agent"),
+            "session_start_other_agent": session_start(hooks, env, project, session + "-o", "general-purpose"),
             "prompts": prompts(hooks, env, project, session),
             "tool_latency": tool_latency(hooks, env, project, session, args.repeats),
             "skills": skills(plugin),
@@ -201,10 +204,12 @@ def main():
     if args.json:
         args.json.write_text(json.dumps(report, indent=1))
     t = report["totals"]
-    print(f"session-start: {t['session_start_chars']} chars / {t['session_start_bytes']} bytes "
+    print(f"session-start (lead agent, all SessionStart hooks): {t['session_start_chars']} chars / {t['session_start_bytes']} bytes "
           f"(over cap: {t['session_start_over_cap']}) ~{t['est_tokens_session_start']} tok est")
-    for r in report["session_start"]:
-        print(f"  {r['command']:<28} {r['ms']:>5} ms  " + ", ".join(f"{s['chars']}c/{s['bytes']}b" for s in r["strings"]))
+    for label, key in (("lead", "session_start"), ("other agent", "session_start_other_agent")):
+        for r in report[key]:
+            print(f"  [{label}] {r['command']:<24} {r['ms']:>5} ms  "
+                  + ", ".join(f"{s['chars']}c/{s['bytes']}b" for s in r["strings"]))
     print(f"prompts ({len(PROMPTS)}): {t['prompt_chars']} chars ~{t['est_tokens_prompts']} tok est")
     for r in report["prompts"]:
         print(f"  {r['prompt']:<15} {r['chars']:>5} chars {r['ms']:>5} ms")
