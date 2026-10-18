@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Codex lifecycle adapter: no classifier model, transcript scan or Claude hooks."""
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -91,10 +92,27 @@ def post(payload):
         print(json.dumps(output))
 
 
+IMPLEMENTER = ("Fullstack Agents: this is a dispatched implementer run (FSA_ROLE=implementer). Follow the implementer "
+               "contract and brief in the prompt; the Codex-led workflow, phases, task lists and audits do not apply.")
+
+
+def implementer_hook(mode, payload):
+    """A dispatched implementer never receives lead doctrine and is never held open by the stop guard."""
+    if mode == "start":
+        context("SessionStart", IMPLEMENTER)
+    elif mode == "post":
+        post(payload)
+    elif mode not in ("prompt", "stop"):
+        raise ValueError("unknown hook mode")
+    return 0
+
+
 def main():
     try:
         payload = json.load(sys.stdin)
         mode = sys.argv[1]
+        if os.environ.get("FSA_ROLE") == "implementer":
+            return implementer_hook(mode, payload)
         if mode == "start":
             launcher = launcher_hint()
             if payload.get("source") in {"resume", "compact"}:
