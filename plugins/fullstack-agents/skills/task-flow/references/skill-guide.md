@@ -283,7 +283,15 @@ services instead of deploying; `team-coordination` "Bare-metal development" has 
 ## Project bindings
 
 The project supplies these values in its `CLAUDE.md` or in a bindings file that `CLAUDE.md` names.
-`.claude/fsa-team.conf` holds the machine-read keys: `runs_dir=` (the canonical run registry; `FSA_CODEX_RUNS_DIR` still wins),
+`.claude/fsa-team.conf` is parsed by `scripts/lib/team_conf.py` (typed keys, never evaluated as shell; an invalid value makes the
+dependent gate refuse and names the key; an unknown key is a warning). Optional gates, each off until its keys are set:
+`edit_budget=`/`carve_outs=`/`gated_extensions=` (edit-budget-gate), `read_range_max=` (read-guard), `gated_extensions=` (write-guard),
+`scan_gate=on` (scan-gate). Overrides: `FSA_SKIP_EDIT_BUDGET`, `FSA_SKIP_READ_GUARD`, `FSA_SKIP_WRITE_GUARD`, `FSA_SKIP_SCAN_GATE` (one
+gate each); the legacy `KC_CODEX_GATE_OFF=1` covers exactly those four, never `run-owner-gate`, `skill-gate` or `team-guard`;
+`KC_DIRECT_EDIT_LIMIT`/`KC_READ_RANGE_MAX` override the two numbers for a session. `policy_profile=engineering-conventions` enables the
+optional conventions profile (`policies/engineering-conventions.md`): the lead receives it at session start and every implementer
+receives its "Every agent" section; `monitor_model=` names the monitor runner; `codex_add_dirs=` lists Codex's extra writable dirs.
+Also: `runs_dir=` (the canonical run registry; `FSA_CODEX_RUNS_DIR` still wins),
 `legacy_runs_dirs=` (colon list readers keep scanning) and `plugin_release=` (the release directory a project's sessions use).
 
 A project normally runs a **pinned release**: `scripts/fsa-release export <ref>` writes an immutable directory with a `RELEASE.json`
