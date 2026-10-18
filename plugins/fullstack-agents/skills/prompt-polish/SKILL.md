@@ -1,6 +1,6 @@
 ---
 name: prompt-polish
-description: Refine a raw user instruction into a precise, well-structured prompt before acting on it or delegating it to worker subagents. Applies Claude prompt-engineering best practices (clear intent, explicit scope, success criteria, format, context). Runs on every request via the prompt-polish UserPromptSubmit hook; this skill carries the method. Use whenever a request is about to drive code generation, review, debugging, or multi-agent work.
+description: Refine an open-ended request into a precise spec (intent, scope, success criteria, constraints, output) before acting on it or delegating it.
 ---
 
 # Prompt Polish

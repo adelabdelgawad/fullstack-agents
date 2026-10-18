@@ -1,6 +1,6 @@
 ---
 name: celery
-description: Production-ready Celery worker configuration for distributed background task processing — task queues, routing, retry strategies, and worker performance tuning. Use when configuring Celery workers, creating background or async tasks, or debugging Celery issues. Do not use for cron-style scheduled jobs (use tasks-management for APScheduler scheduling).
+description: Python Celery workers — queues, routing, retries, background tasks, worker tuning and Celery debugging. Scheduled jobs use tasks-management.
 ---
 
 # Celery Worker Skill

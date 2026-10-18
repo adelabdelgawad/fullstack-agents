@@ -1,6 +1,6 @@
 ---
 name: backend-migration-from-frontend
-description: Migrate a backend to a new framework by reverse-engineering behavior from the frontend — trace every UI request down through router, controller, middleware, service, repository, DB, jobs, events, and side effects, then reproduce equivalent behavior (validation, permissions, transactions, responses, status codes, logging, caching, events) in the target. Use when porting/rewriting a backend and behavioral equivalence with the existing app matters. Do not use for greenfield backends (use fastapi / python-clean-architecture / rust-clean-architecture) or pure frontend migrations (use frontend-transformation).
+description: Port a backend to a new framework with behavioral equivalence, reverse-engineered from every frontend request (validation, permissions, transactions, responses, side effects). Not for greenfield backends.
 ---
 
 # Backend Migration Driven by Frontend Analysis

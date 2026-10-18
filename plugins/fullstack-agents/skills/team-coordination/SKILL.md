@@ -1,6 +1,6 @@
 ---
 name: team-coordination
-description: Use whenever more than one Claude session works on the same repository or production — before a production deploy, a proxy reload, a migration, a default-branch merge or a shared cache clean. Lightweight protocol: each session works in its own worktree, merges only deployable work, and coordinates only the few actions that can actually collide. On a bare-metal development host the project binds one dev branch instead: commits only, no worktrees or merges, and affected services are reloaded rather than deployed.
+description: Several Claude sessions on one repository or production — before a deploy, proxy reload, migration, default-branch merge or shared cache clean.
 ---
 
 # Team coordination

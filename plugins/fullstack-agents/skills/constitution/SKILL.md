@@ -1,6 +1,6 @@
 ---
 name: constitution
-description: Create and maintain a per-project constitution — the versioned, normative principles file that codebase-scanning loads and all gates check against (layer rules, language lanes, wire contract, quality limits). Use when asked to create, update, or check a project constitution, bootstrap project principles, or when a governed project has no constitution yet. Do not use for the plugin's own global rules (those live in the skills).
+description: Create, update or check a project constitution — the versioned principles file (layers, language lanes, wire contract, quality limits) that gates check against.
 ---
 
 # Project Constitution

@@ -1,6 +1,6 @@
 ---
 name: rust-nextjs-contract
-description: Wire-contract parity for Rust APIs serving the shared Next.js frontend — camelCase JSON matching CamelModel output, limit/skip pagination, search and is_active filters, list envelopes with total, Bearer auth, and route prefixes, so Rust and FastAPI services are interchangeable behind the same frontend. Use when exposing ANY Rust endpoint that Next.js (or the existing fetch-architecture) will consume. Do not use for service-to-service-only APIs with their own contract.
+description: Wire contract for Rust endpoints consumed by Next.js — camelCase JSON, pagination, filters, list envelopes, auth, route prefixes and OpenAPI.
 ---
 
 # Rust ↔ Next.js Wire Contract

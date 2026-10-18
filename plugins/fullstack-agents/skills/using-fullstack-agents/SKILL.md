@@ -1,6 +1,6 @@
 ---
 name: using-fullstack-agents
-description: Auto-triggering guide for fullstack-agents — ensures Claude automatically invokes the right code generation, review, and debugging skills before writing any FastAPI or Next.js code.
+description: Routing guide — which fullstack-agents skill to invoke before writing FastAPI, Rust or Next.js code.
 ---
 
 # Using Fullstack Agents

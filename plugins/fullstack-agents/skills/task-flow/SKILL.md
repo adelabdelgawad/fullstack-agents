@@ -1,6 +1,6 @@
 ---
 name: task-flow
-description: Operating flow for the fullstack-agent session lead — investigate, plan, implement (direct edit within the file budget, otherwise a delegated implementer), audit, loop. Use before the first source edit of any task, and whenever deciding whether to edit directly, delegate an implementation, or delegate a wide scan.
+description: Lead operating flow — light or full path, direct edit or delegation, briefs, scans, audit and retries. Before the first source edit, delegation or wide scan.
 ---
 
 # Agent task flow

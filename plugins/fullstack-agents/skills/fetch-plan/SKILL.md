@@ -1,6 +1,6 @@
 ---
 name: fetch-plan
-description: Plan fetch layers for a new entity — determines which server actions, API routes, and client calls to create before implementation.
+description: Plan which server actions, API routes and client calls a new entity needs, before implementation.
 ---
 
 # Fetch Plan

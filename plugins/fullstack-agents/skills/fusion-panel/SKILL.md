@@ -1,6 +1,6 @@
 ---
 name: fusion-panel
-description: Panel reasoning for high-stakes decisions — take several INDEPENDENT passes at the same question (blind to each other), then synthesize consensus, contradictions, unique insights, and blind spots into one grounded answer. Inspired by fusion-fable's "independence, then synthesis". Zero setup — uses parallel Claude subagents, no external CLIs and no slash command. Use for architecture choices, risky migrations, security-sensitive changes, stubborn bugs, and ambiguous trade-offs where being wrong is costly.
+description: Independent parallel passes on one high-stakes question, then one synthesis — architecture choices, risky migrations, security changes, stubborn bugs.
 ---
 
 # Fusion Panel

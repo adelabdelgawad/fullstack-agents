@@ -1,6 +1,6 @@
 ---
 name: senior-engineer
-description: Senior-engineer discipline for architecture, modularity, and duplication prevention with YAGNI — search-before-implement, build only what is asked, composition over monoliths, SOLID boundaries, aggressive complexity reduction, and leave-it-cleaner refactoring. Use before writing, modifying, or refactoring ANY application code, and when asked to refactor, clean up, reduce duplication, or extract shared logic. Do not use for docs-only, config-only, or dependency-bump changes.
+description: Search before implementing, build only what is asked, no duplication, small composable units. Before writing, changing or refactoring application code.
 ---
 
 # Senior Engineer: Architecture, Modularity, and Duplication Prevention

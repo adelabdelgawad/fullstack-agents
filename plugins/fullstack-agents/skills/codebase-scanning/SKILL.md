@@ -1,6 +1,6 @@
 ---
 name: codebase-scanning
-description: Dynamically detect project patterns and coding style before code generation. MANDATORY before first generation in any session.
+description: Detect the project's patterns and coding style before generating code. Mandatory before the first generation in a session.
 ---
 
 # Codebase Scanning

@@ -1,6 +1,6 @@
 ---
 name: tasks-management
-description: Background task management combining APScheduler scheduling with Celery execution — scheduled jobs, cron-style periodic tasks, job management endpoints, execution tracking, and distributed locking. Use when creating scheduled or periodic jobs. Do not use for plain fire-and-forget background tasks (use celery).
+description: Python scheduled and periodic jobs — APScheduler with Celery execution, job endpoints, execution tracking and distributed locking.
 ---
 
 # Scheduled task management

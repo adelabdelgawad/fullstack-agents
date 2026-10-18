@@ -1,6 +1,6 @@
 ---
 name: rust-correctness
-description: Rust language correctness reference — ownership and borrowing, lifetimes, async concurrency hazards, smart pointer selection, panic-vs-Result philosophy, and exhaustive pattern matching, with detectors for the forbidden patterns behind common compiler errors (E0382, E0499, E0502, E0597) and async bugs. Use when writing any non-trivial Rust, fixing borrow-checker or Send/Sync errors, or reviewing Rust for correctness. Do not use for Python.
+description: Rust correctness — ownership, borrowing, lifetimes, async and Send/Sync hazards, error handling, compiler errors E0382/E0499/E0502/E0597. For any non-trivial Rust.
 ---
 
 # Rust Correctness Reference
