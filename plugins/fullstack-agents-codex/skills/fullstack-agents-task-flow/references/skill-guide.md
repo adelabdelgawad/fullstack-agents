@@ -78,8 +78,13 @@ a pre-existing failure is never mistaken for a regression.
 
 The dispatch script enforces the list. The Codex and Grok engines' edit and write tools accept
 only the `ALLOWED_PATHS` entries (the Codex engine, launched through the `cc` alias, enforces this with a PreToolUse fence hook and exports `FSA_IMPLEMENTER_RUN=<run id>` so a
-project edit gate can admit exactly `<runs>/<id>.allow`), and the manifest prints `STATUS=OUT_OF_SCOPE` for any other path that
-changed during the run (in a shared tree that can be another session, so confirm the author). A
+project edit gate can admit exactly `<runs>/<id>.allow`). Codex has no fence: its edits are checked only after the run. For every engine
+the manifest prints `STATUS=OUT_OF_SCOPE` for any other path that
+changed during the run (in a shared tree that can be another session, so confirm the author).
+Every engine receives the same implementer contract (`scripts/lib/roles/implementer.md`, hashed into the run record) and the project's
+rules file: `AGENTS.md`, or `CLAUDE.md` until the project has one. Codex implementer runs pass `--disable plugins`, so the Codex-led
+edition's lead doctrine never reaches them; whether its hooks also stay silent is confirmed only by a real Codex run.
+The verifier and reviewer contracts are `agents/lead/test-runner.md` and `agents/lead/diff-reviewer.md`; briefs never restate them. A
 brief over `FSA_MAX_ALLOWED_PATHS` paths (default 8) is refused. So list every file the change
 breaks, including tests of removed code, and name a `PATTERN:` file for any test the implementer
 must write, so it never browses for one.
@@ -104,6 +109,10 @@ tests would race another (a shared compile target, a shared database)
 waits instead; the project binding caps how many heavy runs share a host. Review worker output before dependent work uses it; run the independent audit once on the
 completed coherent deliverable, including coupled units. Units only start together when neither
 needs the other's output.
+
+A coherent change larger than 8 paths becomes sequential units, each with its own build check, under one shared acceptance and
+one verification at the deliverable boundary. The user may raise `FSA_MAX_ALLOWED_PATHS` for one change instead. Never split
+coherent work only to make units smaller, and record the reason for any split in the brief.
 
 ## Visible workers (only when the user says "use herdr")
 
@@ -132,12 +141,21 @@ outcomes, not only completion:
   finish, so watch the engine's own session activity (for opencode, its session database) or the
   worktree's changed files, not the log size alone.
 - **Stall** — work started, then nothing changed for 5 minutes.
-- **Finished** — the result file exists.
+- **Finished** — `<run>.result.json` exists (v2 runs; `.last.txt` for v1).
 
 On a stuck start or a stall, stop the run by its **engine process** (the child whose working
 directory is the worktree), not only the wrapper script: a surviving child can wake later and
-overwrite files a re-dispatched run wrote. Re-dispatch once; if it hangs again, report it to the
+overwrite files a re-dispatched run wrote. Sending SIGTERM to `codex-task.sh` does this for the runner's process group and every
+process carrying `FSA_RUN_ID`, and records `cancelled` with the touched paths. Re-dispatch once; if it hangs again, report it to the
 user instead of retrying silently, and tell any peer session waiting on the result.
+
+A run ends in one recorded state in `<run>.result.json`: `succeeded`, `engine_failed`, `invalid_output`, `scope_violation`,
+`no_changes` or `cancelled`. `succeeded` means the engine finished with a valid, in-scope result; it is never acceptance. With
+`FSA_DISPATCH_EXIT=strict` the exit code is 0, 10, 11, 12, 13, 14 (instructions changed during the run) or 130; the legacy default
+exits 0 and only the `STATUS=` lines differ. A run owns its paths until `scripts/lib/liveness.py` finds no process that can still
+edit for it and the engine's own record shows completion. A launcher exiting proves nothing, and Codex may run commands through a
+shared daemon. `STATUS=OWNERSHIP_HELD` or an `uncertain` run keeps its paths. Release them with
+`codex-task.sh release <run-id> [--confirm]` only after checking. `--confirm` overrides a missing engine record, never a live process.
 
 ## Auditing
 
@@ -265,6 +283,14 @@ services instead of deploying; `team-coordination` "Bare-metal development" has 
 ## Project bindings
 
 The project supplies these values in its `CLAUDE.md` or in a bindings file that `CLAUDE.md` names.
+`.claude/fsa-team.conf` holds the machine-read keys: `runs_dir=` (the canonical run registry; `FSA_CODEX_RUNS_DIR` still wins),
+`legacy_runs_dirs=` (colon list readers keep scanning) and `plugin_release=` (the release directory a project's sessions use).
+
+A project normally runs a **pinned release**: `scripts/fsa-release export <ref>` writes an immutable directory with a `RELEASE.json`
+hash manifest, and a session started from it never changes behaviour mid-task. Every dispatch verifies the files it copies. The
+live source tree (**dev mode**) is only for working on the plugin itself. There the session pin makes a later source change refuse
+dispatch with `STATUS=PLUGIN_CHANGED` until `FSA_ACCEPT_PLUGIN_CHANGE=1` is set deliberately. Each dispatch runs from a copy of
+the dispatcher and helpers in its run directory, so no plugin edit can alter a run already in flight.
 A binding the project leaves unset means that route is unavailable, not that a default applies.
 
 | Binding | Value |
