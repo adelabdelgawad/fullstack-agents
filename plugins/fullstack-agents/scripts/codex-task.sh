@@ -13,6 +13,9 @@ fi
 # Engine precedence: the brief's IMPLEMENTER: line (per task), then FSA_IMPLEMENTER (per session), then claude.
 engine=$(sed -nE 's/^IMPLEMENTER:[[:space:]]*([a-z]+).*/\1/p' "$brief" | head -1)
 engine=${engine:-${FSA_IMPLEMENTER:-claude}}
+# Grok reasoning effort: the brief's EFFORT: line, then FSA_GROK_VARIANT; empty keeps the model default.
+variant=$(sed -nE 's/^EFFORT:[[:space:]]*([a-z]+).*/\1/p' "$brief" | head -1)
+variant=${variant:-${FSA_GROK_VARIANT:-}}
 case "$engine:$mode" in
   codex:investigate) model=${FSA_CODEX_MODEL_INVESTIGATE:-gpt-5.6-luna}; sandbox=read-only ;;
   codex:plan)        model=${FSA_CODEX_MODEL_PLAN:-gpt-5.6-sol};         sandbox=read-only ;;
@@ -151,7 +154,7 @@ if [ "$engine" = "grok" ]; then
   attach=""; while IFS= read -r f; do [ -n "$f" ] && attach+=" -f '$f'"; done <<<"$(skill_files)"
   cat > "$runner" <<EOF
 set -o pipefail
-cd '$root' && OPENCODE_CONFIG='$cfg' '$opencode_bin' run -m '$model'$attach -- "\$(cat '$prompt')" 2>&1 | tee '$log'
+cd '$root' && OPENCODE_CONFIG='$cfg' '$opencode_bin' run -m '$model'${variant:+ --variant '$variant'}$attach --"\$(cat '$prompt')" 2>&1 | tee '$log'
 rc=\${PIPESTATUS[0]}
 python3 '$here/lib/extract-result.py' '$log' '$last' || rc=1
 exit \$rc
@@ -220,7 +223,7 @@ snapshot > "$runs/$id.post.txt"
 touched=$(run_touched "$runs" "$id")
 
 printf 'run=%s\nengine=%s\nmodel=%s\ncodex_exit=%s\nbase=%s\nlast_message=%s\nlog=%s\ntouched_by_this_run:\n%s\n' \
-  "$id" "$engine" "$model" "$codex_exit" "$base" "$last" "$log" "${touched:-(none)}"
+  "$id" "$engine" "$model${variant:+ (variant $variant)}" "$codex_exit" "$base" "$last" "$log" "${touched:-(none)}"
 [ "$mode" = "implement" ] && printf 'allowed_paths=%s\n' "$runs/$id.allow"
 [ -n "$herdr_pane" ] && printf 'herdr_pane=%s (close it after the audit: herdr pane close %s)\n' "$herdr_pane" "$herdr_pane"
 
