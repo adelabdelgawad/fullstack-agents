@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-fetch-validate
-description: "Audit fetch pattern compliance — checks server actions use /backend/ URLs, API routes use backendFetch with (token, headers), client uses api not fetchClient, and CSRF flows correctly."
+description: "Audit fetch-pattern compliance — /backend/ URLs in server actions, backendFetch in API routes, api client usage and CSRF flow."
 ---
 
 ## Codex runtime binding

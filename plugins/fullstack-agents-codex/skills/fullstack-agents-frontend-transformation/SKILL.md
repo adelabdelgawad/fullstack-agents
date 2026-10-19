@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-frontend-transformation
-description: "Migrate an existing React (or other framework) frontend to a target framework (e.g. Next.js App Router) at 1:1 fidelity — same pages, routes, layouts, components, styling, state, and interactions, with nothing redesigned or reimplemented. Use when asked to port, migrate, convert, or transform a frontend to another framework while preserving it exactly. Do not use for greenfield pages (use nextjs / data-table) or backend migrations (use backend-migration-from-frontend)."
+description: "Port an existing frontend (React or other) to another framework such as Next.js App Router at 1:1 fidelity, with nothing redesigned."
 ---
 
 ## Codex runtime binding

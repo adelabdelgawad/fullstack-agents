@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-rust-clean-architecture
-description: "Clean Architecture + DDD for Rust API microservices — Cargo workspace with domain/application/infrastructure/shared crates, ports and adapters, use-case-owned transactions, parse-don't-validate value objects, four-stage error model, and composition root. Use when creating or structuring a Rust service, deciding where Rust code belongs, or generating Rust entities end-to-end. Do not use for Python services (use python-clean-architecture) or frontend code. No Leptos — Rust serves JSON APIs only."
+description: "Rust service structure — workspace crates, domain boundaries, ports and adapters, use-case transactions, and where Rust code belongs."
 ---
 
 ## Codex runtime binding

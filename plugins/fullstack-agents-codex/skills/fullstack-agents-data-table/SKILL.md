@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-data-table
-description: "Create Next.js data table pages with SSR initial load, simplified state management, and server-response-based UI updates. Use when asked to create, change, review or diagnose a data table page, entity management page, CRUD table, admin list view, table columns or cell links. Generates page.tsx (SSR), table components, columns, context, actions, and API routes following a proven architecture with centralized reusable data-table component. Do not use for non-table pages (use nextjs) or backend code (use fastapi)."
+description: "Next.js data-table and list pages — SSR first load, columns, cell links, filters, facets, CRUD tables and list endpoints; create, change, review or diagnose. Other pages use nextjs."
 ---
 
 ## Codex runtime binding

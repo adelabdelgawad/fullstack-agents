@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-fetch-implement
-description: "Scaffold fetch boilerplate for a new entity — generates server actions, API routes, and client call patterns following the correct architecture."
+description: "Scaffold an entity's fetch layer — server actions, API routes and client calls."
 ---
 
 ## Codex runtime binding

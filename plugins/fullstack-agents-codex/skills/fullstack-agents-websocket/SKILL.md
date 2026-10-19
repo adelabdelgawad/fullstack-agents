@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-websocket
-description: "Production-grade WebSocket patterns for Python (FastAPI/Starlette) with connection management, rooms, and message protocols"
+description: "Python (FastAPI/Starlette) WebSocket servers — connection management, rooms and message protocols."
 ---
 
 ## Codex runtime binding

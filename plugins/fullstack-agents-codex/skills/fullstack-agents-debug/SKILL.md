@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-debug
-description: "Use when encountering any bug, error, unexpected behavior, slow page, long loading skeleton or latency complaint in a fullstack project — enforces root-cause-first debugging discipline before any fix attempts"
+description: "Any bug, error, unexpected behavior, slow page, long loading skeleton or latency complaint — establish the root cause before any fix."
 ---
 
 ## Codex runtime binding

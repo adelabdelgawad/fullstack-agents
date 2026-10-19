@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-rust-quality-gates
-description: "Non-skippable verification chain for Rust services — fmt, clippy with deny-warnings, cargo check, sqlx offline-cache drift, audit, migration safety, and the no-allow policy. Use after generating or modifying Rust code, before declaring any Rust work done, or when asked to gate or validate a Rust project. Do not use for Python validation (ruff/mypy are wired separately)."
+description: "Rust verification chain — fmt, clippy deny-warnings, cargo check, sqlx offline cache, audit, migration safety. Before declaring Rust work done."
 ---
 
 ## Codex runtime binding

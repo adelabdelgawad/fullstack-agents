@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-rust-sqlx
-description: "SQLx + PostgreSQL patterns for Rust services — compile-time-verified query macros, Executor-generic repository functions, FromRow type mapping, pool configuration, migration discipline, offline cache for CI, and SQLSTATE error mapping. Use when writing Rust database code, repositories, migrations, or queries. Do not use for SQLAlchemy/Python data access (use fastapi or python-clean-architecture)."
+description: "Rust SQLx and PostgreSQL — query macros, repositories, transactions, FromRow, pools, migrations, offline cache and SQLSTATE mapping."
 ---
 
 ## Codex runtime binding

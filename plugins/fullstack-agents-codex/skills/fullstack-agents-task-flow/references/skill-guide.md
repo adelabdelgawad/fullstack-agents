@@ -31,9 +31,19 @@ A round trip to the implementer costs a brief, a dispatch, a wait, and an audit.
 change that is more work than the change. So size decides the route:
 
 - **Direct edit** — the orchestrator edits source itself when the change is within the file
-  budget and touches no risk path. It still runs the tests.
-- **Delegated** — anything over the budget, or touching a risk path, goes to the implementer with
-  a written brief.
+  budget, touches no risk path, and is straightforward: the cause and the edit sites are already
+  known, the change follows an existing pattern, and its check is a focused build or test the lead
+  can run in about a minute. It still runs the tests.
+- **Delegated** — anything over the budget, touching a risk path, or below the budget but still
+  open-ended: a new module or abstraction, a cross-layer wire-contract change, edits whose sites
+  are not yet known, or a check that needs the test database or a long suite. The user asking for
+  delegation always delegates.
+
+The budget (`edit_budget`, recommended 5) counts only gated files **this session** edited
+successfully and has not yet committed; other sessions' dirty files never spend it, and
+committing what is done frees it (`hooks/edit-budget-gate`). Evidence for the default, from 177
+UCM Codex runs: runs touching 1–3 paths took a median 1.6–1.9 min each plus a brief and an audit,
+and 53 of them existed only because the old gate counted other sessions' files.
 
 Risk paths never qualify for a direct edit regardless of size: vendored upstream forks,
 migrations, and the code owning a worker, lifecycle, recovery, leader election or sweep. Size
@@ -172,7 +182,7 @@ Runtime bindings win over the historical dispatcher rules below: in the Codex-le
 the lead and native workers may run assigned checks within their actual tool permissions;
 the independent auditor only performs the bounded read-only audit. Test-suite denial below
 applies to the historical headless implementer dispatcher, not native workers. Never bypass
-an enforced tool restriction. Reuse completed evidence; do not rerun solely to change the runner.
+an enforced tool restriction. Evidence for the current tree state is not rerun solely to change the runner; a result from an earlier state is reused only under the D6 rule in SKILL.md (protected inputs plus a matching fingerprint), never on a fingerprint alone.
 
 The implementer's completion report is not evidence. Read the git diff restricted to the paths the
 run reports as touched and review it for conformity: the brief's scope, the project's architecture

@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-nextjs
-description: "Generate production-ready Next.js pages with SSR initial load, client-side data management, and server-response-based updates. Use when creating, changing, reviewing or diagnosing Next.js pages — admin or settings pages, CRUD, layouts, router navigation, `<Link>` prefetch, `router.refresh()`, data refresh after mutations or live events, and slow navigation, long loading skeletons or frozen pages (read references/data-freshness.md and references/client-performance.md). Do not use for backend FastAPI code (use fastapi); for full entity data-table pages prefer data-table."
+description: "Next.js pages, layouts, router, Link prefetch, server actions, data refresh after mutations or live events, and slow navigation, skeletons or frozen pages."
 ---
 
 ## Codex runtime binding

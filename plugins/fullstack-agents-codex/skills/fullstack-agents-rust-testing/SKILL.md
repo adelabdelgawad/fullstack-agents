@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-rust-testing
-description: "Testing strategy for Rust clean-architecture services — domain unit tests, use-case tests with hand-rolled fakes, repository integration tests with #[sqlx::test], HTTP tests with tower oneshot, and TDD flow. Use when writing or fixing Rust tests or setting up test infrastructure. Do not use for pytest/Python testing."
+description: "Rust tests — unit tests, use-case fakes, sqlx::test repository tests, HTTP tests with tower oneshot; writing or fixing Rust tests."
 ---
 
 ## Codex runtime binding

@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-rust-axum-api
-description: "Axum 0.8 API patterns — curly-brace path syntax, extractor ordering, State via FromRef, IntoResponse error mapping, Tower middleware ordering, JWT auth middleware, WebSocket, and graceful shutdown. Use when writing or reviewing Axum handlers, routers, middleware, or HTTP-layer code in a Rust service. Do not use for FastAPI/Python endpoints (use fastapi or python-clean-architecture) or for business logic (handlers delegate to use cases — see rust-clean-architecture)."
+description: "Rust Axum 0.8 handlers, routers, extractors, middleware, error mapping, JWT auth, WebSocket and graceful shutdown."
 ---
 
 ## Codex runtime binding

@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-python-clean-architecture
-description: "Clean Architecture + DDD for Python (FastAPI) microservices — pure domain layer with value objects and entities, application use cases owning transactions, repository ports as Protocols, SQLAlchemy adapters in infrastructure, and a four-stage error model. Use when creating or structuring a NEW Python microservice or applying DDD to Python. Do not use for the existing simplified FastAPI pattern (use fastapi — codebase-scanning decides which applies) and never for Rust services (use rust-clean-architecture)."
+description: "Clean Architecture and DDD for a new Python (FastAPI) microservice — domain, use cases, repository ports, SQLAlchemy adapters. Existing simplified FastAPI uses fastapi."
 ---
 
 ## Codex runtime binding

@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-batch-error-resolution
-description: "Resolve multiple build, compile, test, lint, or type-check errors as one batch operation — fix all errors first, then verify once. Use when a build, test suite, linter, or type checker reports several failures at the same time. Do not use for a single isolated error that can be fixed and verified immediately."
+description: "Fix several build, test, lint or type-check errors as one batch, then verify once. Not for a single isolated error."
 ---
 
 ## Codex runtime binding
