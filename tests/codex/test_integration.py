@@ -792,6 +792,15 @@ class StopGuardTests(unittest.TestCase):
         self.assertIsNone(self.stop("s1", "Three options listed; this needs your decision before the migration."))
         self.assertEqual(self.stop("s1", "Approved items are being implemented now.")["decision"], "block")
 
+    def test_approval_ask_cannot_end_already_approved_open_work(self):
+        self.ledger("s1", "in_progress")
+        self.codex("prompt", {"session_id": "s1", "prompt": "The plan is approved. Proceed with P1-P3."})
+        out = self.stop("s1", "P1 is done.\nApprove the plan and I'll start P2.")
+        self.assertEqual(out["decision"], "block")
+        self.assertIsNone(self.stop("s1", "P2 needs a schema change.\nWaiting on: you - approve the migration"))
+        self.codex("prompt", {"session_id": "s1", "prompt": "what changed in P1"})
+        self.assertIsNone(self.stop("s1", "Summary above.\nApprove the plan and I'll start P2."))
+
     def test_light_task_without_a_ledger_never_blocks(self):
         for message in ("Fixed the typo in hooks/lib.sh; bash hooks/lib.test.sh passes.", "Still working.", ""):
             self.assertIsNone(self.stop("light-session", message))

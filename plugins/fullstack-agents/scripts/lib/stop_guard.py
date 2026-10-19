@@ -16,6 +16,9 @@ PAUSE = re.compile(
     re.IGNORECASE)
 TRAILER = re.compile(r"^\W*(waiting\s+on|paused|blocked)\s*:\s*(.+)$", re.IGNORECASE)
 ON_USER = re.compile(r"\b(you|user|your)\b", re.IGNORECASE)
+# The user's latest prompt approves work already proposed ("go ahead", "approved", "proceed ...").
+APPROVAL = re.compile(r"\b(approved?|go ahead|proceed|lgtm|ship it|green ?light|sounds good|do it|"
+                      r"you (may|can) (start|proceed|continue))\b", re.IGNORECASE)
 # A closing line that asks the user to approve, decide or reply hands the turn over even without a '?'.
 ASK = re.compile(r"^\W*(please\s+)?(approve|confirm|choose|decide|pick|reply|let me know|tell me)\b"
                  r"|\b(your|awaiting)\s+(approval|decision|go-?ahead|confirmation|choice)\b", re.IGNORECASE)
@@ -53,11 +56,15 @@ def record_prompt(session_id, prompt):
         return
     if "SYSTEM NOTIFICATION - NOT USER INPUT" in prompt or "<task-notification>" in prompt:
         return
-    _save(path, {"paused": bool(PAUSE.search(prompt.strip())), "blocks": 0, "signature": None})
+    text = prompt.strip()
+    _save(path, {"paused": bool(PAUSE.search(text)), "approved": bool(APPROVAL.search(text)) and not PAUSE.search(text),
+                 "blocks": 0, "signature": None})
 
 
-def _releases(message, engine):
-    """A final line naming what the turn waits on, or a closing question, legitimately ends the turn."""
+def _releases(message, engine, approved=False):
+    """A final line naming what the turn waits on, or a closing question, legitimately ends the turn.
+    An approval-style ask ("Approve the plan and I'll start") ends it only while approval is genuinely pending:
+    after the user's latest prompt approved the work, asking again does not release open ledger rows."""
     lines = [line.strip() for line in (message or "").splitlines() if line.strip()]
     if not lines:
         return False
@@ -66,7 +73,7 @@ def _releases(message, engine):
     if trailer:
         # Codex is not woken by finishing workers, so only a wait on the user may end its turn.
         return engine != "codex" or trailer[1].lower() != "waiting on" or bool(ON_USER.search(trailer[2]))
-    return tail.rstrip("*_`) ").endswith("?") or bool(ASK.search(tail))
+    return tail.rstrip("*_`) ").endswith("?") or (bool(ASK.search(tail)) and not approved)
 
 
 def decide(session_id, cwd, message, engine):
@@ -80,7 +87,7 @@ def decide(session_id, cwd, message, engine):
     items = ledger.get("items") or []
     open_items = [item for item in items if item.get("status") in OPEN]
     state = _load(path)
-    if not open_items or state.get("paused") or _releases(message, engine):
+    if not open_items or state.get("paused") or _releases(message, engine, bool(state.get("approved"))):
         return None
     signature = f"{ledger.get('updated')}:{json.dumps(ledger.get('counts'), sort_keys=True)}"
     blocks = state.get("blocks", 0) if state.get("signature") == signature else 0
