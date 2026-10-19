@@ -6,6 +6,7 @@ const fleetStore = {
 const fleet = {
   filter: fleetStore.get("filter", "all"), sort: fleetStore.get("sort", "stage"), text: "",
   feed: fleetStore.get("feed", "1") === "1", theme: fleetStore.get("theme", "system"), tpm: [],
+  tilesHidden: fleetStore.get("tiles", "1") === "0",
 };
 const FILTERS = [["all", "All"], ["running", "Running"], ["waiting", "Waiting"], ["stale", "Stale"], ["blowouts", "Blowouts"]];
 const SORTS = [["stage", "Stage order"], ["updated", "Last update"], ["cost", "Cost"], ["context", "Context fill"]];
@@ -30,9 +31,10 @@ function syncNav() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest && e.target.closest("header [data-ftheme], #ffeed, #fwall");
+  const t = e.target.closest && e.target.closest("header [data-ftheme], #ffeed, #fwall, #ftiles");
   if (!t) return;
   if (t.dataset.ftheme) applyTheme(t.dataset.ftheme);
+  else if (t.id === "ftiles") { fleet.tilesHidden = !fleet.tilesHidden; fleetStore.set("tiles", fleet.tilesHidden ? "0" : "1"); render(); }
   else if (t.id === "ffeed") { fleet.feed = !fleet.feed; fleetStore.set("feed", fleet.feed ? "1" : "0"); syncNav(); render(); }
   else setWall(!document.documentElement.classList.contains("wall"));
 });
@@ -78,10 +80,17 @@ function noteTpm() {
   if (fleet.tpm.length > 60) fleet.tpm.shift();
 }
 
+/** The summary cards collapse behind a toggle that stays under them; the choice is remembered per browser. */
 function fleetTiles() {
+  const hidden = fleet.tilesHidden;
+  const toggle = `<button type="button" id="ftiles" class="ft-toggle" aria-expanded="${!hidden}"${hidden ? "" : ' aria-controls="fleet-tiles"'}>${hidden ? "▾ Show summary" : "▴ Hide summary"}</button>`;
+  return hidden ? toggle : fleetTileCards() + toggle;
+}
+
+function fleetTileCards() {
   const t = (state && state.totals) || {};
   const tile = (label, value, sub, cls = "", extra = "") => `<div class="ft ${cls}"><div class="ft-l">${esc(label)}</div><div class="ft-v">${esc(value)}</div>${sub ? `<div class="ft-s">${esc(sub)}</div>` : ""}${extra}</div>`;
-  return `<section class="fleet-tiles" aria-label="Fleet summary">
+  return `<section class="fleet-tiles" id="fleet-tiles" aria-label="Fleet summary">
     ${tile("Sessions active (1 h)", t.live ?? 0, `${t.working || 0} working · ${t.waiting || 0} waiting · ${t.stale || 0} stale`)}
     ${tile("Waiting on you", t.waiting ?? 0, "approve, answer or decide", t.waiting ? "warn" : "")}
     ${tile("Workers running", t.workers ?? 0, t.failed ? `${t.failed} failed run${t.failed === 1 ? "" : "s"}` : "subagents and implementer runs", t.failed ? "bad" : "")}

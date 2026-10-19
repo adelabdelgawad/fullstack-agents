@@ -122,6 +122,17 @@ class FleetUiTests(unittest.TestCase):
             clash = names & set(decl.findall((LIB / extra).read_text()))
             self.assertFalse(clash, f"{extra} redeclares {sorted(clash)}; the browser then rejects the whole main script")
 
+    def test_summary_cards_collapse_behind_a_toggle_under_them(self):
+        shown = self.run_js("fleetTiles()", "var state = {totals: {live: 2}};")
+        self.assertIn('id="fleet-tiles"', shown)
+        self.assertLess(shown.index('id="fleet-tiles"'), shown.index('id="ftiles"'))
+        self.assertIn('aria-expanded="true" aria-controls="fleet-tiles"', shown)
+        self.assertIn("Hide summary", shown)
+        hidden = self.run_js("fleet.tilesHidden = true; fleetTiles()", "var state = {totals: {live: 2}};")
+        self.assertNotIn("fleet-tiles", hidden)
+        self.assertIn('aria-expanded="false"', hidden)
+        self.assertIn("Show summary", hidden)
+
     def test_squares_empty_without_workers(self):
         self.assertEqual(self.run_js(f"squaresHtml({json.dumps(card())})"), "")
 

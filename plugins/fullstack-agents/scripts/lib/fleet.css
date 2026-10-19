@@ -1,5 +1,8 @@
 :root { --m-opus: #7c3aed; --m-sonnet: #2563eb; --m-haiku: #0d9488; --m-fable: #ea580c; --m-gpt: #16a34a; --m-grok: #db2777; --m-other: #8b90a3; }
 .fleet-tiles { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 0; margin: 14px 32px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow: hidden; }
+.ft-toggle { display: block; margin: 6px auto 0; padding: 2px 12px; border: 1px solid var(--line); border-radius: 9999px; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
+.ft-toggle:hover { color: var(--ink); }
+.ft-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .ft { padding: 10px 14px; border-right: 1px solid var(--line); min-width: 0; }
 .ft:last-child { border-right: 0; }
 .ft-l { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -190,6 +193,9 @@ html.wall .wall-hint { display: block; }
   html.agents-page .orc-side { position: static; max-height: none; overflow: visible; }
   html.agents-page .feed ol { max-height: none; overflow: visible; }
   html.agents-page .legend { position: static; }
+  /* The detail panel takes the height left above the legend; a taller tab scrolls inside it, never under it. */
+  html.agents-page .orc-detail .pbody { overflow-y: auto; }
+  html.agents-page .orc-detail .herdr-detail, html.agents-page .orc-detail #card-terminal { flex: 1; min-height: 0; }
   html.agents-page .wall-hint { bottom: 40px; }
   .orc-detail .herdr-detail, .orc-detail #card-terminal { min-height: 70vh; }
   html.split .orc-grid { grid-template-columns: minmax(0, 1fr); }
