@@ -362,12 +362,16 @@ settings-group primitive) is used rather than re-implemented.
    "not set" hint from a server-provided list of which secrets exist, and a blank secret input keeps
    the stored value. The server merges submitted fields over the stored configuration, so changing
    one field never forces the user to re-enter the others.
-5. **Read-only detail tabs are grouped, answer first, one box deep.** A view tab with more than
-   four fields splits them into titled groups (rule 1) that each answer one question, such as
-   "Result", "Call" or "Campaign". The group the user opens the sheet for (the outcome, status or
-   result) comes first. Order fields inside a group from parent to child (campaign before batch).
-   Each group is a single section container holding the project's field grid; never nest a bordered
-   table or card inside a bordered section. Section titles never repeat the sheet title.
+5. **Read-only detail tabs are grouped cards of one-field rows, answer first.** A view tab with
+   more than four fields splits them into titled groups (rule 1) that each answer one question,
+   such as "Result", "Call" or "Campaign". The group the user opens the sheet for (the outcome,
+   status or result) comes first. Order fields inside a group from parent to child (campaign before
+   batch). Each group is its own card (background, border, radius) holding its title and a bordered
+   list with a divider between rows. Each row holds one field: label and value side by side on a
+   fixed 1:3 grid, value left-aligned, stacking label over value on a narrow sheet. Never lay two
+   fields side by side in one row. Use the project's read-only fact row and group primitives when
+   they exist (for example a fact row plus a settings-group list) and set the grid on them, rather
+   than writing a new row component. Section titles never repeat the sheet title.
 6. **An empty value says what it means.** A field that cannot apply to this kind of record (no agent
    on an automated call) is hidden for that kind. A field that applies but has no stored value shows
    a short word from the locale file, such as "Not recorded", not a bare dash. Label fields in
