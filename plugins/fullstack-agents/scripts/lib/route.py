@@ -90,7 +90,9 @@ def request_text(prompt):
 
 
 def clauses(text):
-    return [c.strip() for c in re.split(r"[.;:\n!?]|,\s*(?:and|but|then)\b|\s(?:and then|but)\s", text) if c.strip()]
+    # Sentence punctuation ends a clause only before whitespace, so file names (app/a.py) and URLs stay whole.
+    return [c.strip() for c in re.split(r"[.;:!?](?=\s|$)|\n|,\s*(?:and|but|then)\b|\s(?:and then|but)\s", text)
+            if c.strip()]
 
 
 def classify(prompt):

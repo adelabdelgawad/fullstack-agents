@@ -122,6 +122,8 @@ none_of "do not deploy" "intent: deploy"
 none_of "the setup was created wrong, find out why" "intent: implement"
 none_of "$(printf '## Goal\nDetermine whether data improved transcription.\n## Constraints\n- No training, annotation changes or deployment.')" "intent: deploy"
 none_of "$(printf '## Goal\nCompare two runs.\n## Context\nThe SQLx and Axum crates are unrelated.')" "lane: rust"
+expect "Rename old_name to compute_base in app/a.py and update its callers in app/b.py and app/main.py, then run the fixture test command." "lane: python"
+expect "fix the bug in src/worker.rs. do not deploy." "lane: rust"
 check "question skips Haiku in auto mode" "$([ "$(haiku_used auto 'what does the edit budget gate count in this repository?')" = 0 ] && echo 1 || echo 0)"
 check "research skips Haiku in auto mode" "$([ "$(haiku_used auto 'research online how other plugins size their hook output')" = 0 ] && echo 1 || echo 0)"
 
