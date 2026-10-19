@@ -362,3 +362,13 @@ settings-group primitive) is used rather than re-implemented.
    "not set" hint from a server-provided list of which secrets exist, and a blank secret input keeps
    the stored value. The server merges submitted fields over the stored configuration, so changing
    one field never forces the user to re-enter the others.
+5. **Read-only detail tabs are grouped, answer first, one box deep.** A view tab with more than
+   four fields splits them into titled groups (rule 1) that each answer one question, such as
+   "Result", "Call" or "Campaign". The group the user opens the sheet for (the outcome, status or
+   result) comes first. Order fields inside a group from parent to child (campaign before batch).
+   Each group is a single section container holding the project's field grid; never nest a bordered
+   table or card inside a bordered section. Section titles never repeat the sheet title.
+6. **An empty value says what it means.** A field that cannot apply to this kind of record (no agent
+   on an automated call) is hidden for that kind. A field that applies but has no stored value shows
+   a short word from the locale file, such as "Not recorded", not a bare dash. Label fields in
+   words, not symbols ("Attempt", not "Call #").

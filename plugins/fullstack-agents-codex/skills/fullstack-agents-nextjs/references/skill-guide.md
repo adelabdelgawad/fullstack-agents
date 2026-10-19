@@ -304,7 +304,8 @@ Any add/edit/view sheet follows the restrictions in
 `skills/fullstack-agents-data-table/references/edit-sheet-pattern.md` ("Sheet Layout and Behaviour Rules"): titled section
 per group when a tab has more than one group (none for a single group), successful save closes the
 sheet, edit prefills every stored non-secret value, secrets are write-only and a blank secret keeps
-the stored value.
+the stored value, read-only view tabs are grouped with the result first and one box deep, and an
+empty value is hidden when it cannot apply or says "Not recorded" instead of a bare dash.
 
 ### Data Fetching Strategy
 - **Strategy A (Default)**: `useState` + server response updates
