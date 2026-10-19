@@ -136,6 +136,11 @@ class RoleContractTests(unittest.TestCase):
                 hashes.add(meta["role_contract"]["sha256"])
         self.assertEqual(len(hashes), 1)
 
+    def test_contract_lets_the_engine_read_the_skills_it_is_told_to_read(self):
+        contract = self.CONTRACT.read_text()
+        self.assertIn("Never read or write outside the repository root, except reading the SKILL.md files a "
+                      "SKILLS block lists", contract)
+
     def test_codex_scope_wording_matches_its_enforcement(self):
         _, prompt, _ = self.run_engine("codex")
         self.assertIn("reported as a scope violation after the run", prompt)
