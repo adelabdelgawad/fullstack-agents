@@ -813,6 +813,20 @@ class StopGuardTests(unittest.TestCase):
         self.codex("prompt", {"session_id": "s1", "prompt": "what changed in P1"})
         self.assertIsNone(self.stop("s1", "Summary above.\nApprove the plan and I'll start P2."))
 
+    def test_permission_question_cannot_end_already_approved_open_work(self):
+        self.ledger("s1", "in_progress")
+        self.codex("prompt", {"session_id": "s1", "prompt": "Approved. Go ahead with P2."})
+        for ask in ("Shall I start P2?", "Do you want me to continue with P2?", "Ready to begin. Should I proceed?"):
+            self.assertEqual(self.stop("s1", "P1 is done.\n" + ask)["decision"], "block", ask)
+        self.assertIsNone(self.stop("s1", "P2 can cache in Postgres or Redis.\nWhich store should P2 use?"))
+
+    def test_negated_or_deferred_approval_keeps_the_approval_ask_open(self):
+        self.ledger("s1", "in_progress")
+        for prompt in ("don't do it until I review the plan", "wait before you proceed, I want to see the plan",
+                       "is this approved?", "Review the plan; I will approve later", "Approve? Not yet."):
+            self.codex("prompt", {"session_id": "s1", "prompt": prompt})
+            self.assertIsNone(self.stop("s1", "Plan above.\nApprove the plan and I'll start P1."), prompt)
+
     def test_light_task_without_a_ledger_never_blocks(self):
         for message in ("Fixed the typo in hooks/lib.sh; bash hooks/lib.test.sh passes.", "Still working.", ""):
             self.assertIsNone(self.stop("light-session", message))
