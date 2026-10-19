@@ -173,6 +173,10 @@ def render(output):
             # The entry point is the primary session, never a spawned lead.
             write(output / "agents" / relative, (ADAPTER / "AGENTS.md").read_text())
             continue
+        if path.stem == "web-researcher":
+            # Claude-only: its guarantee is Claude Code's per-agent tools list (web tools only); a Codex role cannot
+            # express that, so it would read the repository while claiming it cannot.
+            continue
         body = RUNTIME + adapt(body, skill_names)
         write(output / "agents" / relative, body)
         instructions = (RUNTIME + f"Role: {description}\n\n"

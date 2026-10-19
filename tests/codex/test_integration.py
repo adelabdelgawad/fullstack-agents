@@ -38,6 +38,12 @@ class BundleTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.scratch.cleanup()
 
+    def test_web_researcher_stays_claude_only(self):
+        # Codex roles cannot restrict tools to web search, so the role would read the repository it claims not to.
+        self.assertFalse((self.bundle / "roles/fullstack-agents-web-researcher.toml").exists())
+        self.assertFalse((self.bundle / "agents/lead/web-researcher.md").exists())
+        self.assertNotIn("fullstack-agents-web-researcher", [a["name"] for a in self.inventory["agents"]])
+
     def test_every_source_skill_and_resource_is_available(self):
         for source in (SOURCE / "skills").iterdir():
             if not source.is_dir():
