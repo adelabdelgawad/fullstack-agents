@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -29,29 +30,36 @@ def state_home():
 
 
 def spill(text, name, session):
-    directory = state_home() / "context"
-    directory.mkdir(parents=True, exist_ok=True)
-    now = time.time()
-    for old in directory.glob("*.md"):
-        try:
-            if now - old.stat().st_mtime > SPILL_RETENTION_S:
-                old.unlink()
-        except OSError:
-            pass
-    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in f"{session or 'nosession'}-{name}")
-    path = directory / f"{safe}.md"
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
-    return path
+    """Write the full text to an owner-only file; returns its path, or None when it cannot be written."""
+    try:
+        directory = state_home() / "context"
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        now = time.time()
+        for old in list(directory.glob("*.md")) + list(directory.glob("*.tmp")):
+            try:
+                if now - old.stat().st_mtime > SPILL_RETENTION_S:
+                    old.unlink()
+            except OSError:
+                pass
+        safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in f"{session or 'nosession'}-{name}")
+        path = directory / f"{safe}.md"
+        fd, tmp = tempfile.mkstemp(dir=directory, prefix=f".{safe}-", suffix=".tmp")  # unique, mode 0600
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(text)
+        os.replace(tmp, path)
+        return path
+    except OSError:
+        return None
 
 
 def fit(text, name, session, keep, limit):
     if len(text) <= limit:
         return text
     path = spill(text, name, session)
+    where = (f"Read the complete text now with the Read tool: {path}" if path else
+             "The complete text could not be saved (state directory not writable); tell the user.")
     notice = (f"\n\n[fullstack-agents] CONTEXT INCOMPLETE: the {name} context is {len(text)} characters, over the "
-              f"{limit}-character hook limit. Read the complete text now with the Read tool: {path}")
+              f"{limit}-character hook limit. {where}")
     head = text[:max(0, min(keep, limit - len(notice)))]
     return head + notice
 

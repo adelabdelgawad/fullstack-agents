@@ -792,6 +792,12 @@ class StopGuardTests(unittest.TestCase):
         self.assertIsNone(self.stop("s1", "Three options listed; this needs your decision before the migration."))
         self.assertEqual(self.stop("s1", "Approved items are being implemented now.")["decision"], "block")
 
+    def test_mentioning_approval_is_not_asking_for_it(self):
+        self.ledger("s1", "in_progress")
+        for message in ("Committed per your approval; 2 rows still open.", "Reply posted to the thread, rest pending."):
+            with self.subTest(message=message):
+                self.assertEqual(self.stop("s1", message)["decision"], "block")
+
     def test_approval_ask_cannot_end_already_approved_open_work(self):
         self.ledger("s1", "in_progress")
         self.codex("prompt", {"session_id": "s1", "prompt": "The plan is approved. Proceed with P1-P3."})

@@ -88,6 +88,12 @@ if [ -n "$session_id" ]; then
   state="${FSA_STATE_HOME:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/fullstack-agents}/edit-budget"
   mkdir -p "$state" 2>/dev/null && find "$state" -type f -mtime +14 -delete 2>/dev/null
   ledger="$state/$(printf '%s' "$session_id" | tr -c 'A-Za-z0-9_-' '_').paths"
+  # An unwritable ledger would undercount: fall back to the conservative whole-tree count instead.
+  if [ -w "$state" ] && { [ ! -e "$ledger" ] || [ -w "$ledger" ]; }; then
+    [ -e "$ledger" ] && touch "$ledger"  # an active session's ledger never ages out
+  else
+    ledger=""
+  fi
 fi
 
 if [ "$mode" = record ]; then

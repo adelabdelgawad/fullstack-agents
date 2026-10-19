@@ -83,6 +83,28 @@ class PruneTests(unittest.TestCase):
         self.assertEqual(plan["implement-20260901-000000-1"], "keep: pre-v2 record changed within a day")
         self.assertTrue(plan["implement-20260902-000000-2"].startswith("keep: younger than 30d"))
 
+    def test_torn_or_missing_meta_and_held_ownership_are_kept(self):
+        self.run_files("implement-20260901-000000-1", 90, "succeeded")
+        (self.runs / "implement-20260901-000000-1.meta.json").write_text("{trunc")
+        self.run_files("implement-20260902-000000-2", 90, "failed", schema=1, ownership="held")
+        self.run_files("implement-20260903-000000-3", 90, "succeeded")
+        (self.runs / "implement-20260903-000000-3.meta.json").unlink()
+        old = self.runs / "dispatch-20260903-000000-3.lib"
+        old.mkdir()
+        os.utime(old, (time.time() - 90 * DAY,) * 2)
+        self.run_files("implement-20261018-000000-9", 0, "succeeded")
+        plan = self.prune("--apply")
+        self.assertEqual(plan["implement-20260901-000000-1"], "keep: meta.json unreadable")
+        self.assertEqual(plan["implement-20260902-000000-2"], "keep: ownership held")
+        self.assertEqual(plan["implement-20260903-000000-3"], "keep: meta.json missing from a v2 run")
+        self.assertEqual(plan["dispatch-20260903-000000-3.lib"], "keep: its run is kept")
+        self.assertTrue(old.is_dir())
+
+    def test_non_positive_windows_are_rejected(self):
+        out = subprocess.run([sys.executable, "-I", str(TOOL), "prune", "--runs-dir", str(self.runs), "--keep-last", "-1"],
+                             capture_output=True, text=True)
+        self.assertEqual(out.returncode, 2)
+
     def test_conf_sets_the_windows_and_dispatcher_copies_age_out(self):
         (self.root / ".claude").mkdir()
         (self.root / ".claude/fsa-team.conf").write_text("runs_keep_days=2\nruns_keep_failed_days=3\n")

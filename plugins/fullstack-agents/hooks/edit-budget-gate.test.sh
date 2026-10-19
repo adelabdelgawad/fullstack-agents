@@ -136,6 +136,16 @@ got=$(sess record A services/rustpbx/src/z.rs); [ "$got" = 0 ] && echo "ok   (0)
 echo "--- concurrent records from parallel tool calls keep every path ---"
 rm -rf "$T/state"; for i in $(seq 1 12); do (dirty "src/p$i.rs"; sess record C "src/p$i.rs" >/dev/null) & done; wait
 n=$(sort -u "$T/state/edit-budget/C.paths" | grep -c .); [ "$n" = 12 ] && echo "ok   12 concurrent records" || { echo "FAIL concurrent records: $n"; FAILED=1; }
+echo "--- an unwritable ledger falls back to the whole-tree count, never to zero ---"
+reset_tree; rm -rf "$T/state"; mkdir -p "$T/state/edit-budget"; chmod 500 "$T/state/edit-budget"
+dirty src/q1.rs src/q2.rs src/q3.rs src/q4.rs src/q5.rs
+scheck 2 D src/q6.rs "unwritable ledger: 5 dirty gated files count"
+chmod 700 "$T/state/edit-budget"
+echo "--- an unparseable conf refuses instead of switching the gate off ---"
+reset_tree; printf 'edit_budget=5\n\377\376\n' > "$R/.claude/fsa-team.conf"
+msg=$(node -e 'process.stdout.on("error",()=>{});process.stdout.write(JSON.stringify({session_id:"E",tool_input:{file_path:process.argv[1]}}))' "$R/services/rustpbx/x.rs" | bash "$H" 2>&1 >/dev/null); got=$?
+if [ "$got" = 2 ] && printf '%s' "$msg" | grep -q 'could not be parsed'; then echo "ok   (2) unparseable conf refuses"; else echo "FAIL unparseable conf: $got $msg"; FAILED=1; fi
+write_conf
 unset FSA_STATE_HOME
 
 echo

@@ -32,15 +32,18 @@ class GeneratedGlobTests(unittest.TestCase):
         result = self.dispatch(["app.py", *self.cache])
         self.assertNotIn("STATUS=OUT_OF_SCOPE", result.stdout, result.stdout)
 
-    def test_a_tracked_file_under_a_generated_glob_is_still_scope_checked(self):
+    def test_a_glob_covering_a_tracked_file_refuses_the_dispatch(self):
         write(self.case.root / ".agent-cargo-cache/tracked.rs", "fn main() {}\n")
         git = ["git", "-C", str(self.case.root), "-c", "user.email=t@example.invalid", "-c", "user.name=T"]
         subprocess.run([*git, "add", ".agent-cargo-cache/tracked.rs"], check=True)
         subprocess.run([*git, "commit", "-qm", "tracked"], check=True)
-        self.case.binding(generated_globs=".agent-cargo-cache/*")
-        result = self.dispatch(["app.py", ".agent-cargo-cache/tracked.rs"])
-        self.assertIn("STATUS=OUT_OF_SCOPE", result.stdout)
-        self.assertIn(".agent-cargo-cache/tracked.rs", result.stdout)
+        for glob in (".agent-cargo-cache/*", "*", "*.py"):
+            with self.subTest(glob=glob):
+                self.case.binding(generated_globs=glob)
+                result = self.dispatch(["app.py"])
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("matches tracked file", result.stderr)
+                self.assertEqual([c for c in self.case.call_log() if c["engine"] == "codex"], [])
 
 
 if __name__ == "__main__":

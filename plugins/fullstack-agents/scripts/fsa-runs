@@ -69,21 +69,24 @@ def outcome(runs, run_id):
 
 def protected(runs, run_id, files, now):
     """Reason to keep regardless of age, or None."""
-    meta = {}
     try:
         meta = json.loads((runs / f"{run_id}.meta.json").read_text())
+    except OSError:
+        meta = None
+    except ValueError:
+        return "meta.json unreadable"  # a torn record proves nothing about the run: keep it
+    try:
+        ownership = json.loads((runs / f"{run_id}.result.json").read_text()).get("ownership")
     except (OSError, ValueError):
-        pass
-    if meta.get("schema", 1) >= 2:
+        ownership = None
+    if ownership not in (None, "free"):
+        return f"ownership {ownership}"
+    if meta is None and any(p.name.endswith((".result.json", ".events.jsonl", ".engine_exit")) for p in files):
+        return "meta.json missing from a v2 run"
+    if (meta or {}).get("schema", 1) >= 2:
         state = liveness.run_state(runs, run_id).get("state")
         if state in ("running", "uncertain"):
             return f"liveness {state}"
-        try:
-            ownership = json.loads((runs / f"{run_id}.result.json").read_text()).get("ownership")
-        except (OSError, ValueError):
-            ownership = None
-        if ownership not in (None, "free"):
-            return f"ownership {ownership}"
     elif now - max(p.stat().st_mtime for p in files) < DAY:
         return "pre-v2 record changed within a day"
     return None
@@ -110,11 +113,14 @@ def plan(runs, keep_days, keep_failed_days, keep_last, now):
             action = "delete"
         rows.append({"run": rid, "outcome": result, "age_days": round(age, 1), "bytes": size(files),
                      "action": action, "paths": [str(p) for p in files]})
+    kept = {r["run"].split("-", 1)[1] for r in rows if r["action"] != "delete"}
     for d in sorted(dispatch):
-        age = (now - d.stat().st_mtime) / DAY
+        age = (now - max([d.stat().st_mtime] + [f.stat().st_mtime for f in d.rglob("*")])) / DAY
+        stamp = d.name[len("dispatch-"):-len(".lib")]
+        action = ("keep: its run is kept" if stamp in kept else
+                  "delete" if age >= keep_days else f"keep: younger than {keep_days}d")
         rows.append({"run": d.name, "outcome": "dispatcher copy", "age_days": round(age, 1), "bytes": size([d]),
-                     "action": "delete" if age >= keep_days else f"keep: younger than {keep_days}d",
-                     "paths": [str(d)]})
+                     "action": action, "paths": [str(d)]})
     return rows
 
 
@@ -128,15 +134,22 @@ def setting(arg, root, key, default):
     return value if value is not None else default
 
 
+def positive(text):
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return value
+
+
 def main(argv):
     ap = argparse.ArgumentParser(prog="fsa-runs")
     sub = ap.add_subparsers(dest="cmd", required=True)
     pr = sub.add_parser("prune")
     pr.add_argument("--root", default=".")
     pr.add_argument("--runs-dir")
-    pr.add_argument("--keep-days", type=int)
-    pr.add_argument("--keep-failed-days", type=int)
-    pr.add_argument("--keep-last", type=int)
+    pr.add_argument("--keep-days", type=positive)
+    pr.add_argument("--keep-failed-days", type=positive)
+    pr.add_argument("--keep-last", type=positive)
     pr.add_argument("--apply", action="store_true")
     pr.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)

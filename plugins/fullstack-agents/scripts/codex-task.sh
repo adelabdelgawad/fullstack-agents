@@ -180,6 +180,12 @@ is_generated() {
   while IFS= read -r g; do [ -n "$g" ] || continue; case "$1" in $g) return 0 ;; esac; done <<<"$generated_globs"
   return 1
 }
+# Narrow by construction: a glob that matches any tracked file covers source, not build output, so the dispatch is
+# refused rather than letting that glob hide new files beside the source.
+if [ -n "$generated_globs" ]; then
+  covered=$(git -C "$root" ls-files | while IFS= read -r f; do if is_generated "$f"; then printf '%s\n' "$f"; break; fi; done)
+  [ -z "$covered" ] || { echo "invalid fsa-team.conf: generated_globs matches tracked file '$covered'; list only untracked build output (e.g. .agent-cargo-cache/*)" >&2; exit 2; }
+fi
 untracked_source() {
   git -C "$root" ls-files -o --exclude-standard | while IFS= read -r f; do if ! is_generated "$f"; then printf '%s\n' "$f"; fi; done
 }

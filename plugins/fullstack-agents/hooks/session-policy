@@ -28,5 +28,5 @@ else
 fi
 
 printf '%s' "$text" | "$PYTHON_BIN" -I "${PLUGIN_ROOT}/scripts/lib/hook_context.py" emit \
-    --event SessionStart --name "policy-${policy_name:-invalid}" --session "$session_id" --keep 2000
+    --event SessionStart --name "policy-${policy_name:-invalid}" --session="$session_id" --keep 2000
 exit 0

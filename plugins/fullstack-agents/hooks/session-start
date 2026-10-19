@@ -137,7 +137,7 @@ fi
 
 if [ -n "$PYTHON_BIN" ]; then
     printf '%s' "$session_context" | "$PYTHON_BIN" -I "${PLUGIN_ROOT}/scripts/lib/hook_context.py" emit \
-        --event SessionStart --name session-start --session "${board_session:-}" --keep "${#essential}"
+        --event SessionStart --name session-start --session="${board_session:-}" --keep "${#essential}"
 elif command -v jq > /dev/null 2>&1; then
     printf '%s' "$session_context" | jq -Rs '{additional_context: ., hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: .}}'
 fi

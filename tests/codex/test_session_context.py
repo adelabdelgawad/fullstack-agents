@@ -148,6 +148,21 @@ class HookContextHelperTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertIsNone(self.emit("  \n", tmp))
 
+    def test_spill_file_is_owner_only_and_an_unwritable_home_still_delivers_the_head(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = self.emit("HEAD\n" + "y" * 5000, tmp, limit="1000", keep="5")["hookSpecificOutput"]["additionalContext"]
+            path = Path(ctx.rsplit("Read tool: ", 1)[1].strip())
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            blocked = Path(tmp) / "ro"
+            blocked.mkdir(mode=0o500)
+            try:
+                ctx = self.emit("HEAD\n" + "y" * 5000, str(blocked / "home"), limit="1000", keep="5")
+            finally:
+                blocked.chmod(0o700)
+            text = ctx["hookSpecificOutput"]["additionalContext"]
+            self.assertTrue(text.startswith("HEAD\n"))
+            self.assertIn("could not be saved", text)
+
     def test_spill_keeps_the_head_and_names_a_file_inside_the_state_home(self):
         with tempfile.TemporaryDirectory() as tmp:
             text = "ESSENTIAL\n" + "x" * 20000

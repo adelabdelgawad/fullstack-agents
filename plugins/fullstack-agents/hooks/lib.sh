@@ -181,6 +181,11 @@ conf_load() {
     CONF_BAD=""
     local -a out=()
     mapfile -d '' -t out < <(python3 -I "$(dirname "${BASH_SOURCE[0]}")/../scripts/lib/team_conf.py" get-many "$root" "$@" 2>/dev/null)
+    # A parser crash (e.g. a non-UTF-8 conf) must not read as "every key absent" and switch the gates off.
+    if [ "${#out[@]}" -ne $(( 2 * $# )) ] && [ -f "$root/.claude/fsa-team.conf" ]; then
+        CONF_BAD="${1} (fsa-team.conf could not be parsed)"
+        return 3
+    fi
     for key in "$@"; do
         status="${out[$i]:-ok}"; value="${out[$((i + 1))]:-}"; i=$((i + 2))
         if [ "$status" = invalid ]; then CONF_BAD=$key; return 3; fi

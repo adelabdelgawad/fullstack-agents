@@ -20,8 +20,10 @@ ON_USER = re.compile(r"\b(you|user|your)\b", re.IGNORECASE)
 APPROVAL = re.compile(r"\b(approved?|go ahead|proceed|lgtm|ship it|green ?light|sounds good|do it|"
                       r"you (may|can) (start|proceed|continue))\b", re.IGNORECASE)
 # A closing line that asks the user to approve, decide or reply hands the turn over even without a '?'.
-ASK = re.compile(r"^\W*(please\s+)?(approve|confirm|choose|decide|pick|reply|let me know|tell me)\b"
-                 r"|\b(your|awaiting)\s+(approval|decision|go-?ahead|confirmation|choice)\b", re.IGNORECASE)
+# Anchored to an actual request: a line that merely mentions approval ("committed per your approval") is not one.
+ASK = re.compile(r"^\W*(please\s+)?(approve|confirm|choose|decide|let me know|tell me)\b"
+                 r"|\b(needs?|awaiting|waiting (on|for)|pending)\s+(your\s+)?(approval|decision|go-?ahead|"
+                 r"confirmation|choice)\b", re.IGNORECASE)
 
 
 def _state_path(session_id):
