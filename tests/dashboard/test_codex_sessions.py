@@ -300,6 +300,31 @@ class CodexSessionTests(unittest.TestCase):
                 result = dash.phase_of(card, [], [session])
                 self.assertEqual(result, "audit" if phase == "validate" else phase)
 
+    def test_shared_checkout_shows_build_only_for_the_cards_own_edits(self):
+        session = {"id": "s-claude", "engine": "claude", "state": "working", "briefs": []}
+        declared = {"phase": "investigate", "at": self.now - 300}
+        shared = {"tree": {"edited": time.time(), "phase_edited": 0}, "declared": declared}
+        self.assertEqual(dash.phase_of(shared, [], [session]), "investigate")
+        shared["tree"]["phase_edited"] = time.time()
+        self.assertEqual(dash.phase_of(shared, [], [session]), "implement")
+        dedicated = {"tree": {"edited": time.time()}, "declared": declared}
+        self.assertEqual(dash.phase_of(dedicated, [], [session]), "implement")
+
+    def test_own_newest_edit_ignores_other_sessions_files(self):
+        root = self.root / "shared"
+        root.mkdir()
+        for name, age in (("mine.md", 100), ("theirs.md", 5)):
+            (root / name).write_text(name)
+            os.utime(root / name, (self.now - age, self.now - age))
+        files = [{"status": "?", "path": "mine.md"}, {"status": "?", "path": "theirs.md"}]
+        scope = {"sessions": ["s-claude"], "runs": []}
+        with patch.object(dash, "status_files", return_value=files), \
+                patch.object(dash, "card_scope", return_value={"mine.md"}):
+            self.assertEqual(dash.own_newest_edit(self.repo, str(root), scope, self.now), self.now - 100)
+            dash.OWN_EDIT_CACHE.clear()
+            with patch.object(dash, "card_scope", return_value=set()):
+                self.assertEqual(dash.own_newest_edit(self.repo, str(root), scope, self.now), 0.0)
+
     def dashboard_state(self, session, board, runs=(), only=None):
         self.repo.board = self.root / "board.json"
         self.repo.board.write_text(json.dumps(board))
