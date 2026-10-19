@@ -153,7 +153,9 @@ class ReleaseTests(unittest.TestCase):
         loaded = str((release / "plugins/fullstack-agents").resolve())
         self.assertEqual(json.loads(pin.read_text())["root"], loaded)
         self.assertIn(f"FSA_PLUGIN_ROOT={loaded}", env_file.read_text())
-        self.assertIn("Plugin pin updated", json.loads(hook.stdout)["hookSpecificOutput"]["additionalContext"])
+        context = json.loads(hook.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("\n\n**Plugin pin updated:**", context)
+        self.assertNotIn("\\n", context)  # plain text, never JSON escapes the model would read literally
 
     def test_a_running_dispatch_is_immune_to_source_rewrites(self):
         script = self.plugin / "scripts/codex-task.sh"
