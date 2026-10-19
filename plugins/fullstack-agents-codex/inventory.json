@@ -214,7 +214,7 @@
   ],
   "source_hashes": {
     ".claude-plugin/marketplace.json": "88540c3d139cc6b4a0594b35273ad2fb90523eb0becec24146df9e130e0a19cb",
-    ".claude-plugin/plugin.json": "971b8537a9cc17c167f6509c2c48cb66dd8e205120f8fb1eb34e3cf5f53589c8",
+    ".claude-plugin/plugin.json": "66ccab2f7bb5993de2fcd43f7796b30ffd612b4b00671eb69f1a57b6bb1eaa90",
     "README.md": "f22b4bcadc47b74edf9bc6ca84d8e041e492b3b7c1604b58fc6f289e458a1654",
     "agents/_core/AGENT_BASE.md": "c29fe50773b1f705354beadd48af6018d39bfb830599ff3190e26b6bd9188f1a",
     "agents/_core/detection-patterns.md": "5f4b2d3bf8a5e1559725f60a86d0fa9ea0d4df4ce2e1e622713c26a0a9639389",
@@ -324,7 +324,7 @@
     "scripts/lib/plan_usage.py": "859a42fb2342939a22e9e85d907b73615090a8740df31341190021d5d71bcc97",
     "scripts/lib/plugin-pin.sh": "9f310eeec7b9e3eb0a854a8d9b96245d3087c46c3228fe4540bba65d15772689",
     "scripts/lib/registry.sh": "e3ec962919b9084bdd6ee04bf1ed02e3f2fe4b4a6f7c80b6d15924b04668a995",
-    "scripts/lib/roles/implementer.md": "7ade33633959b830ae88f63bdfdf5a221c80640e04bda8966c3a878bbbe8dd9f",
+    "scripts/lib/roles/implementer.md": "a1d482cd4ad1abde4922d750784de5720e444e1667205845314ceb914c01aa9d",
     "scripts/lib/route.py": "381f6817fc0ed1b5cf9992650c970fc8db747517741c6bdf101124b6cceb849e",
     "scripts/lib/run-scope.sh": "375452425aa9b2def28c2ce4d6befc4a1357e875b7d16b70e9db8b3c361f05bc",
     "scripts/lib/run-scope.test.sh": "e1b9c69e33042ae9eb94828f972c5f26174cc8bf03b742a5d89e2fff0b67e389",
