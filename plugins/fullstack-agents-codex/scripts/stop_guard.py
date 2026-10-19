@@ -19,6 +19,26 @@ ON_USER = re.compile(r"\b(you|user|your)\b", re.IGNORECASE)
 # The user's latest prompt approves work already proposed ("go ahead", "approved", "proceed ...").
 APPROVAL = re.compile(r"\b(approved?|go ahead|proceed|lgtm|ship it|green ?light|sounds good|do it|"
                       r"you (may|can) (start|proceed|continue))\b", re.IGNORECASE)
+# A sentence that negates, defers or questions its approval word is not an approval ("don't do it until I review",
+# "is this approved?", "I will approve later"). Missing an approval only restores the plain release rules; a false
+# one would keep the lead working on something the user has not approved, so ambiguity counts as no approval.
+NOT_APPROVAL = re.compile(r"\?|n't\b|\b(not|no|never|wait|until|before|after|later|yet|unless|once|if|when|"
+                          r"whether|why|how|what)\b", re.IGNORECASE)
+HOLD = re.compile(r"\b(hold off|not yet|wait for me|do not start|don'?t start)\b", re.IGNORECASE)
+SENTENCE = re.compile(r"(?<=[.!?;\n])\s*")
+# After an approval, asking permission to start or continue the approved work is a re-ask, not a new decision.
+PERMISSION = re.compile(r"\b(shall|should|can|may)\s+I\s+(start|begin|proceed|continue|go ahead|carry on|move on)\b"
+                        r"|\b(do you want|would you like)\s+me\s+to\s+(start|begin|proceed|continue|go ahead|carry on|"
+                        r"move on)\b|\bready\s+to\s+(start|begin|proceed|continue)\b", re.IGNORECASE)
+
+
+def _approves(text):
+    """True only when some sentence approves plainly and no sentence holds, negates or questions an approval."""
+    sentences = [part.strip() for part in SENTENCE.split(text) if part.strip()]
+    approving = [part for part in sentences if APPROVAL.search(part)]
+    if not approving or HOLD.search(text) or PAUSE.search(text):
+        return False
+    return not any(NOT_APPROVAL.search(part) for part in approving)
 # A closing line that asks the user to approve, decide or reply hands the turn over even without a '?'.
 # Anchored to an actual request: a line that merely mentions approval ("committed per your approval") is not one.
 ASK = re.compile(r"^\W*(please\s+)?(approve|confirm|choose|decide|let me know|tell me)\b"
@@ -59,8 +79,7 @@ def record_prompt(session_id, prompt):
     if "SYSTEM NOTIFICATION - NOT USER INPUT" in prompt or "<task-notification>" in prompt:
         return
     text = prompt.strip()
-    _save(path, {"paused": bool(PAUSE.search(text)), "approved": bool(APPROVAL.search(text)) and not PAUSE.search(text),
-                 "blocks": 0, "signature": None})
+    _save(path, {"paused": bool(PAUSE.search(text)), "approved": _approves(text), "blocks": 0, "signature": None})
 
 
 def _releases(message, engine, approved=False):
@@ -75,7 +94,9 @@ def _releases(message, engine, approved=False):
     if trailer:
         # Codex is not woken by finishing workers, so only a wait on the user may end its turn.
         return engine != "codex" or trailer[1].lower() != "waiting on" or bool(ON_USER.search(trailer[2]))
-    return tail.rstrip("*_`) ").endswith("?") or (bool(ASK.search(tail)) and not approved)
+    if approved and (ASK.search(tail) or PERMISSION.search(tail)):
+        return False
+    return tail.rstrip("*_`) ").endswith("?") or bool(ASK.search(tail))
 
 
 def decide(session_id, cwd, message, engine):

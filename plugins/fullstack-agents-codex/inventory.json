@@ -214,7 +214,7 @@
   ],
   "source_hashes": {
     ".claude-plugin/marketplace.json": "88540c3d139cc6b4a0594b35273ad2fb90523eb0becec24146df9e130e0a19cb",
-    ".claude-plugin/plugin.json": "704a6f435770de0ce3f2ea167b28d54c5a79eeec036fef643f220bfaba86972d",
+    ".claude-plugin/plugin.json": "7606f08c9c0f65f9b6e987041e6851cfa9a1ccadd3c41bef7a2b022680c7dec3",
     "README.md": "f22b4bcadc47b74edf9bc6ca84d8e041e492b3b7c1604b58fc6f289e458a1654",
     "agents/_core/AGENT_BASE.md": "c29fe50773b1f705354beadd48af6018d39bfb830599ff3190e26b6bd9188f1a",
     "agents/_core/detection-patterns.md": "5f4b2d3bf8a5e1559725f60a86d0fa9ea0d4df4ce2e1e622713c26a0a9639389",
@@ -330,7 +330,7 @@
     "scripts/lib/run-scope.test.sh": "e1b9c69e33042ae9eb94828f972c5f26174cc8bf03b742a5d89e2fff0b67e389",
     "scripts/lib/runs-dir.sh": "efc839b8c25fba284eece5f573c6b3f847d7a8baffa61ff608113da4fc881f6b",
     "scripts/lib/runs_dir.py": "918b7e6af453f01720aac963a534799612087f8ad31e400524d16bc8737495d0",
-    "scripts/lib/stop_guard.py": "85bb61f9b5b8cf83aa4e9d0916d766aa0b3145e1751c55414e154fd3e67f4136",
+    "scripts/lib/stop_guard.py": "7fec5c207f6f3564473581a5d6566cab97733649572b533f665d9c6f2042f9c3",
     "scripts/lib/task-row.sh": "815bdb04b23f5f9ac550129ad2117e9a038ec9e0e1b10943340263c44ab2e254",
     "scripts/lib/task-row.test.sh": "970534585c2d9ebc7a867de928913338f3a859b26e9c06adb3cc5ad44ee15cc2",
     "scripts/lib/task_tracking.py": "dd36954ebe6339a51d1ada8688f3a7aa7f86fd4f57d4b431963042a2b6cce11c",
