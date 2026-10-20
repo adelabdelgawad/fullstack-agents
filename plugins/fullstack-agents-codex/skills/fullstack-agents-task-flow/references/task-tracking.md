@@ -56,3 +56,101 @@ scripts/fsa-task add --root /absolute/project --file docs/tasks/example.md --tas
 scripts/fsa-task set --root /absolute/project --file docs/tasks/example.md --id V1 --id V2 --note 'Waiting for S4a and S4b'
 scripts/fsa-task show --root /absolute/project --file docs/tasks/example.md
 ```
+
+## Ownership
+
+`init` and `bind` make the calling session the ledger's **owner**. After that, `set`, `add`, `checkpoint` and `close` from any other session are refused, and so is the dispatcher's row update when it runs under another session.
+
+The guard covers only these commands. Direct edits to the Markdown file (Edit/Write tools, editors, git) bypass it: the ledger stays an ordinary repository file. The guard keeps cooperating sessions from writing over each other's tasks; it is not access control.
+
+An owner is reported as one of four states:
+
+| State | Meaning |
+|---|---|
+| `free` | released |
+| `live` | its Codex process, identified by process id **and** start time, still runs |
+| `stale` | that process is gone, or the process id was reused |
+| `unknown` | another host, or the process cannot be checked |
+
+**Taking over another session's ledger:** pass `--takeover <current-owner-session>` to `bind` or `adopt`. Rules:
+
+- Use it **only when the user directs it**. A `stale` or `unknown` state alone never authorizes a takeover.
+- The value must name the current owner exactly, so a takeover fails if the owner changed in the meantime.
+- The previous owner is kept in the owner record and noted in the ledger's `## Ownership log`.
+
+**Session id:** `--session` defaults to whichever of `CODEX_THREAD_ID` and `CLAUDE_CODE_SESSION_ID` is set. When both are set, `fsa-task` picks the engine that is actually nearer in the process tree. When it cannot tell, it refuses: pass `--session` explicitly. Never copy another session's id.
+
+## Checkpoints
+
+A checkpoint stores the task state that would otherwise exist only in the conversation, in a fenced JSON block inside the ledger. Write it with `scripts/fsa-task checkpoint --root … --file … --input <file.json | ->`.
+
+The input has these fields:
+
+| Field | Content |
+|---|---|
+| `goal` | the task goal |
+| `scope` | `{in, out}` |
+| `approvals` | the user's quoted words: `{quote, at, scope, kind: single-use\|task, used, clarity: explicit\|ambiguous}` |
+| `decisions` | `{id, text, source}` |
+| `constraints` | binding rules |
+| `done` | `{text, evidence}` |
+| `next` | `{action, owner}` |
+| `blockers` | optional |
+| `evidence` | paths |
+| `verification` | `{command, result: pass\|fail\|other, log, run_at, paths}` |
+| `status` | `active`, `completed` or `abandoned` |
+
+Unknown keys are rejected. The tool adds the identity (checkout, branch, HEAD, session, time) and gives each verification entry a fingerprint. That fingerprint records the state when the result was first saved and is never refreshed.
+
+**When to write:** only when the task state actually changes, batching changes made in one turn:
+
+- a user decision or approval;
+- a plan approved;
+- a batch dispatched, or its result accepted or rejected after audit;
+- a verification outcome concluded from its log;
+- a blocker appears or clears;
+- `fsa-usage` prints `HANDOFF:`;
+- before a manual `/compact` or `/clear`.
+
+Reading files, grepping and worker progress are not triggers. An unchanged checkpoint is not rewritten.
+
+**What a checkpoint is:** a lead-written historical record that can be wrong. Cite a user quote or an evidence path for every decision and result.
+
+- An approval in a checkpoint is a record of what the user said, **never an authorization**. Schema validity does not make it one either.
+- Ask the user again for anything `ambiguous`, anything outside the quoted scope, and anything the project's rules require a fresh go-ahead for (deploys, migrations, production actions, releases).
+
+## After compaction, `/clear`, resume or a fork
+
+| Event | What happens |
+|---|---|
+| Compaction | Same session. A recovery summary of at most 2,500 characters arrives automatically. Ownership is unchanged. |
+| `/clear` | Starts a new session. The old session releases ownership. The new session sees at most a short **offer**, never a binding. Continue the old task only when the user asks, with `scripts/fsa-task adopt --root … --file … --from <old-session>`. Otherwise start fresh. |
+| Fork (`/branch`) | Same as `/clear`. The copied conversation is not a user instruction to continue, and the fork owns nothing until an explicit `adopt`. |
+| Resume | Ownership is re-acquired only when it is free, stale, or held by this same process. Another session's ownership is never displaced: the hook names that owner instead. |
+
+The offer is decided at the first session start in the same Codex process after the clear or branch, and that start consumes it whatever happens. It is shown only once, only for the same checkout and Codex process, and only for a ledger that still has open rows and an active checkpoint. As a safety bound, it is never shown more than 300 seconds after the old session ended. Otherwise nothing is shown.
+
+The offer is a convenience, not a requirement. To continue a task later, or after a missed offer:
+
+1. Run `scripts/fsa-task show --root … --file …`. It names the ledger's owner session and state.
+2. Only when the user asks, run `adopt --from <that session>`. This works for as long as the old session's binding exists.
+3. A `stale` or `unknown` owner still needs the user-directed `--takeover <that session>`.
+
+**Using a recovery summary:**
+
+- It is historical. Re-check the repository before editing.
+- A field shortened to fit is marked `[truncated]`, and omitted items are listed under `Omitted:`. In either case the summary says that reading the full checkpoint is required before any edit or dispatch.
+- Rerun a check before relying on its result. A verification line marked `inputs changed` or `unknown` certainly needs a rerun.
+- Read the full checkpoint before the first edit, and whenever the summary lists omissions.
+- `scripts/fsa-task recover --cwd <session cwd>` prints the summary again for the session's bound ledger. `adopt` includes it in its output.
+
+**Finishing:** `scripts/fsa-task close` marks the checkpoint completed and releases ownership. It is refused while rows are open. `release` gives up ownership without closing.
+
+## Codex edition limits
+
+The Codex bundle has no SessionEnd or compaction-recovery hook. In Codex:
+
+- Ownership ends only with `close` or `release`.
+- Without a `CLAUDE_PID` ancestor, the owner identity is the **parent process of the `tasks.py` invocation**, usually the shell Codex starts for that one command. That shell exits when the command ends, so a Codex-owned ledger reads `stale` within seconds **while the Codex session may still be active**. In Codex, `stale` does not mean the owner has ended. It still needs the user's direction for `--takeover`, so nothing is lost silently.
+- The owning Codex thread keeps writing by its session id.
+- After context loss, run `python3 scripts/tasks.py recover --cwd <session cwd>`. To continue another session's task, use `adopt`, as described above.

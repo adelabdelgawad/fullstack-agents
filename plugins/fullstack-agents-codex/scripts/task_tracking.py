@@ -11,7 +11,11 @@ import os
 from pathlib import Path
 import re
 import stat
+import sys
 import tempfile
+
+# `-I` (used by every CLI caller) drops the script's own directory from sys.path; task_ownership lives beside it.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 START = "<!-- fsa:tasks:start -->"
 END = "<!-- fsa:tasks:end -->"
@@ -224,10 +228,15 @@ def _summary(path):
             "completed": counts["done"], "active": sum(item["is_active"] for item in items)}
 
 
+def _owner_text(owner):
+    return f"owner: {owner['session_id']} ({owner['state']})" if owner else "owner: none"
+
+
 def _show_text(summary):
     counts = summary["counts"]
     lines = [f"done {counts['done']}/{summary['total']} · in_progress {counts['in_progress']} · blocked {counts['blocked']}"
-             f" · pending {counts['pending']} · active {summary['active']}"]
+             f" · pending {counts['pending']} · active {summary['active']}",
+             _owner_text(summary.get("owner"))]
     for item in summary["items"]:
         if item["status"] == "done":
             continue
@@ -252,13 +261,25 @@ def _task_specs(values):
     return items
 
 
-def bind_tasks(session_id, root, filename):
+def bind_tasks(session_id, root, filename, takeover=None):
     binding = _binding_path(session_id)
     root = _root(root)
     path = _file(root, filename)
     _parse(_read(path))
+    import task_ownership
+    with _lock(root, path):
+        task_ownership.acquire(session_id, root, path, takeover)
     _atomic(binding, json.dumps({"session_id": session_id, "root": str(root), "file": str(path)}, ensure_ascii=False) + "\n")
     return load_tasks(session_id, root)
+
+
+def release_ownership(session_id, root, filename):
+    root = _root(root)
+    path = _file(root, filename)
+    import task_ownership
+    with _lock(root, path):
+        released = task_ownership.release(session_id, root, path)
+    return {"file": str(path), "released": released}
 
 
 def load_tasks(session_id, cwd):
@@ -285,16 +306,147 @@ def load_tasks(session_id, cwd):
         return {**info, "error": str(error)}
 
 
+def _read_checkpoint_input(value):
+    data = sys.stdin.read() if value == "-" else Path(value).read_text()
+    try:
+        return json.loads(data)
+    except ValueError as error:
+        raise ValueError(f"Checkpoint input is not valid JSON: {error}") from error
+
+
+def _cmd_checkpoint(args, root, path):
+    import task_ownership
+    import task_checkpoint
+    payload = _read_checkpoint_input(args.input)
+    with _lock(root, path):
+        path = _file(root, args.file)
+        task_ownership.check_write(args.session, root, path)
+        new_text, changed = task_checkpoint.apply(_read(path), payload, root, path.stem, args.session)
+        if changed:
+            _atomic(path, new_text)
+    return {"file": str(path), "changed": changed, "updated": path.stat().st_mtime}
+
+
+def _load_binding(session_id):
+    binding = _binding_path(session_id)
+    if not binding.exists() or binding.is_symlink():
+        raise ValueError(f"Session {session_id} has no task binding")
+    record = json.loads(_read(binding, 16384))
+    if not isinstance(record, dict) or record.get("session_id") != session_id:
+        raise ValueError(f"Session {session_id} binding is invalid")
+    return record, binding
+
+
+def _delete_parked_matching(predicate):
+    directory = _state_dir() / "parked"
+    if not directory.is_dir():
+        return
+    for record_path in directory.glob("*.json"):
+        try:
+            record = json.loads(_read(record_path, 4096))
+        except (OSError, ValueError):
+            continue
+        if isinstance(record, dict) and predicate(record):
+            record_path.unlink(missing_ok=True)
+
+
+def _append_ownership_log(text, line):
+    heading = "## Ownership log"
+    text = text.rstrip("\n") + "\n"
+    return text + line if heading in text else text + "\n" + heading + "\n" + line
+
+
+def _cmd_adopt(args, root, path):
+    import task_ownership
+    import task_recovery
+    from_record, from_binding = _load_binding(args.from_session)
+    if _root(from_record["root"]) != root or _file(root, from_record["file"]) != path:
+        raise ValueError(f"Session {args.from_session} is not bound to this file")
+    with _lock(root, path):
+        path = _file(root, args.file)
+        record, state = task_ownership.current_owner(root, path)
+        if record is not None and state != "free" and record["session_id"] not in (args.from_session, args.session):
+            raise ValueError(f"Ledger owned by session {record['session_id']} ({state}); adopt refused")
+        task_ownership.acquire(args.session, root, path, args.takeover)
+        _atomic(_binding_path(args.session),
+                json.dumps({"session_id": args.session, "root": str(root), "file": str(path)}, ensure_ascii=False) + "\n")
+        from_binding.unlink(missing_ok=True)
+        line = f"- {datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')} adopted by {args.session} from {args.from_session} ({state})\n"
+        text = _append_ownership_log(_read(path), line)
+        _parse(text)
+        _atomic(path, text)
+    _delete_parked_matching(lambda record: record.get("old_session") == args.from_session)
+    recovery = task_recovery.render(task_recovery.collect(args.session, str(root)))
+    return {"file": str(path), "adopted_from": args.from_session, "session_id": args.session, "recovery": recovery}
+
+
+def _cmd_close(args, root, path):
+    import task_ownership
+    import task_checkpoint
+    with _lock(root, path):
+        path = _file(root, args.file)
+        task_ownership.check_write(args.session, root, path)
+        text = _read(path)
+        items, _start, _end = _parse(text)
+        open_rows = [item["id"] for item in items if item["status"] in ("pending", "in_progress", "blocked")]
+        if open_rows:
+            raise ValueError(f"Cannot close with open rows: {', '.join(open_rows)}")
+        checkpoint, error = task_checkpoint.load_checkpoint(text)
+        if error is not None:
+            raise ValueError(f"fix the checkpoint before close: {error}")
+        if checkpoint is not None:
+            payload = {key: value for key, value in checkpoint.items() if key != "identity"}
+            payload["status"] = "completed"
+            text, changed = task_checkpoint.apply(text, payload, root, path.stem, args.session)
+            if changed:
+                _atomic(path, text)
+        released = task_ownership.release(args.session, root, path)
+    _delete_parked_matching(lambda record: record.get("file") == str(path))
+    return {"file": str(path), "released": released}
+
+
+def _session_vars(environ):
+    return environ.get("CODEX_THREAD_ID"), environ.get("CLAUDE_CODE_SESSION_ID") or environ.get("CLAUDE_SESSION_ID")
+
+
+def default_session(environ=os.environ, pid=None):
+    """Single variable wins; both set walks the ancestor chain for the engine actually running."""
+    x, c = _session_vars(environ)
+    if bool(x) != bool(c):
+        return x or c
+    if not x:
+        return None
+    import task_ownership
+    claude_pid = environ.get("CLAUDE_PID")
+    target = int(claude_pid) if claude_pid else None
+    for candidate in task_ownership.ancestors(pid):
+        if target is not None and candidate == target:
+            return c
+        if task_ownership._is_codex(candidate):
+            return x
+    return None
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Register and update an explicit Markdown task ledger")
     actions = parser.add_subparsers(dest="command", required=True)
-    for command in ("init", "bind", "set", "add", "show"):
+    session_default = default_session()
+    recover = actions.add_parser("recover")
+    recover.add_argument("--session", default=session_default)
+    recover.add_argument("--cwd", required=True)
+    for command in ("init", "bind", "set", "add", "show", "release", "checkpoint", "adopt", "close"):
         sub = actions.add_parser(command)
         sub.add_argument("--root", required=True)
         sub.add_argument("--file", required=True)
-        sub.add_argument("--session", default=os.environ.get("CODEX_THREAD_ID") or os.environ.get("CLAUDE_SESSION_ID"))
+        sub.add_argument("--session", default=session_default)
         if command == "init":
             sub.add_argument("--title", default="Tasks")
+        if command in ("bind", "adopt"):
+            sub.add_argument("--takeover", help="Expected current owner's session id (CAS takeover, only on the user's word)")
+        if command == "adopt":
+            sub.add_argument("--from", dest="from_session", required=True, help="Session to adopt the binding from")
+        if command == "checkpoint":
+            sub.add_argument("--input", required=True, help="Checkpoint JSON file path, or - for stdin")
         if command in ("init", "add"):
             sub.add_argument("--task", action="append", default=[], required=command == "add", help="ID|status|title|note (repeatable)")
         if command == "show":
@@ -308,6 +460,16 @@ def main(argv=None):
             sub.add_argument("--active-for", type=int, help="Report active execution for 1..300 seconds; 0 clears it")
     args = parser.parse_args(argv)
     try:
+        import task_ownership
+        x, c = _session_vars(os.environ)
+        if args.command not in ("show", "recover") and args.session is None and x and c:
+            raise ValueError("cannot determine the session id (CODEX_THREAD_ID and CLAUDE_CODE_SESSION_ID "
+                              "both set and ambiguous); pass --session")
+        if args.command == "recover":
+            import task_recovery
+            info = task_recovery.collect(args.session, args.cwd)
+            print(task_recovery.render(info))
+            return 2 if "fatal" in info else 0
         root = _root(args.root)
         if args.command in ("init", "bind"):
             _binding_path(args.session)
@@ -324,15 +486,26 @@ def main(argv=None):
                 _atomic(path, text, exclusive=True)
             result = bind_tasks(args.session, root, path)
         elif args.command == "bind":
-            result = bind_tasks(args.session, root, path)
+            result = bind_tasks(args.session, root, path, args.takeover)
+        elif args.command == "release":
+            result = release_ownership(args.session, root, args.file)
+        elif args.command == "checkpoint":
+            result = _cmd_checkpoint(args, root, path)
+        elif args.command == "adopt":
+            result = _cmd_adopt(args, root, path)
+        elif args.command == "close":
+            result = _cmd_close(args, root, path)
         elif args.command == "show":
-            summary = {"file": str(path), **_summary(path)}
+            owner_record, owner_state = task_ownership.current_owner(root, path)
+            owner = {"session_id": owner_record["session_id"], "state": owner_state} if owner_record else None
+            summary = {"file": str(path), "owner": owner, **_summary(path)}
             print(json.dumps(summary, ensure_ascii=False) if args.json else _show_text(summary))
             return 0
         elif args.command == "add":
             specs = _task_specs(args.task)
             with _lock(root, path):
                 path = _file(root, args.file)
+                task_ownership.check_write(args.session, root, path)
                 text = _read(path)
                 items, start, end = _parse(text)
                 for spec in specs:
@@ -349,11 +522,12 @@ def main(argv=None):
                 _file(root, args.file)
                 _atomic(path, changed)
             result = {"file": str(path), "updated": path.stat().st_mtime}
-        else:
+        elif args.command == "set":
             if args.active_for is not None and not 0 <= args.active_for <= MAX_ACTIVE_SECONDS:
                 raise ValueError("--active-for must be between 0 and 300 seconds")
             with _lock(root, path):
                 path = _file(root, args.file)
+                task_ownership.check_write(args.session, root, path)
                 text = _read(path)
                 items, start, end = _parse(text)
                 for identifier in dict.fromkeys(args.id):

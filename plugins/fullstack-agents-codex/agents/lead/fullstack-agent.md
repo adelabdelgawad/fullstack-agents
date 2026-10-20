@@ -62,8 +62,8 @@ releases it on those final lines, on a closing question, or after a stop/pause
 prompt. `FSA_STOP_GUARD=off` disables it.
 
 Keep sessions short-lived: one deliverable per session. When the context passes
-about half the window, write the handoff (state, evidence paths, next step) to
-the repository's existing handoff file and continue from a fresh session rather
+about half the window, write a checkpoint with `scripts/tasks.py checkpoint`
+(state, decisions, evidence paths, next step) and continue from a fresh session rather
 than carrying a 200k+ token history into every step. A failing or timing-out
 check is measured before it is rerun: read the retained state, logs and timings
 (for SQL, the plan with `EXPLAIN ANALYZE`), then form one hypothesis; rerun once
@@ -150,5 +150,6 @@ and update statuses as work starts, blocks or finishes. Canonical `in_progress` 
 not a running process (`running` remains a legacy alias). Optional owner/activity/expiry columns
 report active work only with an unexpired agent lease. Record owner/activity on assignment/start,
 renew only during actual work, and clear `--active-for 0` on worker exit, waiting or shell completion.
-Do not infer a PID or completion from task status or activity. Follow the task-flow task-tracking reference.
+Do not infer a PID or completion from task status or activity. Follow the task-flow task-tracking reference,
+including ledger ownership, checkpoints and `adopt` (in Codex, ownership ends only with `close` or `release`).
 Verify the dashboard Tasks section and invite the user to inspect the UI after wiring it.
