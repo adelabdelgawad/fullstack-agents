@@ -38,6 +38,18 @@ class SessionStartDeliveryTests(unittest.TestCase):
         self.assertTrue(any(c.endswith(" session-start") for c in commands))
         self.assertTrue(any(c.endswith(" session-policy") for c in commands))
 
+    def test_session_task_hook_is_wired_for_every_source_including_fork(self):
+        group = HOOKS["SessionStart"][1]
+        self.assertEqual(group["matcher"], "startup|resume|clear|compact|fork")
+        commands = [h["command"] for h in group["hooks"] if not h.get("async")]
+        self.assertTrue(any(c.endswith(" session-task") for c in commands))
+
+    def test_pre_compact_hook_is_wired_for_manual_and_auto(self):
+        group = HOOKS["PreCompact"][0]
+        self.assertEqual(group["matcher"], "manual|auto")
+        commands = [h["command"] for h in group["hooks"] if not h.get("async")]
+        self.assertTrue(any(c.endswith(" pre-compact") for c in commands))
+
     def test_each_block_fits_the_hook_limit_with_the_profile_and_a_full_board(self):
         self.case.binding(policy_profile="engineering-conventions")
         core = run("session-start", self.case)

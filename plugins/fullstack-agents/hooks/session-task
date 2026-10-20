@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# session-task — SessionStart hook: clear/fork parked-task notice, compact recovery block, resume reacquire line.
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/lib.sh"
+
+hook_input=""
+[ -t 0 ] || hook_input=$(cat || true)
+session_id=$(printf '%s' "$hook_input" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+
+PYTHON_BIN=$(find_python || true)
+[ -n "$PYTHON_BIN" ] || exit 0
+
+text=$(printf '%s' "$hook_input" | "$PYTHON_BIN" -I "${PLUGIN_ROOT}/scripts/lib/task_lifecycle.py" session-start)
+
+if [ -n "$text" ]; then
+    printf '%s' "$text" | "$PYTHON_BIN" -I "${PLUGIN_ROOT}/scripts/lib/hook_context.py" emit \
+        --event SessionStart --name session-task --session "$session_id" --keep 2600
+fi
+exit 0

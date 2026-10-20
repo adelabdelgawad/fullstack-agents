@@ -11,4 +11,5 @@ cwd="${JSON_FIELDS[1]}"
 [ -n "$session" ] || exit 0
 [ -n "$cwd" ] && cd "$cwd" 2>/dev/null
 "${SCRIPT_DIR}/../scripts/team-board" release-session "$session" >/dev/null 2>&1 || true
+python3 -I "${SCRIPT_DIR}/../scripts/lib/task_lifecycle.py" session-end <<<"$hook_input" >/dev/null 2>&1 || true
 exit 0

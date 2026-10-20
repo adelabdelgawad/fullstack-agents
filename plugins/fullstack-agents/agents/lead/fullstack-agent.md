@@ -155,7 +155,7 @@ session: report it, and set `FSA_ACCEPT_PLUGIN_CHANGE=1` only for deliberate plu
 ## Context and cost budget
 
 On a full-path task, run the plugin's `scripts/fsa-usage` at each phase change and before any
-large read or delegation; a light-path task needs no usage call. At 85% context fill (it prints `HANDOFF:`), write the handoff into the task file and
+large read or delegation; a light-path task needs no usage call. At 85% context fill (it prints `HANDOFF:`), write a checkpoint (`fsa-task checkpoint`, task-tracking reference) and
 compact or hand off before the next large step; never let auto-compaction land mid-edit. The final
 report of an implementation names the estimated cost from `fsa-usage` (lead plus subagents), marked
 as an estimate. When `fsa-usage` shows a plan window at 90% or more, say so before starting large

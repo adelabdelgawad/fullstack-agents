@@ -17,14 +17,14 @@ BASELINE = "5e78c14"
 SUBSTANTIVE = {"prompt": "Please investigate the slow backend request and fix it", "session_id": "s-roles"}
 
 
-def hook(script, mode, payload, role=None, home=None):
+def hook(script, mode, payload, role=None, home=None, cwd=None):
     env = {k: v for k, v in os.environ.items() if k != "FSA_ROLE"}
     if role:
         env["FSA_ROLE"] = role
     if home:
         env.update(HOME=str(home), CODEX_HOME=str(home / ".codex"))
     return subprocess.run([sys.executable, str(script), mode], input=json.dumps(payload), capture_output=True,
-                          text=True, env=env)
+                          text=True, env=env, cwd=str(cwd) if cwd else None)
 
 
 class CodexRoleHookTests(unittest.TestCase):
@@ -56,8 +56,8 @@ class CodexRoleHookTests(unittest.TestCase):
         (sandbox / "scripts/hook_baseline.py").write_text(old)
         for mode, payload in (("start", {"source": "startup"}), ("start", {"source": "resume"}), ("prompt", SUBSTANTIVE)):
             with self.subTest(mode=mode, payload=payload):
-                new = hook(sandbox / "scripts/hook.py", mode, payload, home=self.home)
-                base = hook(sandbox / "scripts/hook_baseline.py", mode, payload, home=self.home)
+                new = hook(sandbox / "scripts/hook.py", mode, payload, home=self.home, cwd=self.home)
+                base = hook(sandbox / "scripts/hook_baseline.py", mode, payload, home=self.home, cwd=self.home)
                 self.assertEqual(new.stdout, base.stdout)
                 self.assertEqual(new.returncode, base.returncode)
 
@@ -86,9 +86,15 @@ class CodexRoleHookTests(unittest.TestCase):
     def test_unconfigured_repo_gets_no_profile_text(self):
         repo = self.init_repo()
         start = hook(SCRIPTS / "hook.py", "start", {"source": "startup", "cwd": str(repo)}, home=self.home)
-        no_conf = hook(SCRIPTS / "hook.py", "start", {"source": "startup"}, home=self.home)
+        no_conf = hook(SCRIPTS / "hook.py", "start", {"source": "startup"}, home=self.home, cwd=self.home)
         self.assertEqual(start.stdout, no_conf.stdout)
         self.assertNotIn("Policy profile", start.stdout)
+
+    def test_missing_cwd_in_payload_falls_back_to_the_process_working_directory(self):
+        repo = self.init_repo("policy_profile=engineering-conventions\n")
+        start = hook(SCRIPTS / "hook.py", "start", {"source": "startup"}, home=self.home, cwd=repo)
+        text = json.loads(start.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("Policy profile engineering-conventions", text)
 
     def test_dispatched_implementer_gets_no_profile_text_even_when_configured(self):
         repo = self.init_repo("policy_profile=engineering-conventions\n")

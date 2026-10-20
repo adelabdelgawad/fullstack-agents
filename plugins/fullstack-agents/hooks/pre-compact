@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# PreCompact: records a compaction marker (and a stale-checkpoint flag); never blocks compaction.
+set -uo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+hook_input=""
+[ ! -t 0 ] && hook_input=$(cat || true)
+python3 -I "${SCRIPT_DIR}/../scripts/lib/task_lifecycle.py" pre-compact <<<"$hook_input" >/dev/null 2>&1 || true
+exit 0

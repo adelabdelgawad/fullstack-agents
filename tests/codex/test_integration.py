@@ -27,6 +27,9 @@ def run(command, **kwargs):
     return subprocess.run(command, capture_output=True, text=True, **kwargs)
 
 
+LEAKED_SESSION_ENV_VARS = ("CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "CLAUDE_PID", "CODEX_THREAD_ID")
+
+
 class BundleTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -319,9 +322,10 @@ class CLITests(unittest.TestCase):
         self.call = Path(self.scratch.name) / "call.json"
         self.home = Path(self.scratch.name) / "home"
         write(self.home / ".bashrc", "alias cc='claude --dangerously-skip-permissions'\n")
-        self.env = {**os.environ, "PATH": str(self.bin) + os.pathsep + os.environ["PATH"], "FSA_TEST_CALL": str(self.call),
-                    "CODEX_HOME": str(Path(self.scratch.name) / "codex-home"), "CODEX_THREAD_ID": "test-lead",
-                    "HOME": str(self.home)}
+        self.env = {key: value for key, value in os.environ.items() if key not in LEAKED_SESSION_ENV_VARS}
+        self.env.update({"PATH": str(self.bin) + os.pathsep + os.environ["PATH"], "FSA_TEST_CALL": str(self.call),
+                          "CODEX_HOME": str(Path(self.scratch.name) / "codex-home"), "CODEX_THREAD_ID": "test-lead",
+                          "HOME": str(self.home)})
         self.runs = Path(self.scratch.name) / "runs"
         self.runs.mkdir()
 
@@ -479,6 +483,15 @@ class CLITests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         record = json.loads((state / "active-lead.json").read_text())
         self.assertEqual((record["phase"], record["task_tracking"]["completed"]), ("complete", 1))
+
+    def test_tasks_init_refuses_to_guess_between_codex_and_a_stale_claude_session(self):
+        env = {**self.env, "CODEX_THREAD_ID": "tracked-lead", "CLAUDE_CODE_SESSION_ID": "stale-claude",
+               "CLAUDE_PID": str(2 ** 22 + 7), "FSA_TASKS_DIR": str(Path(self.scratch.name) / "ambiguous-registry")}
+        tasks = self.bundle / "scripts/tasks.py"
+        result = run([sys.executable, str(tasks), "init", "--root", str(self.root), "--file", "docs/tasks/ambiguous.md",
+                      "--task", "T1|running|Implement|"], env=env)
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("pass --session", result.stderr)
 
     def test_phase_cli_preserves_evidence_and_clears_it_for_new_task(self):
         state = Path(self.scratch.name) / "evidence-state"

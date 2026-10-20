@@ -14,11 +14,17 @@ import unittest
 from unittest.mock import patch
 
 REPO = Path(__file__).resolve().parents[2]
-MODULE = REPO / "plugins/fullstack-agents/scripts/lib/task_tracking.py"
+LIB = REPO / "plugins/fullstack-agents/scripts/lib"
+MODULE = LIB / "task_tracking.py"
+sys.path.insert(0, str(LIB))
 SPEC = importlib.util.spec_from_file_location("task_tracking", MODULE)
 tasks = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(tasks)
+import task_ownership
 CLI = REPO / "plugins/fullstack-agents/scripts/fsa-task"
+
+
+AMBIENT_SESSION_VARS = ("CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "CLAUDE_PID")
 
 
 class TaskTrackingTests(unittest.TestCase):
@@ -28,12 +34,19 @@ class TaskTrackingTests(unittest.TestCase):
         self.root = self.base / "repo"
         self.root.mkdir()
         self.state = self.base / "state"
+        # The host shell may carry its own Claude/Codex session vars; tests need a clean slate.
+        self.leaked = {key: os.environ.pop(key, None) for key in AMBIENT_SESSION_VARS}
         self.env = patch.dict(os.environ, {"FSA_TASKS_DIR": str(self.state), "CODEX_THREAD_ID": "session-1"})
         self.env.start()
         self.path = self.root / "TASKS.md"
 
     def tearDown(self):
         self.env.stop()
+        for key, value in self.leaked.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
         self.scratch.cleanup()
 
     def ledger(self, rows=None):
@@ -225,9 +238,51 @@ class TaskTrackingTests(unittest.TestCase):
         bundle.mkdir()
         (bundle / "tasks.py").write_bytes((REPO / "integrations/codex/scripts/tasks.py").read_bytes())
         (bundle / "task_tracking.py").write_bytes(MODULE.read_bytes())
+        (bundle / "task_ownership.py").write_bytes((LIB / "task_ownership.py").read_bytes())
         process = subprocess.run([sys.executable, str(bundle / "tasks.py"), "set", "--root", str(self.root), "--file", "TASKS.md", "--id", "T1", "--status", "blocked", "--note", "Dependency"], text=True, capture_output=True)
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertEqual(tasks.load_tasks("session-1", self.root)["counts"]["blocked"], 1)
+
+    def test_session_default_prefers_codex_then_claude_code_then_claude(self):
+        self.path.write_text(self.ledger())
+        del os.environ["CODEX_THREAD_ID"]
+        try:
+            with patch.dict(os.environ, {"CLAUDE_CODE_SESSION_ID": "cc-session", "CLAUDE_SESSION_ID": "legacy-session"}):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(tasks.main(["bind", "--root", str(self.root), "--file", "TASKS.md"]), 0)
+                self.assertTrue((self.state / "cc-session.json").exists())
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(tasks.main(["release", "--root", str(self.root), "--file", "TASKS.md"]), 0)
+                del os.environ["CLAUDE_CODE_SESSION_ID"]
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(tasks.main(["bind", "--root", str(self.root), "--file", "TASKS.md"]), 0)
+                self.assertTrue((self.state / "legacy-session.json").exists())
+        finally:
+            os.environ["CODEX_THREAD_ID"] = "session-1"
+
+    def test_default_session_single_variable_cases(self):
+        self.assertEqual(tasks.default_session({"CODEX_THREAD_ID": "codex-only"}), "codex-only")
+        self.assertEqual(tasks.default_session({"CLAUDE_CODE_SESSION_ID": "cc-only"}), "cc-only")
+        self.assertEqual(tasks.default_session({"CLAUDE_SESSION_ID": "legacy-only"}), "legacy-only")
+        self.assertIsNone(tasks.default_session({}))
+
+    def test_default_session_walks_ancestors_to_the_claude_pid(self):
+        environ = {"CODEX_THREAD_ID": "stale-codex", "CLAUDE_CODE_SESSION_ID": "claude-id",
+                   "CLAUDE_PID": str(os.getppid())}
+        self.assertEqual(tasks.default_session(environ), "claude-id")
+
+    def test_default_session_ambiguous_is_none_and_the_cli_refuses(self):
+        self.path.write_text(self.ledger())
+        environ = {"CODEX_THREAD_ID": "stale-codex", "CLAUDE_CODE_SESSION_ID": "claude-id",
+                   "CLAUDE_PID": str(2**22 + 7)}
+        self.assertIsNone(tasks.default_session(environ))
+        with patch.dict(os.environ, environ):
+            with contextlib.redirect_stderr(io.StringIO()) as stderr:
+                with self.assertRaises(SystemExit) as ctx:
+                    tasks.main(["bind", "--root", str(self.root), "--file", "TASKS.md"])
+            self.assertEqual(ctx.exception.code, 2)
+            self.assertIn("ambiguous", stderr.getvalue())
+            self.assertIn("--session", stderr.getvalue())
 
     def deadline(self, seconds=120):
         return (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat().replace("+00:00", "Z")
@@ -419,10 +474,23 @@ class TaskTrackingTests(unittest.TestCase):
                                tasks._item("V1", "blocked", "Compile check", ""), tasks._item("V2", "pending", "Focused tests", "")]))
         lines = self.show().splitlines()
         self.assertEqual(lines[0], "done 1/4 · in_progress 1 · blocked 1 · pending 1 · active 1")
-        self.assertEqual(lines[1], "S4b  in_progress  [codex: implementing S4b]  Brief B — " + "n" * 99 + "…")
-        self.assertEqual(lines[2:], ["V1  blocked  Compile check", "V2  pending  Focused tests"])
+        self.assertEqual(lines[1], "owner: session-1 (live)")
+        self.assertEqual(lines[2], "S4b  in_progress  [codex: implementing S4b]  Brief B — " + "n" * 99 + "…")
+        self.assertEqual(lines[3:], ["V1  blocked  Compile check", "V2  pending  Focused tests"])
         summary = json.loads(self.show("--json"))
         self.assertEqual((summary["total"], summary["completed"], summary["active"], summary["file"]), (4, 1, 1, str(self.path)))
+        self.assertEqual(summary["owner"], {"session_id": "session-1", "state": "live"})
+
+    def test_show_reports_owner_text_and_json_for_none_live_and_free(self):
+        self.path.write_text(self.ledger())
+        self.assertEqual(self.show().splitlines()[1], "owner: none")
+        self.assertIsNone(json.loads(self.show("--json"))["owner"])
+        self.bind()
+        self.assertEqual(self.show().splitlines()[1], "owner: session-1 (live)")
+        self.assertEqual(json.loads(self.show("--json"))["owner"], {"session_id": "session-1", "state": "live"})
+        task_ownership.release("session-1", self.root, self.path)
+        self.assertEqual(self.show().splitlines()[1], "owner: session-1 (free)")
+        self.assertEqual(json.loads(self.show("--json"))["owner"], {"session_id": "session-1", "state": "free"})
 
 if __name__ == "__main__":
     unittest.main()
