@@ -263,6 +263,24 @@ def _find_fingerprint(old_entries, entry):
     return None
 
 
+def refresh_blockers(text, root, task_id, session_id, lines, next=None):
+    """Rewrite only `blockers` (and `next.action` when given) of an existing valid checkpoint."""
+    existing, error = load_checkpoint(text)
+    if error is not None:
+        return text, error
+    if existing is None:
+        return text, None
+    payload = {key: value for key, value in existing.items() if key != "identity"}
+    payload["blockers"] = list(lines)
+    if next is not None:
+        payload["next"] = {"action": next, "owner": existing["next"]["owner"]}
+    try:
+        new_text, _changed = apply(text, payload, root, task_id, session_id)
+    except ValueError as error:
+        return text, str(error)
+    return new_text, None
+
+
 def apply(text, payload, root, task_id, session_id):
     """Validate, stamp identity/fingerprints, and splice the section; return (text, changed)."""
     stripped = dict(payload)

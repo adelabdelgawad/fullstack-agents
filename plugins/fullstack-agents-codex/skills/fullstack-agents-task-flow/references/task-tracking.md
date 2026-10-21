@@ -16,7 +16,8 @@ Codex phase reporting can bind the file with `scripts/phase.py --root /absolute/
 
 The helper defaults to `CODEX_THREAD_ID` or `CLAUDE_SESSION_ID`; pass `--session` when the lead ID is known and not exported. Do not invent a session ID. The registration lives outside the repository; the Markdown file stays versioned with the project. `FSA_TASKS_DIR` overrides the shared registry directory for tools and dashboard together.
 
-The task table is bounded by `<!-- fsa:tasks:start -->` and `<!-- fsa:tasks:end -->`. Existing four-column tables remain supported:
+The task table is bounded by `<!-- fsa:tasks:start -->` and `<!-- fsa:tasks:end -->`. `init` creates the **v2** format
+(below); `init --format legacy` and existing files use the **legacy** format. Existing four-column tables remain supported:
 
 ```markdown
 | ID | Status | Task | Note |
@@ -33,7 +34,9 @@ For owner and current activity, use the optional seven-column format:
 | T02 | blocked | Implement and verify | Depends on T01 | worker-api | | |
 ```
 
-Preserve stable IDs. Use `pending`, `in_progress`, `blocked`, `done`, `skipped` or `canceled`. Legacy `running` is accepted and normalized to `in_progress`; it does not mean a process is running. Only `done` counts as completed. Keep evidence and the next action in the note; name an actual blocking dependency for `blocked`, using its task ID when available. Do not mark implementation done while its required validation or audit remains outstanding.
+Preserve stable IDs. IDs are unique: `add` with an ID that already exists, or twice in one call, fails and leaves the
+file unchanged; change a title with `set --title` and everything else with `set`. Use `pending`, `in_progress`, `blocked`,
+`done`, `skipped` or `canceled` (v2 adds `verifying`). Legacy `running` is accepted and normalized to `in_progress`; it does not mean a process is running. Only `done` counts as completed. Keep evidence and the next action in the note; name an actual blocking dependency for `blocked`, using its task ID when available. Do not mark implementation done while its required validation or audit remains outstanding.
 
 Task progress and active execution are separate. `in_progress` means unfinished work has started; it may be waiting. A task is active only when its status is `in_progress`, both Owner and Activity are set, and its Active until lease has not expired. Four-column rows have no active lease. `load_tasks` exposes each item's `is_active` and a top-level `active` count. Neither status nor a lease verifies a PID: activity is agent-reported and expires automatically.
 
@@ -45,15 +48,141 @@ After wiring a task file or changing dashboard support, verify the live session 
 
 The dashboard renders task status as an icon with an accessible name and hover label. Owner/activity text stays visible; progress and expiring execution counts remain separate.
 
+## Format v2
+
+v2 adds a Parent column and a task log:
+
+```markdown
+| ID | Status | Task | Note | Owner | Activity | Active until | Parent |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| S4 | in_progress | Restart bot after resolution | repair r1: outbox counter | lead | | | |
+| S4.v | pending | Journey tests | | | | | S4 |
+```
+
+- **Deliverable**: a row with an empty Parent, an independently verifiable result. **Step**: a row whose Parent names a
+  deliverable. Parent is set once with `add --parent <ID>`; it must be an existing deliverable of the same ledger (one level,
+  no self-parenting). The dot in `S4.v` is a naming habit only; the Parent cell alone decides.
+- `verifying`: the work is written and its checks or audit are under way. The dispatcher moves a successful run's row there.
+- Progress counts deliverables and steps separately; `skipped` and `canceled` deliverables leave the total. Steps never
+  change the deliverable count.
+- No step may be open while its deliverable is `done`, `skipped` or `canceled`: a deliverable cannot close over open
+  steps, and a step cannot be added or reopened under a closed deliverable; reopen the deliverable first
+  (`set --status in_progress --reason …`). Nothing reopens it implicitly. Every v2 write checks this, so a hand-edited
+  file that breaks it refuses further writes until it is fixed. Reopening a `done` row needs `set --reason`.
+- `## Task log` (between `<!-- fsa:log:start -->` and `<!-- fsa:log:end -->`) receives one line per add, status change,
+  title change, upgrade and downgrade. Notes, owners and leases are not logged. The tool never rewrites a log line, and
+  refuses a write that would push the file past its size limit.
+- A v2 deliverable reaches `done` only through recorded completion evidence (next section). Steps are not gated.
+- The header is the format: it must match the 4-, 7- or 8-column header exactly, and a v2 file needs its log markers.
+  Anything else is an error, never a fallback to legacy.
+
+## Completion evidence (v2)
+
+Each deliverable declares, before it can close, what "done" means and how it is checked. `fsa-task accept --id S4
+--input spec.json` records the spec in a tool-written evidence block of the ledger:
+
+```json
+{"kind": "code",
+ "scope": {"paths": ["src/backend/crates/x/"],
+           "dependencies": ["src/backend/crates/shared/", "src/backend/Cargo.toml", "src/backend/Cargo.lock", "tests/helpers/"],
+           "inputs": ["src/backend/.env.example"], "env": ["SQLX_OFFLINE"],
+           "rationale": "x and the shared crate it calls; the journeys test reads the helpers and env example"},
+ "criteria": [{"id": "AC1", "text": "Journey B restarts the bot", "checks": ["C1", "R1"]}],
+ "checks": {"C1": {"method": "command", "command": "scripts/test-backend.sh -p x --test journeys", "cwd": ".",
+                   "expect": {"patterns": ["test result: ok\\. [1-9][0-9]* passed"], "reject": ["0 passed"]}},
+            "R1": {"method": "review", "what": "diff read against the brief's ACCEPTANCE"}}}
+```
+
+- **Kinds and methods.** `kind` is `code`, `docs`, `design`, `investigation` or `other`. Methods: `command` (exit code,
+  run log and `expect`), `review` (saved review notes or diff), `inspection` (screenshot, probe output), `document` (the
+  document itself), `analysis` (the report with its sources). `code` needs at least one `command` check unless the spec
+  carries `automated_waiver` with a reason; other kinds never need one but may use one (a doc checker, a link check).
+- **Scope is a declaration.** `paths`, `dependencies` and `inputs` are what the evidence is about: shared modules, test
+  helpers, manifests, lockfiles and configuration belong in it. A package boundary is not automatically enough;
+  `rationale` says why the scope covers what the checks exercise, and `code` needs dependencies or `dependencies_none`
+  with a reason. Edits outside the scope do not affect the evidence, by this policy.
+- **`expect`.** Exit 0 alone proves nothing: a `command` check lists regexes its log must match (and may list `reject`
+  ones), or `{"none": "<reason>"}` for silent commands. When a command can pass while skipping its work, pair it with a
+  `review` check.
+
+**Recording results.** `fsa-task check run --id S4 --check C1` runs the recorded command itself and records `pass`,
+`fail` (nonzero exit), `timeout` (the command's whole process group is killed), `unavailable` (missing executable) or
+`inconclusive` (exit 0, expectations unmet). An external finish reports only `pass`, `fail`, `timeout` or `unavailable`
+(with `--reason`). For a
+check run elsewhere (test-runner, a browser, a review), call `check start` first and `check finish --run <id> --result …
+--evidence <file>` after; that result is labelled *attested*: fsa-task did not execute it. A finish without its start, a
+second finish, or a finish after the check's definition changed is refused. Evidence of `command`, `review` and
+`inspection` checks lives outside the scope (the default log directory is outside the repository); the ledger file never
+counts as scope. `document`/`analysis` evidence is the subject file inside the scope.
+
+**The gate.** `set --status done` (and `add`/`init` with a done deliverable) is refused unless no step is open, the spec
+is valid, and every check used by a criterion has a latest result that is `pass` (or an attributed baseline failure),
+was recorded under the check's current definition, saw no scoped change between start and finish, still has its evidence
+files unchanged, and matches the scope's current content. `fsa-task verify --id S4` prints the same report without
+writing. A later non-pass result on a `done` deliverable reopens it, with the reason logged, in the same row.
+
+**Changing the spec.** Any change to criteria, checks, scope or waivers after a result exists needs `--reason`; it
+invalidates exactly the results whose check definition changed, and the log names them. Never edit a spec to get a
+deliverable through the gate without saying so to the user.
+
+**Baselines.** `fsa-task baseline --id B1 --command … --ref <commit> --log <file> --signature "<failing test>" --reason …`
+records a failure that predates the work: the ref must be an ancestor of HEAD and the log must contain every signature;
+the tool keeps the log's hash and a hash of the whole tree at the ref. `check attribute --id S4 --check C1 --baseline B1 --reason …` accepts a later `fail` of the same command only when its log
+contains the same signatures. The original failure, both logs, the baseline code state and the reason are kept; the
+deliverable shows as *done with baseline failures*, never as a plain pass. `timeout`, `unavailable` and `inconclusive`
+results cannot be attributed.
+
+**Freshness and its limits.** A result's code state is a content hash of the scoped files (tracked, untracked and deleted),
+the declared inputs and hashed values of the declared environment variables; each check's command, working directory and
+criteria are bound separately by its definition digest, so changing one check does not stale the others. It is
+computed only when the check starts and finishes, never re-stamped. Committing unchanged content keeps evidence current;
+another session's edit to a scoped file makes it stale. It cannot see a change made and undone during a run, anything
+outside the declared scope (build caches, toolchains, databases, services, undeclared environment), or a change in the
+moment after the gate passes. The evidence identifies what was tested; it does not guarantee the result still holds.
+
+**Completion kinds.** `show` and the dashboard distinguish `done` with evidence, with baseline failures, and *unrecorded*
+(closed without passing the gate: before L2, or carried over by `upgrade`). The kind is stamped only when the gate passes
+and cleared on every reopen. A malformed evidence block never prevents a reasoned reopen (`set --status in_progress
+--reason …`): the block is left byte-for-byte for diagnosis and the log records `evidence_malformed`; completion and every
+evidence command stay refused until the block is repaired. `show` and other status changes keep working. Legacy ledgers have no evidence and no gate.
+
+**Compatibility.** Legacy files keep their behaviour; the only changes are duplicate-ID refusal and recovery no longer
+listing `skipped`/`canceled` rows as open. `fsa-task upgrade` converts a legacy file to v2 (every row a deliverable; nothing
+is inferred from IDs). Releases before v2 reject the v2 header: their dashboard shows an error and their Codex `phase.py`
+refuses `complete`, so old tools never report v2 work as finished.
+
+**Rollback.** Before reinstalling an older release, run `fsa-task downgrade`. It refuses while any row is `verifying` or has
+a Parent (finish, cancel or record those first), and while an evidence block exists, because a legacy ledger cannot keep
+the completion gate; otherwise it restores the legacy table, keeps the task log and appends a
+`downgrade` event.
+
+**Outside enforcement.** Every rule above applies only through `fsa-task`, `tasks.py` and the dispatcher. Editing the
+Markdown directly (Edit/Write tools, an editor, git) bypasses them; a resulting malformed v2 file is reported as an error.
+
 ## Granularity and update cadence
 
-Track the work at the size it is audited: one row per implementer unit (brief), per repair, and per verification step (compile check, focused tests, lint, visual check, docs), never one row per phase. Rows of one phase share its prefix: `S4a`, `S4b` for units, `V1`, `V2` for checks. A brief carries `TASK: <ledger.md>#<ROW-ID>` (path relative to the repository root, or absolute); the dispatcher then adds the row if it is missing, marks it `in_progress` with the engine as owner and a lease at dispatch, and at finish hands it to `lead` with the note `succeeded: awaiting lead audit (run <id>)`, or marks it `blocked` with `<state>: see run <id>`. A ledger failure only warns; it never changes the dispatch. The lead marks a row `done` only after its audit and checks pass, citing the evidence in the note. Update at every event: dispatch, return, check pass or fail, blocker.
+One row per deliverable: the result that is audited and accepted as a whole. Repairs, retries and verification runs
+belong to the deliverable they serve: record them in its note (`repair r1: …; tests 9/9 v2b.log`) and keep it open until
+its checks and audit pass. A failed check or audit sends the same row back to `in_progress`; it never creates a "follow-up"
+row. In v2, a step row (`--parent`) is optional, for a separate brief or check worth showing on its own. A new row is right
+only for an independently verifiable result or a real prerequisite; unrelated findings go to the user at hand-back, not
+into this ledger. Never one row per phase.
 
-Add or upsert several rows in one write (an existing ID keeps its owner and activity), apply one change to several rows (an omitted `--status` keeps each row's status), and report status from the compact summary (`--json` for machine output); Codex passes the same arguments to `python3 scripts/tasks.py`:
+A brief carries `TASK: <ledger.md>#<ROW-ID>` (path relative to the repository root, or absolute). At dispatch the
+dispatcher marks the row `in_progress` with the engine as owner and a lease. At finish it hands the row to `lead` with the
+note `succeeded: awaiting lead audit (run <id>)` (v2: status `verifying`), or marks it `blocked` with `<state>: see run <id>`.
+On a legacy ledger it adds a missing row; on v2 it never adds a row and never touches a `done` row (it warns: add or reopen
+the row first). A ledger failure only warns; it never changes the dispatch. The lead marks a row `done` only after its audit
+and checks pass, citing the evidence in the note. Update at every event: dispatch, return, check pass or fail, blocker.
+
+Add several rows in one write, apply one change to several rows (an omitted `--status` keeps each row's status), and
+report status from the compact summary (`--json` for machine output); Codex passes the same arguments to
+`python3 scripts/tasks.py`:
 
 ```bash
-scripts/fsa-task add --root /absolute/project --file docs/tasks/example.md --task 'S4a|pending|Unit A: API handler|' --task 'V1|pending|Compile check|cargo check --workspace'
-scripts/fsa-task set --root /absolute/project --file docs/tasks/example.md --id V1 --id V2 --note 'Waiting for S4a and S4b'
+scripts/fsa-task add --root /absolute/project --file docs/tasks/example.md --task 'S4|pending|Restart bot after resolution|' --task 'S5|pending|Saved selections|'
+scripts/fsa-task add --root /absolute/project --file docs/tasks/example.md --parent S4 --task 'S4.v|pending|Journey tests|'
+scripts/fsa-task set --root /absolute/project --file docs/tasks/example.md --id S4 --status in_progress --reason 'journey B fails after done'
 scripts/fsa-task show --root /absolute/project --file docs/tasks/example.md
 ```
 
@@ -116,8 +245,47 @@ Reading files, grepping and worker progress are not triggers. An unchanged check
 
 **What a checkpoint is:** a lead-written historical record that can be wrong. Cite a user quote or an evidence path for every decision and result.
 
-- An approval in a checkpoint is a record of what the user said, **never an authorization**. Schema validity does not make it one either.
-- Ask the user again for anything `ambiguous`, anything outside the quoted scope, and anything the project's rules require a fresh go-ahead for (deploys, migrations, production actions, releases).
+- An approval in a checkpoint is a record of what the user said. It never creates or widens authorization; schema validity does not make it one either.
+- A clear, restart, resume or compaction does not revoke an approval the user actually gave. Reconfirm only when the scope changed, a limit the user stated has expired, a single-use approval was already used, or the recorded words do not establish it (`ambiguous`).
+- Database resets, migrations, service reloads, deploys and releases keep the project's explicit-approval rule: the user's words must name that action for this task; a backup, a checkpoint or an earlier general approval does not.
+
+## Blockers, waiting and continuity (v2)
+
+A row waits only through a typed blocker, and the session's state is derived from rows and blockers, never from reply
+wording:
+
+| Command | Use |
+|---|---|
+| `fsa-task block --rows S3,S4 --kind user --text "<exact question>" --why "<what it blocks>"` | a decision only the user can make |
+| `fsa-task block --rows S2 --kind external --class capacity --engine codex --until <reset> [--offer "<alternative needing approval>"]` | an implementer's quota is exhausted |
+| `fsa-task block --rows S5 --kind worker --text <run id>` / `--kind external --class infrastructure --text "<condition>"` / `--kind row --text <row>` | a running worker, unavailable infrastructure, a prerequisite row |
+| `fsa-task resolve --id B1 --quote "<user's words>"` / `--evidence <file>` | `user`: the quote (at least three words) must occur in one prompt this session recorded (only salted word-hashes of the last 30 prompts are kept, never the text); `worker`: the run's `result.json`; `external`: an evidence file and `--reason`; `capacity`: refused while the engine's window still reads ≥ 100 %; a `row` blocker clears when its row is done |
+| `fsa-task withdraw --id B1 --reason …` | the blocker was wrong |
+
+- Session state: `executable` (some open row is unblocked and not held by a live worker) → keep working; otherwise
+  `waiting_worker`, `waiting_user`, `waiting_external`, or `done`. Independent authorized work always comes first; a
+  pending question never stops it.
+- The stop guard holds the turn only while work is executable. In `waiting_user` the final message must state each open
+  question (its id or text) and why it blocks; other waits end the turn without forced wording.
+- An implementer's exhausted quota is a capacity blocker, not a question. An engine switch is an `--offer`: waiting for
+  capacity stays valid, and switching needs the user's authorization. Time passing proves nothing; resolve only after
+  `fsa-usage` shows capacity. When usage is unknown (no fresh data, or the Codex edition, which does not ship the usage
+  reader) the blocker stays open unless `--evidence <file> --reason` records a manual observation of available capacity.
+- A matched `--quote` only proves the words were typed in this session. Resolving with it records the lead's
+  interpretation that they answer the question; it authorizes nothing else, and approvals still follow the rules above.
+- When the stop guard lets a turn end without progress (Codex Code's repeated-continuation signal, or the guard's own
+  cap), it shows the user "released without progress" with the open rows; nothing is marked complete.
+- `block`, `resolve` and `withdraw` refresh an existing checkpoint's blockers (and next action) in the same write; the
+  deliverable stays open with its failing checks.
+- `team-board phase complete` is refused while the ledger has open work; a push declares `review`, never `complete`.
+
+**Continuing.** In the same session nothing is needed: the next prompt receives a one-line status (state, blockers,
+failing checks, next action) from the existing binding; never ask the user for a path the binding already holds. After a
+`/clear` or restart, session start lists up to three resumable ledgers of this checkout (open work, valid ledger, active
+or no checkpoint, owner free or stale; newest first, with a count of any more and the command to list them all). Nothing
+binds automatically. When the user asks to continue a task and exactly one candidate matches, bind it with the command
+the list shows (`--takeover` only for a stale owner, on that instruction); when several match, ask which. A generic new
+request starts fresh. Do not recommend `/clear` or a new session for context size or cost; write the checkpoint instead.
 
 ## After compaction, `/clear`, resume or a fork
 

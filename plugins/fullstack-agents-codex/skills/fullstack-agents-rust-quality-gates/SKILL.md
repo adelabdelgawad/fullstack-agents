@@ -16,9 +16,8 @@ explicitly; do not assume historical hooks or dashboards are running.
 
 The complete adapted rules are in [references/engineering-guide.md](references/engineering-guide.md). Before acting, read its relevant requirements/checklist sections and only the examples you need. Start with the section index below and read at most 200 lines per call. Load the complete guide only when the task spans all of it. Paths inside that guide remain relative to this skill directory, beside `SKILL.md`. Project patterns and the constitution win over template defaults.
 
-- Line 7: The Chain
-- Line 24: Order Matters
-- Line 30: Justfile Integration
-- Line 45: Workspace Policy (what the gates assume)
-- Line 59: CI Mirror
-- Line 72: Remediation Map
+- Line 7: Per change set (fast, scoped to the touched crates)
+- Line 18: Tests (through the project's runner)
+- Line 30: Release only
+- Line 35: Always
+- Line 43: Remediation

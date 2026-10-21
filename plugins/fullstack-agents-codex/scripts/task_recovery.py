@@ -3,10 +3,16 @@ import json
 from pathlib import Path
 
 from task_tracking import _load_binding, _read, _root, _state_dir, load_tasks
+import task_blockers
 import task_checkpoint
+import task_evidence
 import task_ownership
+import task_rules
 
 CAP = 2500
+APPROVAL_NOTE = ("Records, not new authority: still valid after clear/restart/compaction unless the scope changed, "
+                 "a stated limit expired, a single-use approval was used, or the words do not establish it. "
+                 "DB resets, migrations, reloads and releases need explicit approval.")
 TIER0_RESERVE = 1100
 SCOPE_CUT = 300
 DECISION_CUT = 120
@@ -56,10 +62,50 @@ def collect(session_id, cwd):
     if checkpoint is not None:
         for entry in checkpoint["verification"]:
             verification_tags.append(_verification_tag(root, entry))
-    return {"task_id": path.stem, "ledger": {"title": info["title"], "items": info["items"]},
+    blocker_lines = _open_blocker_lines(text) if info.get("format") == "v2" else []
+    failing_check_lines = _failing_check_lines(root, path, text, info["items"]) if info.get("format") == "v2" else []
+    return {"task_id": path.stem, "ledger": {"title": info["title"], "items": info["items"],
+                                                   "format": info.get("format", "legacy")},
             "checkpoint_path": str(path), "checkpoint": checkpoint, "checkpoint_error": checkpoint_error,
             "owner": owner, "owner_state": owner_state, "git_identity": git_identity,
-            "compaction": compaction, "verification_tags": verification_tags}
+            "compaction": compaction, "verification_tags": verification_tags,
+            "blocker_lines": blocker_lines, "failing_check_lines": failing_check_lines}
+
+
+def _blocker_line(identifier, entry):
+    rows = ",".join(entry["rows"])
+    if entry.get("class") == "capacity":
+        until = f" until {entry['until']}" if entry.get("until") else ""
+        return f"{identifier}: capacity {entry['engine']}{until} — blocks {rows}"
+    line = f"{identifier}: {entry['kind']} {entry['text']} — blocks {rows}"
+    return f"{line} ({entry['why']})" if entry.get("why") else line
+
+
+def _open_blocker_lines(text):
+    if not task_blockers.has_block(text):
+        return []
+    try:
+        block = task_blockers.load_block(text)
+    except ValueError:
+        return []
+    return [_blocker_line(identifier, entry) for identifier, entry in sorted(block["blockers"].items())
+            if entry["status"] == "open"]
+
+
+def _failing_check_lines(root, path, text, items):
+    try:
+        block = task_evidence.load_block(text)
+    except ValueError:
+        return []
+    lines = []
+    for item in items:
+        if item.get("parent") or item["status"] not in task_rules.OPEN:
+            continue
+        report = task_evidence.build_report(root, block, item["id"], ledger_path=path)
+        if report["ok"]:
+            continue
+        lines.extend(f"{item['id']}: {reason}" for reason in report["blocking"])
+    return lines
 
 
 def _verification_tag(root, entry):
@@ -150,6 +196,16 @@ def _tier0_lines(info):
     if checkpoint is not None:
         lines.append(f"Checkpoint written: {checkpoint.get('identity', {}).get('written_at', '?')}")
     lines.append(f"Checkpoint path: {info.get('checkpoint_path', '?')}")
+    blocker_lines = info.get("blocker_lines") or []
+    if blocker_lines:
+        text, cut = _cut_blockers(blocker_lines, BLOCKERS_CUT)
+        truncated = truncated or cut
+        lines.append(f"Open blockers: {text}")
+    failing_check_lines = info.get("failing_check_lines") or []
+    if failing_check_lines:
+        text, cut = _cut_blockers(failing_check_lines, BLOCKERS_CUT)
+        truncated = truncated or cut
+        lines.append(f"Failing checks: {text}")
     if checkpoint is not None:
         scope = checkpoint.get("scope", {"in": [], "out": []})
         scope_in, cut_in = _cut_marked(", ".join(scope.get("in", [])), SCOPE_CUT)
@@ -206,8 +262,10 @@ def _decision_line(decision):
     return f"{decision['id']}: {text}", truncated
 
 
-def _open_row_line(item):
+def _open_row_line(item, version="legacy"):
     line = f"{item['id']} {item['status']} {item['title']}"
+    if version == "v2" and item.get("parent"):
+        line += f" (step of {item['parent']})"
     return f"{line} — {item['note']}" if item.get("note") else line
 
 
@@ -215,8 +273,8 @@ def _sections(info):
     """Rendered sections plus whether any kept decision's text was truncated."""
     checkpoint = info.get("checkpoint")
     ledger = info.get("ledger") or {"items": []}
-    open_items = [item for item in ledger.get("items", []) if item.get("status") != "done"]
-    sections = [("open rows", [_open_row_line(item) for item in open_items], False)]
+    open_items = [item for item in ledger.get("items", []) if item.get("status") in task_rules.OPEN]
+    sections = [("open rows", [_open_row_line(item, ledger.get("format", "legacy")) for item in open_items], False)]
     decisions_truncated = False
     if checkpoint is not None:
         tags = info.get("verification_tags") or []
@@ -227,7 +285,7 @@ def _sections(info):
             line, cut = _decision_line(decision)
             decision_lines.append(line)
             decisions_truncated = decisions_truncated or cut
-        sections = [("approvals", [_approval_line(a) for a in checkpoint["approvals"]], True),
+        sections = [("approvals", [_approval_line(a) for a in checkpoint["approvals"]] + [APPROVAL_NOTE], True),
                     ("goal", [checkpoint["goal"]], False),
                     ("decisions", decision_lines, True),
                     sections[0],
