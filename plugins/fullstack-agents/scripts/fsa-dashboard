@@ -31,6 +31,7 @@ from datetime import datetime, timezone
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "lib"))
+import task_rules
 from task_tracking import load_tasks
 from usage import redact, session_usage, transcript_usage
 from activity import ActivityFeed, card_usage, history_rows, run_cause, totals
@@ -2115,6 +2116,41 @@ def iso_epoch(ts):
         return 0
 
 
+def session_state_need(state):
+    """§14.6 item 1: a bound v2 ledger states its own waiting text, not a reply-text guess."""
+    if not state:
+        return ""
+    if state["state"] == "waiting_user" and state["questions"]:
+        return "; ".join(f"{q['id']}: {q['text']} — blocks {', '.join(q['rows'])}: {q['why']}"
+                          for q in state["questions"])
+    if state["state"] == "waiting_external":
+        capacity = [e for e in state["external"] if e.get("class") == "capacity"]
+        if capacity:
+            return "; ".join(f"waiting for {e['engine']} capacity until {e['until']}" for e in capacity)
+    return ""
+
+
+def apply_session_state_need(session):
+    """A ledger's waiting text only overrides state once the session's turn has ended."""
+    need = session_state_need(session["task_tracking"].get("session_state"))
+    if need and session["state"] in ("idle", "waiting", "still_open"):
+        session["state"], session["need"] = "waiting", need
+
+
+def _ledger_open(sessions):
+    for s in sessions:
+        t = s.get("task_tracking") or {}
+        if t.get("error") or not t.get("file"):
+            continue
+        state = t.get("session_state")
+        if state is not None:
+            if state["state"] != "done":
+                return True
+        elif any(t.get("counts", {}).get(status, 0) for status in task_rules.OPEN):
+            return True
+    return False
+
+
 def phase_of(card, runs, sessions):
     if sessions and not runs and all(s.get("fresh") for s in sessions):
         return "review"
@@ -2139,6 +2175,10 @@ def phase_of(card, runs, sessions):
         # A finished task stays Done until the session starts working on a new turn.
         if declared["phase"] == "complete" and any(s["state"] == "working" and s.get("turn_at", 0) > declared["at"] for s in sessions):
             return "investigate"
+        if declared["phase"] == "complete" and _ledger_open(sessions):
+            note = declared.get("note")
+            card["declared"] = {**declared, "note": f"{note}; ledger has open work" if note else "ledger has open work"}
+            return "review"
         return declared["phase"]
     if latest:
         ended = latest["state"] == "done" and any(
@@ -2201,6 +2241,7 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
         sessions = list(by_session.values())
     for session in sessions:
         session["task_tracking"] = load_tasks(session["id"], session.get("cwd"))
+        apply_session_state_need(session)
     judge_turns(repo, sessions, now)
     favourites = load_json(repo.favourites) or {}
     main_root = str(repo.root)

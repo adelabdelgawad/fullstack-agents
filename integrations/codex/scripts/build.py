@@ -224,6 +224,13 @@ def render(output):
     for name in ("validate.sh", "hook.py", "handoff.py", "worker.py", "phase.py", "tasks.py"):
         shutil.copy2(ADAPTER / "scripts" / name, output / "scripts" / name)
     shutil.copy2(SOURCE / "scripts/lib/task_tracking.py", output / "scripts/task_tracking.py")
+    shutil.copy2(SOURCE / "scripts/lib/task_format.py", output / "scripts/task_format.py")
+    shutil.copy2(SOURCE / "scripts/lib/task_evidence.py", output / "scripts/task_evidence.py")
+    shutil.copy2(SOURCE / "scripts/lib/task_evidence_cli.py", output / "scripts/task_evidence_cli.py")
+    shutil.copy2(SOURCE / "scripts/lib/task_brief.py", output / "scripts/task_brief.py")
+    shutil.copy2(SOURCE / "scripts/lib/task_blockers.py", output / "scripts/task_blockers.py")
+    shutil.copy2(SOURCE / "scripts/lib/prompt_history.py", output / "scripts/prompt_history.py")
+    shutil.copy2(SOURCE / "scripts/lib/task_rules.py", output / "scripts/task_rules.py")
     shutil.copy2(SOURCE / "scripts/lib/task_ownership.py", output / "scripts/task_ownership.py")
     shutil.copy2(SOURCE / "scripts/lib/task_checkpoint.py", output / "scripts/task_checkpoint.py")
     shutil.copy2(SOURCE / "scripts/lib/task_recovery.py", output / "scripts/task_recovery.py")

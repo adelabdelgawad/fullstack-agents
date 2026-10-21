@@ -200,6 +200,18 @@ class SessionEndTests(LifecycleTestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertFalse(self.parked_path().exists())
 
+    def test_verifying_parks_but_canceled_does_not(self):
+        for status, expected in (("verifying", True), ("canceled", False)):
+            with self.subTest(status=status):
+                item = tasks._item("T1", status, "Task", "", version="v2")
+                self.path.write_text("# T\n\n" + tasks.START + tasks._render([item], "v2") + tasks.END
+                                     + "\n\n## Task log\n" + tasks.LOG_START + "\n" + tasks.LOG_END + "\n")
+                self.bind("sess-1")
+                proc = self.run_hook("session-end", {"session_id": "sess-1", "reason": "clear", "cwd": str(self.root)})
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertEqual(self.parked_path().exists(), expected)
+                self.parked_path().unlink(missing_ok=True)
+
     def test_no_binding_skips_parking(self):
         proc = self.run_hook("session-end", {"session_id": "sess-unbound", "reason": "clear", "cwd": str(self.root)})
         self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -372,6 +384,58 @@ class ClearForkOfferTests(LifecycleTestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         command = f"fsa-task adopt --root {self.root} --file {self.path.relative_to(self.root)} --from sess-1"
         self.assertTrue(proc.stdout.strip().endswith(f"`{command}` runs."))
+
+
+class CandidatesNoticeTests(LifecycleTestCase):
+    def free_ledger(self, name, old_session):
+        path = self.root / name
+        path.write_text("# " + name + "\n\n" + tasks.START + tasks._render([tasks._item("T1", "pending", "T", "")])
+                        + tasks.END + "\n")
+        old = {k: os.environ.get(k) for k in ("FSA_TASKS_DIR", "CLAUDE_PID")}
+        os.environ["FSA_TASKS_DIR"], os.environ["CLAUDE_PID"] = str(self.state), str(os.getpid())
+        try:
+            tasks.bind_tasks(old_session, self.root, path)
+            ownership.release(old_session, self.root, path)
+        finally:
+            for key, value in old.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+        return path
+
+    def test_clear_with_no_binding_lists_candidate_and_binds_nothing(self):
+        path = self.free_ledger("TASKS.md", "sess-old")
+        proc = self.run_session_start({"session_id": "sess-new", "source": "clear", "cwd": str(self.root)})
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("most recently changed first", proc.stdout)
+        self.assertIn(str(path.relative_to(self.root)), proc.stdout)
+        self.assertIn("fsa-task bind --root", proc.stdout)
+        self.assertIn("Nothing is bound.", proc.stdout)
+        self.assertFalse((self.state / "sess-new.json").exists())
+
+    def test_startup_with_no_binding_lists_candidate(self):
+        self.free_ledger("TASKS.md", "sess-old")
+        proc = self.run_session_start({"session_id": "sess-new", "source": "startup", "cwd": str(self.root)})
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("fsa-task bind --root", proc.stdout)
+        self.assertIn("Nothing is bound.", proc.stdout)
+
+    def test_startup_with_a_binding_shows_no_candidates(self):
+        self.bind("sess-1")
+        proc = self.run_session_start({"session_id": "sess-1", "source": "startup", "cwd": str(self.root)})
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stdout, "")
+
+    def test_four_eligible_candidates_shows_three_plus_count(self):
+        for index in range(4):
+            self.free_ledger(f"T{index}.md", f"sess-{index}")
+        proc = self.run_session_start({"session_id": "sess-new", "source": "startup", "cwd": str(self.root)})
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stdout.count("fsa-task bind --root"), 3)
+        self.assertIn("and 1 more: python3 -I", proc.stdout)
+        self.assertIn("--cwd " + str(self.root), proc.stdout)
+        self.assertIn("Nothing is bound.", proc.stdout)
 
 
 class CompactTests(LifecycleTestCase):

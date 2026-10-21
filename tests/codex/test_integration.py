@@ -10,6 +10,7 @@ import tempfile
 import tomllib
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO / "integrations/codex/scripts"
@@ -27,7 +28,14 @@ def run(command, **kwargs):
     return subprocess.run(command, capture_output=True, text=True, **kwargs)
 
 
-LEAKED_SESSION_ENV_VARS = ("CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "CLAUDE_PID", "CODEX_THREAD_ID")
+LEAKED_SESSION_ENV_VARS = ("CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "CLAUDE_PID", "CODEX_THREAD_ID", "FSA_ROLE")
+
+
+def clean_env(**overrides):
+    """Base env for subprocesses that run a hook or dispatch: never inherits the invoking shell's FSA_ROLE."""
+    env = {key: value for key, value in os.environ.items() if key not in LEAKED_SESSION_ENV_VARS}
+    env.update(overrides)
+    return env
 
 
 class BundleTests(unittest.TestCase):
@@ -132,7 +140,7 @@ class BundleTests(unittest.TestCase):
                 write(cache / version / "scripts/hook.py",
                       "import json,sys; print(json.dumps({'version':" + repr(version) +
                       ", 'mode':sys.argv[1], 'payload':json.load(sys.stdin)}))")
-            env = dict(os.environ, PLUGIN_ROOT=str(old))
+            env = clean_env(PLUGIN_ROOT=str(old))
             old.rmdir()  # Reproduce cache eviction while the session retains its hook command.
             for event, mode in (("SessionStart", "start"), ("UserPromptSubmit", "prompt"), ("PostToolUse", "post"), ("Stop", "stop")):
                 command = hooks[event][0]["hooks"][0]["command"]
@@ -154,7 +162,7 @@ class BundleTests(unittest.TestCase):
             script = root / "cache/3.59.1/scripts/hook.py"
             write(script, "import hook_helper; print(hook_helper.VALUE)")
             write(script.parent / "hook_helper.py", "VALUE='sibling-import-ok'")
-            env = dict(os.environ, PLUGIN_ROOT=str(root / "cache/3.58.6"), PYTHONPATH=str(workspace))
+            env = clean_env(PLUGIN_ROOT=str(root / "cache/3.58.6"), PYTHONPATH=str(workspace))
             result = run(["bash", "-c", hooks["SessionStart"][0]["hooks"][0]["command"]], cwd=workspace, env=env, input="{}")
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.strip(), "sibling-import-ok")
@@ -162,7 +170,7 @@ class BundleTests(unittest.TestCase):
     def test_hook_missing_entire_cache_reports_actionable_failure(self):
         hooks = json.loads((self.bundle / "hooks/hooks.json").read_text())["hooks"]
         with tempfile.TemporaryDirectory() as directory:
-            env = dict(os.environ, PLUGIN_ROOT=str(Path(directory) / "missing" / "3.58.6"))
+            env = clean_env(PLUGIN_ROOT=str(Path(directory) / "missing" / "3.58.6"))
             result = run(["bash", "-c", hooks["SessionStart"][0]["hooks"][0]["command"]], env=env, input="{}")
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("reinstall the plugin", result.stderr)
@@ -322,10 +330,9 @@ class CLITests(unittest.TestCase):
         self.call = Path(self.scratch.name) / "call.json"
         self.home = Path(self.scratch.name) / "home"
         write(self.home / ".bashrc", "alias cc='claude --dangerously-skip-permissions'\n")
-        self.env = {key: value for key, value in os.environ.items() if key not in LEAKED_SESSION_ENV_VARS}
-        self.env.update({"PATH": str(self.bin) + os.pathsep + os.environ["PATH"], "FSA_TEST_CALL": str(self.call),
-                          "CODEX_HOME": str(Path(self.scratch.name) / "codex-home"), "CODEX_THREAD_ID": "test-lead",
-                          "HOME": str(self.home)})
+        self.env = clean_env(PATH=str(self.bin) + os.pathsep + os.environ["PATH"], FSA_TEST_CALL=str(self.call),
+                             CODEX_HOME=str(Path(self.scratch.name) / "codex-home"), CODEX_THREAD_ID="test-lead",
+                             HOME=str(self.home))
         self.runs = Path(self.scratch.name) / "runs"
         self.runs.mkdir()
 
@@ -451,14 +458,34 @@ class CLITests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("T01", result.stderr)
         self.assertEqual(json.loads((state / "tracked-lead.json").read_text())["phase"], "implement")
-        result = run([sys.executable, str(tasks), "set", "--root", str(self.root), "--file", "docs/tasks/work.md", "--id", "T01", "--status", "done"], env=env)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        # Hand-edit to done: a bare status transition has no recorded evidence spec and would hit the L2 gate.
+        ledger = self.root / "docs/tasks/work.md"
+        ledger.write_text(ledger.read_text().replace("| T01 | in_progress |", "| T01 | done |"))
         result = run([*cmd, "--phase", "complete"], env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
         (self.root / "docs/tasks/work.md").unlink()
         result = run([*cmd, "--phase", "complete"], env=env)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("invalid task list", result.stderr)
+        self.assertIn("ledger is invalid", result.stderr)
+
+    def test_phase_completion_refuses_verifying_and_accepts_terminal_rows(self):
+        env = {**self.env, "CODEX_THREAD_ID": "verify-lead", "FSA_TASKS_DIR": str(Path(self.scratch.name) / "verify-registry")}
+        tasks = self.bundle / "scripts/tasks.py"
+        result = run([sys.executable, str(tasks), "init", "--root", str(self.root), "--file", "docs/tasks/verify.md",
+                      "--task", "T1|verifying|Review|", "--task", "T2|skipped|Skip|", "--task", "T3|canceled|Cancel|"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = Path(self.scratch.name) / "verify-phase"
+        command = [sys.executable, str(self.bundle / "scripts/phase.py"), "--root", str(self.root), "--state-dir", str(state)]
+        result = run([*command, "--phase", "implement"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = run([*command, "--phase", "complete"], env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("T1", result.stderr)
+        # Hand-edit to done: a bare status transition has no recorded evidence spec and would hit the L2 gate.
+        ledger = self.root / "docs/tasks/verify.md"
+        ledger.write_text(ledger.read_text().replace("| T1 | verifying |", "| T1 | done |"))
+        result = run([*command, "--phase", "complete"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_phase_completion_guard_covers_canonical_in_progress_and_activity_metadata(self):
         env = {**self.env, "CODEX_THREAD_ID": "active-lead", "FSA_TASKS_DIR": str(Path(self.scratch.name) / "active-registry")}
@@ -475,14 +502,44 @@ class CLITests(unittest.TestCase):
         self.assertEqual(record["task_tracking"]["counts"]["in_progress"], 1)
         result = run([*command, "--phase", "complete"], env=env)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("unfinished", result.stderr)
+        self.assertIn("ledger state is executable", result.stderr)
+        self.assertIn("T1", result.stderr)
         self.assertEqual(json.loads((state / "active-lead.json").read_text())["phase"], "implement")
-        result = run([sys.executable, str(tasks), "set", "--root", str(self.root), "--file", "docs/tasks/active.md", "--id", "T1", "--status", "done"], env=env)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        # Hand-edit to done: a bare status transition has no recorded evidence spec and would hit the L2 gate.
+        ledger = self.root / "docs/tasks/active.md"
+        ledger.write_text(ledger.read_text().replace("| T1 | in_progress |", "| T1 | done |"))
         result = run([*command, "--phase", "complete"], env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
         record = json.loads((state / "active-lead.json").read_text())
         self.assertEqual((record["phase"], record["task_tracking"]["completed"]), ("complete", 1))
+
+    def test_phase_completion_matches_team_board_for_a_v2_waiting_external_ledger(self):
+        env = {**self.env, "CODEX_THREAD_ID": "ext-lead", "FSA_TASKS_DIR": str(Path(self.scratch.name) / "ext-registry")}
+        tasks = self.bundle / "scripts/tasks.py"
+        result = run([sys.executable, str(tasks), "init", "--root", str(self.root), "--file", "docs/tasks/ext.md",
+                      "--task", "T1|pending|Implement|"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = run([sys.executable, str(tasks), "block", "--root", str(self.root), "--file", "docs/tasks/ext.md",
+                      "--rows", "T1", "--kind", "external", "--class", "other", "--text", "CI quota window"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        identifier = json.loads(result.stdout)["id"]
+        state = Path(self.scratch.name) / "ext-phase"
+        command = [sys.executable, str(self.bundle / "scripts/phase.py"), "--root", str(self.root), "--state-dir", str(state)]
+        result = run([*command, "--phase", "implement"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = run([*command, "--phase", "complete"], env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("waiting_external", result.stderr)
+        evidence = Path(self.scratch.name) / "ci-cleared.txt"
+        evidence.write_text("quota window cleared\n")
+        result = run([sys.executable, str(tasks), "resolve", "--root", str(self.root), "--file", "docs/tasks/ext.md",
+                      "--id", identifier, "--evidence", str(evidence), "--reason", "quota window reopened"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = run([sys.executable, str(tasks), "set", "--root", str(self.root), "--file", "docs/tasks/ext.md",
+                      "--id", "T1", "--status", "skipped"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = run([*command, "--phase", "complete"], env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_tasks_init_refuses_to_guess_between_codex_and_a_stale_claude_session(self):
         env = {**self.env, "CODEX_THREAD_ID": "tracked-lead", "CLAUDE_CODE_SESSION_ID": "stale-claude",
@@ -702,13 +759,13 @@ class HookAndValidationTests(unittest.TestCase):
         for prompt in ("commit and push", "yes", "", "<task-notification> background task completed successfully </task-notification>",
                        "SYSTEM NOTIFICATION - NOT USER INPUT: background task completed"):
             with self.subTest(prompt=prompt):
-                result = run([sys.executable, str(SCRIPTS / "hook.py"), "prompt"],
+                result = run([sys.executable, str(SCRIPTS / "hook.py"), "prompt"], env=clean_env(),
                              input=json.dumps({"prompt": prompt}))
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "")
 
     def test_prompt_hook_keeps_guidance_for_substantive_requests(self):
-        result = run([sys.executable, str(SCRIPTS / "hook.py"), "prompt"],
+        result = run([sys.executable, str(SCRIPTS / "hook.py"), "prompt"], env=clean_env(),
                      input=json.dumps({"prompt": "Please investigate the slow backend request and fix it"}))
         self.assertEqual(result.returncode, 0, result.stderr)
         output = json.loads(result.stdout)["hookSpecificOutput"]
@@ -723,11 +780,20 @@ class HookAndValidationTests(unittest.TestCase):
             patch = "*** Begin Patch\n*** Update File: app.py\n*** Move to: other.py\n*** Update File: src/main.rs\n*** End Patch\n"
             payload = {"cwd": str(root), "tool_input": {"command": patch}}
             result = run([sys.executable, str(SCRIPTS / "hook.py"), "post"], input=json.dumps(payload),
-                         env={**os.environ, "PATH": str(root)})
+                         env=clean_env(PATH=str(root)))
             self.assertEqual(result.returncode, 0, result.stderr)
             context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
             self.assertIn("unavailable", context)
             self.assertEqual((root / "app.py").read_text(), "value = 2\n")
+
+    def test_clean_env_hides_the_invoking_shells_fsa_role_from_a_dispatched_hook(self):
+        with patch.dict(os.environ, {"FSA_ROLE": "implementer"}):
+            result = run([sys.executable, str(SCRIPTS / "hook.py"), "start"], env=clean_env(),
+                         input=json.dumps({"source": "startup"}))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertNotIn("dispatched implementer run", context)
+        self.assertIn("Ownership and flow", context)
 
     def test_frontend_validation_does_not_download_typescript(self):
         with tempfile.TemporaryDirectory(prefix="fsa-validation-") as scratch:
@@ -757,16 +823,19 @@ class StopGuardTests(unittest.TestCase):
         base = Path(self.case.name)
         self.root = base / "repo"
         self.root.mkdir()
-        self.env = {**os.environ, "FSA_TASKS_DIR": str(base / "tasks"), "FSA_STOP_GUARD_DIR": str(base / "guard")}
+        self.env = clean_env(FSA_TASKS_DIR=str(base / "tasks"), FSA_STOP_GUARD_DIR=str(base / "guard"))
         self.env.pop("FSA_STOP_GUARD", None)
 
     def tearDown(self):
         self.case.cleanup()
 
-    def ledger(self, session, status):
+    def ledger(self, session, status, fmt=None):
+        # A v2 "done" deliverable needs a recorded evidence spec (L2 gate); this helper only cares about
+        # the stop guard reading task status, so a pre-L2 legacy ledger keeps that case unaffected.
+        extra = ["--format", fmt] if fmt else (["--format", "legacy"] if status == "done" else [])
         result = run([sys.executable, str(self.bundle / "scripts/tasks.py"), "init", "--session", session,
                       "--root", str(self.root), "--file", f"docs/tasks/{session}.md", "--title", "Work",
-                      "--task", f"T01|{status}|Implement|"], env=self.env)
+                      "--task", f"T01|{status}|Implement|", *extra], env=self.env)
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def codex(self, mode, payload, script=None):
@@ -776,9 +845,29 @@ class StopGuardTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout) if result.stdout.strip() else None
 
-    def stop(self, session, message, script=None):
+    def stop(self, session, message, script=None, stop_hook_active=False):
         return self.codex("stop", {"session_id": session, "cwd": str(self.root),
-                                   "last_assistant_message": message, "stop_hook_active": False}, script)
+                                   "last_assistant_message": message, "stop_hook_active": stop_hook_active}, script)
+
+    def tasks(self, *args):
+        result = run([sys.executable, str(self.bundle / "scripts/tasks.py"), *args], env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout) if result.stdout.strip() else None
+
+    def add_row(self, session, task_id, status="pending"):
+        self.tasks("add", "--session", session, "--root", str(self.root),
+                   "--file", f"docs/tasks/{session}.md", "--task", f"{task_id}|{status}|Implement|")
+
+    def block(self, session, rows, kind, text, **extra):
+        args = ["block", "--session", session, "--root", str(self.root), "--file", f"docs/tasks/{session}.md",
+                "--rows", rows, "--kind", kind, "--text", text]
+        for key, value in extra.items():
+            args += ["--class" if key == "cls" else f"--{key.replace('_', '-')}", value]
+        return self.tasks(*args)["id"]
+
+    def prompt_hook(self, session, prompt="continue"):
+        return run([sys.executable, str(CLAUDE_GUARD), "prompt"],
+                   input=json.dumps({"session_id": session, "cwd": str(self.root), "prompt": prompt}), env=self.env)
 
     def test_bundle_registers_stop_hook_and_ships_guard(self):
         hooks = json.loads((self.bundle / "hooks/hooks.json").read_text())["hooks"]
@@ -797,7 +886,8 @@ class StopGuardTests(unittest.TestCase):
         self.assertEqual(out["decision"], "block")
 
     def test_explicit_wait_on_user_question_or_done_ledger_releases(self):
-        self.ledger("s1", "in_progress")
+        # Trailers only decide for legacy ledgers now (§13.4): a v2 "executable" row holds the turn regardless.
+        self.ledger("s1", "in_progress", fmt="legacy")
         self.assertIsNone(self.stop("s1", "Plan ready.\nWaiting on: you - approve the migration"))
         self.assertIsNone(self.stop("s1", "Which channel should the trigger use?"))
         self.assertIsNone(self.stop("s1", "Blocked: the auditor CLI is unavailable"))
@@ -805,8 +895,17 @@ class StopGuardTests(unittest.TestCase):
         self.assertIsNone(self.stop("s2", "All done."))
         self.assertIsNone(self.stop("unbound", "Finished."))
 
+    def test_verifying_holds_turn_but_blocked_only_releases(self):
+        self.ledger("verify", "verifying")
+        out = self.stop("verify", "Review is still underway.")
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("T01 (verifying)", out["reason"])
+        self.ledger("blocked", "blocked")
+        self.assertIsNone(self.stop("blocked", "Still blocked."))
+
     def test_explicit_ask_without_question_mark_releases(self):
-        self.ledger("s1", "in_progress")
+        # Legacy only (§13.7): a v2 "executable" row holds the turn no matter what the reply says.
+        self.ledger("s1", "in_progress", fmt="legacy")
         self.assertIsNone(self.stop("s1", "Plan below.\nApprove the plan and I will start P1."))
         self.assertIsNone(self.stop("s1", "Three options listed; this needs your decision before the migration."))
         self.assertEqual(self.stop("s1", "Approved items are being implemented now.")["decision"], "block")
@@ -818,7 +917,8 @@ class StopGuardTests(unittest.TestCase):
                 self.assertEqual(self.stop("s1", message)["decision"], "block")
 
     def test_approval_ask_cannot_end_already_approved_open_work(self):
-        self.ledger("s1", "in_progress")
+        # Legacy only (§13.7): a v2 "executable" row holds the turn no matter what the reply says.
+        self.ledger("s1", "in_progress", fmt="legacy")
         self.codex("prompt", {"session_id": "s1", "prompt": "The plan is approved. Proceed with P1-P3."})
         out = self.stop("s1", "P1 is done.\nApprove the plan and I'll start P2.")
         self.assertEqual(out["decision"], "block")
@@ -827,14 +927,16 @@ class StopGuardTests(unittest.TestCase):
         self.assertIsNone(self.stop("s1", "Summary above.\nApprove the plan and I'll start P2."))
 
     def test_permission_question_cannot_end_already_approved_open_work(self):
-        self.ledger("s1", "in_progress")
+        # Legacy only (§13.7): a v2 "executable" row holds the turn no matter what the reply says.
+        self.ledger("s1", "in_progress", fmt="legacy")
         self.codex("prompt", {"session_id": "s1", "prompt": "Approved. Go ahead with P2."})
         for ask in ("Shall I start P2?", "Do you want me to continue with P2?", "Ready to begin. Should I proceed?"):
             self.assertEqual(self.stop("s1", "P1 is done.\n" + ask)["decision"], "block", ask)
         self.assertIsNone(self.stop("s1", "P2 can cache in Postgres or Redis.\nWhich store should P2 use?"))
 
     def test_negated_or_deferred_approval_keeps_the_approval_ask_open(self):
-        self.ledger("s1", "in_progress")
+        # Legacy only (§13.7): a v2 "executable" row holds the turn no matter what the reply says.
+        self.ledger("s1", "in_progress", fmt="legacy")
         for prompt in ("don't do it until I review the plan", "wait before you proceed, I want to see the plan",
                        "is this approved?", "Review the plan; I will approve later", "Approve? Not yet."):
             self.codex("prompt", {"session_id": "s1", "prompt": prompt})
@@ -857,8 +959,9 @@ class StopGuardTests(unittest.TestCase):
 
     def test_unchanged_ledger_blocks_at_most_three_times(self):
         self.ledger("s1", "in_progress")
-        decisions = [self.stop("s1", "Still working.") for _ in range(4)]
-        self.assertEqual([bool(d) for d in decisions], [True, True, True, False])
+        decisions = [self.stop("s1", "Still working.", script=CLAUDE_GUARD) for _ in range(4)]
+        self.assertEqual(["decision" in result for result in decisions], [True, True, True, False])
+        self.assertIn("nothing was marked complete", decisions[-1]["systemMessage"])
 
     def test_kill_switch_disables_the_guard(self):
         self.ledger("s1", "in_progress")
@@ -866,7 +969,8 @@ class StopGuardTests(unittest.TestCase):
         self.assertIsNone(self.stop("s1", "Still working."))
 
     def test_claude_guard_reads_transcript_and_accepts_background_wait(self):
-        self.ledger("c1", "in_progress")
+        # Legacy only (§13.7): a v2 "executable" row holds the turn no matter what the reply says.
+        self.ledger("c1", "in_progress", fmt="legacy")
         transcript = Path(self.case.name) / "t.jsonl"
         entry = {"type": "assistant", "message": {"content": [{"type": "text", "text": "Tests are running."}]}}
         transcript.write_text(json.dumps(entry) + "\n")
@@ -876,6 +980,100 @@ class StopGuardTests(unittest.TestCase):
         payload["last_assistant_message"] = "Started the suite.\nWaiting on: background task bt4t8yate"
         result = run([sys.executable, str(CLAUDE_GUARD), "stop"], input=json.dumps(payload), env=self.env)
         self.assertEqual(result.stdout.strip(), "", result.stderr)
+
+    def test_v2_executable_holds_the_turn_naming_rows_while_a_question_is_pending(self):
+        self.ledger("s1", "pending")
+        self.add_row("s1", "T02")
+        self.block("s1", "T02", "user", "Which datastore?", why="T02 needs the choice")
+        out = self.stop("s1", "No idea yet, still looking.")
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("T01", out["reason"])
+        self.assertNotIn("T02", out["reason"])
+
+    def test_v2_waiting_user_names_an_unnamed_question_and_releases_once_all_are_named(self):
+        self.ledger("s1", "pending")
+        self.block("s1", "T01", "user", "Which datastore?", why="T01 needs the choice", id="Q1")
+        out = self.stop("s1", "Still thinking.")
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("Q1", out["reason"])
+        self.add_row("s1", "T02")
+        self.block("s1", "T02", "user", "Which region?", why="T02 needs the choice", id="Q2")
+        out = self.stop("s1", "Q1: use Postgres.")
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("Q2", out["reason"])
+        self.assertIsNone(self.stop("s1", "Q1: use Postgres. Q2: use eu-west."))
+
+    def test_v2_waiting_worker_and_waiting_external_release_without_a_trailer(self):
+        self.ledger("worker", "pending")
+        self.block("worker", "T01", "worker", "implement-run-1")
+        self.assertIsNone(self.stop("worker", "Still working, nothing to report."))
+        self.ledger("ext", "pending")
+        self.block("ext", "T01", "external", "CI quota window", cls="other")
+        self.assertIsNone(self.stop("ext", "Still working, nothing to report."))
+        self.ledger("cap", "pending")
+        self.block("cap", "T01", "external", "claude capacity window", cls="capacity", engine="claude",
+                    until="2999-01-01T00:00:00Z")
+        self.assertIsNone(self.stop("cap", "Still working, nothing to report."))
+
+    def test_v2_waiting_user_blocks_at_most_three_times_on_an_unchanged_ledger(self):
+        self.ledger("s1", "pending")
+        self.block("s1", "T01", "user", "Which datastore?", why="T01 needs the choice", id="Q1")
+        decisions = [self.stop("s1", "Still thinking.", script=CLAUDE_GUARD) for _ in range(4)]
+        self.assertEqual(["decision" in result for result in decisions], [True, True, True, False])
+        self.assertEqual(decisions[-1]["systemMessage"],
+                         "Stop guard released without progress: state waiting_user; open T01 (blocked); "
+                         "nothing was marked complete.")
+
+    def test_stop_hook_active_releases_only_when_the_ledger_made_no_progress(self):
+        self.ledger("c2", "in_progress")
+        out = self.stop("c2", "Still working.", script=CLAUDE_GUARD)
+        self.assertEqual(out["decision"], "block")
+        ledger_path = self.root / "docs/tasks/c2.md"
+        before = ledger_path.read_bytes()
+        out = self.stop("c2", "Still working.", script=CLAUDE_GUARD, stop_hook_active=True)
+        self.assertEqual(out["systemMessage"],
+                         "Stop guard released without progress: state executable; open T01 (in_progress); "
+                         "nothing was marked complete.")
+        self.assertEqual(ledger_path.read_bytes(), before)
+
+    def test_continuation_cap_reports_open_rows_without_changing_the_ledger(self):
+        self.ledger("cap-release", "pending")
+        ledger_path = self.root / "docs/tasks/cap-release.md"
+        before = ledger_path.read_bytes()
+        decisions = [self.stop("cap-release", "Still working.", script=CLAUDE_GUARD) for _ in range(4)]
+        self.assertEqual(decisions[-1]["systemMessage"],
+                         "Stop guard released without progress: state executable; open T01 (pending); "
+                         "nothing was marked complete.")
+        self.assertEqual(ledger_path.read_bytes(), before)
+
+    def test_stop_hook_active_still_holds_the_turn_while_the_ledger_progresses(self):
+        self.ledger("c3", "in_progress")
+        out = self.stop("c3", "Still working.", script=CLAUDE_GUARD, stop_hook_active=True)
+        self.assertEqual(out["decision"], "block")
+        self.add_row("c3", "T02")
+        out = self.stop("c3", "Still working.", script=CLAUDE_GUARD, stop_hook_active=True)
+        self.assertEqual(out["decision"], "block")
+
+    def test_continuation_line_is_silent_for_executable_without_blockers_and_for_a_malformed_ledger(self):
+        self.ledger("s1", "in_progress")
+        result = self.prompt_hook("s1")
+        self.assertEqual((result.returncode, result.stdout.strip()), (0, ""), result.stderr)
+        ledger_path = self.root / "docs/tasks/s1.md"
+        text = ledger_path.read_text()
+        ledger_path.write_text(text + "\n<!-- fsa:blockers:start -->\nnot json\n<!-- fsa:blockers:end -->\n")
+        result = self.prompt_hook("s1")
+        self.assertEqual((result.returncode, result.stdout.strip()), (0, ""), result.stderr)
+
+    def test_continuation_line_names_state_blockers_and_overdue_capacity(self):
+        self.ledger("cap", "pending")
+        identifier = self.block("cap", "T01", "external", "claude capacity window", cls="capacity", engine="claude",
+                                 until="2000-01-01T00:00:00Z")
+        result = self.prompt_hook("cap")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        line = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("waiting_external", line)
+        self.assertIn(identifier, line)
+        self.assertIn("check capacity with fsa-usage before resolving " + identifier, line)
 
 
 class ClaudeLauncherTests(unittest.TestCase):
@@ -997,7 +1195,7 @@ open(out, "w").write(json.dumps({"summary": "done"}))
     def test_task_line_drives_the_ledger_row_without_counting_as_a_touched_path(self):
         tracker = [sys.executable, str(self.SCRIPTS / "fsa-task")]
         self.env.update(FSA_TASKS_DIR=str(Path(self.case.name) / "tasks"), CODEX_THREAD_ID="lead-1")
-        subprocess.run([*tracker, "init", "--root", str(self.root), "--file", "docs/tasks/t.md"], env=self.env, check=True, capture_output=True)
+        subprocess.run([*tracker, "init", "--format", "legacy", "--root", str(self.root), "--file", "docs/tasks/t.md"], env=self.env, check=True, capture_output=True)
         self.brief.write_text(self.brief.read_text() + "TASK: docs/tasks/t.md#S4a\nBUILD: sg docker -c 'make check'\n")
         result = self.dispatch()
         self.assertEqual(result.returncode, 0, result.stderr)

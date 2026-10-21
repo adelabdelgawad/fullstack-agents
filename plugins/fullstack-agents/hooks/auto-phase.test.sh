@@ -29,9 +29,11 @@ check() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1 (want $3, 
 
 reset investigate; push "git push origin main" "To origin.git
    a..b  main -> main"
-check "push from default branch -> complete" "$(phase)" complete
+check "push from default branch -> review" "$(phase)" review
+note=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["phases"].get("s1", {}).get("note", ""))' "$FSA_TEAM_BOARD")
+check "push note names the branch/sha and disclaims completion" "$(echo "$note" | grep -c "completion not established by a push")" 1
 reset investigate; push "cd /x && git -C . push -q" ""
-check "push with global flags -> complete" "$(phase)" complete
+check "push with global flags -> review" "$(phase)" review
 reset investigate; push "git push origin main" " ! [rejected]        main -> main (fetch first)
 error: failed to push some refs"
 check "rejected push -> unchanged" "$(phase)" investigate
@@ -45,7 +47,7 @@ git -C "$tmp/repo" checkout -q -b feature
 reset investigate; push "git push -u origin feature" ""
 check "feature branch push -> unchanged" "$(phase)" investigate
 FSA_DONE_BRANCHES="dev,feature" push "git push" ""
-check "FSA_DONE_BRANCHES branch -> complete" "$(phase)" complete
+check "FSA_DONE_BRANCHES branch -> review" "$(phase)" review
 git -C "$tmp/repo" checkout -q main
 
 reset complete; prompt "add a create button to the list"

@@ -49,8 +49,10 @@ full path is everything below, including the ledger and team-board lifecycle.
    the log of a check commissioned for the current state is evidence, not reuse.
    Finish all writers and required checks before one audit of the coherent
    deliverable. Serialize checks sharing fixture databases or native build state.
-   After each implementer batch run one fast compile/type check across all touched
-   crates/packages before any test; then affected test targets first and one
+   Run one fast compile/lint check (Rust: scoped clippy, which type-checks) on the
+   integrated state before any test, not again merely because work changed hands;
+   long test runs split into target groups (none counts as passed unless it finished);
+   then affected test targets first and one
    whole-crate/package suite per deliverable, at the end. Dispatch independent units
    while long test runs execute. A mechanical change repeated across many files is one
    unit with `FSA_MAX_ALLOWED_PATHS` raised to the file count, never several 8-path units.
@@ -123,8 +125,8 @@ Markdown links are relocated.
 For full-path multi-step implementation, create and register a dedicated repository Markdown task file,
 update task statuses as work changes, and verify the live session Tasks section. Read
 [task tracking](references/task-tracking.md) for the helper, format and completion rules.
-Keep one row per brief, repair and verification step, never one per phase (its "Granularity and
-update cadence"). A brief's `TASK: <ledger.md>#<ROW-ID>` line lets the dispatcher update that row.
+Keep one row per deliverable; repairs and checks stay in that row until its checks and audit pass,
+never a follow-up row and never one row per phase (its "Granularity and update cadence"). A brief's `TASK: <ledger.md>#<ROW-ID>` line lets the dispatcher update that row.
 
 ## Keep work moving
 

@@ -141,6 +141,13 @@ class RoleContractTests(unittest.TestCase):
         self.assertIn("Never read or write outside the repository root, except reading the SKILL.md files a "
                       "SKILLS block lists", contract)
 
+    def test_every_engine_prompt_carries_the_shared_checkout_rule(self):
+        for engine in ("claude", "codex", "grok"):
+            with self.subTest(engine=engine):
+                _, prompt, _ = self.run_engine(engine)
+                self.assertIn("SHARED CHECKOUT:", prompt)
+                self.assertIn("git stash", prompt)
+
     def test_codex_scope_wording_matches_its_enforcement(self):
         _, prompt, _ = self.run_engine("codex")
         self.assertIn("reported as a scope violation after the run", prompt)

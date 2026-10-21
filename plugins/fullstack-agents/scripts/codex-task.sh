@@ -272,9 +272,9 @@ if [ "$engine" = "grok" ]; then
   if [ "$sandbox" = "read-only" ]; then
     perms='{"edit":"deny","bash":"deny","webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
   elif [ "$allow_tests" = 1 ]; then
-    perms='{"edit":'"$edit_rules"',"bash":"allow","webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
+    perms='{"edit":'"$edit_rules"',"bash":{"*":"allow","*git stash*":"deny","*git -C * stash*":"deny","*git -c * stash*":"deny"},"webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
   else
-    perms='{"edit":'"$edit_rules"',"bash":{"*":"allow","*cargo test*":"deny","*cargo nextest*":"deny","*test-backend.sh*":"deny","*vitest*":"deny","*jest*":"deny","*playwright*":"deny","*pytest*":"deny","*npm test*":"deny","*pnpm test*":"deny","*yarn test*":"deny","*bun test*":"deny"},"webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
+    perms='{"edit":'"$edit_rules"',"bash":{"*":"allow","*git stash*":"deny","*git -C * stash*":"deny","*git -c * stash*":"deny","*cargo test*":"deny","*cargo nextest*":"deny","*test-backend.sh*":"deny","*vitest*":"deny","*jest*":"deny","*playwright*":"deny","*pytest*":"deny","*npm test*":"deny","*pnpm test*":"deny","*yarn test*":"deny","*bun test*":"deny"},"webfetch":"deny","external_directory":"deny","doom_loop":"deny","task":"deny"}'
   fi
   instructions='[]'; [ -n "$project_docs" ] && instructions="[\"$project_docs\"]"
   printf '{"$schema":"https://opencode.ai/config.json","instructions":%s,"permission":%s}\n' "$instructions" "$perms" > "$cfg"
@@ -290,7 +290,7 @@ elif [ "$engine" = "claude" ]; then
   # Project settings only, so the user-scope plugin lead never loads. The `cc` alias bypasses permission prompts,
   # so the PreToolUse fence (not the Edit/Write allow rules) is what keeps file tools inside ALLOWED_PATHS.
   fence=$(jq -cn --arg c "python3 -I $(printf %q "$here/lib/allowed-paths-fence")" \
-    '{hooks:{PreToolUse:[{matcher:"Edit|Write|MultiEdit|NotebookEdit",hooks:[{type:"command",command:$c}]}]}}')
+    '{hooks:{PreToolUse:[{matcher:"Edit|Write|MultiEdit|NotebookEdit|Bash",hooks:[{type:"command",command:$c}]}]}}')
   args=(-p --model "$model" --session-id "$engine_sid" --setting-sources project,local --settings "$fence" --strict-mcp-config --permission-mode dontAsk
         --output-format stream-json --verbose --json-schema "$(cat "$schema")"
         --tools Read Grep Glob Edit Write Bash --allowedTools Read Grep Glob Bash)
@@ -397,6 +397,11 @@ printf 'run=%s\nengine=%s\nmodel=%s\ncodex_exit=%s\nbase=%s\nlast_message=%s\nlo
   "$id" "$engine" "$model${variant:+ (variant $variant)}" "$codex_exit" "$base" "$last" "$log" "${touched:-(none)}"
 [ "$mode" = "implement" ] && printf 'allowed_paths=%s\n' "$runs/$id.allow"
 [ -n "$herdr_pane" ] && printf 'herdr_pane=%s (close it after the audit: herdr pane close %s)\n' "$herdr_pane" "$herdr_pane"
+stash_used=0
+if grep -Fq 'Saved working directory and index state' "$log"; then
+  stash_used=1
+  printf 'STATUS=SHARED_CHECKOUT_VIOLATION (git stash ran during the run; compare %s and .post.txt)\n' "$runs/$id.pre.txt"
+fi
 
 # A truncated or empty result is a red result: re-brief once, then hand the user the failure.
 summary_len=$(jq -r '(.summary // "") | length' 2>/dev/null < "$last" || echo 0)
@@ -414,7 +419,7 @@ fi
 noop=0; [ "$mode" = "implement" ] && [ -z "$touched" ] && { noop=1; echo "STATUS=NO_CHANGES (the run changed no file; read the summary before re-briefing)"; }
 [ "$instructions_changed" = true ] && echo "STATUS=INSTRUCTIONS_CHANGED (project instructions changed during the run; review the result against the current rules)"
 [ "$codex_exit" -eq 0 ] && [ -s "$last" ] && [ "${summary_len:-0}" -lt 11500 ] && [ -z "${outside:-}" ] && [ "$noop" = 0 ] \
-  && [ "$instructions_changed" = false ] && echo "STATUS=OK (audit the diff before trusting it)"
+  && [ "$instructions_changed" = false ] && [ "$stash_used" = 0 ] && echo "STATUS=OK (audit the diff before trusting it)"
 
 # Terminal state: the first that applies; `succeeded` means a valid in-scope result, never an accepted change.
 engine_exit=$(cat "$runs/$id.engine_exit" 2>/dev/null || echo "$codex_exit")
@@ -424,6 +429,7 @@ details=()
 { [ ! -s "$last" ] || [ "${summary_len:-0}" -ge 11500 ]; } && details+=(invalid_output)
 [ -n "${outside:-}" ] && details+=(scope_violation)
 [ "$noop" = 1 ] && details+=(no_changes)
+[ "$stash_used" = 1 ] && details+=(stash_used)
 state=${details[0]:-succeeded}
 after=$(liveness state || echo '{"state":"uncertain"}')
 held=$(jq -r 'if .state == "running" or ((.processes // []) | length > 0) then "held" else "free" end' <<<"$after")

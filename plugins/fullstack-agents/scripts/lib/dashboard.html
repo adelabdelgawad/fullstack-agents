@@ -419,6 +419,7 @@ html.herdr-page .herdr-view { height: 100%; }
 .tracked-tasks { list-style: none; padding: 0; margin: 8px 0 0; }
 .tracked-task { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
 .task-status.in_progress, .task-status.running { color: var(--blue); }
+.task-status.verifying { color: var(--amber); }
 .task-status.blocked { color: var(--red); }
 .task-status.done { color: var(--green); }
 .session-task-overview, .info-top.task-list { grid-column: 1 / -1; }
@@ -432,15 +433,19 @@ html.herdr-page .herdr-view { height: 100%; }
 .task-stage-timeline li span { z-index: 1; display: grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; width: 21px; height: 21px; background: var(--bg); font-size: 12px; }
 .task-stage-timeline li small { font: 10px var(--mono); }
 .task-stage-timeline li.in_progress, .task-stage-timeline li.running { color: var(--blue); }
+.task-stage-timeline li.verifying { color: var(--amber); }
 .task-stage-timeline li.done { color: var(--green); }
 .task-stage-timeline li.blocked, .task-error { color: var(--red); }
 .task-current { margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-state { margin-top: 6px; }
+.task-blockers { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
 .session-activity { grid-column: 1 / -1; display: grid; gap: 12px; min-width: 0; }
 .tracked-tasks { max-height: 640px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 @media (max-width: 760px) { .info-grid { grid-template-columns: minmax(0, 1fr); } }
 
 .task-status-icon { display: inline-flex; flex: 0 0 24px; align-items: center; justify-content: center; width: 24px; height: 24px; color: var(--muted); vertical-align: middle; }
 .task-status-icon.in_progress { color: var(--blue); }
+.task-status-icon.verifying { color: var(--amber); }
 .task-status-icon.done { color: var(--green); }
 .task-status-icon.blocked, .task-status-icon.canceled { color: var(--red); }
 .task-status-icon.executing { border-radius: 50%; background: color-mix(in srgb, var(--blue) 12%, transparent); outline: 1px solid var(--blue); }
@@ -534,12 +539,13 @@ aside .tracked-plan progress::-moz-progress-bar { background: var(--blue); borde
 .tt-tile { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 .tt-tile .task-status-icon { flex-basis: 20px; width: 20px; height: 20px; }
 .tt-n { font-size: 18px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
-.tt-tile.in_progress .tt-n { color: var(--blue); } .tt-tile.blocked .tt-n { color: var(--red); } .tt-tile.done .tt-n { color: var(--green); }
+.tt-tile.in_progress .tt-n { color: var(--blue); } .tt-tile.verifying .tt-n { color: var(--amber); } .tt-tile.blocked .tt-n { color: var(--red); } .tt-tile.done .tt-n { color: var(--green); }
 .tracked-tasks { margin: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
 .tracked-task { grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 10px 12px 10px 10px; border-top: 1px solid var(--line); border-left: 3px solid transparent; }
 .tracked-task:first-child { border-top: 0; }
 .tracked-task.blocked { border-left-color: var(--red); background: color-mix(in srgb, var(--red) 5%, transparent); }
 .tracked-task.in_progress { border-left-color: color-mix(in srgb, var(--blue) 45%, transparent); }
+.tracked-task.verifying { border-left-color: var(--amber); }
 .tracked-task.executing { border-left-color: var(--blue); background: color-mix(in srgb, var(--blue) 6%, transparent); }
 .tracked-task.done .tt-title, .tracked-task.skipped .tt-title, .tracked-task.canceled .tt-title { color: var(--muted); }
 .tt-main { min-width: 0; }
@@ -549,8 +555,10 @@ aside .tracked-plan progress::-moz-progress-bar { background: var(--blue); borde
 .tt-badges { display: flex; gap: 5px; margin-left: auto; }
 .tt-badge { font: 10.5px/1.6 var(--mono); padding: 0 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .tt-badge.in_progress, .tt-badge.live { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 40%, transparent); background: var(--blue-bg); }
+.tt-badge.verifying { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, transparent); }
 .tt-badge.blocked { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); background: var(--red-bg); }
 .tt-badge.done { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, transparent); background: var(--green-bg); }
+.tt-badge.baseline { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, transparent); }
 .tt-owner { color: var(--ink); font-family: var(--mono); font-size: 11px; }
 .tt-note { margin-top: 3px; font-size: 12px; }
 
@@ -2110,7 +2118,7 @@ function liveHtml(c) {
 }
 
 function taskStatusLabel(status) {
-  return ({pending: "Pending", in_progress: "In progress", running: "In progress", blocked: "Blocked", done: "Done", skipped: "Skipped", canceled: "Canceled"})[status] || "Unknown";
+  return ({pending: "Pending", in_progress: "In progress", running: "In progress", verifying: "Verifying", blocked: "Blocked", done: "Done", skipped: "Skipped", canceled: "Canceled"})[status] || "Unknown";
 }
 function taskIsActive(item) {
   return item.is_active === true && Date.parse(item.active_until) > Date.now();
@@ -2119,6 +2127,7 @@ function taskStatusIcon(status, active = false) {
   const paths = {
     pending: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
     in_progress: '<path d="M20 12a8 8 0 1 1-3-6.2M20 4v5h-5"/>',
+    verifying: '<path d="M4 12.5 9 17l11-11"/><path d="M4 6h7"/>',
     blocked: '<path d="m8 3-5 5v8l5 5h8l5-5V8l-5-5ZM12 8v5m0 3h.01"/>',
     done: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
     skipped: '<path d="m5 5 9 7-9 7ZM18 5v14"/>',
@@ -2128,17 +2137,37 @@ function taskStatusIcon(status, active = false) {
   const label = taskStatusLabel(status) + (active ? " — actively executing (agent-reported)" : "");
   return `<span class="task-status-icon ${esc(canonical)}${active ? ' executing' : ''}" role="img" aria-label="${esc(label)}" title="${esc(label)}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[canonical] || paths.pending}</svg></span>`;
 }
+const SESSION_STATE_LABELS = {executable: "Executable", waiting_worker: "Waiting on worker",
+  waiting_user: "Waiting on you", waiting_external: "Waiting on capacity or external", done: "Done"};
+function sessionStateLines(state) {
+  const rows = r => r.join(", ");
+  return [
+    ...state.questions.map(q => `${q.id}: ${q.text} — blocks ${rows(q.rows)}: ${q.why}`),
+    ...state.workers.map(w => w.id ? `${w.id}: ${w.text} — blocks ${rows(w.rows)}` : `${w.row}: running (${w.owner})`),
+    ...state.external.map(e => e.class === "capacity"
+      ? `waiting for ${e.engine} capacity${e.until ? ` until ${e.until}` : ""}${e.offer ? ` — ${e.offer}` : ""}`
+      : `${e.id}: ${e.text} — blocks ${rows(e.rows)}`),
+  ];
+}
+function sessionStateHtml(state) {
+  if (!state) return "";
+  const lines = sessionStateLines(state);
+  return `<div class="task-state"><span class="pill">${esc(SESSION_STATE_LABELS[state.state] || state.state)}</span></div>${lines.length ? `<ul class="task-blockers">${lines.map(l => `<li>${esc(l)}</li>`).join("")}</ul>` : ""}`;
+}
 function taskProgressHtml(c, compact = false) {
   const sessions = (c.sessions || []).filter(s => s.task_tracking && Object.keys(s.task_tracking).length);
   if (!sessions.length) return "";
   return sessions.map(s => {
     const t = s.task_tracking;
     if (t.error) return `<div class="task-overview task-error" role="alert">Task list needs attention: ${esc(t.error)}</div>`;
-    const counts = `${t.items.filter(taskIsActive).length} actively executing · ${t.counts.in_progress ?? t.counts.running ?? 0} in progress · ${t.counts.pending || 0} pending · ${t.counts.blocked || 0} blocked`;
+    const counts = `${t.items.filter(taskIsActive).length} actively executing · ${t.counts.in_progress ?? t.counts.running ?? 0} in progress${t.format === "v2" ? ` · ${t.counts.verifying || 0} verifying` : ""} · ${t.counts.pending || 0} pending · ${t.counts.blocked || 0} blocked`;
     const active = t.items.filter(taskIsActive);
     const percent = t.total ? Math.round(t.completed / t.total * 100) : 0;
     const timeline = compact ? "" : `<ol class="task-stage-timeline" aria-label="Task stage timeline">${t.items.map(x => `<li class="${esc(x.status)}" title="${esc(x.id + ': ' + x.title + ' — ' + taskStatusLabel(x.status))}" aria-label="${esc(x.id + ': ' + x.title + ' — ' + taskStatusLabel(x.status))}"><span aria-hidden="true">${taskStatusIcon(x.status, taskIsActive(x))}</span><small>${esc(x.id)}</small></li>`).join("")}</ol>`;
-    return `<section class="task-overview ${compact ? "compact" : "session-task-overview"}" aria-label="Task progress"><div class="task-progress-title"><b>${esc(t.completed)}/${esc(t.total)} tasks done</b><span>${percent}%</span></div><progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress><div class="s">${esc(counts)}</div>${compact && active.length ? `<div class="s task-current">${esc(active[0].id + ': ' + active[0].title)}${active.length > 1 ? ` · +${active.length - 1} active` : ""}</div>` : ""}${timeline}</section>`;
+    const unrecorded = t.format === "v2" ? (t.deliverables && t.deliverables.completion && t.deliverables.completion.unrecorded) || 0 : 0;
+    const progressTitle = t.format === "v2" ? `${t.completed}/${t.total} deliverables done${t.steps && t.steps.total ? ` · steps ${t.steps.completed}/${t.steps.total}` : ""}${unrecorded ? ` · ${unrecorded} without evidence` : ""}` : `${t.completed}/${t.total} tasks done`;
+    const state = t.format === "v2" ? sessionStateHtml(t.session_state) : "";
+    return `<section class="task-overview ${compact ? "compact" : "session-task-overview"}" aria-label="Task progress"><div class="task-progress-title"><b>${esc(progressTitle)}</b><span>${percent}%</span></div><progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress><div class="s">${esc(counts)}</div>${compact && active.length ? `<div class="s task-current">${esc(active[0].id + ': ' + active[0].title)}${active.length > 1 ? ` · +${active.length - 1} active` : ""}</div>` : ""}${timeline}${state}</section>`;
   }).join("");
 }
 
@@ -2149,18 +2178,21 @@ function taskListHtml(c) {
     const t = s.task_tracking;
     if (t.error) return `<div role="alert" class="snip"><b>${esc(s.name || s.id)}</b>: ${esc(t.error)}</div>`;
     const count = k => t.counts[k] ?? (k === "in_progress" ? t.counts.running : 0) ?? 0;
-    const tiles = ["in_progress", "blocked", "pending", "done", "skipped", "canceled"].filter(k => count(k) || ["in_progress", "blocked", "pending", "done"].includes(k))
+    const tiles = ["in_progress", "verifying", "blocked", "pending", "done", "skipped", "canceled"].filter(k => count(k) || ["in_progress", "blocked", "pending", "done"].includes(k))
       .map(k => `<div class="tt-tile ${esc(k)}" title="${esc(taskStatusLabel(k))}">${taskStatusIcon(k)}<div><div class="so-l">${esc(taskStatusLabel(k))}</div><div class="tt-n">${esc(count(k))}</div></div></div>`).join("");
-    const order = {in_progress: 0, running: 0, blocked: 1, pending: 2, done: 3, skipped: 4, canceled: 5};
+    const order = {in_progress: 0, running: 0, verifying: 1, blocked: 2, pending: 3, done: 4, skipped: 5, canceled: 6};
     const sorted = [...t.items].sort((a, b) => Number(taskIsActive(b)) - Number(taskIsActive(a)) || order[a.status] - order[b.status]);
     const source = `/api/doc?sid=${encodeURIComponent(s.id)}&path=${encodeURIComponent(t.file)}`;
     const percent = t.total ? Math.round(t.completed / t.total * 100) : 0;
     const row = x => {
       const st = x.status === "running" ? "in_progress" : x.status, live = taskIsActive(x);
-      return `<li class="tracked-task ${esc(st)}${live ? " executing" : ""}">${taskStatusIcon(x.status, live)}<div class="tt-main"><div class="tt-top"><b>${esc(x.id)}</b><span class="tt-title">${esc(x.title)}</span><span class="tt-badges">${live ? '<span class="tt-badge live" title="Agent-reported activity expires automatically; it is separate from process detection">Actively executing</span>' : ""}<span class="tt-badge ${esc(st)}">${esc(taskStatusLabel(x.status))}</span></span></div>
+      const completionBadge = t.format === "v2" && x.status === "done" && x.completion === "unrecorded" ? '<span class="tt-badge unrecorded" title="Marked done before evidence tracking, or upgraded from a legacy ledger">no recorded evidence</span>'
+        : t.format === "v2" && x.status === "done" && x.completion === "evidence_with_baseline" ? '<span class="tt-badge baseline" title="Completed using an attributed baseline failure">baseline failures</span>' : "";
+      return `<li class="tracked-task ${esc(st)}${live ? " executing" : ""}">${taskStatusIcon(x.status, live)}<div class="tt-main"><div class="tt-top"><b>${esc(x.id)}</b><span class="tt-title">${esc(x.title)}${t.format === "v2" && x.parent ? ` <span class="s">(step of ${esc(x.parent)})</span>` : ""}</span><span class="tt-badges">${live ? '<span class="tt-badge live" title="Agent-reported activity expires automatically; it is separate from process detection">Actively executing</span>' : ""}<span class="tt-badge ${esc(st)}">${esc(taskStatusLabel(x.status))}</span>${completionBadge}</span></div>
         <div class="s task-activity"><span class="tt-owner">${esc(x.owner || "Unassigned")}</span>${x.activity ? ` · ${esc(x.activity)}` : ""}</div>${x.note ? `<div class="s tt-note">${esc(x.note)}</div>` : ""}</div></li>`;
     };
-    return `<article class="tracked-plan"><div class="tp-head"><div class="tp-title"><b>${esc(t.title)}</b><a class="tp-file" href="${esc(source)}" target="_blank" rel="noopener">${esc(t.relative_file)}</a></div><div class="tp-done"><b>${esc(t.completed)}/${esc(t.total)} done</b><span>${percent}%</span></div></div>
+    const state = t.format === "v2" ? sessionStateHtml(t.session_state) : "";
+    return `<article class="tracked-plan"><div class="tp-head"><div class="tp-title"><b>${esc(t.title)}</b><a class="tp-file" href="${esc(source)}" target="_blank" rel="noopener">${esc(t.relative_file)}</a></div><div class="tp-done"><b>${esc(t.completed)}/${esc(t.total)} done</b><span>${percent}%</span></div></div>${state}
       <progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress><div class="task-counts">${tiles}</div><ul class="tracked-tasks" tabindex="0" aria-label="Tasks; scroll for more">${sorted.map(row).join("")}</ul></article>`;
   }).join("");
   const ok = sessions.map(s => s.task_tracking).filter(t => !t.error), doneN = ok.reduce((n, t) => n + (t.completed || 0), 0), allN = ok.reduce((n, t) => n + (t.total || 0), 0);

@@ -51,7 +51,8 @@ def main():
             credits = f" · credits {round(p['credits']['balance']):,} left" if p.get("credits") else ""
             print(f"{name} plan: " + " · ".join(f"{w['name']} {pct(w)}" for w in p["windows"]) + credits + (f" ({p['stale']})" if p.get("stale") else ""))
     if u["fill"] >= HANDOFF_FILL:
-        print(f"HANDOFF: context is at {round(u['fill'] * 100)}%; write the handoff or compact before the next large step")
+        print(f"HANDOFF: context is at {round(u['fill'] * 100)}%; write the checkpoint now. Automatic compaction "
+              "summarises the conversation, so reread the ledger, checkpoint and authoritative files when needed.")
 
 
 if __name__ == "__main__":

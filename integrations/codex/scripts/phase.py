@@ -92,6 +92,7 @@ def main():
     if not Path(__file__).with_name("task_tracking.py").is_file():
         sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "plugins/fullstack-agents/scripts/lib"))
     from task_tracking import bind_tasks, load_tasks
+    import stop_guard
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True, type=Path)
@@ -115,12 +116,10 @@ def main():
         except (OSError, ValueError, TypeError, KeyError) as error:
             parser.error(f"task registration failed: {error}")
     tracked = load_tasks(args.session, cwd)
-    if args.phase == "complete" and tracked:
-        if tracked.get("error"):
-            parser.error(f"cannot complete with an invalid task list: {tracked['error']}")
-        unfinished = [item["id"] for item in tracked["items"] if item["status"] in {"pending", "in_progress", "running", "blocked"}]
-        if unfinished:
-            parser.error("cannot complete while tasks remain unfinished: " + ", ".join(unfinished))
+    if args.phase == "complete":
+        refusal = stop_guard.phase_complete_refusal(tracked)
+        if refusal:
+            parser.error(f"cannot complete: {refusal}")
     path = args.state_dir.expanduser() / f"{args.session}.json"
     history = []
     checks, summary = [], ""

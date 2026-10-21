@@ -2,7 +2,6 @@
 import argparse
 from datetime import datetime, timezone
 import time
-from collections import Counter
 from contextlib import contextmanager
 import fcntl
 import hashlib
@@ -16,13 +15,17 @@ import tempfile
 
 # `-I` (used by every CLI caller) drops the script's own directory from sys.path; task_ownership lives beside it.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import task_rules
 
 START = "<!-- fsa:tasks:start -->"
 END = "<!-- fsa:tasks:end -->"
-STATUSES = ("pending", "in_progress", "blocked", "done", "skipped", "canceled")
+LOG_START = "<!-- fsa:log:start -->"
+LOG_END = "<!-- fsa:log:end -->"
+STATUSES = task_rules.LEGACY_STATUSES
 MAX_ACTIVE_SECONDS = 300
 HEADERS = ["ID", "Status", "Task", "Note"]
 ACTIVITY_HEADERS = HEADERS + ["Owner", "Activity", "Active until"]
+V2_HEADERS = ACTIVITY_HEADERS + ["Parent"]
 MAX_BYTES = 256 * 1024
 MAX_ROWS = 200
 SID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,199}\Z")
@@ -92,8 +95,8 @@ def _cells(line):
             current.append(char)
         index += 1
     cells.append("".join(current).strip())
-    if len(cells) not in (4, 7):
-        raise ValueError("Malformed task table row: expected four or seven columns")
+    if len(cells) not in (4, 7, 8):
+        raise ValueError("Malformed task table row: expected four, seven or eight columns")
     return cells
 
 
@@ -109,26 +112,51 @@ def _deadline(value):
         raise ValueError("Active until must be an ISO 8601 timestamp with timezone") from error
 
 
-def _item(identifier, status, title, note, owner="", activity="", active_until=""):
+def _item(identifier, status, title, note, owner="", activity="", active_until="", parent="", version="legacy"):
     status = "in_progress" if status == "running" else status
     if not isinstance(identifier, str) or not TASK_ID.fullmatch(identifier):
         raise ValueError("Task ID must be a safe nonempty identifier of at most 64 characters")
-    if status not in STATUSES:
+    statuses = task_rules.V2_STATUSES if version == "v2" else STATUSES
+    if status not in statuses:
         raise ValueError(f"Invalid task status: {status}")
     if not isinstance(title, str) or not title.strip():
         raise ValueError("Task title must be nonempty")
-    for value in (identifier, status, title, note, owner, activity, active_until):
+    for value in (identifier, status, title, note, owner, activity, active_until, parent):
         if not isinstance(value, str) or any(ord(char) < 32 or ord(char) == 127 for char in value):
             raise ValueError("Task cells must be single-line text without control characters")
-        if START in value or END in value:
+        if any(marker in value for marker in (START, END, LOG_START, LOG_END)):
             raise ValueError("Task cells cannot contain ledger markers")
-    if status != "in_progress":
+    if status not in ("in_progress", "verifying"):
         active_until = ""
     if active_until and (not owner.strip() or not activity.strip()):
         raise ValueError("Active execution requires an owner and activity")
     _deadline(active_until)
     return {"id": identifier, "status": status, "title": title.strip(), "note": note.strip(),
-            "owner": owner.strip(), "activity": activity.strip(), "active_until": active_until}
+            "owner": owner.strip(), "activity": activity.strip(), "active_until": active_until,
+            "parent": parent.strip()}
+
+
+def _format(text):
+    start, end = text.index(START), text.index(END)
+    rows = [line for line in text[start + len(START):end].splitlines() if line.strip()]
+    header = _cells(rows[0]) if rows else []
+    expected = "ID | Status | Task | Note; optionally Owner | Activity | Active until; or v2 with Parent"
+    if header not in (HEADERS, ACTIVITY_HEADERS, V2_HEADERS):
+        raise ValueError(f"Task table header must equal one of: {expected}")
+    return "v2" if header == V2_HEADERS else "legacy", len(header)
+
+
+def _validate_log(text, table_end, version):
+    if version != "v2":
+        return
+    if text.count(LOG_START) != 1 or text.count(LOG_END) != 1:
+        raise ValueError("v2 ledger must contain exactly one task log marker pair")
+    log_start, log_end = text.index(LOG_START), text.index(LOG_END)
+    if not table_end < log_start < log_end:
+        raise ValueError("v2 task log markers must follow the task table")
+    lines = text.splitlines()
+    if not all(any(line == marker for line in lines) for marker in (LOG_START, LOG_END)):
+        raise ValueError("Task log markers must each be on their own line")
 
 
 def _parse(text):
@@ -142,9 +170,10 @@ def _parse(text):
         if not any(line.strip() == marker for line in text.splitlines()):
             raise ValueError("Task markers must be on separate lines")
     rows = [line for line in text[start + len(START):end].splitlines() if line.strip()]
+    version, width = _format(text)
     header = _cells(rows[0]) if rows else []
-    if len(rows) < 2 or header not in (HEADERS, ACTIVITY_HEADERS):
-        raise ValueError("Task table header must be ID | Status | Task | Note, optionally Owner | Activity | Active until")
+    if len(rows) < 2:
+        raise ValueError("Task table requires a header and separator")
     if len(_cells(rows[1])) != len(header):
         raise ValueError("Task separator column count must match header")
     if not all(re.fullmatch(r":?-{3,}:?", cell) for cell in _cells(rows[1])):
@@ -156,23 +185,43 @@ def _parse(text):
         cells = _cells(row)
         if len(cells) != len(header):
             raise ValueError("Task row column count must match header")
-        item = _item(*cells)
+        item = _item(*cells, version=version)
         if item["id"] in identifiers:
             raise ValueError(f"Duplicate task ID: {item['id']}")
         identifiers.add(item["id"])
         items.append(item)
+    _validate_log(text, end, version)
+    if version == "v2":
+        task_rules.validate_parents(items)
     return items, start + len(START), end
 
 
-def _render(items):
+def _render(items, version="legacy", width=None):
     def cell(value):
         return value.replace("\\", "\\\\").replace("|", "\\|")
-    extended = any(item.get(key) for item in items for key in ("owner", "activity", "active_until"))
-    header = ACTIVITY_HEADERS if extended else HEADERS
-    keys = ("id", "status", "title", "note", "owner", "activity", "active_until") if extended else ("id", "status", "title", "note")
+    extended = width == 7 or (width is None and any(item.get(key) for item in items for key in ("owner", "activity", "active_until")))
+    header = V2_HEADERS if version == "v2" else ACTIVITY_HEADERS if extended else HEADERS
+    keys = ("id", "status", "title", "note", "owner", "activity", "active_until", "parent") if version == "v2" else (("id", "status", "title", "note", "owner", "activity", "active_until") if extended else ("id", "status", "title", "note"))
     lines = ["| " + " | ".join(header) + " |", "| " + " | ".join("---" for _ in header) + " |"]
     lines.extend("| " + " | ".join(cell(item.get(key, "")) for key in keys) + " |" for item in items)
     return "\n" + "\n".join(lines) + "\n"
+
+
+def _append_log(text, line):
+    position = text.index(LOG_END)
+    return text[:position] + line + text[position:]
+
+
+def _mutated(text, items, start, end, version, logs=(), force_width=None):
+    if version == "v2":
+        task_rules.validate_open_steps(items)
+    changed = text[:start] + _render(items, version, force_width) + text[end:]
+    for line in logs:
+        changed = _append_log(changed, line)
+    if len(changed.encode()) > MAX_BYTES:
+        raise ValueError("ledger too large: close or split it")
+    _parse(changed)
+    return changed
 
 
 def _atomic(path, text, exclusive=False):
@@ -216,16 +265,43 @@ def _lock(root, path):
 def _summary(path):
     text = _read(path)
     items, _, _ = _parse(text)
+    version, _width = _format(text)
     title = next((line[2:].strip() for line in text.splitlines() if line.startswith("# ")), path.stem)
     updated = path.stat().st_mtime
     now = time.time()
     for item in items:
-        item["is_active"] = bool(item["status"] == "in_progress" and item["owner"] and item["activity"]
+        item["is_active"] = bool(item["status"] in ("in_progress", "verifying") and item["owner"] and item["activity"]
                                  and min(_deadline(item["active_until"]), updated + MAX_ACTIVE_SECONDS) > now)
-    counts = dict.fromkeys(STATUSES, 0)
-    counts.update(Counter(item["status"] for item in items))
-    return {"title": title, "updated": updated, "items": items, "counts": counts, "total": len(items),
-            "completed": counts["done"], "active": sum(item["is_active"] for item in items)}
+    counts, totals = task_rules.counts(items, version)
+    evidence_error = None
+    blockers_error = None
+    if version == "v2":
+        import task_evidence
+        try:
+            block = task_evidence.load_block(text)
+            for item in items:
+                if not item.get("parent") and item["status"] == "done":
+                    item["completion"] = task_evidence.completion_kind(block, item["id"])
+            totals["deliverables"]["completion"] = task_evidence.completion_counts(items)
+        except ValueError as error:
+            evidence_error = str(error)
+        import task_blockers
+        try:
+            blk = task_blockers.load_block(text) if task_blockers.has_block(text) else {"schema": 1, "blockers": {}}
+            totals["session_state"] = task_rules.session_state(items, blk["blockers"], now)
+            totals["blockers"] = {bid: entry for bid, entry in blk["blockers"].items() if entry["status"] == "open"}
+        except ValueError as error:
+            blockers_error = str(error)
+    if version == "legacy":
+        for item in items:
+            item.pop("parent", None)
+    summary = {"title": title, "updated": updated, "items": items, "counts": counts, "format": version,
+               **totals, "active": sum(item["is_active"] for item in items)}
+    if evidence_error:
+        summary["evidence_error"] = evidence_error
+    if blockers_error:
+        summary["blockers_error"] = blockers_error
+    return summary
 
 
 def _owner_text(owner):
@@ -234,9 +310,20 @@ def _owner_text(owner):
 
 def _show_text(summary):
     counts = summary["counts"]
-    lines = [f"done {counts['done']}/{summary['total']} · in_progress {counts['in_progress']} · blocked {counts['blocked']}"
-             f" · pending {counts['pending']} · active {summary['active']}",
-             _owner_text(summary.get("owner"))]
+    if summary["format"] == "v2":
+        deliverables, steps = summary["deliverables"], summary["steps"]
+        baseline = deliverables.get("completion", {}).get("evidence_with_baseline", 0)
+        note = f" ({baseline} with baseline failures)" if baseline else ""
+        first = (f"deliverables {deliverables['completed']}/{deliverables['total']}{note} · steps "
+                 f"{steps['completed']}/{steps['total']} · verifying {counts['verifying']} · "
+                 f"in_progress {counts['in_progress']} · blocked {counts['blocked']} · pending {counts['pending']} "
+                 f"· active {summary['active']}")
+    else:
+        first = (f"done {counts['done']}/{summary['total']} · in_progress {counts['in_progress']} · "
+                 f"blocked {counts['blocked']} · pending {counts['pending']} · active {summary['active']}")
+    lines = [first, _owner_text(summary.get("owner"))]
+    if summary.get("evidence_error"):
+        lines.append(f"evidence_error: {summary['evidence_error']}")
     for item in summary["items"]:
         if item["status"] == "done":
             continue
@@ -244,6 +331,8 @@ def _show_text(summary):
         if item["owner"] or item["activity"]:
             line += f"[{item['owner']}: {item['activity']}]  "
         line += item["title"]
+        if summary["format"] == "v2" and item.get("parent"):
+            line += f" (step of {item['parent']})"
         if item["note"]:
             note = item["note"] if len(item["note"]) <= 100 else item["note"][:99] + "…"
             line += f" — {note}"
@@ -257,7 +346,7 @@ def _task_specs(values):
         parts = task.split("|", 3)
         if len(parts) != 4:
             raise ValueError("--task requires ID|status|title|note")
-        items.append(_item(*(part.strip() for part in parts)))
+        items.append(_item(*(part.strip() for part in parts), version="v2"))
     return items
 
 
@@ -388,7 +477,7 @@ def _cmd_close(args, root, path):
         task_ownership.check_write(args.session, root, path)
         text = _read(path)
         items, _start, _end = _parse(text)
-        open_rows = [item["id"] for item in items if item["status"] in ("pending", "in_progress", "blocked")]
+        open_rows = [item["id"] for item in items if item["status"] in task_rules.OPEN]
         if open_rows:
             raise ValueError(f"Cannot close with open rows: {', '.join(open_rows)}")
         checkpoint, error = task_checkpoint.load_checkpoint(text)
@@ -427,20 +516,38 @@ def default_session(environ=os.environ, pid=None):
     return None
 
 
-def main(argv=None):
+def _owned_text(args, root, path):
+    import task_ownership
+    path = _file(root, args.file)
+    task_ownership.check_write(args.session, root, path)
+    return path, _read(path)
+
+
+def _parser():
     parser = argparse.ArgumentParser(description="Register and update an explicit Markdown task ledger")
     actions = parser.add_subparsers(dest="command", required=True)
     session_default = default_session()
     recover = actions.add_parser("recover")
     recover.add_argument("--session", default=session_default)
     recover.add_argument("--cwd", required=True)
-    for command in ("init", "bind", "set", "add", "show", "release", "checkpoint", "adopt", "close"):
+    import task_evidence
+    import task_evidence_cli
+    import task_blockers
+    evidence_commands = task_evidence.COMMANDS
+    blocker_commands = task_blockers.COMMANDS
+    for command in ("init", "bind", "set", "add", "show", "release", "checkpoint", "adopt", "close", "upgrade",
+                     "downgrade", *evidence_commands, *blocker_commands):
         sub = actions.add_parser(command)
         sub.add_argument("--root", required=True)
         sub.add_argument("--file", required=True)
         sub.add_argument("--session", default=session_default)
+        if command in evidence_commands:
+            task_evidence_cli.add_arguments(command, sub)
+        if command in blocker_commands:
+            task_blockers.add_arguments(command, sub)
         if command == "init":
             sub.add_argument("--title", default="Tasks")
+            sub.add_argument("--format", choices=("v2", "legacy"), default="v2")
         if command in ("bind", "adopt"):
             sub.add_argument("--takeover", help="Expected current owner's session id (CAS takeover, only on the user's word)")
         if command == "adopt":
@@ -449,22 +556,220 @@ def main(argv=None):
             sub.add_argument("--input", required=True, help="Checkpoint JSON file path, or - for stdin")
         if command in ("init", "add"):
             sub.add_argument("--task", action="append", default=[], required=command == "add", help="ID|status|title|note (repeatable)")
+        if command == "add":
+            sub.add_argument("--parent")
         if command == "show":
             sub.add_argument("--json", action="store_true", help="Print the machine-readable summary")
         if command == "set":
             sub.add_argument("--id", action="append", required=True, help="Task ID (repeatable)")
-            sub.add_argument("--status", choices=(*STATUSES, "running"), help="Omit to keep each row's status")
+            sub.add_argument("--status", choices=(*task_rules.V2_STATUSES, "running"), help="Omit to keep each row's status")
+            sub.add_argument("--title")
+            sub.add_argument("--reason")
             sub.add_argument("--note")
             sub.add_argument("--owner")
             sub.add_argument("--activity")
             sub.add_argument("--active-for", type=int, help="Report active execution for 1..300 seconds; 0 clears it")
+    return parser
+
+
+def _cmd_init(args, root, path):
+    _item("title", "pending", args.title, "")
+    items = _task_specs(args.task)
+    if args.format == "v2":
+        if any(item["status"] == "done" for item in items):
+            import task_evidence
+            for item in (i for i in items if i["status"] == "done"):
+                task_evidence.require_done(task_evidence.load_block(""), item["id"], root)
+        line = task_rules.log_line("", "init")
+        text = f"# {args.title}\n\n{START}{_render(items, 'v2')}{END}\n\n## Task log\n{LOG_START}\n{line}{LOG_END}\n"
+    else:
+        if any(item["status"] == "verifying" for item in items):
+            raise ValueError("verifying requires a v2 ledger; run fsa-task upgrade")
+        text = f"# {args.title}\n\n{START}{_render(items)}{END}\n"
+    _parse(text)
+    with _lock(root, path):
+        if path.exists() or path.is_symlink():
+            raise ValueError("Task file already exists; init never overwrites it")
+        _file(root, path, existing=False)
+        _atomic(path, text, exclusive=True)
+    return bind_tasks(args.session, root, path)
+
+
+def _validate_add(specs, items, version, parent_id):
+    if parent_id and version != "v2":
+        raise ValueError("--parent requires a v2 ledger")
+    if version != "v2" and any(spec["status"] == "verifying" for spec in specs):
+        raise ValueError("verifying requires a v2 ledger; run fsa-task upgrade")
+    identifiers = [spec["id"] for spec in specs]
+    duplicates = set(identifiers) & {item["id"] for item in items}
+    duplicates.update(identifier for identifier in identifiers if identifiers.count(identifier) > 1)
+    if duplicates:
+        raise ValueError(f"Duplicate task ID: {', '.join(sorted(duplicates))}")
+
+
+def _cmd_add(args, root, path):
+    specs = _task_specs(args.task)
+    with _lock(root, path):
+        path, text = _owned_text(args, root, path)
+        items, start, end = _parse(text)
+        version, width = _format(text)
+        _validate_add(specs, items, version, args.parent)
+        for spec in specs:
+            added = _item(spec["id"], spec["status"], spec["title"], spec["note"], parent=args.parent or "", version=version)
+            items.append(added)
+        if version == "v2":
+            task_rules.validate_parents(items)
+        if len(items) > MAX_ROWS:
+            raise ValueError(f"Task table exceeds {MAX_ROWS} rows")
+        logs = [task_rules.log_line(spec["id"], "add", status=spec["status"], parent=spec["parent"], title=spec["title"]) for spec in items[-len(specs):]] if version == "v2" else []
+        changed = _mutated(text, items, start, end, version, logs)
+        if version == "v2" and not args.parent:
+            import task_evidence
+            if done_ids := [spec["id"] for spec in specs if spec["status"] == "done"]:
+                block = task_evidence.load_block(text)
+                for identifier in done_ids:
+                    for line in task_evidence.require_done(block, identifier, root, path):
+                        changed = _append_log(changed, line)
+                changed = task_evidence.splice_block(changed, task_evidence.render_block(block))
+            if len(changed.encode()) > MAX_BYTES:
+                raise ValueError("ledger too large: close or split it")
+        path = _file(root, args.file)
+        _atomic(path, changed)
+    return {"file": str(path), "updated": path.stat().st_mtime}
+
+
+def _set_item(args, item, items, version):
+    status = item["status"] if args.status is None else args.status
+    status = "in_progress" if status == "running" else status
+    if version == "v2" and item["status"] == "done" and status != "done" and not args.reason:
+        raise ValueError(f"Reopening done task {item['id']} requires set --reason")
+    owner = item["owner"] if args.owner is None else args.owner
+    activity = (item["activity"] if owner == item["owner"] else "") if args.activity is None else args.activity
+    active_until = item["active_until"] if owner == item["owner"] else ""
+    if args.active_for is not None:
+        if args.active_for and status not in ("in_progress", "verifying"):
+            raise ValueError("Active execution requires in_progress or verifying status")
+        active_until = datetime.fromtimestamp(time.time() + args.active_for, timezone.utc).isoformat() if args.active_for else ""
+    title = item["title"] if args.title is None else args.title
+    replacement = _item(item["id"], status, title, item["note"] if args.note is None else args.note,
+                        owner, activity, active_until, item.get("parent", ""), version)
+    return replacement
+
+
+def _set_logs(args, old, new, version):
+    if version != "v2":
+        return []
+    logs = []
+    if old["status"] != new["status"]:
+        logs.append(task_rules.log_line(old["id"], "status", **{"from": old["status"], "to": new["status"], "reason": args.reason or ""}))
+    if old["title"] != new["title"]:
+        logs.append(task_rules.log_line(old["id"], "title", **{"from": old["title"], "to": new["title"]}))
+    return logs
+
+
+def _apply_set_rows(args, items, version, blk):
+    import task_blockers
+    logs, reopened = [], []
+    for identifier in dict.fromkeys(args.id):
+        item = next((item for item in items if item["id"] == identifier), None)
+        if item is None:
+            raise ValueError(f"Unknown task ID: {identifier}")
+        if (version == "v2" and item["status"] == "blocked" and args.status not in (None, "blocked")
+                and task_blockers.row_has_open_blocker(blk, identifier)):
+            raise ValueError(f"{identifier} has an open blocker; resolve or withdraw it first")
+        replacement = _set_item(args, item, items, version)
+        if version == "v2" and not item.get("parent") and item["status"] == "done" and replacement["status"] != "done":
+            reopened.append(identifier)
+        logs.extend(_set_logs(args, item, replacement, version))
+        item.update(replacement)
+    if version == "v2" and blk is not None:
+        done_ids = [i for i in dict.fromkeys(args.id) if next(item for item in items if item["id"] == i)["status"] == "done"]
+        logs.extend(task_blockers.auto_resolve_rows(blk, items, done_ids))
+    return logs, reopened
+
+
+def _cmd_set(args, root, path):
+    if args.active_for is not None and not 0 <= args.active_for <= MAX_ACTIVE_SECONDS:
+        raise ValueError("--active-for must be between 0 and 300 seconds")
+    with _lock(root, path):
+        path, text = _owned_text(args, root, path)
+        items, start, end = _parse(text)
+        version, width = _format(text)
+        if args.status == "verifying" and version != "v2":
+            raise ValueError("verifying requires a v2 ledger; run fsa-task upgrade")
+        blk = None
+        if version == "v2":
+            import task_blockers
+            if args.status == "blocked":
+                raise ValueError("set cannot move a row to blocked; use `fsa-task block`")
+            if task_blockers.has_block(text):
+                blk = task_blockers.load_block(text)
+        logs, reopened = _apply_set_rows(args, items, version, blk)
+        changed = _mutated(text, items, start, end, version, logs)
+        if version == "v2":
+            import task_evidence
+            if args.status == "done":
+                block = task_evidence.load_block(text)
+                deliverables = [i for i in dict.fromkeys(args.id) if not next(item for item in items if item["id"] == i).get("parent")]
+                for identifier in deliverables:
+                    for line in task_evidence.require_done(block, identifier, root, path):
+                        changed = _append_log(changed, line)
+                changed = task_evidence.splice_block(changed, task_evidence.render_block(block))
+            elif reopened and task_evidence.has_block(text):
+                try:
+                    block = task_evidence.load_block(text)
+                except ValueError as error:
+                    for identifier in reopened:
+                        changed = _append_log(changed, task_rules.log_line(
+                            identifier, "evidence_malformed", action="reopen", error=str(error)))
+                else:
+                    for identifier in reopened:
+                        (block["deliverables"].get(identifier) or {}).pop("completed", None)
+                    changed = task_evidence.splice_block(changed, task_evidence.render_block(block))
+            if blk is not None:
+                changed = task_blockers.splice_block(changed, task_blockers.render_block(blk))
+            if len(changed.encode()) > MAX_BYTES:
+                raise ValueError("ledger too large: close or split it")
+        path = _file(root, args.file)
+        _atomic(path, changed)
+    return {"file": str(path), "updated": path.stat().st_mtime}
+
+
+def _dispatch(args, root, path):
+    import task_ownership
+    import task_format
+    commands = {"bind": lambda: bind_tasks(args.session, root, path, args.takeover),
+                "release": lambda: release_ownership(args.session, root, args.file),
+                "checkpoint": lambda: _cmd_checkpoint(args, root, path), "adopt": lambda: _cmd_adopt(args, root, path),
+                "close": lambda: _cmd_close(args, root, path), "upgrade": lambda: task_format._cmd_upgrade(args, root, path),
+                "downgrade": lambda: task_format._cmd_downgrade(args, root, path), "add": lambda: _cmd_add(args, root, path),
+                "set": lambda: _cmd_set(args, root, path)}
+    if args.command in ("accept", "baseline", "check", "verify"):
+        import task_evidence
+        import task_evidence_cli
+        if args.command == "verify":
+            task_evidence.print_verify(args, root, path)
+            return None
+        commands[args.command] = lambda: task_evidence_cli.dispatch(args, root, path)
+    import task_blockers
+    if args.command in task_blockers.COMMANDS:
+        commands[args.command] = lambda: task_blockers.dispatch(args, root, path)
+    if args.command != "show":
+        return commands[args.command]()
+    record, state = task_ownership.current_owner(root, path)
+    owner = {"session_id": record["session_id"], "state": state} if record else None
+    summary = {"file": str(path), "owner": owner, **_summary(path)}
+    print(json.dumps(summary, ensure_ascii=False) if args.json else _show_text(summary))
+    return None
+
+
+def main(argv=None):
+    parser = _parser()
     args = parser.parse_args(argv)
     try:
-        import task_ownership
         x, c = _session_vars(os.environ)
         if args.command not in ("show", "recover") and args.session is None and x and c:
-            raise ValueError("cannot determine the session id (CODEX_THREAD_ID and CLAUDE_CODE_SESSION_ID "
-                              "both set and ambiguous); pass --session")
+            raise ValueError("cannot determine the session id (CODEX_THREAD_ID and CLAUDE_CODE_SESSION_ID both set and ambiguous); pass --session")
         if args.command == "recover":
             import task_recovery
             info = task_recovery.collect(args.session, args.cwd)
@@ -474,81 +779,9 @@ def main(argv=None):
         if args.command in ("init", "bind"):
             _binding_path(args.session)
         path = _file(root, args.file, existing=args.command != "init")
-        if args.command == "init":
-            _item("title", "pending", args.title, "")
-            items = _task_specs(args.task)
-            text = f"# {args.title}\n\n{START}{_render(items)}{END}\n"
-            _parse(text)
-            with _lock(root, path):
-                if path.exists() or path.is_symlink():
-                    raise ValueError("Task file already exists; init never overwrites it")
-                _file(root, path, existing=False)
-                _atomic(path, text, exclusive=True)
-            result = bind_tasks(args.session, root, path)
-        elif args.command == "bind":
-            result = bind_tasks(args.session, root, path, args.takeover)
-        elif args.command == "release":
-            result = release_ownership(args.session, root, args.file)
-        elif args.command == "checkpoint":
-            result = _cmd_checkpoint(args, root, path)
-        elif args.command == "adopt":
-            result = _cmd_adopt(args, root, path)
-        elif args.command == "close":
-            result = _cmd_close(args, root, path)
-        elif args.command == "show":
-            owner_record, owner_state = task_ownership.current_owner(root, path)
-            owner = {"session_id": owner_record["session_id"], "state": owner_state} if owner_record else None
-            summary = {"file": str(path), "owner": owner, **_summary(path)}
-            print(json.dumps(summary, ensure_ascii=False) if args.json else _show_text(summary))
+        result = _cmd_init(args, root, path) if args.command == "init" else _dispatch(args, root, path)
+        if result is None:
             return 0
-        elif args.command == "add":
-            specs = _task_specs(args.task)
-            with _lock(root, path):
-                path = _file(root, args.file)
-                task_ownership.check_write(args.session, root, path)
-                text = _read(path)
-                items, start, end = _parse(text)
-                for spec in specs:
-                    task = next((item for item in items if item["id"] == spec["id"]), None)
-                    if task is None:
-                        items.append(spec)
-                    else:
-                        task.update(_item(task["id"], spec["status"], spec["title"], spec["note"],
-                                          task["owner"], task["activity"], task["active_until"]))
-                if len(items) > MAX_ROWS:
-                    raise ValueError(f"Task table exceeds {MAX_ROWS} rows")
-                changed = text[:start] + _render(items) + text[end:]
-                _parse(changed)
-                _file(root, args.file)
-                _atomic(path, changed)
-            result = {"file": str(path), "updated": path.stat().st_mtime}
-        elif args.command == "set":
-            if args.active_for is not None and not 0 <= args.active_for <= MAX_ACTIVE_SECONDS:
-                raise ValueError("--active-for must be between 0 and 300 seconds")
-            with _lock(root, path):
-                path = _file(root, args.file)
-                task_ownership.check_write(args.session, root, path)
-                text = _read(path)
-                items, start, end = _parse(text)
-                for identifier in dict.fromkeys(args.id):
-                    task = next((item for item in items if item["id"] == identifier), None)
-                    if task is None:
-                        raise ValueError(f"Unknown task ID: {identifier}")
-                    status = task["status"] if args.status is None else args.status
-                    owner = task["owner"] if args.owner is None else args.owner
-                    activity = (task["activity"] if owner == task["owner"] else "") if args.activity is None else args.activity
-                    active_until = task["active_until"] if owner == task["owner"] else ""
-                    if args.active_for is not None:
-                        if args.active_for and status not in ("in_progress", "running"):
-                            raise ValueError("Active execution requires in_progress status")
-                        active_until = datetime.fromtimestamp(time.time() + args.active_for, timezone.utc).isoformat() if args.active_for else ""
-                    task.update(_item(task["id"], status, task["title"], task["note"] if args.note is None else args.note,
-                                      owner, activity, active_until))
-                changed = text[:start] + _render(items) + text[end:]
-                _parse(changed)
-                _file(root, args.file)
-                _atomic(path, changed)
-            result = {"file": str(path), "updated": path.stat().st_mtime}
         if "error" in result:
             raise ValueError(result["error"])
         print(json.dumps(result, ensure_ascii=False))

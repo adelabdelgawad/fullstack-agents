@@ -11,13 +11,18 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from task_tracking import SID, _atomic, _file, _load_binding, _lock, _read, _root, _state_dir, load_tasks
+import task_candidates
 import task_checkpoint
 import task_ownership
 import task_recovery
+import task_rules
 
-OPEN_STATUSES = ("pending", "in_progress", "blocked")
+OPEN_STATUSES = task_rules.OPEN
 TITLE_CAP = 80
 PARKED_OFFER_MAX_AGE = 300
+CANDIDATES_CLI = str(Path(__file__).resolve().parent / "task_candidates.py")
+NOTHING_BOUND = ("Nothing is bound. Continue one only if the user asks for it; if the request does not identify "
+                 "one task, ask which.")
 
 
 def _cut_title(title):
@@ -279,6 +284,25 @@ def _resume(session_id):
     return f"Task '{title}' ({open_rows} open rows): {words}. {_checkpoint_note(root, path)}."
 
 
+def _candidates_notice(cwd):
+    """§14.3 item 5, §14.6 item 5: offer ledgers to resume; never bind."""
+    if not cwd or not isinstance(cwd, str):
+        return None
+    results = task_candidates.candidates(cwd)
+    if not results:
+        return None
+    lines = ["Resumable ledgers in this checkout (most recently changed first):"]
+    lines += [task_candidates.candidate_line(c) for c in results[:3]]
+    if len(results) > 3:
+        lines.append(f"and {len(results) - 3} more: python3 -I {CANDIDATES_CLI} --cwd {cwd}")
+    lines.append(NOTHING_BOUND)
+    return "\n".join(lines)
+
+
+def _unbound_notice(session_id, cwd):
+    return None if _bound_ledger(session_id) is not None else _candidates_notice(cwd)
+
+
 def _session_start(payload):
     session_id = payload.get("session_id")
     source = payload.get("source") or "startup"
@@ -286,12 +310,18 @@ def _session_start(payload):
     parked = _own_parked_record()
     if not isinstance(session_id, str) or not SID.fullmatch(session_id):
         return None
-    if source in ("clear", "fork"):
+    if source == "fork":
         return _offer(parked, payload.get("cwd"), source)
+    if source == "clear":
+        parts = [_offer(parked, payload.get("cwd"), source), _unbound_notice(session_id, payload.get("cwd"))]
+        parts = [part for part in parts if part]
+        return "\n\n".join(parts) if parts else None
     if source == "compact":
         return _compact(session_id)
     if source == "resume":
         return _resume(session_id)
+    if source == "startup":
+        return _unbound_notice(session_id, payload.get("cwd"))
     return None
 
 

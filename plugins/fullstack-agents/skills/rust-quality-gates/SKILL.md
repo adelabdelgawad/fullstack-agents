@@ -5,82 +5,52 @@ description: Rust verification chain — fmt, clippy deny-warnings, cargo check,
 
 # Rust Quality Gates
 
-The verify chain that runs after EVERY Rust change. The plugin's hooks enforce
-the fast subset automatically (rustfmt on edit, fmt+clippy at stop); this skill
-defines the full chain for post-generation and pre-commit.
+Which Rust checks run, when, and on what. **The project's own bindings (`CLAUDE.md`, `AGENTS.md`, justfile) come first**:
+their commands, crate scopes, features, environment and test runners replace every generic command below. Use the
+generic forms only where the project names nothing.
 
-## The Chain
+## Per change set (fast, scoped to the touched crates)
 
-| # | Gate | Command | Fails when |
-|---|---|---|---|
-| 1 | Format | `cargo fmt --all --check` | Any file unformatted |
-| 2 | Lint | `cargo clippy --workspace --all-targets -- -D warnings` | Any warning (deny policy) |
-| 3 | Compile | `cargo check --workspace` | Type errors |
-| 4 | SQLx cache | `cargo sqlx prepare --check --workspace` | `.sqlx/` drifted from queries/schema |
-| 5 | Audit | `cargo audit` | Known vulnerable dependency |
-| 6 | Migration safety | grep migrations for DROP/TRUNCATE without `-- @destructive` | Unmarked destructive DDL |
-| 7 | No-allow | grep `#[allow(` in crates/ and apps/ | Any silenced lint |
-| 8 | Tests | `cargo test --workspace` | Any failure; coverage < 80% |
+| Gate | Generic command | Notes |
+|---|---|---|
+| Format | `rustfmt --edition <edition> <changed files>` | only the files you changed; `cargo fmt --all` only when the project declares its tree rustfmt-clean |
+| Lint + compile | `cargo clippy -p <touched crates> --all-targets -- -D warnings` (plus the project's required env/features, e.g. `SQLX_OFFLINE=true`) | clippy performs the full type-check, so no separate `cargo check` for the same configuration |
+| Other configurations | one extra `cargo check` per configuration clippy did not exercise (another feature set, `--no-default-features`, another target or profile, live SQLx validation) | list them in the project binding; skip when there are none |
 
-Run 1-3 after every change set; the full chain after generation and before
-commit. Skip a gate ONLY when its tool is absent (e.g. no .sqlx/ in the
-project, cargo-audit not installed) — say so explicitly, never silently.
+The implementer runs the lint + compile gate before returning. The lead runs it **once on the integrated state** (after
+all units of the deliverable landed), not again merely because work changed hands; rerun only after a later change.
 
-## Order Matters
+## Tests (through the project's runner)
 
-fmt → clippy → check → tests. Formatting noise hides real diffs; clippy
-findings often change code that would invalidate test runs. Fix ALL errors from
-a step before rerunning (batch-error-resolution — never fix-one-rebuild-loop).
+- Run tests only through the project's designated runner and only against **isolated test infrastructure** (a
+  disposable database, fixtures, a test container). Never against a production database, a production
+  `DATABASE_URL`, or shared live services, during development or release. If the runner cannot prove isolation, do not
+  run the tests: report the gap.
+- Affected test targets first; one whole-crate run per deliverable at the end.
+- Split a run expected to exceed ~8 minutes into target groups, each its own command with its own log, run one after
+  another (never two Cargo jobs on one build directory at once). A group that timed out or did not run is not a pass;
+  report which groups completed.
+- Add tests at the cheapest layer that proves the behaviour (see rust-testing). There is no coverage percentage gate.
 
-## Justfile Integration
+## Release only
 
-If the project has a justfile, prefer its recipes — they encode project-specific
-crate lists and feature flags:
+Workspace-wide clippy, `cargo audit`, `cargo sqlx prepare --check --workspace`, and any whole-workspace test run — each
+only with isolated test infrastructure as above.
 
-```makefile
-check:
-    cargo fmt --all --check
-    cargo clippy --workspace --all-targets -- -D warnings
-    cargo test --workspace
+## Always
 
-prepare:
-    cargo sqlx prepare --workspace
-```
+- Warnings are errors; no `#[allow(...)]` in crate/app code: fix the root cause (generated code in its own module is the
+  only exception).
+- Destructive migrations (`DROP`, `TRUNCATE`) are marked `-- @destructive` with a rollback plan, or rewritten.
+- Fix all errors from one gate before rerunning it (batch-error-resolution), in the order fmt → clippy → tests.
+- No hook runs these gates for you: the plugin's edit hook formats changed Rust files only where the project allows it.
 
-## Workspace Policy (what the gates assume)
-
-```toml
-[workspace.lints.rust]
-warnings = "deny"
-[workspace.lints.clippy]
-all = { level = "deny", priority = -1 }
-```
-
-- Warnings are errors — there is no warning backlog to triage later.
-- `#[allow(...)]` is forbidden in crate/app code: fix the root cause. The ONLY
-  exception is generated code, isolated in its own module and documented.
-- Toolchain pinned in `rust-toolchain.toml` — gates run on the pinned version.
-
-## CI Mirror
-
-CI runs the same chain plus a fresh-database migration check:
-
-```yaml
-- run: cargo fmt --all --check
-- run: cargo clippy --workspace --all-targets -- -D warnings
-- run: sqlx migrate run --source migrations   # empty Postgres must migrate cleanly
-- run: cargo test --workspace
-```
-
-If CI and local gates diverge, CI is the source of truth — update the justfile.
-
-## Remediation Map
+## Remediation
 
 | Failure | Action |
 |---|---|
-| fmt | Format only the files you changed: `rustfmt --edition <crate edition> <files>` (or `cargo fmt -- <files>`). Run `cargo fmt --all` only when the project declares its tree rustfmt-clean; a workspace-wide reformat in a shared tree rewrites other people's files. Never hand-format |
-| clippy warning | Fix the code; if clippy is genuinely wrong, restructure so the lint doesn't fire — no `#[allow]` |
-| sqlx prepare --check | `cargo sqlx prepare --workspace` and commit `.sqlx/` |
-| audit vulnerability | Upgrade the dependency; if no fix released, document and pin the decision |
-| unmarked destructive migration | Add `-- @destructive` + rollback plan, or rewrite non-destructively |
-| coverage < 80% | Add tests at the cheapest layer (see rust-testing) |
+| fmt | format only the changed files; never hand-format |
+| clippy | fix the code; if clippy is genuinely wrong, restructure so the lint does not fire |
+| sqlx offline cache drift | `cargo sqlx prepare` for the touched crates against the isolated database, commit `.sqlx/` |
+| audit | upgrade the dependency; if no fix exists, document and pin the decision |
+| destructive migration | add `-- @destructive` and a rollback plan, or rewrite non-destructively |

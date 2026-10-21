@@ -238,8 +238,16 @@ class TaskTrackingTests(unittest.TestCase):
         bundle.mkdir()
         (bundle / "tasks.py").write_bytes((REPO / "integrations/codex/scripts/tasks.py").read_bytes())
         (bundle / "task_tracking.py").write_bytes(MODULE.read_bytes())
+        (bundle / "task_format.py").write_bytes((LIB / "task_format.py").read_bytes())
+        (bundle / "task_rules.py").write_bytes((LIB / "task_rules.py").read_bytes())
+        (bundle / "task_evidence.py").write_bytes((LIB / "task_evidence.py").read_bytes())
+        (bundle / "task_evidence_cli.py").write_bytes((LIB / "task_evidence_cli.py").read_bytes())
+        (bundle / "task_brief.py").write_bytes((LIB / "task_brief.py").read_bytes())
+        (bundle / "task_blockers.py").write_bytes((LIB / "task_blockers.py").read_bytes())
+        (bundle / "prompt_history.py").write_bytes((LIB / "prompt_history.py").read_bytes())
+        (bundle / "task_checkpoint.py").write_bytes((LIB / "task_checkpoint.py").read_bytes())
         (bundle / "task_ownership.py").write_bytes((LIB / "task_ownership.py").read_bytes())
-        process = subprocess.run([sys.executable, str(bundle / "tasks.py"), "set", "--root", str(self.root), "--file", "TASKS.md", "--id", "T1", "--status", "blocked", "--note", "Dependency"], text=True, capture_output=True)
+        process = subprocess.run([sys.executable, str(bundle / "tasks.py"), "block", "--root", str(self.root), "--file", "TASKS.md", "--id", "B1", "--rows", "T1", "--kind", "external", "--class", "other", "--text", "Dependency"], text=True, capture_output=True)
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertEqual(tasks.load_tasks("session-1", self.root)["counts"]["blocked"], 1)
 
@@ -428,21 +436,14 @@ class TaskTrackingTests(unittest.TestCase):
             self.assertEqual(tasks.main(["show", "--root", str(self.root), "--file", str(self.path), *args]), 0)
         return output.getvalue()
 
-    def test_add_appends_new_rows_and_upserts_existing_ones_keeping_owner_and_activity(self):
+    def test_add_rejects_existing_and_repeated_ids_without_writes(self):
         self.bind(self.ledger([tasks._item("T1", "in_progress", "Old title", "Old note", owner="lead", activity="Checks", active_until=self.deadline())]))
-        before = self.path.read_text()
-        self.invoke("add", "--root", str(self.root), "--file", "TASKS.md", "--task", "T1|in_progress|New title|New note", "--task", "S4a|pending|Brief A|", "--task", "V1|running|Compile check|cargo check")
-        after = self.path.read_text()
-        self.assertEqual(before.split(tasks.START)[0], after.split(tasks.START)[0])
-        self.assertEqual(before.split(tasks.END)[1], after.split(tasks.END)[1])
-        items = tasks.load_tasks("session-1", self.root)["items"]
-        self.assertEqual([item["id"] for item in items], ["T1", "S4a", "V1"])
-        self.assertEqual((items[0]["title"], items[0]["note"], items[0]["owner"], items[0]["activity"]), ("New title", "New note", "lead", "Checks"))
-        self.assertTrue(items[0]["is_active"])
-        self.assertEqual(items[2]["status"], "in_progress")
-        self.invoke("add", "--root", str(self.root), "--file", "TASKS.md", "--task", "T1|done|New title|Verified")
-        item = tasks.load_tasks("session-1", self.root)["items"][0]
-        self.assertEqual((item["status"], item["owner"], item["active_until"]), ("done", "lead", ""))
+        original = self.path.read_bytes()
+        for specs in (("T1|done|Duplicate|",), ("X|pending|One|", "X|done|Two|")):
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                tasks.main(["add", "--root", str(self.root), "--file", "TASKS.md",
+                            *[arg for spec in specs for arg in ("--task", spec)]])
+            self.assertEqual(self.path.read_bytes(), original)
 
     def test_add_rejects_malformed_specs_and_row_overflow_without_writes(self):
         self.bind(self.ledger([tasks._item(str(index), "pending", "Task", "") for index in range(tasks.MAX_ROWS - 1)]))
@@ -451,7 +452,7 @@ class TaskTrackingTests(unittest.TestCase):
             with self.subTest(specs=specs), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 tasks.main(["add", "--root", str(self.root), "--file", "TASKS.md", *[arg for spec in specs for arg in ("--task", spec)]])
             self.assertEqual(self.path.read_bytes(), original)
-        self.invoke("add", "--root", str(self.root), "--file", "TASKS.md", "--task", "0|done|Task|Upsert at the limit", "--task", "X|pending|Last|")
+        self.invoke("add", "--root", str(self.root), "--file", "TASKS.md", "--task", "X|pending|Last|")
         self.assertEqual(tasks.load_tasks("session-1", self.root)["total"], tasks.MAX_ROWS)
 
     def test_set_applies_one_change_to_several_ids_and_keeps_status_when_omitted(self):

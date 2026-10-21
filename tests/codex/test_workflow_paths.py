@@ -37,7 +37,7 @@ class WorkflowPathTests(unittest.TestCase):
         lead = flat(LEAD)
         self.assertIn("On a full-path task, run the plugin's `scripts/fsa-usage`", lead)
         self.assertIn("On a full-path task, before a reply that ends with the user's turn", lead)
-        self.assertIn("when a full-path task ends without a push", lead)
+        self.assertIn("When a full-path task ends, run", lead)
         self.assertIn("For full-path multi-step implementation, create and register", flat(SKILL))
         self.assertIn("on a full-path task", flat(DOCTRINE).lower())
 

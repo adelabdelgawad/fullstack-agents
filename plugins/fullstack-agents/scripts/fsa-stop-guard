@@ -38,10 +38,16 @@ def main():
         return 0
     if mode == "prompt":
         stop_guard.record_prompt(hook.get("session_id"), hook.get("prompt"))
+        line = stop_guard.continuation_line(hook.get("session_id"), hook.get("cwd"))
+        if line:
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": line}}))
     elif mode == "stop":
         message = hook.get("last_assistant_message") or last_reply(hook.get("transcript_path"))
-        reason = stop_guard.decide(hook.get("session_id"), hook.get("cwd"), message, "claude")
-        if reason:
+        reason = stop_guard.decide(hook.get("session_id"), hook.get("cwd"), message, "claude",
+                                   stop_hook_active=bool(hook.get("stop_hook_active")))
+        if isinstance(reason, dict):
+            print(json.dumps(reason))
+        elif reason:
             print(json.dumps({"decision": "block", "reason": reason}))
     return 0
 

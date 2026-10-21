@@ -73,6 +73,37 @@ a page and what it shows. Someone holding only the repository must be able to ru
 a loose "tests that prove the fix" list. It is for the orchestrator's audit, not for the
 implementer to run. A behaviour with no check you can name is not understood well enough to delegate.
 
+The same fields are the deliverable's completion evidence (no second spec to write). Each acceptance
+item ends with one or more verification tags, separated by `;`:
+
+```text
+ACCEPTANCE:
+1. Journey B restarts the bot — check: scripts/test-backend.sh -p x --test journeys expect: test result: ok\. [1-9]
+2. Restart notice text matches the design — review: diff of chatbot_restart.rs against §8.3
+3. Builder shows the restart toggle — inspection: screenshot of /chatbot/builder after next build
+KIND: code
+DEPENDS:
+src/backend/crates/shared/
+src/backend/Cargo.lock
+INPUTS: src/backend/.env.example
+ENV: SQLX_OFFLINE
+SCOPE_WHY: x and the shared crate it calls; the journeys read the helpers and env example
+AFFECTED_TESTS:
+src/backend/crates/x/tests/journeys.rs
+```
+
+- `check: <command>` needs `expect: <regex>` or `expect: none (<reason>)`, optionally `cwd: <dir>`;
+  `review:`, `inspection:`, `document: <path>` and `analysis: <path>` name non-command evidence. `BUILD:` becomes a
+  command check named `BUILD`.
+- Verification scope = `ALLOWED_PATHS` ∪ `AFFECTED_TESTS` ∪ `DEPENDS` (+ `INPUTS`, `ENV`). Allowed edit paths are only
+  the start: list the shared code, manifests, lockfiles, configuration and test helpers the checks exercise. `code` needs
+  `DEPENDS:` or `DEPENDS: none (<reason>)`; `KIND:` defaults to `code`.
+- `AFFECTED_TESTS:` lists the tests and fixtures the change can break, found by grep before dispatch, including any that
+  pin a default the brief changes; those that must change are also in `ALLOWED_PATHS`.
+- Before dispatch the lead runs `fsa-task accept --id <ROW> --from-brief <brief>`. An item without a tag is refused and
+  named. A later repair brief for the same row merges: scope only grows, checks are added or replaced by id, and removing
+  one still needs `--reason`.
+
 A brief for a frontend page or container also states its **first-paint contract**: which data the
 server page fetches and seeds (list, thread, side panels), and the request budget after hydration
 (zero for primary content). A brief that only lists screens and features gets a client that fetches
@@ -95,6 +126,14 @@ only the `ALLOWED_PATHS` entries (the Claude engine, launched through the `cc` a
 project edit gate can admit exactly `<runs>/<id>.allow`). Codex has no fence: its edits are checked only after the run. For every engine
 the manifest prints `STATUS=OUT_OF_SCOPE` for any other path that
 changed during the run (in a shared tree that can be another session, so confirm the author).
+Destructive shared-checkout commands are refused where the engine allows enforcement: the Claude engine's fence also
+inspects every Bash command and refuses a `git stash` invocation in its ordinary forms (`git -C <dir>`, `-c` options,
+chained commands, `bash -c`/`sh -c` wrappers, env prefixes) before it runs; opencode (Grok) denies the same patterns in
+its generated permission config; Codex has no command-level enforcement from the dispatcher (it would need user-level
+execpolicy rules), so for Codex the rule is the contract's instruction alone. For every engine the dispatcher scans the
+run log afterwards and reports `STATUS=SHARED_CHECKOUT_VIOLATION` when a stash actually ran, pointing at the run's
+`pre.txt`/`post.txt` content inventories (it matches git's stash output text, so a run whose own output quotes that line is also flagged; read the inventories). A pattern check is not a shell parser: aliases, scripts, `eval` and variables
+are not seen.
 Every engine receives the same implementer contract (`scripts/lib/roles/implementer.md`, hashed into the run record) and the project's
 rules file: `AGENTS.md`, or `CLAUDE.md` until the project has one. Codex implementer runs pass `--disable plugins`, so the Codex-led
 edition's lead doctrine never reaches them; whether its hooks also stay silent is confirmed only by a real Codex run.
@@ -192,8 +231,11 @@ logs it names yourself — grep the result and failure lines, never trust the ta
 diff touched is not a green result. The implementer does not run test suites (they are denied to the implementer); it runs only the brief's
 `BUILD:` compile or type check, so test output never inflates its context.
 
-After every implementer batch, run one fast compile or type check across all touched
-crates/packages before any test run; a compile failure goes back as a repair, not into a test run.
+Once every unit of the deliverable has landed, run one fast compile/lint check on the integrated state before any
+test run (Rust: the project's scoped clippy, which also type-checks; a separate check only for configurations clippy did
+not exercise). Do not rerun it merely because work changed hands; rerun after a later change. A compile failure goes
+back as a repair, not into a test run. Split a test run expected to exceed ~8 minutes into target groups, each its own
+`fsa-task check` with its own log, run one after another; a group that timed out or never ran blocks completion.
 Verification then runs the affected test targets first and one whole-crate/package suite per
 deliverable, once, at the end.
 
@@ -271,13 +313,13 @@ Declare each one the moment it starts, with the plugin's `scripts/team-board`:
 | The plan or first brief is written | `team-board phase plan` |
 | An implementer run returns and the audit begins | `team-board phase audit` |
 | The result goes back to the user (report, question or merge decision) | `team-board phase review --note "<one line>"` |
-| The task is finished: answered with nothing left to do | `team-board phase complete --note "<one line>"` (the card moves to Done until the session's next working turn) |
+| The task is finished: answered with nothing left to do | `team-board phase complete --note "<one line>"` (refused while the bound ledger has open work; the card moves to Done until the session's next working turn) |
 
 Two transitions are automatic (`hooks/auto-phase`): a successful `git push` from the remote's default
-branch (or a branch in `FSA_DONE_BRANCHES`) declares `complete`, and the user's next real prompt after
+branch (or a branch in `FSA_DONE_BRANCHES`) declares `review` (a push never establishes completion), and the user's next real prompt after
 `review` or `complete` declares `investigate`. Plan, Build and Review are derived by the dashboard from
 briefs, implementer runs and edits; declare them explicitly when no brief or run exists.
-| Any reply that needs the user to approve, decide, answer or act | `team-board wait "<what you need>"` (cleared by the user's next message) |
+| Any reply that needs the user to approve, decide, answer or act | with a v2 ledger: `fsa-task block --kind user --text "<exact question>" --why "<what it blocks>"` (the dashboard shows it); without one: `team-board wait "<what you need>"` (cleared by the user's next message) |
 
 The card also shows the lead's own steps, so the user can follow investigation, design and
 planning work that no implementer run records. At intake, list the task's steps in plain words

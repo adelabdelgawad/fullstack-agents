@@ -71,5 +71,21 @@ for i in $(seq 1 25); do "$TB" --session "S$i" claim --name "s$i" --task "t$i" &
 n=$("$TB" --session X status --json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["claims"]))')
 ok "$([ "$n" = 25 ] && echo true)" "25 concurrent writers lose no claim" "claims=$n"
 
+TASKS_ROOT="$TMP/tasks-root"
+mkdir -p "$TASKS_ROOT"
+export FSA_TASKS_DIR="$TMP/tasks-state"
+FT="${HERE}/../scripts/fsa-task"
+( cd "$TASKS_ROOT" && python3 "$FT" init --root . --file work.md --session T --format v2 --task 'S1|pending|work|' >/dev/null )
+( cd "$TASKS_ROOT" && "$TB" --session T phase complete 2>/dev/null ); rc=$?
+ok "$([ $rc -eq 2 ] && echo true)" "phase complete refused with an open v2 row" "rc=$rc"
+( cd "$TASKS_ROOT" && python3 "$FT" set --root . --file work.md --session T --id S1 --status skipped >/dev/null )
+( cd "$TASKS_ROOT" && "$TB" --session T phase complete >/dev/null 2>&1 ); rc=$?
+ok "$([ $rc -eq 0 ] && echo true)" "phase complete accepted once the v2 ledger is done" "rc=$rc"
+( cd "$TASKS_ROOT" && python3 "$FT" init --root . --file legacy.md --session L --format legacy --task 'S1|pending|work|' >/dev/null )
+( cd "$TASKS_ROOT" && "$TB" --session L phase complete 2>/dev/null ); rc=$?
+ok "$([ $rc -eq 2 ] && echo true)" "phase complete refused with an open legacy row" "rc=$rc"
+( cd "$TASKS_ROOT" && "$TB" --session nobind phase complete >/dev/null 2>&1 ); rc=$?
+ok "$([ $rc -eq 0 ] && echo true)" "phase complete unchanged for a session without a ledger" "rc=$rc"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

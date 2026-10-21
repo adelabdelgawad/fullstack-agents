@@ -3,9 +3,22 @@
 import json
 import os
 from pathlib import Path
+import re
 import sys
 
 WRITERS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
+ARG = r'''(?:"[^"\n]*"|'[^'\n]*'|[^\s;&|()]+)'''
+# This intentionally does not see aliases, scripts, eval, or variables; it only scans the submitted command text.
+GIT_STASH = re.compile(
+    rf'''(?<![A-Za-z0-9_])git(?:\s+(?:-C\s+{ARG}|-c\s+{ARG}|'''
+    rf'''--(?:git-dir|work-tree|namespace)(?:=|\s+){ARG}|'''
+    r'''--no-pager|-p|-P|--bare|--literal-pathspecs))*\s+stash\b'''
+)
+STASH_REFUSAL = (
+    "BLOCKED: git stash is refused in a shared checkout (it hides other people's uncommitted work). "
+    "Nothing ran. Use read-only inspection (git diff, git show <commit>:<path>, git log) or an isolated "
+    "fixture in a temporary directory; if neither works, name the blocked action in open_risks."
+)
 
 
 def main():
@@ -14,12 +27,18 @@ def main():
     except ValueError:
         print("allowed-paths fence: unreadable hook input", file=sys.stderr)
         return 2
-    if hook.get("tool_name") not in WRITERS:
+    tool_name = hook.get("tool_name")
+    tool_input = hook.get("tool_input") or {}
+    if tool_name == "Bash":
+        if GIT_STASH.search(tool_input.get("command") or ""):
+            print(STASH_REFUSAL, file=sys.stderr)
+            return 2
+        return 0
+    if tool_name not in WRITERS:
         return 0
     root = Path(os.environ["FSA_IMPLEMENTER_ROOT"]).resolve()
     allowed = {(root / line.strip()).resolve()
                for line in Path(os.environ["FSA_ALLOWED_PATHS_FILE"]).read_text().splitlines() if line.strip()}
-    tool_input = hook.get("tool_input") or {}
     target = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
     path = (root / target).resolve() if target else None
     if path in allowed:

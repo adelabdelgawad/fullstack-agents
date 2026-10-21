@@ -16,6 +16,7 @@ sys.path.insert(0, str(LIB))
 SPEC = importlib.util.spec_from_file_location("task_tracking", LIB / "task_tracking.py")
 tasks = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(tasks)
+import task_blockers
 import task_checkpoint as checkpoint
 import task_recovery as recovery
 CLI = REPO / "plugins/fullstack-agents/scripts/fsa-task"
@@ -147,6 +148,22 @@ class RenderVariantTests(unittest.TestCase):
         self.assertIn("T1 pending Do a thing", rendered)
         self.assertNotIn("Scope in:", rendered)
 
+    def test_open_rows_use_shared_status_rules_for_legacy_and_v2(self):
+        items = [{"id": "T1", "status": "pending", "title": "Open", "note": ""},
+                 {"id": "T2", "status": "skipped", "title": "Skip", "note": ""},
+                 {"id": "T3", "status": "canceled", "title": "Cancel", "note": ""}]
+        for version in ("legacy", "v2"):
+            with self.subTest(version=version):
+                rendered = recovery.render(_info(ledger={"title": "T", "format": version, "items": items}))
+                self.assertIn("T1 pending Open", rendered)
+                self.assertNotIn("T2 skipped Skip", rendered)
+                self.assertNotIn("T3 canceled Cancel", rendered)
+
+    def test_v2_step_row_names_its_parent(self):
+        item = {"id": "S1", "status": "verifying", "title": "Check", "note": "", "parent": "T1"}
+        rendered = recovery.render(_info(ledger={"title": "T", "format": "v2", "items": [item]}))
+        self.assertIn("S1 verifying Check (step of T1)", rendered)
+
     def test_malformed_checkpoint_section_is_a_warning_not_a_wipeout(self):
         info = _info(checkpoint_error="Checkpoint JSON is invalid: bad")
         rendered = recovery.render(info)
@@ -167,6 +184,34 @@ class RenderVariantTests(unittest.TestCase):
         info = _info(git_identity={"checkout": "/repo", "branch": None, "head": "deadbeef" * 5, "detached": True})
         rendered = recovery.render(info)
         self.assertIn("Branch: detached deadbeef", rendered)
+
+
+class OpenBlockersAndChecksTests(unittest.TestCase):
+    def test_open_blockers_and_failing_checks_precede_narrative_blockers(self):
+        payload = _checkpoint_payload(blockers=["narrative blocker text"])
+        payload["identity"] = {"schema": 1, "task_id": "T", "root": "/repo", "checkout": "/repo", "branch": "main",
+                               "head": "a" * 40, "detached": False, "session_id": "s", "written_at": "t"}
+        info = _info(checkpoint=payload, verification_tags=["inputs unchanged"],
+                     blocker_lines=["E1: capacity codex until 2026-10-21T00:00:00Z — blocks S2"],
+                     failing_check_lines=["S2: no evidence spec recorded; run accept"])
+        rendered = recovery.render(info)
+        self.assertIn("Open blockers: E1: capacity codex until 2026-10-21T00:00:00Z — blocks S2", rendered)
+        self.assertIn("Failing checks: S2: no evidence spec recorded; run accept", rendered)
+        self.assertLess(rendered.index("Open blockers:"), rendered.index("Blockers: narrative blocker text"))
+        self.assertLess(rendered.index("Failing checks:"), rendered.index("Blockers: narrative blocker text"))
+
+    def test_approval_sentence_present_whenever_a_checkpoint_exists(self):
+        payload = _checkpoint_payload()
+        payload["identity"] = {"schema": 1, "task_id": "T", "root": "/repo", "checkout": "/repo", "branch": "main",
+                               "head": "a" * 40, "detached": False, "session_id": "s", "written_at": "t"}
+        info = _info(checkpoint=payload, verification_tags=["inputs unchanged"])
+        rendered = recovery.render(info)
+        self.assertIn(recovery.APPROVAL_NOTE, rendered)
+
+    def test_no_blocker_or_check_lines_without_data(self):
+        rendered = recovery.render(_info())
+        self.assertNotIn("Open blockers:", rendered)
+        self.assertNotIn("Failing checks:", rendered)
 
 
 class RenderWarningTests(unittest.TestCase):
@@ -339,6 +384,34 @@ class CollectTests(RepoTestCase):
     def test_no_binding_is_a_fatal_message(self):
         info = recovery.collect("never-bound", str(self.root))
         self.assertIn("fatal", info)
+
+
+class V2CollectTests(RepoTestCase):
+    def test_open_capacity_blocker_and_missing_evidence_spec_surface_with_next_action(self):
+        item = tasks._item("S1", "pending", "Ship it", "", version="v2")
+        text = ("# T\n\n" + tasks.START + tasks._render([item], "v2") + tasks.END
+                + "\n\n## Task log\n" + tasks.LOG_START + "\n" + tasks.LOG_END + "\n")
+        block = {"schema": 1, "blockers": {"E1": {
+            "kind": "external", "rows": ["S1"], "text": "codex quota", "why": "", "next": "",
+            "created_at": "2026-10-20T00:00:00Z", "status": "open", "resumes": {"S1": "pending"},
+            "resolution": None, "class": "capacity", "engine": "codex", "until": "2026-10-21T00:00:00Z"}}}
+        text = task_blockers.splice_block(text, task_blockers.render_block(block))
+        self.path.write_text(text)
+        subprocess.run(["git", "add", "-A"], cwd=self.root, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "blockers"], cwd=self.root, check=True)
+        tasks.bind_tasks("sess-1", self.root, self.path)
+        payload = self.checkpoint_payload()
+        payload["next"] = {"action": "check fsa-usage and resolve E1", "owner": "claude"}
+        input_path = self.write_input(payload)
+        result = self.invoke("checkpoint", "--root", str(self.root), "--file", "TASKS.md", "--session", "sess-1",
+                             "--input", str(input_path))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        info = recovery.collect("sess-1", str(self.root))
+        rendered = recovery.render(info)
+        self.assertIn("Open blockers: E1: capacity codex until 2026-10-21T00:00:00Z — blocks S1", rendered)
+        self.assertIn("Failing checks: S1: no evidence spec recorded; run accept", rendered)
+        self.assertIn("Next: check fsa-usage and resolve E1", rendered)
+        self.assertIn(recovery.APPROVAL_NOTE, rendered)
 
 
 class CliTests(RepoTestCase):

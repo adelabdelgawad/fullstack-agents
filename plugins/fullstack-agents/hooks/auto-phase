@@ -2,9 +2,9 @@
 # auto-phase — keeps a Claude session's dashboard phase current without the lead declaring it.
 #   auto-phase prompt  (UserPromptSubmit): a real user prompt after a hand-back (review/complete)
 #                      starts a new task, so the card returns to Investigate.
-#   auto-phase push    (PostToolUse Bash): a successful `git push` from a finishing branch marks the
-#                      session complete, so the card moves to Done. Finishing branches are the
-#                      remote's default branch, or FSA_DONE_BRANCHES (comma list) when set.
+#   auto-phase push    (PostToolUse Bash): a successful `git push` from a finishing branch moves the
+#                      card to Review; a push never establishes completion on its own. Finishing
+#                      branches are the remote's default branch, or FSA_DONE_BRANCHES (comma list).
 # Plan, Build and Review are already derived by the dashboard from briefs, runs and edits.
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -48,7 +48,8 @@ ${JSON_FIELDS[6]}"
     fi
     case ",${done_branches// /}," in *",${branch},"*) ;; *) exit 0 ;; esac
     head=$(git rev-parse --short HEAD 2>/dev/null)
-    python3 "$TB" --session "$session" phase complete --note "pushed ${branch} at ${head}" >/dev/null 2>&1
+    python3 "$TB" --session "$session" phase review \
+        --note "pushed ${branch} at ${head}; completion not established by a push" >/dev/null 2>&1
     ;;
 esac
 exit 0

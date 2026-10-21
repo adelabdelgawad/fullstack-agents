@@ -144,8 +144,8 @@ waiting replies on its own. The user's next message clears it.
 Done means all of: the plan's tests were run (by you or the test-runner) and their logs, read by you, are green against the stated known-red
 baseline; the diff was read restricted to the paths the run reports as touched; the authoritative
 document is updated if a boundary, invariant, configuration owner or recovery procedure changed.
-Commit only when the user asks, staging explicit paths. A successful push from the default branch marks the session Done
-automatically; when a full-path task ends without a push, run `team-board phase complete --note "<one line>"`.
+Commit only when the user asks, staging explicit paths. A push marks the session for review, never Done. When a full-path task ends, run
+`team-board phase complete --note "<one line>"` once its bound ledger is done (it refuses while work is open).
 
 A dispatch's `STATUS=OK` or `succeeded` state is execution, not acceptance. `STATUS=INSTRUCTIONS_CHANGED` means the project rules
 changed mid-run: review the result against the current rules. `STATUS=OWNERSHIP_HELD` or an `uncertain` run keeps its paths until
@@ -155,8 +155,11 @@ session: report it, and set `FSA_ACCEPT_PLUGIN_CHANGE=1` only for deliberate plu
 ## Context and cost budget
 
 On a full-path task, run the plugin's `scripts/fsa-usage` at each phase change and before any
-large read or delegation; a light-path task needs no usage call. At 85% context fill (it prints `HANDOFF:`), write a checkpoint (`fsa-task checkpoint`, task-tracking reference) and
-compact or hand off before the next large step; never let auto-compaction land mid-edit. The final
+large read or delegation; a light-path task needs no usage call. At 85% context fill (it prints `HANDOFF:`), write a checkpoint (`fsa-task checkpoint`, task-tracking reference) before the next large step; automatic compaction
+summarises the conversation, so reread the ledger, checkpoint and authoritative files when needed. Never advise `/clear`
+or a fresh session because of a context percentage or an unmeasured cost claim. When an implementer's capacity is
+exhausted, record a capacity blocker (`fsa-task block --kind external --class capacity`), continue any independent
+authorised work, and keep the deliverable open with its failing checks; an engine switch is an offer, not a demand. The final
 report of an implementation names the estimated cost from `fsa-usage` (lead plus subagents), marked
 as an estimate. When `fsa-usage` shows a plan window at 90% or more, say so before starting large
 delegated work. The dashboard marks a session stale when its transcript stops growing for five

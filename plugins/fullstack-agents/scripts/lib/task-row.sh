@@ -1,6 +1,6 @@
 # Dispatcher hooks: a brief's `TASK: <ledger.md>#<ROW-ID>` row follows the run; tracker failures only warn on stderr.
 fsa_task_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-fsa_task_root=""; fsa_task_file=""; fsa_task_id=""; fsa_task_renewed=0
+fsa_task_root=""; fsa_task_file=""; fsa_task_id=""; fsa_task_renewed=0; fsa_task_format=""; fsa_task_status=""
 
 fsa_task_cli() {
   local out
@@ -44,10 +44,27 @@ fsa_task_row_relpath() {
 # fsa_task_row_dispatch <engine> <brief-stem> <run-id>
 fsa_task_row_dispatch() {
   [ -n "$fsa_task_id" ] || return 0
-  local summary
-  summary=$(fsa_task_cli show --json) || return 0
+  local summary err
+  if ! summary=$(python3 -I "$fsa_task_lib/task_tracking.py" show --root "$fsa_task_root" --file "$fsa_task_file" --json 2>/dev/null); then
+    err=$(python3 -I "$fsa_task_lib/task_tracking.py" show --root "$fsa_task_root" --file "$fsa_task_file" --json 2>&1 1>/dev/null) || true
+    printf 'fullstack-agents: task ledger unreadable; ledger updates disabled for this run: %s\n' "$(tail -1 <<<"$err")" >&2
+    fsa_task_id=""
+    return 0
+  fi
+  fsa_task_format=$(jq -r '.format' <<<"$summary")
+  fsa_task_status=$(jq -r --arg id "$fsa_task_id" '.items[] | select(.id == $id) | .status' <<<"$summary")
   if ! jq -e --arg id "$fsa_task_id" 'any(.items[]; .id == $id)' <<<"$summary" > /dev/null 2>&1; then
+    if [ "$fsa_task_format" = v2 ]; then
+      printf 'fullstack-agents: task row %s is missing; add the row first\n' "$fsa_task_id" >&2
+      fsa_task_id=""
+      return 0
+    fi
     fsa_task_cli add --task "$fsa_task_id|in_progress|$2|dispatched (run $3)" > /dev/null || return 0
+  fi
+  if [ "$fsa_task_format" = v2 ] && [ "$fsa_task_status" = done ]; then
+    printf 'fullstack-agents: task row %s is already done; leaving it untouched\n' "$fsa_task_id" >&2
+    fsa_task_id=""
+    return 0
   fi
   fsa_task_cli set --id "$fsa_task_id" --status in_progress --owner "$1" --activity "implementing $2" --active-for 300 > /dev/null || return 0
   fsa_task_renewed=$SECONDS
@@ -64,7 +81,9 @@ fsa_task_row_renew() {
 fsa_task_row_finish() {
   [ -n "$fsa_task_id" ] || return 0
   if [ "$1" = succeeded ]; then
-    fsa_task_cli set --id "$fsa_task_id" --status in_progress --owner lead --activity "" --active-for 0 \
+    local status=in_progress
+    [ "$fsa_task_format" = v2 ] && status=verifying
+    fsa_task_cli set --id "$fsa_task_id" --status "$status" --owner lead --activity "" --active-for 0 \
       --note "$1: awaiting lead audit (run $2)" > /dev/null || true
   else
     fsa_task_cli set --id "$fsa_task_id" --status blocked --owner lead --activity "" --active-for 0 --note "$1: see run $2" > /dev/null || true

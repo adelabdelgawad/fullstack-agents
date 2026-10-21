@@ -284,6 +284,14 @@ def main():
                 data["locks"].pop(args.surface)
                 event(data, t, sid, held.get("name", "?"), f"unlocked {args.surface}")
         elif args.cmd == "phase":
+            if args.phase == "complete":
+                sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
+                import task_tracking
+                import stop_guard
+                refusal = stop_guard.phase_complete_refusal(task_tracking.load_tasks(sid, os.getcwd()))
+                if refusal:
+                    print(f"team-board: cannot complete: {refusal}", file=sys.stderr)
+                    return 2
             prev = data["phases"].get(sid, {})
             allowed = {x.strip() for x in args.only_from.split(",") if x.strip()}
             if allowed and (prev.get("phase") or "none") not in allowed:
