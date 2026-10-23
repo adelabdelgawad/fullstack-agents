@@ -25,7 +25,9 @@ What each lens looks for, in this change only:
   secrets in the diff; a new dependency.
 - **ux**: a flow that dead-ends; missing loading, empty or error states; copy that is unclear or
   inconsistent with neighbouring strings; accessibility (real buttons and links, labels, roles,
-  keyboard reach, focus order, alt text); layout that breaks at phone width.
+  keyboard reach, focus order, alt text); layout that breaks at phone width; an edit sheet with a
+  second commit point (a section inside it that saves, adds, removes or toggles through the API
+  instead of the footer Save).
 - **code**: behaviour the brief's `ACCEPTANCE:` items require but the diff does not deliver; edge
   cases, unhandled errors, a missing await, an off-by-one or wrong path; a change outside the
   brief's paths; duplicated logic an existing helper in the listed files already provides;

@@ -376,3 +376,15 @@ settings-group primitive) is used rather than re-implemented.
    on an automated call) is hidden for that kind. A field that applies but has no stored value shows
    a short word from the locale file, such as "Not recorded", not a bare dash. Label fields in
    words, not symbols ("Attempt", not "Call #").
+7. **One commit point: the footer.** Every change made inside an edit sheet (fields, related lists
+   such as members or teams, linked policies, add/remove/toggle rows, nested editor sheets) is a
+   draft until the footer Save, and the footer Cancel or close discards all of it. No section
+   inside the sheet renders its own Save/Apply button or calls a write API on add, remove, toggle
+   or select. A nested editor sheet returns its values to the parent draft instead of writing.
+   Drafts count as unsaved changes for the close confirmation. The footer Save writes the main
+   record first, then only the sections whose draft differs from what was loaded, in a fixed
+   order, through one shared step runner; on a failed step the sheet stays open, the error names
+   the section, and completed steps become the new baseline so a retry sends only what is left.
+   Read-only probes (test connection, validate URL, preview) are not commits and may act
+   immediately. A review finds this by listing every component rendered inside the sheet that
+   calls a mutation or renders a Save button.
