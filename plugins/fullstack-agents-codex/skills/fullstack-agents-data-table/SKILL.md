@@ -23,7 +23,8 @@ never infer global counts from visible rows. One coordinator owns refresh.
 Required: [list-loading](references/list-loading.md),
 [data-freshness](../fullstack-agents-nextjs/references/data-freshness.md) and relevant
 [client-performance](../fullstack-agents-nextjs/references/client-performance.md) rules.
-For forms also read [sheet rules](references/edit-sheet-pattern.md).
+For forms also read [sheet rules](references/edit-sheet-pattern.md); an edit sheet has one
+commit point, its footer Save/Cancel: no section saves on its own.
 
 ## Detailed guide
 
