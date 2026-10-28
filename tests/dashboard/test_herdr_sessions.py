@@ -136,6 +136,26 @@ class HerdrSessionTests(unittest.TestCase):
         s = dash.pane_session(pane, str(self.home), now)
         self.assertEqual((s["id"], s["state"], s["name"], s["worktree"]), ("herdr-x1:p1", "working", "fix it", ""))
 
+    def test_waiting_pane_keeps_its_updated_time_across_polls(self):
+        pane = {"pane_id": "x1:p9", "status": "blocked", "cwd": str(self.other), "agent": "grok"}
+        first = dash.pane_session(pane, str(self.home), 1000.0)
+        again = dash.pane_session(pane, str(self.home), 1004.0)
+        self.assertEqual((first["state"], first["updated"], again["updated"]), ("waiting", 1000.0, 1000.0))
+        moved = dash.pane_session({**pane, "status": "working"}, str(self.home), 1008.0)
+        self.assertEqual(moved["updated"], 1008.0)
+
+    def test_transcript_ending_in_large_attachments_is_still_read(self):
+        path = Path(self.scratch.name) / "sess.jsonl"
+        said = {"type": "assistant", "cwd": str(self.home), "timestamp": "2026-10-28T10:00:00Z",
+                "message": {"role": "assistant", "stop_reason": "end_turn",
+                            "content": [{"type": "text", "text": "Which option do you want?"}]}}
+        pad = json.dumps({"type": "attachment", "attachment": {"content": "x" * 4096}}, separators=(",", ":"))
+        path.write_text(json.dumps(said, separators=(",", ":")) + "\n" + (pad + "\n") * 80)
+        self.assertGreater(path.stat().st_size, dash.TAIL_BYTES)
+        s = dash.read_session(path, time.time(), None, {}, {})
+        self.assertIsNotNone(s)
+        self.assertEqual(s["cwd"], str(self.home))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -56,6 +56,7 @@ WAIT_MIN_S = 30
 STILL_OPEN_S = 900
 SUBAGENT_BUSY_S = 120
 TAIL_BYTES = 262144
+SESSION_TAIL_MAX = 4 * 1048576
 STATE_TTL_S = 3
 HERDR_TTL_S = 2
 GIT_TTL_S = 30
@@ -480,6 +481,21 @@ def tail_lines(path, size=TAIL_BYTES):
         return []
     lines = data.splitlines()
     return lines[1:] if end > size else lines
+
+
+def message_tail(path):
+    """A transcript tail widened (up to SESSION_TAIL_MAX) until it holds a conversation line."""
+    size = TAIL_BYTES
+    while True:
+        lines = tail_lines(path, size)
+        if size >= SESSION_TAIL_MAX or any('"type":"user"' in x or '"type":"assistant"' in x for x in lines):
+            return lines
+        try:
+            if path.stat().st_size <= size:
+                return lines
+        except OSError:
+            return lines
+        size *= 4
 
 
 def encode_project(path):
@@ -1267,7 +1283,7 @@ def read_session(path, now, wt_re, names, waits):
     action, action_at, action_id, said_at, seen_at, turn_at = "", "", "", "", "", ""
     mentions, briefs, answered = {}, set(), set()
     finished, bg = {}, {"labels": {}, "tasks": {}, "exit": {}, "bash": {}, "pending": []}
-    for line in tail_lines(path):
+    for line in message_tail(path):
         for m in NOTE_RE.finditer(line):
             finished[m.group(1)] = m.group(2)
         for m in SHELL_EXIT_RE.finditer(line):
@@ -2053,6 +2069,16 @@ def herdr_agents(snapshot):
 
 
 HERDR_STATES = {"working": "working", "blocked": "waiting"}
+PANE_SINCE = {}
+
+
+def pane_since(pane, now):
+    """When the pane entered its current herdr status; stable across polls."""
+    status = pane.get("status")
+    seen = PANE_SINCE.get(pane["pane_id"])
+    if not seen or seen[0] != status:
+        seen = PANE_SINCE[pane["pane_id"]] = (status, now)
+    return seen[1]
 
 
 def pane_session(pane, root, now):
@@ -2063,7 +2089,7 @@ def pane_session(pane, root, now):
     return {
         "id": f"herdr-{pane['pane_id']}", "engine": agent, "pane": pane["pane_id"],
         "name": pane.get("title") or f"{agent} {Path(cwd).name}", "named": bool(pane.get("title")), "title": "",
-        "cwd": cwd, "branch": "", "worktree": top if top != root else "", "state": state, "updated": now,
+        "cwd": cwd, "branch": "", "worktree": top if top != root else "", "state": state, "updated": pane_since(pane, now),
         "turn_at": 0, "agents": [], "idle": 0, "snippet": "", "briefs": [], "chips": [], "ask": "",
         "need": f"{agent} is waiting in herdr pane {pane['pane_id']}" if state == "waiting" else "",
         "action": "", "action_at": 0, "action_running": False, "said_at": 0, "said": "", "said_full": "", "docs": [],

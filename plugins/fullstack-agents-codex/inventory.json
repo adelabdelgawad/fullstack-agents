@@ -214,7 +214,7 @@
   ],
   "source_hashes": {
     ".claude-plugin/marketplace.json": "88540c3d139cc6b4a0594b35273ad2fb90523eb0becec24146df9e130e0a19cb",
-    ".claude-plugin/plugin.json": "e82f279ba61f81f71b57ec9d9a4c4fe61417765f107cd2d3eeaacaff7e4d1fbd",
+    ".claude-plugin/plugin.json": "29098e7f9c3d1152756e47ced76a7d734b5b63e6f184d99e96d84a66a186002b",
     "README.md": "f22b4bcadc47b74edf9bc6ca84d8e041e492b3b7c1604b58fc6f289e458a1654",
     "agents/_core/AGENT_BASE.md": "c29fe50773b1f705354beadd48af6018d39bfb830599ff3190e26b6bd9188f1a",
     "agents/_core/detection-patterns.md": "5f4b2d3bf8a5e1559725f60a86d0fa9ea0d4df4ce2e1e622713c26a0a9639389",
@@ -305,7 +305,7 @@
     "scripts/codex-result.schema.json": "31546c15e65da0d17fe14f8602ef03882b2a9582698bb9d52782617e7902655c",
     "scripts/codex-task.sh": "64c5de21f1d0da55eaed238f803f294446472fe10cf6e5430c7cc4ad8ad43e7e",
     "scripts/fsa-classify": "5ba9c9f9c0755bb60a5f2c1d84b76e72fb817ea7b630d66447dad7dde8da4f6e",
-    "scripts/fsa-dashboard": "b85710d9285d1eb611e2192ba312f7da7044c95b6354e2411c20da32f05a73ce",
+    "scripts/fsa-dashboard": "05289c2810988961e8bb0c22e523f10f14ad8d5bc10ad9ced7111e4932e96e17",
     "scripts/fsa-release": "24fdd722e70dde13aab7a0c48f3cafad1a3a7d745387f75c7bda4bfb8193a048",
     "scripts/fsa-runs": "ae195c5e6c52040fdd0b2018689cee7136c2990bf0a34e9e703e57bcd908a8e3",
     "scripts/fsa-skill-map": "d5aed8566c6e937b88896e3462294f9c43d8d34dcd5b71c6b880eae06225245d",
