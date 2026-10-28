@@ -8,6 +8,8 @@ allowed-tools: Bash
 
 Run the dashboard control script for the current repository and print its output verbatim.
 The server is detached from the session; only `stop` ends it.
+After `claude plugin update`, a running server restarts itself onto the new user-scope install
+within 30 s, keeping its URL; open pages reload.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/fsa-dashboard" ${ARGUMENTS:-status}

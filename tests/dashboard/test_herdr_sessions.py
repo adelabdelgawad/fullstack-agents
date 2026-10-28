@@ -156,6 +156,17 @@ class HerdrSessionTests(unittest.TestCase):
         self.assertIsNotNone(s)
         self.assertEqual(s["cwd"], str(self.home))
 
+    def test_cached_dashboard_finds_the_user_scope_install(self):
+        plugins = Path(self.scratch.name) / "cfg" / "plugins"
+        old, new = (plugins / "cache" / "mkt" / "fsa" / v / "scripts" for v in ("1.0.0", "1.0.1"))
+        for d in (old, new):
+            d.mkdir(parents=True)
+            (d / "fsa-dashboard").write_text("")
+        entries = [{"scope": "project", "installPath": str(old.parent)}, {"scope": "user", "installPath": str(new.parent)}]
+        (plugins / "installed_plugins.json").write_text(json.dumps({"plugins": {"fsa@mkt": entries}}))
+        self.assertEqual(dash.installed_dashboard(old / "fsa-dashboard"), new / "fsa-dashboard")
+        self.assertIsNone(dash.installed_dashboard(REPO / "plugins/fullstack-agents/scripts/fsa-dashboard"))
+
 
 if __name__ == "__main__":
     unittest.main()

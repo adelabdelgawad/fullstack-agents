@@ -2956,6 +2956,36 @@ def host_ip():
     return next((ip for ip in out if not ip.startswith(("172.", "127."))), out[0] if out else "localhost")
 
 
+FOLLOW_S = 30
+
+
+def installed_dashboard(script):
+    """The fsa-dashboard of the user-scope install of the plugin this cached copy belongs to, or None."""
+    up = Path(script).resolve().parents
+    if len(up) < 6 or up[4].name != "cache":
+        return None
+    data = load_json(up[5] / "installed_plugins.json") or {}
+    for entry in (data.get("plugins") or {}).get(f"{up[2].name}@{up[3].name}", []):
+        if entry.get("scope") == "user":
+            found = Path(entry.get("installPath") or "/nonexistent") / "scripts" / "fsa-dashboard"
+            return found if found.is_file() else None
+    return None
+
+
+def follow_updates(script):
+    """Re-exec onto the installed copy once `claude plugin update` replaces the one serving."""
+    while True:
+        time.sleep(FOLLOW_S)
+        found = installed_dashboard(script)
+        if not found or found.resolve() == Path(script).resolve():
+            continue
+        try:
+            compile(found.read_text(), str(found), "exec")
+        except (OSError, SyntaxError, ValueError):
+            continue
+        os.execv(sys.executable, [sys.executable, str(found), *sys.argv[1:]])
+
+
 def running_pid(port):
     for proc in Path("/proc").iterdir():
         if not proc.name.isdigit() or int(proc.name) == os.getpid():
@@ -3002,6 +3032,7 @@ def main():
     elif args.cmd == "serve":
         srv = Server((args.host, args.port), repo, token)
         signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+        threading.Thread(target=follow_updates, args=(__file__,), daemon=True).start()
         srv.serve_forever()
     elif args.cmd == "start":
         if not pid:
