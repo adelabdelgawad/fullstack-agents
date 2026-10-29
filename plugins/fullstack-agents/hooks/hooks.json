@@ -137,6 +137,17 @@
             "async": true
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd\" context-handoff",
+            "async": false,
+            "timeout": 10
+          }
+        ]
       }
     ],
     "SessionEnd": [

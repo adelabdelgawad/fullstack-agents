@@ -238,7 +238,7 @@ Unknown keys are rejected. The tool adds the identity (checkout, branch, HEAD, s
 - a batch dispatched, or its result accepted or rejected after audit;
 - a verification outcome concluded from its log;
 - a blocker appears or clears;
-- `fsa-usage` prints `HANDOFF:`;
+- `HANDOFF:` appears (from `fsa-usage` or the `context-handoff` hook);
 - before a manual `/compact` or `/clear`.
 
 Reading files, grepping and worker progress are not triggers. An unchanged checkpoint is not rewritten.

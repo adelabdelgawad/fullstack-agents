@@ -13,6 +13,9 @@ SAMPLE_KEEP_S = 600
 IDS_KEEP = 4096
 BLOWOUT_FILL = 0.9
 WARN_FILL = 0.8
+HANDOFF_FILL = 0.85
+HANDOFF_TOKENS = 200_000
+PERSIST = ("ino", "offset", "model", "context", "window", "compactions", "compact_pre", "compact_min")
 DEFAULT_PRICES = {
     "claude-fable-5-1": {"input": 10.0, "output": 50.0, "cache_read": 0.25, "window": 1_000_000},
     "claude-mythos-5-1": {"input": 10.0, "output": 50.0, "cache_read": 0.25, "window": 1_000_000},
@@ -80,6 +83,16 @@ def window_of(model, seen=0):
     return 1_000_000 if seen > window else window
 
 
+def handoff_at(window, compact_min=0):
+    """Context size that calls for a checkpoint: the lowest of the token cap, the window share and the smallest compaction share."""
+    try:
+        cap = int(os.environ.get("FSA_HANDOFF_TOKENS") or HANDOFF_TOKENS)
+    except ValueError:
+        cap = HANDOFF_TOKENS
+    limits = [cap, int(window * HANDOFF_FILL)] + ([int(compact_min * HANDOFF_FILL)] if compact_min else [])
+    return min(x for x in limits if x > 0)
+
+
 def cost_of(model, t):
     p = price_of(model)
     if not p:
@@ -91,7 +104,7 @@ def cost_of(model, t):
 
 def _blank():
     return {"ino": None, "offset": 0, "ids": [], "seen": set(), "models": {}, "model": "", "context": 0,
-            "window": 0, "compactions": 0, "compact_pre": 0, "samples": [], "daily": {}, "codex_prev": {}, "agent": False}
+            "window": 0, "compactions": 0, "compact_pre": 0, "compact_min": 0, "samples": [], "daily": {}, "codex_prev": {}, "agent": False}
 
 
 def _iso(ts):
@@ -115,9 +128,12 @@ def _add(st, model, at, t):
 
 def _claude_line(st, d):
     if d.get("type") == "system" and d.get("subtype") == "compact_boundary":
+        meta = d.get("compactMetadata") or {}
         st["compactions"] += 1
-        st["compact_pre"] = (d.get("compactMetadata") or {}).get("preTokens") or st["compact_pre"]
-        st["context"] = (d.get("compactMetadata") or {}).get("postTokens") or 0
+        st["compact_pre"] = meta.get("preTokens") or st["compact_pre"]
+        if meta.get("preTokens"):
+            st["compact_min"] = min(st["compact_min"] or meta["preTokens"], meta["preTokens"])
+        st["context"] = meta.get("postTokens") or 0
         return
     msg = d.get("message") or {}
     u = msg.get("usage")
@@ -202,8 +218,10 @@ def _summary(st, now):
     cost = sum(c for c in costs if c is not None) if any(c is not None for c in costs) else None
     window = st["window"] or window_of(st["model"], st["context"])
     fill = min(st["context"] / window, 1.0) if window else 0.0
+    handoff = handoff_at(window, st["compact_min"])
     return {"model": st["model"], "tokens": tokens, "cost": cost, "context": st["context"], "window": window,
             "fill": round(fill, 4), "compactions": st["compactions"], "compact_pre": st["compact_pre"],
+            "handoff_at": handoff, "handoff": st["context"] >= handoff,
             "tpm": sum(n for at, n in st["samples"] if now - at <= 60),
             "today": _today(st, now), "blowout": st["compactions"] > 0 or fill >= BLOWOUT_FILL}
 
@@ -225,6 +243,22 @@ def _agent_label(meta):
 def _sum_costs(values):
     known = [v for v in values if v is not None]
     return sum(known) if known else None
+
+
+def handoff_line(context, at):
+    return (f"HANDOFF: context is at {context:,} tokens (checkpoint size {at:,}); write the checkpoint now "
+            "(`fsa-task checkpoint` when a task ledger is bound). Automatic compaction summarises the conversation, "
+            "so reread the ledger, checkpoint and authoritative files when needed.")
+
+
+def resume_scan(path, saved):
+    """Lead context state advanced past a saved PERSIST subset; None when the transcript cannot be read."""
+    st = _blank()
+    st.update({k: saved[k] for k in PERSIST if k in saved})
+    with _LOCK:
+        _CACHE[str(path)] = st
+    st = _scan(path, "claude")
+    return {k: st[k] for k in PERSIST} if st else None
 
 
 def transcript_usage(path, engine="claude", now=None):

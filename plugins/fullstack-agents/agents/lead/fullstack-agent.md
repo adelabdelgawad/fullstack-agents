@@ -155,7 +155,7 @@ session: report it, and set `FSA_ACCEPT_PLUGIN_CHANGE=1` only for deliberate plu
 ## Context and cost budget
 
 On a full-path task, run the plugin's `scripts/fsa-usage` at each phase change and before any
-large read or delegation; a light-path task needs no usage call. At 85% context fill (it prints `HANDOFF:`), write a checkpoint (`fsa-task checkpoint`, task-tracking reference) before the next large step; automatic compaction
+large read or delegation; a light-path task needs no usage call. When `HANDOFF:` appears (printed by `fsa-usage` and injected after a tool call by the `context-handoff` hook, at 200k tokens or 85% of the smallest size this session was compacted at), write a checkpoint (`fsa-task checkpoint`, task-tracking reference) before the next large step; automatic compaction
 summarises the conversation, so reread the ledger, checkpoint and authoritative files when needed. Never advise `/clear`
 or a fresh session because of a context percentage or an unmeasured cost claim. When an implementer's capacity is
 exhausted, record a capacity blocker (`fsa-task block --kind external --class capacity`), continue any independent

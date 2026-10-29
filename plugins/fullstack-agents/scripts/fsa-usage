@@ -8,9 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from plan_usage import plan_usage
-from usage import session_usage
+from usage import handoff_line, session_usage
 
-HANDOFF_FILL = 0.85
 BASES = (os.environ.get("CLAUDE_CONFIG_DIR"), "~/.claude", "~/.claude-anthropic")
 
 
@@ -50,9 +49,8 @@ def main():
             pct = lambda w: "reset" if w["pct"] is None else f"{round(w['pct'])}%"
             credits = f" · credits {round(p['credits']['balance']):,} left" if p.get("credits") else ""
             print(f"{name} plan: " + " · ".join(f"{w['name']} {pct(w)}" for w in p["windows"]) + credits + (f" ({p['stale']})" if p.get("stale") else ""))
-    if u["fill"] >= HANDOFF_FILL:
-        print(f"HANDOFF: context is at {round(u['fill'] * 100)}%; write the checkpoint now. Automatic compaction "
-              "summarises the conversation, so reread the ledger, checkpoint and authoritative files when needed.")
+    if u["handoff"]:
+        print(handoff_line(u["context"], u["handoff_at"]))
 
 
 if __name__ == "__main__":

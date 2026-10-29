@@ -9,6 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "plugins/fullstack-agents/scripts/lib"))
 import activity
+import context_handoff
 import plan_usage
 import usage
 
@@ -65,6 +66,28 @@ class UsageTests(unittest.TestCase):
         u = usage.transcript_usage(path)
         self.assertEqual(u["window"], 200_000)
         self.assertTrue(u["blowout"])
+
+    def test_handoff_uses_token_cap_not_the_million_window(self):
+        path = self.dir / "s.jsonl"
+        write_lines(path, [assistant("m1", read=210_000)])
+        u = usage.transcript_usage(path)
+        self.assertEqual((u["window"], u["handoff_at"]), (1_000_000, 200_000))
+        self.assertTrue(u["handoff"])
+
+    def test_handoff_drops_below_the_smallest_compaction(self):
+        path = self.dir / "s.jsonl"
+        write_lines(path, [{"type": "system", "subtype": "compact_boundary", "compactMetadata": {"preTokens": 150_000, "postTokens": 30_000}},
+                           {"type": "system", "subtype": "compact_boundary", "compactMetadata": {"preTokens": 400_000, "postTokens": 30_000}},
+                           assistant("m1", read=130_000)])
+        u = usage.transcript_usage(path)
+        self.assertEqual(u["handoff_at"], 127_500)
+        self.assertTrue(u["handoff"])
+
+    def test_handoff_cap_reads_the_environment(self):
+        os.environ["FSA_HANDOFF_TOKENS"] = "100000"
+        self.addCleanup(os.environ.pop, "FSA_HANDOFF_TOKENS")
+        self.assertEqual(usage.handoff_at(1_000_000), 100_000)
+        self.assertEqual(usage.handoff_at(100_000), 85_000)
 
     def test_sidechain_does_not_move_lead_context(self):
         path = self.dir / "s.jsonl"
@@ -259,6 +282,48 @@ class PlanUsageTests(unittest.TestCase):
         plan_usage._CACHE.update(at=0.0, value=None, busy=False)
         plan_usage.claude_plan(wait=True)
         self.assertEqual(len(calls), 2, "a second process inside the backoff window must not call the endpoint")
+
+
+class ContextHandoffHookTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        self.path = self.dir / "s.jsonl"
+        self.hook = {"session_id": "s1", "transcript_path": str(self.path)}
+        usage._CACHE.clear()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def notice(self, **extra):
+        return context_handoff.notice({**self.hook, **extra}, self.dir)
+
+    def test_fires_once_per_compaction_cycle(self):
+        write_lines(self.path, [assistant("m1", read=150_000)])
+        self.assertIsNone(self.notice())
+        write_lines(self.path, [assistant("m2", read=210_000)])
+        self.assertIn("HANDOFF: context is at 211,010 tokens", self.notice())
+        write_lines(self.path, [assistant("m3", read=250_000)])
+        self.assertIsNone(self.notice())
+        write_lines(self.path, [{"type": "system", "subtype": "compact_boundary",
+                                 "compactMetadata": {"preTokens": 260_000, "postTokens": 30_000}}])
+        self.assertIsNone(self.notice())
+        write_lines(self.path, [assistant("m4", read=230_000)])
+        self.assertIn("checkpoint size 200,000", self.notice())
+
+    def test_resumes_from_saved_offset_without_rescanning(self):
+        write_lines(self.path, [assistant("m1", read=10_000)])
+        self.notice()
+        saved = json.loads((self.dir / "handoff-s1.json").read_text())
+        self.assertEqual(saved["offset"], self.path.stat().st_size)
+        usage._CACHE.clear()
+        write_lines(self.path, [assistant("m2", read=205_000)])
+        self.assertIsNotNone(self.notice())
+
+    def test_subagent_and_missing_transcript_stay_silent(self):
+        write_lines(self.path, [assistant("m1", read=500_000)])
+        self.assertIsNone(self.notice(agent_id="a1"))
+        self.assertIsNone(context_handoff.notice({"session_id": "s2", "transcript_path": str(self.dir / "none.jsonl")}, self.dir))
 
 
 if __name__ == "__main__":
