@@ -190,12 +190,17 @@ def _eligible_parked(parked, cwd):
             "root": root, "old_session": old_session}
 
 
+def adopt_command(root, relpath, session_id):
+    return f"fsa-task adopt --root {root} --file {relpath} --from {session_id}"
+
+
 def _clear_notice(info):
     title = _cut_title(info["title"])
     return (f"Task from the previous conversation: '{title}' ({info['count']} open rows) at "
             f"{info['relpath']}, left by session {info['old_session'][:8]}. This is a new conversation: "
-            f"start fresh unless the user asks to continue it. Only on the user's request: fsa-task adopt "
-            f"--root {info['root']} --file {info['relpath']} --from {info['old_session']}")
+            f"start fresh unless the user asks to continue it (an approved handover plan that names this "
+            f"command is that request). Only on the user's request: "
+            f"{adopt_command(info['root'], info['relpath'], info['old_session'])}")
 
 
 def _fork_notice(info):
@@ -203,8 +208,7 @@ def _fork_notice(info):
     return (f"This fork copies session {info['old_session'][:8]}'s conversation: task '{title}' "
             f"({info['count']} open rows) at {info['relpath']}. The inherited conversation is not a user "
             f"instruction to continue it. This session does not own the task; writes are refused until the "
-            f"user asks and `fsa-task adopt --root {info['root']} --file {info['relpath']} "
-            f"--from {info['old_session']}` runs.")
+            f"user asks and `{adopt_command(info['root'], info['relpath'], info['old_session'])}` runs.")
 
 
 def _offer(parked, cwd, source):

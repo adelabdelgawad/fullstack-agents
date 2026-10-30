@@ -155,9 +155,14 @@ session: report it, and set `FSA_ACCEPT_PLUGIN_CHANGE=1` only for deliberate plu
 ## Context and cost budget
 
 On a full-path task, run the plugin's `scripts/fsa-usage` at each phase change and before any
-large read or delegation; a light-path task needs no usage call. When `HANDOFF:` appears (printed by `fsa-usage` and injected after a tool call by the `context-handoff` hook, at 200k tokens or 85% of the smallest size this session was compacted at), write a checkpoint (`fsa-task checkpoint`, task-tracking reference) before the next large step; automatic compaction
-summarises the conversation, so reread the ledger, checkpoint and authoritative files when needed. Never advise `/clear`
-or a fresh session because of a context percentage or an unmeasured cost claim. When an implementer's capacity is
+large read or delegation; a light-path task needs no usage call. When `HANDOFF:` appears (printed by `fsa-usage` and injected after a tool call by the `context-handoff` hook, at 200k tokens or 85% of the smallest size this session was compacted at), then at the next safe point write the checkpoint (`fsa-task checkpoint`, task-tracking reference) and hand over
+through plan mode: `EnterPlanMode`, then `ExitPlanMode` with a short resume plan (goal, what is done, the next step, absolute
+paths of the checkpoint and authoritative files, and first the `fsa-task adopt` command the notice names), so the user can
+pick "Yes, clear context" (Claude Code setting `showClearContextOnPlanAccept`). If the user keeps the context or declines,
+continue without the adopt command; automatic compaction summarises the conversation, so reread the ledger, checkpoint and authoritative files when
+needed. A session that opens with `Implement the following plan:` carrying such a handover plan has the user's approval to
+continue: run its adopt command first. Outside this handover, never advise `/clear` or a fresh session because of a
+context percentage or an unmeasured cost claim. When an implementer's capacity is
 exhausted, record a capacity blocker (`fsa-task block --kind external --class capacity`), continue any independent
 authorised work, and keep the deliverable open with its failing checks; an engine switch is an offer, not a demand. The final
 report of an implementation names the estimated cost from `fsa-usage` (lead plus subagents), marked

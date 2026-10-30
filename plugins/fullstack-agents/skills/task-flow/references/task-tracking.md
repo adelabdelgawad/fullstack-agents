@@ -286,13 +286,15 @@ or no checkpoint, owner free or stale; newest first, with a count of any more an
 binds automatically. When the user asks to continue a task and exactly one candidate matches, bind it with the command
 the list shows (`--takeover` only for a stale owner, on that instruction); when several match, ask which. A generic new
 request starts fresh. Do not recommend `/clear` or a new session for context size or cost; write the checkpoint instead.
+The one exception is the `HANDOFF:` handover: the lead writes the checkpoint and asks the user to approve a short resume
+plan that names the adopt command; approving it with a cleared context is the user's request to continue.
 
 ## After compaction, `/clear`, resume or a fork
 
 | Event | What happens |
 |---|---|
 | Compaction | Same session. A recovery summary of at most 2,500 characters arrives automatically. Ownership is unchanged. |
-| `/clear` | Starts a new session. The old session releases ownership. The new session sees at most a short **offer**, never a binding. Continue the old task only when the user asks, with `scripts/fsa-task adopt --root … --file … --from <old-session>`. Otherwise start fresh. |
+| `/clear` | Starts a new session. The old session releases ownership. The new session sees at most a short **offer**, never a binding. Continue the old task only when the user asks (an approved handover plan that names the command is that request), with `scripts/fsa-task adopt --root … --file … --from <old-session>`. Otherwise start fresh. |
 | Fork (`/branch`) | Same as `/clear`. The copied conversation is not a user instruction to continue, and the fork owns nothing until an explicit `adopt`. |
 | Resume | Ownership is re-acquired only when it is free, stale, or held by this same process. Another session's ownership is never displaced: the hook names that owner instead. |
 

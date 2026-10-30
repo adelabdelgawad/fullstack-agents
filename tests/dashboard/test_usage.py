@@ -320,6 +320,27 @@ class ContextHandoffHookTests(unittest.TestCase):
         write_lines(self.path, [assistant("m2", read=205_000)])
         self.assertIsNotNone(self.notice())
 
+    def test_notice_hands_over_through_plan_mode_with_the_adopt_command(self):
+        tasks, root = self.dir / "tasks", self.dir / "repo"
+        (root / "docs").mkdir(parents=True)
+        (root / "docs" / "t.md").write_text("# Tasks\n")
+        tasks.mkdir()
+        (tasks / "s1.json").write_text(json.dumps({"session_id": "s1", "root": str(root), "file": "docs/t.md"}))
+        os.environ["FSA_TASKS_DIR"] = str(tasks)
+        self.addCleanup(os.environ.pop, "FSA_TASKS_DIR")
+        write_lines(self.path, [assistant("m1", read=210_000)])
+        line = self.notice()
+        self.assertIn("call EnterPlanMode", line)
+        self.assertIn(f"first step is `fsa-task adopt --root {root.resolve()} --file docs/t.md --from s1`", line)
+
+    def test_notice_without_a_bound_ledger_names_no_adopt_command(self):
+        os.environ["FSA_TASKS_DIR"] = str(self.dir / "no-tasks")
+        self.addCleanup(os.environ.pop, "FSA_TASKS_DIR")
+        write_lines(self.path, [assistant("m1", read=210_000)])
+        line = self.notice()
+        self.assertIn("ExitPlanMode", line)
+        self.assertNotIn("fsa-task adopt", line)
+
     def test_subagent_and_missing_transcript_stay_silent(self):
         write_lines(self.path, [assistant("m1", read=500_000)])
         self.assertIsNone(self.notice(agent_id="a1"))

@@ -245,10 +245,15 @@ def _sum_costs(values):
     return sum(known) if known else None
 
 
-def handoff_line(context, at):
-    return (f"HANDOFF: context is at {context:,} tokens (checkpoint size {at:,}); write the checkpoint now "
-            "(`fsa-task checkpoint` when a task ledger is bound). Automatic compaction summarises the conversation, "
-            "so reread the ledger, checkpoint and authoritative files when needed.")
+def handoff_line(context, at, adopt=None):
+    first = f" The plan's first step is `{adopt}`." if adopt else ""
+    return (f"HANDOFF: context is at {context:,} tokens (checkpoint size {at:,}). At the next safe point, write the "
+            "checkpoint (`fsa-task checkpoint` when a task ledger is bound, otherwise a file with an absolute path), "
+            "then hand over: load EnterPlanMode and ExitPlanMode with ToolSearch when they are deferred, call "
+            "EnterPlanMode, and submit with ExitPlanMode a short resume plan (goal, what is done, the next step, "
+            f"absolute paths of the checkpoint and authoritative files).{first} The user's \"Yes, clear context\" "
+            "continues it in a fresh context. If the user keeps the context or declines, continue; automatic "
+            "compaction summarises the conversation, so reread the ledger, checkpoint and authoritative files when needed.")
 
 
 def resume_scan(path, saved):

@@ -35,7 +35,14 @@ def notice(hook, state_dir):
     due = st["context"] >= at and saved.get("warned") != st["compactions"]
     st["warned"] = st["compactions"] if due else saved.get("warned")
     _save(state_file, st)
-    return usage.handoff_line(st["context"], at) if due else None
+    return usage.handoff_line(st["context"], at, _adopt(sid)) if due else None
+
+
+def _adopt(sid):
+    """The `fsa-task adopt` command a fresh session runs to take over this session's ledger, or None."""
+    import task_lifecycle
+    bound = task_lifecycle._bound_ledger(sid)
+    return task_lifecycle.adopt_command(bound[0], bound[1].relative_to(bound[0]), sid) if bound else None
 
 
 def main():
