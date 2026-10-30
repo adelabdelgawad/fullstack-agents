@@ -1104,6 +1104,12 @@ class ClaudeLauncherTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "claude --dangerously-skip-permissions --name 'a b'")
 
+    def test_leading_env_assignments_launch_through_env(self):
+        result = self.resolve('alias cc="CLAUDE_CONFIG_DIR=~/.claude-x claude --dangerously-skip-permissions"\n')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(),
+                         f"env CLAUDE_CONFIG_DIR={self.home}/.claude-x claude --dangerously-skip-permissions")
+
     def test_missing_alias_or_binary_asks_for_the_alias(self):
         for bashrc in ("", "alias cc='no-such-claude-binary -p'\n"):
             result = self.resolve(bashrc)

@@ -219,7 +219,7 @@
   ],
   "source_hashes": {
     ".claude-plugin/marketplace.json": "88540c3d139cc6b4a0594b35273ad2fb90523eb0becec24146df9e130e0a19cb",
-    ".claude-plugin/plugin.json": "5fff117ea668dc030d1f1da9ce07bc247d46fc98dcfb51600a53163f3d6d313f",
+    ".claude-plugin/plugin.json": "c25543bf455336ef2d9b0301b8f34733482845b38a0a40fe89c8946c2c3fec2c",
     "README.md": "9d5f0cc671a59443f2cd160f959d2167c4c1505cef9a8e06c7e7af5338d09663",
     "agents/_core/AGENT_BASE.md": "c29fe50773b1f705354beadd48af6018d39bfb830599ff3190e26b6bd9188f1a",
     "agents/_core/detection-patterns.md": "5f4b2d3bf8a5e1559725f60a86d0fa9ea0d4df4ce2e1e622713c26a0a9639389",
@@ -327,7 +327,7 @@
     "scripts/lib/activity.py": "570541cd5f0b87d3548583a6a1ac97d83e59ffee17261c41ed25e12bf39a8366",
     "scripts/lib/allowed-paths-fence": "60f10c946c3987a9c99b4e55d46a7724dcf3b38b924df89f1b9e3301870dd2ec",
     "scripts/lib/auto_handoff.py": "567236e9d465cf68d4fe536822a1ef451170fd227bdefb3853523ad499ed1944",
-    "scripts/lib/claude_cli.py": "b88e09785032f4713d511dd120ddc809d7ecf22aa2c8a9f200bb789d9bf9ce12",
+    "scripts/lib/claude_cli.py": "79be204fa1b67ed5b95a088256b204b0e2a17d5526a9f962b47e38677270e381",
     "scripts/lib/context_handoff.py": "cd1e4286da89e136862faf4fd15233f21288a8c5a0547afeccfe70cc7c5f7c00",
     "scripts/lib/dashboard.html": "5e8d86fcc271b64f1a8b0c33133472dcf1b594f9e8eb2ba349568d760e596ce4",
     "scripts/lib/deploy_hold.py": "1309c5a2f308692d28deaaf91594eb1c5034e5bf89d3f3c59f612962c313e0a8",
