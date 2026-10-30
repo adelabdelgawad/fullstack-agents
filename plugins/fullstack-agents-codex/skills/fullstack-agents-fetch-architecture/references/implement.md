@@ -1,8 +1,3 @@
----
-name: fetch-implement
-description: Scaffold an entity's fetch layer — server actions, API routes and client calls.
----
-
 # Fetch Implement
 
 Scaffold the fetch layer for a new entity. Creates server actions and API routes with correct patterns.
@@ -10,20 +5,20 @@ Scaffold the fetch layer for a new entity. Creates server actions and API routes
 ## Usage
 
 ```
-/fetch-implement <entity> <section>
+implement <entity> <section>
 ```
 
 **Examples:**
 ```
-/fetch-implement schedules setting
-/fetch-implement campaigns management
-/fetch-implement queue dialer
+implement schedules setting
+implement campaigns management
+implement queue dialer
 ```
 
 ## Prerequisites
 
 Before running, ensure:
-1. A fetch plan exists (run `/fetch-plan` first if unsure)
+1. A fetch plan exists (run `references/plan.md` first if unsure)
 2. TypeScript types exist at `lib/types/api/{path-name}.ts`
 3. Backend endpoint is implemented and responding
 
@@ -183,7 +178,7 @@ export async function PUT(request: Request) {
 
 ## After Scaffolding
 
-Run `/fetch-validate` to confirm compliance:
+Check with `references/validate.md` to confirm compliance:
 
 - [ ] Server actions use `/backend/{section}/{path}` URLs
 - [ ] API routes import `backendFetch` from `@/lib/fetch/backend`
@@ -200,8 +195,8 @@ For quick scaffolding, use the helper script from `src/frontend/`:
 cd src/frontend/
 
 # Generate API routes
-python3 /path/to/fullstack-agents/skills/fetch-architecture/scripts/helper.py generate <entity> <section>
+python3 /path/to/fullstack-agents/skills/fullstack-agents-fetch-architecture/scripts/helper.py generate <entity> <section>
 
 # Generate server actions
-python3 /path/to/fullstack-agents/skills/fetch-architecture/scripts/helper.py actions <entity> <section>
+python3 /path/to/fullstack-agents/skills/fullstack-agents-fetch-architecture/scripts/helper.py actions <entity> <section>
 ```

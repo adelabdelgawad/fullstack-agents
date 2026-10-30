@@ -30,7 +30,7 @@ Python/Rust idioms. Resolve an unspecified new service's language first.
 | Rust correctness / tests / gates | rust-correctness / rust-testing / rust-quality-gates |
 | Rust endpoint consumed by Next.js | rust-nextjs-contract plus generating skill |
 | Next.js page / list page | nextjs / data-table |
-| Fetch layers | fetch-architecture; fetch-plan/implement/validate as needed |
+| Fetch layers | fetch-architecture (its plan, implement and validate references) |
 | Python WebSocket / background / scheduled | websocket / celery / tasks-management |
 | Infrastructure | docker |
 | Bug / multiple check failures | debug / batch-error-resolution plus lane skill |

@@ -1,8 +1,3 @@
----
-name: fetch-plan
-description: Plan which server actions, API routes and client calls a new entity needs, before implementation.
----
-
 # Fetch Plan
 
 Plan the complete fetch layer for a new entity before writing any code. Outputs a structured plan of files to create with their function signatures and URL patterns.
@@ -10,15 +5,15 @@ Plan the complete fetch layer for a new entity before writing any code. Outputs 
 ## Usage
 
 ```
-/fetch-plan <entity> <section>
+plan <entity> <section>
 ```
 
 **Examples:**
 ```
-/fetch-plan schedules setting
-/fetch-plan campaigns management
-/fetch-plan queue dialer
-/fetch-plan agents report
+plan schedules setting
+plan campaigns management
+plan queue dialer
+plan agents report
 ```
 
 ## Input

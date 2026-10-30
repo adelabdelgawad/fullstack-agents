@@ -23,7 +23,7 @@ steps. Do not assume Claude hooks or tools are active.
 | Rust consumed by Next.js | rust-nextjs-contract, plus the generating skill |
 | Next.js page/rendering | nextjs |
 | Management/data table page | data-table, nextjs |
-| Fetch/server action/API proxy | fetch-architecture; fetch-plan/implement/validate as needed |
+| Fetch/server action/API proxy | fetch-architecture (its plan, implement and validate references) |
 | Background/scheduled work | celery / tasks-management |
 | Python WebSocket | websocket |
 | Browser live updates | nextjs, skills/fullstack-agents-nextjs/references/live-updates.md |

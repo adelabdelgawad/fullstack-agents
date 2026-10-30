@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-fetch-architecture
-description: "Next.js fetch utilities — server-side backend calls and API-route proxying with auth refresh for client code. Per-entity code uses fetch-plan and fetch-implement."
+description: "Next.js fetch layer — plan, scaffold or validate an entity's server actions, API routes and client calls; backend calls, API-route proxying and auth refresh."
 ---
 
 ## Codex runtime binding
@@ -19,8 +19,9 @@ Next.js API routes. API-route mutations use `backendFetch` from `backend.ts`
 with `(token, forwardHeaders)`, preserving CSRF/auth headers and token refresh.
 Do not add a server-action → API-route → backend hop or replace shared `api`
 with ad hoc helpers. Reuse detected utilities and match backend wire contracts.
-Per-entity scaffolding uses `fetch-plan` then `fetch-implement`; compliance uses
-`fetch-validate`. Read applicable anti-patterns before examples.
+Per entity: plan with [references/plan.md](references/plan.md), scaffold with
+[references/implement.md](references/implement.md), audit compliance with
+[references/validate.md](references/validate.md). Read applicable anti-patterns before examples.
 
 ## Detailed guide
 

@@ -5,15 +5,15 @@ Validate that the codebase follows the correct fetch architecture. Run after cod
 ## Usage
 
 ```
-/fetch-validate                    # Full codebase audit
-/fetch-validate server-actions     # Only check server actions
-/fetch-validate api-routes         # Only check API routes
-/fetch-validate client             # Only check client components
+validate                    # Full codebase audit
+validate server-actions     # Only check server actions
+validate api-routes         # Only check API routes
+validate client             # Only check client components
 ```
 
 ## Architecture Rules (Reference)
 
-For full architecture details, see `fetch-architecture/SKILL.md`. Quick summary:
+For full architecture details, see `../SKILL.md` and `skill-guide.md`. Quick summary:
 
 ```
 SERVER PATH (1 hop):  Server Action → directBackendFetch() → FastAPI

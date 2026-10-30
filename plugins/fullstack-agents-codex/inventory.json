@@ -1,7 +1,6 @@
 {
   "edition": "codex-led-claude-audit",
   "skills": [
-    "fullstack-agents-analyze",
     "fullstack-agents-backend-migration-from-frontend",
     "fullstack-agents-batch-error-resolution",
     "fullstack-agents-celery",
@@ -13,14 +12,9 @@
     "fullstack-agents-docker",
     "fullstack-agents-fastapi",
     "fullstack-agents-fetch-architecture",
-    "fullstack-agents-fetch-implement",
-    "fullstack-agents-fetch-plan",
-    "fullstack-agents-fetch-validate",
     "fullstack-agents-frontend-transformation",
     "fullstack-agents-fusion-panel",
-    "fullstack-agents-generate",
     "fullstack-agents-nextjs",
-    "fullstack-agents-optimize",
     "fullstack-agents-production-data-change",
     "fullstack-agents-prompt-polish",
     "fullstack-agents-python-clean-architecture",
@@ -32,110 +26,20 @@
     "fullstack-agents-rust-quality-gates",
     "fullstack-agents-rust-sqlx",
     "fullstack-agents-rust-testing",
-    "fullstack-agents-scaffold",
     "fullstack-agents-senior-engineer",
     "fullstack-agents-session-review",
-    "fullstack-agents-status",
     "fullstack-agents-task-flow",
     "fullstack-agents-tasks-management",
     "fullstack-agents-team-coordination",
     "fullstack-agents-using-fullstack-agents",
-    "fullstack-agents-validate",
     "fullstack-agents-webrtc-media",
     "fullstack-agents-websocket",
     "fullstack-agents-workspace-hygiene"
   ],
   "workflows": [
-    "fullstack-agents-analyze",
-    "fullstack-agents-debug",
-    "fullstack-agents-generate",
-    "fullstack-agents-optimize",
-    "fullstack-agents-review",
-    "fullstack-agents-scaffold",
-    "fullstack-agents-status",
-    "fullstack-agents-validate"
+    "fullstack-agents-review"
   ],
   "agents": [
-    {
-      "name": "fullstack-agents-analyze-architecture",
-      "source": "analyze/architecture.md",
-      "read_only": true
-    },
-    {
-      "name": "fullstack-agents-analyze-codebase",
-      "source": "analyze/codebase.md",
-      "read_only": true
-    },
-    {
-      "name": "fullstack-agents-analyze-dependencies",
-      "source": "analyze/dependencies.md",
-      "read_only": true
-    },
-    {
-      "name": "fullstack-agents-analyze-patterns",
-      "source": "analyze/patterns.md",
-      "read_only": true
-    },
-    {
-      "name": "fullstack-agents-debug-api-debugging",
-      "source": "debug/api-debugging.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-debug-error-diagnosis",
-      "source": "debug/error-diagnosis.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-debug-log-analysis",
-      "source": "debug/log-analysis.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-debug-performance-profiling",
-      "source": "debug/performance-profiling.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-generate-api-route",
-      "source": "generate/api-route.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-generate-celery-task",
-      "source": "generate/celery-task.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-generate-docker-service",
-      "source": "generate/docker-service.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-generate-fastapi-entity",
-      "source": "generate/fastapi-entity.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-generate-nextjs-data-table",
-      "source": "generate/nextjs-data-table.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-generate-nextjs-page",
-      "source": "generate/nextjs-page.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-generate-rust-entity",
-      "source": "generate/rust-entity.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-generate-scheduled-job",
-      "source": "generate/scheduled-job.md",
-      "read_only": false
-    },
     {
       "name": "fullstack-agents-bounded-extractor",
       "source": "lead/bounded-extractor.md",
@@ -149,26 +53,6 @@
     {
       "name": "fullstack-agents-test-runner",
       "source": "lead/test-runner.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-optimize-code-cleanup",
-      "source": "optimize/code-cleanup.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-optimize-performance",
-      "source": "optimize/performance.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-optimize-query-optimization",
-      "source": "optimize/query-optimization.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-optimize-refactoring",
-      "source": "optimize/refactoring.md",
       "read_only": false
     },
     {
@@ -190,84 +74,25 @@
       "name": "fullstack-agents-review-security",
       "source": "review/security.md",
       "read_only": true
-    },
-    {
-      "name": "fullstack-agents-scaffold-docker-infrastructure",
-      "source": "scaffold/docker-infrastructure.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-scaffold-module-backend",
-      "source": "scaffold/module-backend.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-scaffold-module-frontend",
-      "source": "scaffold/module-frontend.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-scaffold-project-fastapi",
-      "source": "scaffold/project-fastapi.md",
-      "read_only": false
-    },
-    {
-      "name": "fullstack-agents-scaffold-project-nextjs",
-      "source": "scaffold/project-nextjs.md",
-      "read_only": false
     }
   ],
   "source_hashes": {
-    ".claude-plugin/marketplace.json": "88540c3d139cc6b4a0594b35273ad2fb90523eb0becec24146df9e130e0a19cb",
-    ".claude-plugin/plugin.json": "c25543bf455336ef2d9b0301b8f34733482845b38a0a40fe89c8946c2c3fec2c",
+    ".claude-plugin/plugin.json": "f51cbbf4a120de8bd0d669c96543af7e4accacfd0ab03c43792fb86bb8bdaff6",
+    ".ruff_cache/.gitignore": "9e3a60f1e6ec4ae60215c11d54b171392745ec25e9dded433d5bd921363af316",
+    ".ruff_cache/0.17.3/15465963306022667406": "18a86e3c478ff4dcca6d59ce921bc26014ce5eef98273ca1fb6712dcd15b214a",
+    ".ruff_cache/CACHEDIR.TAG": "5953156d7e0c564a427251316eaf26f8870e6483ae2197f916b630e4f93e31ae",
     "README.md": "9d5f0cc671a59443f2cd160f959d2167c4c1505cef9a8e06c7e7af5338d09663",
-    "agents/_core/AGENT_BASE.md": "c29fe50773b1f705354beadd48af6018d39bfb830599ff3190e26b6bd9188f1a",
-    "agents/_core/detection-patterns.md": "5f4b2d3bf8a5e1559725f60a86d0fa9ea0d4df4ce2e1e622713c26a0a9639389",
-    "agents/_core/dialogue-patterns.md": "1066938640629e0f415a7e19f41dada905f01586062f83cca10d94e2954cf05f",
-    "agents/_core/orchestration.md": "c07e7b25c27634cdf5008798849eae0746fbf41a887c383f57cc09ff56923aeb",
-    "agents/analyze/architecture.md": "8d8312b2386e70622707df83cb09ed93b548d1fb08dae3074eab918ffaca17df",
-    "agents/analyze/codebase.md": "3637d7585806bfc81f68db48531515bc738d03d2f98e5d5fd9ea93dd56c36206",
-    "agents/analyze/dependencies.md": "067af33a554c618da606fba0e7ddda0617f4003b37e17440e15510c895e74a29",
-    "agents/analyze/patterns.md": "dd67e91c221e5ef6b4692adaa05659a54af23cd4e4f40ad9b5d70a360562f26e",
-    "agents/debug/api-debugging.md": "c1c5e8c85d2cbff4790126f7acb3bb58b3d2c7bb2832e60e1e0bb1df84e575f7",
-    "agents/debug/error-diagnosis.md": "53be659e6d7811031fa8079ac213f3e24fb83b28ffcc240da8855f47c775550f",
-    "agents/debug/log-analysis.md": "c959ed62380c65b82431d8da318f420cb8bb4337b996ec977b98f907728e110c",
-    "agents/debug/performance-profiling.md": "6f5578b2e7c234997cbd6089fc68f1b1dc1cc76d3cc8aaff787e21df799d1417",
-    "agents/generate/api-route.md": "3f31c674879a467d5cc4b560f59651f2ad65665766a0ed8ab434c029bf07011e",
-    "agents/generate/celery-task.md": "68846452bce43e84ecbcaa83a4994ae727014098333771d356af15382eccb8d4",
-    "agents/generate/docker-service.md": "0d6a3c05a3ec230b67c0b09fb2bdb85a7503d1e7fd51c5bcb2f90e4a6e0ef9bd",
-    "agents/generate/fastapi-entity.md": "e16d0a696675a483fe18dc4938b9aaf669eab899bac6a166031b4d38136d2af6",
-    "agents/generate/nextjs-data-table.md": "3cd5da93a264d3019f60b1fde6c2d3f45b81026f43cdf292cd0e8687b19843c5",
-    "agents/generate/nextjs-page.md": "5686d693288f711315df3c4b9fa2b990645e0cbd2aab7709b20184a7204d919f",
-    "agents/generate/rust-entity.md": "0a9d0ed3efc66208151ed189bc781ff617cd78239f20be7be2cfb03ad75962bf",
-    "agents/generate/scheduled-job.md": "b44d862e83bbdc53e3ac12227e43549713aed5ac53963f55b9a6e63d5b728003",
     "agents/lead/bounded-extractor.md": "610bd8956a5df0204e6b8257dea773cfe30d0416407e58554c39a7f4593c1f56",
     "agents/lead/diff-reviewer.md": "bcb36eb58b8eafd1e34521b1abd7632528a6ea5b3da08185d8100359a7699b58",
-    "agents/lead/fullstack-agent.md": "4ba5576d4db867adc8cd1f3aaefa7d0f73a343449c2db962a8ba50d446d0cc68",
+    "agents/lead/fullstack-agent.md": "86f0b84d64256568cec3836d33fb4160ac177ca278b078de80482837688a1b9c",
     "agents/lead/test-runner.md": "7ddd413503c5e9d3c12b731577044d45e820061fa149f13fe56b82e8dc8751e1",
     "agents/lead/web-researcher.md": "114256a53cd5a07f448ca53b070ac4761cd7a6008654da91e8c36e5e156fde2f",
-    "agents/optimize/code-cleanup.md": "50e3fcb6aa2b893286d1d6771649df641659c20592b645e4f872328fe25ba759",
-    "agents/optimize/performance.md": "32fb274cd8e6f2cd8226853c8adf885ec387970497b6807a56a1e6c031f58fba",
-    "agents/optimize/query-optimization.md": "f12254d33fc53e143eed9736526bbe432dbf055f5a9e2e5133e9672d9efadc5f",
-    "agents/optimize/refactoring.md": "dd33ed0d67db131814ea43b75ca22779cfc4a9f8e50120abe3b3a9aa13ffd9ed",
     "agents/review/code-quality.md": "d03255fad8954ac920bb7a07f666c2b0c6e08873dc4e39159d0c76e86d0b5b5b",
     "agents/review/patterns-compliance.md": "3589cb3004c35d0b026f19081acb6092343c86d485f23698847e484b86512b2e",
     "agents/review/performance.md": "d4311bad200876a704d6db6408ad0181995cda8f61593589ce60c49adf4ce3cd",
     "agents/review/security.md": "8779417c6f087ccea75fbda42ac8f026d83fcc2a3412de5aa40b358648f57191",
-    "agents/scaffold/docker-infrastructure.md": "45b244a70aba7487751aa5bba2435b7f7589d87d98cc1435ee12f1c11f9a1375",
-    "agents/scaffold/module-backend.md": "4b8fc5786d4a9c11a28d1b20718aa5e7747222256b3ccce7e01ca860668331ea",
-    "agents/scaffold/module-frontend.md": "c6d4f4b126a90a22c93c6b1b65615a04ba6fb8c320a323dc29d0560cc638267a",
-    "agents/scaffold/project-fastapi.md": "bde45520efb8dfbf8a065cbc4cc4d3355a60ec6620ac25624e4281abd9071f24",
-    "agents/scaffold/project-nextjs.md": "23319dbc138a899344dac986ddb6779d67c8aa14fd99d0dfea2e5a5d50b0e403",
-    "commands/analyze.md": "cce615f39eefd6a8fc2d39daf40183030e90f3c667db573dd9b14d3116bf7dd6",
     "commands/dashboard.md": "3a28608769694527adfeec1d09c03b5b0cf1089a89a716ec47d3f5a7b85dfd3e",
-    "commands/debug.md": "2e147e860a1d8e70ddb63aeb6347a69dd7a8e3630d85f17dd2b3305cbd68e313",
-    "commands/generate.md": "29f54c5e610aa7c78725cce5c608a826ee960cca49a02b4aba6c284e80d35888",
-    "commands/optimize.md": "9bc1c06329bbc6be303115971a208b6a75ba80060f6c70edaabcf3f963267285",
     "commands/review.md": "d8c7800480faed7c6e731db886f1e499c687977428a968da5792c9ebb66bfe5f",
-    "commands/scaffold.md": "7f92ac0ed99f4326f7961c6a7df4c2d7d4c6efa4d6eab2e32db0f71cfa45c36b",
-    "commands/status.md": "e8ed9cda935b8bee1e09463958bf5594541205748fef7e961a31ad17e179cb66",
-    "commands/validate.md": "61b78e5b6c986c7b572b5ddfeda234b99f361d25f14e0e08702793a4d686cc4f",
     "hooks/auto-handoff": "5f29139074c73a938feb46a7be92b9ba49302120bb93ae6c0ca435a2603e2bda",
     "hooks/auto-phase": "c238173f5f03b93bfd945f7a731fbc340159b422331c84151a6b642b0b9b21ca",
     "hooks/auto-phase.test.sh": "3efc708f4adaef6ddef30072d94e3a6a2fb9c061f496defea59b895ff99654ef",
@@ -282,10 +107,10 @@
     "hooks/lib.test.sh": "695e467e458838db549b0ae98a53c27cec8080e43fc923e9a74c7790b8a0591f",
     "hooks/post-edit-validate": "43ff3cfa892177d8c2bf72f355a8c4e3da4e0554113fda23f9f830c32dc3873e",
     "hooks/pre-compact": "100504afde7764891c19af007a08f4df6f37def428aaaa5cb3d5b3d0846ad9a4",
-    "hooks/pre-edit-gate": "9fc9c0d148dc91b3c8ec76105379f6400af314b2f7cf346e0a04f7c8444cc6bd",
-    "hooks/prompt-polish": "5e7acfb843320a2c9f0f416c8c74ccc3425b06fd93da024e53e56efb935b261e",
+    "hooks/pre-edit-gate": "cc061a3aa103788b0a2f2ef4249f2988a28058a725a0f7d3a3c30bd532a48428",
+    "hooks/prompt-polish": "906d6c685d994e5c91d2183e7d9c2c68ef0be5f65aa1b77731429eb9d59ba880",
     "hooks/prompt-polish.test.sh": "5bb492fc8fadb0459d8edcccf56b12e105406773e42fcd0d87af65885af1e51a",
-    "hooks/prompt-scan": "7d0707448f79ca63f69c150b17a2bacf96a7f33e1e4618344b26ae95c2e8941c",
+    "hooks/prompt-scan": "4cec29d8b9515795549f6bc9181bbbfd58984a67120269c7251ee8d6937cb663",
     "hooks/prompt-scan.test.sh": "36807d37e68f4859a09140434f840898067ccb5a1b03da7f98055528a58739fa",
     "hooks/read-guard": "c5f91129db315dac1a312b04ba7e96b1f5ce9cee897a9d781c36c64a4bbda3d5",
     "hooks/read-guard.test.sh": "22c1c58fa367d4134908ceff87c9b7741cd694a6341ca6ef7bee7df301122e79",
@@ -295,7 +120,7 @@
     "hooks/run-owner-gate.test.sh": "a7cbf37a1cfd2356e84546cc8e2a7f489186561f4bccfc054d4001b8ac575cb1",
     "hooks/scan-gate": "f345c802e723eda87e7064581e40953fd448e23644a5e0106db692537be21352",
     "hooks/scan-gate.test.sh": "8d618be5679a201c2ee766425f16ace6da443044d37cac6be8351d9e73a41f24",
-    "hooks/session-doctrine.md": "aa4a579485e99a006687da8122aff149b1034a1e32341ea92edb0dcb9b6eea8c",
+    "hooks/session-doctrine.md": "ae48e87e8bfd25a989ceb783cf84d17df53791c2585e6c321cba981493cfdeb3",
     "hooks/session-end": "4d8839c677207d0eef96396859d777f812441560c9d3918e3a2badb6286e8b9e",
     "hooks/session-policy": "23bb2b97aa5d81c9d62ee8eda599ea075fc8512baa5a80a1136de37cfebb9569",
     "hooks/session-start": "35d1ea21a3c8a3da15d9276a04dad1cc7fbcf7fb87e3a7fd4be05fccb73c181f",
@@ -309,6 +134,9 @@
     "hooks/write-guard": "6a8daf63297f42c724337c9cbccc10ba5d006524464293e43225a905e0871949",
     "hooks/write-guard.test.sh": "e78739534923935f40dc5893a4a1f29a4a9fe129766979cfcdd880ff512c3b53",
     "policies/engineering-conventions.md": "58ef9e8bc5a149a3166d11e460d95ceb437cd856d89f789d98efb47a73b386d3",
+    "scripts/__pycache__/fsa-classifycpython-314.pyc": "e40b520cfe1fb36d7f6231883a292a8f3113582690c35a4b428b73b706e45444",
+    "scripts/__pycache__/fsa-dashboardcpython-314.pyc": "f2139a1d5d416a7c4008805cab5ad669b023dc50d26bffd778ba257523dfcbba",
+    "scripts/__pycache__/team-boardcpython-314.pyc": "a24e7dd0fc2dadd8931bfb817ff69230064cdd19b4a99e7dda0f62018fe8e154",
     "scripts/codex-result.schema.json": "31546c15e65da0d17fe14f8602ef03882b2a9582698bb9d52782617e7902655c",
     "scripts/codex-task.sh": "64c5de21f1d0da55eaed238f803f294446472fe10cf6e5430c7cc4ad8ad43e7e",
     "scripts/fsa-classify": "5ba9c9f9c0755bb60a5f2c1d84b76e72fb817ea7b630d66447dad7dde8da4f6e",
@@ -324,6 +152,34 @@
     "scripts/fsa-task": "996e38419c75cf69dcbe4558eb46f91796dd32cf4e57ec746359ce05c5a84fe0",
     "scripts/fsa-usage": "2377029374189eb90f040020e237172268ecc638a61aa1a51023e4e7b59fb34e",
     "scripts/herdr-watch.sh": "9fc0b48f11cec50d5f342331799fa28b83d97d2d173199e84264f2bab17f2973",
+    "scripts/lib/.ruff_cache/.gitignore": "9e3a60f1e6ec4ae60215c11d54b171392745ec25e9dded433d5bd921363af316",
+    "scripts/lib/.ruff_cache/0.17.3/4656827204235436414": "adee38ed3d55eb12c652f8e00c647409b8771d34f7a0cdb851b6a67e7e56080c",
+    "scripts/lib/.ruff_cache/CACHEDIR.TAG": "5953156d7e0c564a427251316eaf26f8870e6483ae2197f916b630e4f93e31ae",
+    "scripts/lib/__pycache__/activity.cpython-314.pyc": "0edf4eab5cb9d275c20d6c2f5ce03030d1ef136b30c600dba59438a8b5c82db9",
+    "scripts/lib/__pycache__/auto_handoff.cpython-314.pyc": "5822f0d1ee3b67faee88b937c36a989c89001b19ef3aefce6c4e78142b29a1ec",
+    "scripts/lib/__pycache__/claude_cli.cpython-314.pyc": "b0911b50bb42e94ac73404803c0180dcd002760fb8f407dce8645ce22fa8b4db",
+    "scripts/lib/__pycache__/context_handoff.cpython-314.pyc": "aebd2cc168964e50bf2e68e79833d9e815b8e2d694bee2695146efb5dc23a2f0",
+    "scripts/lib/__pycache__/deploy_hold.cpython-314.pyc": "530a206305491ad3ff4b2ad253d6c852549dfc631ebcebc80d9829c07e1d46b9",
+    "scripts/lib/__pycache__/layout_hint.cpython-314.pyc": "d4a095c0b8c088f6588b5743bbcad413faeccaa013a82247ab427f0a8e41cf7f",
+    "scripts/lib/__pycache__/liveness.cpython-314.pyc": "f43456c3ab0e44e1636e2a4c11d2ce8c66a09f6740f020a13f811c968dfa2576",
+    "scripts/lib/__pycache__/plan_usage.cpython-314.pyc": "6494400b038aeb6728f7eaf4f548a1f611c584d73e6393ec4ae554bdd1de0f8a",
+    "scripts/lib/__pycache__/prompt_history.cpython-314.pyc": "716722c3f53e069754de5f4c56157f3e7f29ccdeef72d7f600c274831c7862a9",
+    "scripts/lib/__pycache__/runs_dir.cpython-314.pyc": "9eb4abe872f8a0f4bfd40a568c7bd9e23d8363ffd37d75b259c1577f8286a1d8",
+    "scripts/lib/__pycache__/stop_guard.cpython-314.pyc": "0148828a45159a7d21db2359c2db5dc333c1cb1d97cb91d59761483be3abf6eb",
+    "scripts/lib/__pycache__/task_blockers.cpython-314.pyc": "2dd1d8b6c5f87f7472d5c1352a802dad124f93864a4545ee897c2ba9b3c37e47",
+    "scripts/lib/__pycache__/task_brief.cpython-314.pyc": "5919769a9c7a52163bc60b5f26b620d0aeac2ab0d048ee7b9e43f697be1fe537",
+    "scripts/lib/__pycache__/task_candidates.cpython-314.pyc": "ff40e20a9b48adb5782dc8f484352400796c45db508dd205c01f10b410b170d7",
+    "scripts/lib/__pycache__/task_checkpoint.cpython-314.pyc": "75b23cf7062c1f38f2ebaaff50abee1c5ba5ff6ae6db22204667d2d516246d04",
+    "scripts/lib/__pycache__/task_evidence.cpython-314.pyc": "c7f7bca5c827ac2a59b432114990787b7e0e09bd09fe22c2df3d4494c825b42e",
+    "scripts/lib/__pycache__/task_evidence_cli.cpython-314.pyc": "e21e9201edf70513d121f4e18e432d489f221ce65c8fc717ddd93f8766a71dad",
+    "scripts/lib/__pycache__/task_format.cpython-314.pyc": "3b6182f7194c10c2ed8d21b087b9162e518414e7f0a3b4b78f7a81ef09f9f277",
+    "scripts/lib/__pycache__/task_lifecycle.cpython-314.pyc": "b6d920de490c70c95f7f0ed2eb6369e9b6a3ea52ead44e7abe73effe4a9df062",
+    "scripts/lib/__pycache__/task_ownership.cpython-314.pyc": "44efcf7c81a776e5fd8147e7a0473a6208ac0abc448fd93605fc58a655a31e78",
+    "scripts/lib/__pycache__/task_recovery.cpython-314.pyc": "adfac4b9f0dd8500f1abece79bea7d66e5855555ef1a642cd80350d25fdf7f09",
+    "scripts/lib/__pycache__/task_rules.cpython-314.pyc": "cb359995a4923c5184feef6af7a87ef19d25e1efe9b7376ad0fb0e615f8f0ddc",
+    "scripts/lib/__pycache__/task_tracking.cpython-314.pyc": "dd90da0ce02be4617d1ecf4bc5c8e34d43af2fa9520372f8b075b6f08a789f9a",
+    "scripts/lib/__pycache__/team_conf.cpython-314.pyc": "04d2d5bd830ef4a8436b03ea538d70fb5a93a59b634b20a42b373e306aa2579b",
+    "scripts/lib/__pycache__/usage.cpython-314.pyc": "711fe3d9e49ae020737d82b6e674be84d9d0136b52443be8b5b90331f5b8938a",
     "scripts/lib/activity.py": "570541cd5f0b87d3548583a6a1ac97d83e59ffee17261c41ed25e12bf39a8366",
     "scripts/lib/allowed-paths-fence": "60f10c946c3987a9c99b4e55d46a7724dcf3b38b924df89f1b9e3301870dd2ec",
     "scripts/lib/auto_handoff.py": "567236e9d465cf68d4fe536822a1ef451170fd227bdefb3853523ad499ed1944",
@@ -423,16 +279,16 @@
     "skills/fastapi/references/service-pattern.md": "8cc496757feb3233c719ed7b599ba610be77a93495816d070d3981abac16d382",
     "skills/fastapi/references/testing-pattern.md": "759a361a3b13ef7b35a682127c44e7a251c0c46d7bd9437d2cf25e9fbb0f55ff",
     "skills/fastapi/scripts/helper.py": "6c403916b1c43962391b7024e52c4b5036e99acb5a2cfb2c1eb74ce00307f868",
-    "skills/fetch-architecture/SKILL.md": "98724a2ebe89b6c5b2386ad49ae0074e9476fc118e9705a5391f93e805e0b3e5",
+    "skills/fetch-architecture/SKILL.md": "1f583d6e729b31feb610ff40ac074b1f3d0c3a67a0ad6bca4dfca90ed514eae0",
     "skills/fetch-architecture/examples.md": "b5f571e9e1cce99f455fe8c7a616ebbd685ab1d4373ee535e2c48667fc811f37",
     "skills/fetch-architecture/references/api-route-helper-pattern.md": "52369a5326f7aefbf3d05e08e439cf89114404282ee4a3eaaa60269e37c4f7b6",
     "skills/fetch-architecture/references/client-fetch-pattern.md": "adaaffdcf9c1e5c27b01276ff01265b40909f1e31cf21a180c0b4cabb5e8de64",
+    "skills/fetch-architecture/references/implement.md": "fabb7adaee6a65b48d6b5b1b3bbcbe710a6748270ac13d54e4ad91411c38488c",
+    "skills/fetch-architecture/references/plan.md": "67a782c1c2e7b7076b8322346cfbb6557b521c084a8e6b7bf5b4e3fc8eb725e1",
     "skills/fetch-architecture/references/server-fetch-pattern.md": "f56ae587ceefb5e82665b20fee9023fb497faeb57e325f9410a40187d5aa749b",
     "skills/fetch-architecture/references/skill-guide.md": "a59f7e3d7238c971f7c9b8adefb6d323867f60f689a51503a6b64bc5c4c1311a",
+    "skills/fetch-architecture/references/validate.md": "3398b11a6ae1f71b54f998dc6c0ac0f0c1017f7128e1b2048b26f239c449307e",
     "skills/fetch-architecture/scripts/helper.py": "765d9a4aed50f6b6272ba527c2dfd9475bbf3105d675b73cd64a514452899a50",
-    "skills/fetch-implement/SKILL.md": "f7ac4635fde829df3190b9e989809f35dc98ef0a6aaf4dc3f483431127a8bd0c",
-    "skills/fetch-plan/SKILL.md": "5bcf7e2899635c25677bb55091878902f99b490e96e58167e1dabead3c8ba60e",
-    "skills/fetch-validate/SKILL.md": "fccecc5d1f9208af1273f9584e2f43fc91db912fd18c7c8b0a5390d50d18691b",
     "skills/frontend-transformation/SKILL.md": "25e061170696b7d8dde9bed03a946a779d1018182b83a31865871e6a5bd510e4",
     "skills/fusion-panel/SKILL.md": "1dda1a9b261cc33dd890c5c2e8f8a6a8861dc0d8cf5b37c822238bd8d42eac21",
     "skills/nextjs/SKILL.md": "f76865b922c8a96bf75c9528e9fa9ccbbf6bc21dba7da5da03883f8346fe4478",
@@ -477,8 +333,8 @@
     "skills/tasks-management/scripts/helper.py": "201f2f9a885f122ac32a10abbe7aac2483060b2cde82ef6dc988873c41ce1ab1",
     "skills/team-coordination/SKILL.md": "dc65919765ca9f040473d0d8530aa911ac4e06ac0b2d01c119cfbe560f0993c4",
     "skills/team-coordination/references/release-verification.md": "7336b9e0bcd17eb405772eb34f4ffa7d5803779677ded9baeb0e2a587241370c",
-    "skills/using-fullstack-agents/SKILL.md": "c351ae52a7ae793534de936b1a5a4a7e55b022ad065902c986545f9f091cdf0a",
-    "skills/using-fullstack-agents/references/skill-guide.md": "3e9da75b7b24c7ad2296c5b5b703dfe99812d853560f6e378f08b14c109037bf",
+    "skills/using-fullstack-agents/SKILL.md": "b58783945900368efec38a84511148cbea7767c51ab34368bef40a5fc05b9ccc",
+    "skills/using-fullstack-agents/references/skill-guide.md": "46869957b2d32fe75be512cb747321f4a0c93e9352b86dce2118689d9144e47e",
     "skills/webrtc-media/SKILL.md": "ada728d9a285efb72e08f06b16f80681c1ccbc694dd169b67649281684592545",
     "skills/websocket/SKILL.md": "40dbfada7dc9f3e3d3a0bbecc140402953f731b5266e992201a1fdfaae0fb80c",
     "skills/websocket/examples.md": "e7343ce2b3febe08698d0400407c1aa63f3a346e1434c1c5b8999761c2f5f5f4",

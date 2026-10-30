@@ -37,7 +37,7 @@ is_fullstack_project || exit 0
 case "$lane" in
     rust)     lane_skills="rust-clean-architecture rust-axum-api rust-sqlx rust-correctness rust-testing rust-quality-gates rust-nextjs-contract backend-migration-from-frontend debug batch-error-resolution" ;;
     python)   lane_skills="fastapi python-clean-architecture celery tasks-management backend-migration-from-frontend debug batch-error-resolution" ;;
-    frontend) lane_skills="nextjs data-table fetch-architecture fetch-plan fetch-implement fetch-validate frontend-transformation backend-migration-from-frontend debug batch-error-resolution" ;;
+    frontend) lane_skills="nextjs data-table fetch-architecture frontend-transformation backend-migration-from-frontend debug batch-error-resolution" ;;
 esac
 
 # One pass over the session's transcripts answers both requirements.
@@ -63,7 +63,7 @@ if [ "$lane_ok" != "true" ]; then
     case "$lane" in
         rust)     hint="rust-clean-architecture / rust-axum-api / rust-sqlx (or debug for bug fixes)" ;;
         python)   hint="fastapi or python-clean-architecture (or debug for bug fixes)" ;;
-        frontend) hint="nextjs / data-table / fetch-* (or debug for bug fixes)" ;;
+        frontend) hint="nextjs / data-table / fetch-architecture (or debug for bug fixes)" ;;
     esac
     missing="${missing}  2. A ${lane}-lane skill: ${hint}
 "

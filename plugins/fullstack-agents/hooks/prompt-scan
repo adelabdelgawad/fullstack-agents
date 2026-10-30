@@ -52,20 +52,20 @@ case "$intent" in
     investigate) skills="task-flow (Investigate + scan ladder), debug" ;;
     debug)       skills="debug, task-flow" ;;
     plan)        skills="task-flow (Plan), senior-engineer" ;;
-    implement)   skills="task-flow (size threshold decides direct edit or delegation), codebase-scanning, senior-engineer" ;;
+    implement)   skills="task-flow (size threshold decides direct edit or delegation), senior-engineer" ;;
     review)      skills="task-flow (Audit), review" ;;
     investigate+implement) skills="task-flow (Investigate first: establish the cause before any change; then the size threshold decides direct edit or delegation), debug" ;;
     question)    skills="none required: answer from the source (grep and bounded reads); load task-flow only if the answer needs an investigation or a change" ;;
     research)    skills="none required: delegate web sources to fullstack-agents:web-researcher (no FILES: block needed) and repository facts to grep; load task-flow only when the research turns into a change" ;;
     deploy)      skills="task-flow (deploy class), the project's deploy rules in CLAUDE.md" ;;
-    *)           skills="codebase-scanning" ;;
+    *)           skills="the lane skill for the code in question" ;;
 esac
 
 case "$lane" in
     rust)     lane_skills="rust-correctness plus the rust-* skill for the touched layer (axum-api, sqlx, testing, clean-architecture, nextjs-contract, quality-gates)" ;;
     python)   lane_skills="fastapi or python-clean-architecture; websocket, celery or tasks-management when named" ;;
     infra)    lane_skills="docker" ;;
-    frontend) lane_skills="nextjs (read references/data-freshness.md + client-performance.md for tables, fetching, mutations, filters, live data or navigation; live-updates.md for streams), data-table for list pages, fetch-* for the fetch layer" ;;
+    frontend) lane_skills="nextjs (read references/data-freshness.md + client-performance.md for tables, fetching, mutations, filters, live data or navigation; live-updates.md for streams), data-table for list pages, fetch-architecture for the fetch layer" ;;
     *)        lane_skills="" ;;
 esac
 [ "$intent" = "performance" ] && [ "$lane" != "rust" ] && [ "$lane" != "python" ] && [ "$lane" != "infra" ] \
@@ -112,11 +112,11 @@ fi
 cat <<CONTEXT
 [fullstack-agents] STACK TOPIC DETECTED (lane: ${lane}) — mandatory routing:
 ${constitution_line}  1. Run the 5-step gate from using-fullstack-agents: DETECT -> MATCH -> REUSE -> INVOKE -> SCAN.
-  2. Skill: fullstack-agents:codebase-scanning (invoke NOW if not yet this session).
+  2. fullstack-agents:codebase-scanning before your first code edit (the pre-edit gate enforces it).
   3. Invoke the matching domain skill as soon as the lane is known — BEFORE any root
      cause, design answer, plan or code — LANGUAGE LANES are strict:
      rust lane -> rust-* skills only; python lane -> fastapi / python-clean-architecture;
-     frontend lane -> nextjs / data-table / fetch-* skills. Never blend idioms.
+     frontend lane -> nextjs / data-table / fetch-architecture. Never blend idioms.
   4. Rust endpoints consumed by Next.js also require fullstack-agents:rust-nextjs-contract.
   5. After code lands: REVIEW PATTERNS -> FIX -> VALIDATE (language-matched chain).
 CONTEXT

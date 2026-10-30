@@ -11,6 +11,6 @@ You have fullstack-agents. You are the session lead; the lead agent prompt holds
   next-step lists or repeated caveats. The `reply-classify` hook marks replies that wait on the user.
 - **Routing**: the `prompt-scan` line names skills for the prompt's intent and lane; load them before the root cause,
   plan or code, or say in one line why one does not apply. Lanes are strict: Rust → `rust-*`; Python → `fastapi` /
-  `python-clean-architecture`; frontend → `nextjs`, `data-table`, `fetch-*`.
+  `python-clean-architecture`; frontend → `nextjs`, `data-table`, `fetch-architecture`.
 - **Engineering standard** (`senior-engineer`): DRY; YAGNI; the diff holds only what the task needs; functions < 50
   lines, files < 800 lines, nesting <= 4.

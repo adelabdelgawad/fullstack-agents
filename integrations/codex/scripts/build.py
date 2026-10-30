@@ -162,11 +162,6 @@ def render(output):
     for path in sorted((SOURCE / "agents").rglob("*.md")):
         metadata, body = frontmatter(path.read_text())
         relative = path.relative_to(SOURCE / "agents")
-        if relative.parts[0] == "_core":
-            if path.name == "orchestration.md":
-                body = "# Codex orchestration\n\nUse `fullstack-agents-task-flow`. Keep bounded path lists, sequential workers by default, and Codex ownership of the final audit. Claude returns issues and scope through `scripts/handoff.py`.\n"
-            write(output / "agents" / relative, RUNTIME + adapt(body, skill_names))
-            continue
         name = PREFIX + metadata["name"]
         description = adapt(metadata["description"], skill_names)
         if path.stem == "fullstack-agent":
@@ -184,7 +179,7 @@ def render(output):
                         "using bounded ranges and only relevant examples. Work only on the parent's exact file list. "
                         "Return concise source evidence and saved check logs; do not take over planning or call the Claude auditor yourself.\n")
         role = {"name": name, "description": description, "developer_instructions": instructions}
-        readonly = relative.parts[0] in {"review", "analyze"} or path.stem in {"bounded-extractor", "diff-reviewer"}
+        readonly = relative.parts[0] == "review" or path.stem in {"bounded-extractor", "diff-reviewer"}
         if readonly:
             role["sandbox_mode"] = "read-only"
         # Test-runner writes only logs; it needs inherited workspace permissions.
@@ -199,10 +194,7 @@ def render(output):
             # The existing dashboard consumes Claude transcripts and is not ported.
             continue
         body = adapt(body, skill_names)
-        body = re.sub(r"/(generate|review|analyze|scaffold|debug|optimize|validate|status)\b",
-                      lambda match: "$" + PREFIX + match[1], body)
-        body = body.replace("claude $fullstack-agents-validate --all --strict",
-                            "bash scripts/validate.sh LANE SERVICE_ROOT")
+        body = re.sub(r"/(review)\b", lambda match: "$" + PREFIX + match[1], body)
         write(output / "commands" / path.name, RUNTIME + body)
         name = PREFIX + path.stem
         workflow_names.append(name)

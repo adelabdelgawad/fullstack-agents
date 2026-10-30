@@ -46,8 +46,8 @@ fully refine vague or large ones. If a point that changes the outcome is genuine
 ambiguous, ask up to 3 focused questions first; otherwise state your interpretation
 in one line and proceed. When delegating, give each worker the refined spec for the
 unit it owns. A large, repetitive request (e.g. a change across many pages) should
-go to the orchestration agent to split into tracked sub-tasks, confirm concurrency
-with the user, and audit each unit.
+goes through task-flow: split it into tracked units, confirm concurrency with
+the user, and audit each unit.
 CONTEXT
 
 exit 0

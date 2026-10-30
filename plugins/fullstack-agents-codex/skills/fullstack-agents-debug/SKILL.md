@@ -23,7 +23,3 @@ The complete adapted rules are in [references/engineering-guide.md](references/e
 - Line 91: Common Rationalizations
 - Line 105: Quick Reference
 - Line 114: Impact
-
-## Workflow reference
-
-For the explicit debugging workflow, read `references/workflow.md`.

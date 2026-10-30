@@ -74,36 +74,36 @@ When you detect the user's intent, route to the correct skill or agent. Two kind
 
 | User Intent Pattern | Target |
 |---|---|
-| "create entity", "add model", "CRUD", "backend API for X" | Skill `fullstack-agents-fastapi` (agent: `generate-fastapi-entity`, `$fullstack-agents-generate entity`) |
-| "data table", "management page", "list page with CRUD" | Skill `fullstack-agents-data-table` (agent: `generate-nextjs-data-table`, `$fullstack-agents-generate data-table`) |
-| "create page", "new page", "frontend page" | Skill `fullstack-agents-nextjs` (agent: `generate-nextjs-page`, `$fullstack-agents-generate page`) |
+| "create entity", "add model", "CRUD", "backend API for X" | Skill `fullstack-agents-fastapi` |
+| "data table", "management page", "list page with CRUD" | Skill `fullstack-agents-data-table` |
+| "create page", "new page", "frontend page" | Skill `fullstack-agents-nextjs` |
 | "migrate frontend", "port React to Next.js", "convert/transform frontend 1:1" | Skill `fullstack-agents-frontend-transformation` |
 | "migrate backend", "rewrite API in framework X", "reproduce backend behavior from the UI" | Skill `fullstack-agents-backend-migration-from-frontend` |
-| "API route", "proxy route", "Next.js API" | Skill `fullstack-agents-fetch-architecture` (agent: `generate-api-route`, `$fullstack-agents-generate api-route`) |
-| "celery task", "background task", "async task" | Skill `fullstack-agents-celery` (agent: `generate-celery-task`, `$fullstack-agents-generate task`) |
-| "scheduled job", "cron job", "periodic task" | Skill `fullstack-agents-tasks-management` (agent: `generate-scheduled-job`, `$fullstack-agents-generate job`) |
-| "docker service", "add container", "compose setup" | Skill `fullstack-agents-docker` (agent: `generate-docker-service`, `$fullstack-agents-generate docker-service`) |
+| "API route", "proxy route", "Next.js API" | Skill `fullstack-agents-fetch-architecture` |
+| "celery task", "background task", "async task" | Skill `fullstack-agents-celery` |
+| "scheduled job", "cron job", "periodic task" | Skill `fullstack-agents-tasks-management` |
+| "docker service", "add container", "compose setup" | Skill `fullstack-agents-docker` |
 | "websocket", "real-time", "live updates" | Skill `fullstack-agents-websocket` |
-| "fullstack feature", "create X end-to-end" | `$fullstack-agents-generate fullstack` orchestration (fastapi → fetch → data-table skills in sequence) |
+| "fullstack feature", "create X end-to-end" | Skill `fullstack-agents-task-flow`, then fastapi → fetch-architecture → data-table in sequence |
 | "debug", "error", "fix", "broken", "not working" | Skill `fullstack-agents-debug` |
 | build/tests/lint failing with MULTIPLE errors | Skill `fullstack-agents-batch-error-resolution` |
 | "review", "check quality", "audit" | Agent `review-code-quality` (`$fullstack-agents-review quality`) |
 | "security review", "security audit" | Agent `review-security` (`$fullstack-agents-review security`) |
-| "performance review", "slow", "optimize" | Agent `review-performance` or `optimize-performance` (`$fullstack-agents-review performance`, `$fullstack-agents-optimize`) |
+| "performance review", "slow", "optimize" | Agent `review-performance` (`$fullstack-agents-review performance`) |
 | "check patterns", "validate patterns" | Agent `review-patterns-compliance` (`$fullstack-agents-review patterns`) |
-| "analyze codebase", "architecture review" | Agent `analyze-codebase` or `analyze-architecture` (`$fullstack-agents-analyze`) |
-| "scaffold project", "new project", "bootstrap" | Agent `scaffold-project-fastapi` / `scaffold-project-nextjs` (`$fullstack-agents-scaffold`) |
-| "validate entity", "check entity compliance" | `$fullstack-agents-validate` command |
-| "validate fetch", "check fetch patterns", "fetch audit" | Skill `fullstack-agents-fetch-validate` |
-| "plan fetch", "fetch layers for X" | Skill `fullstack-agents-fetch-plan` |
-| "scaffold fetch", "generate fetch boilerplate" | Skill `fullstack-agents-fetch-implement` |
-| "refactor", "clean up", "reduce duplication", "extract shared logic" | Skill `fullstack-agents-senior-engineer` (agent: `optimize-refactoring`, `$fullstack-agents-optimize`) |
+| "analyze codebase", "architecture review" | Skill `fullstack-agents-codebase-scanning` |
+| "scaffold project", "new project", "bootstrap" | The stack's skill: `fastapi`, `python-clean-architecture`, `rust-clean-architecture` or `nextjs` |
+| "validate entity", "check entity compliance" | Agent `review-patterns-compliance` (`$fullstack-agents-review patterns`) |
+| "validate fetch", "check fetch patterns", "fetch audit" | Skill `fullstack-agents-fetch-architecture` (references/validate.md) |
+| "plan fetch", "fetch layers for X" | Skill `fullstack-agents-fetch-architecture` (references/plan.md) |
+| "scaffold fetch", "generate fetch boilerplate" | Skill `fullstack-agents-fetch-architecture` (references/implement.md) |
+| "refactor", "clean up", "reduce duplication", "extract shared logic" | Skill `fullstack-agents-senior-engineer` |
 | ANY implementation work (standing discipline, see gate step 3) | Skill `fullstack-agents-senior-engineer` |
 | ANY request, before acting (refine intent / scope / success criteria) | Skill `fullstack-agents-prompt-polish` (also auto-injected by the prompt-polish hook) |
-| a change spanning 5+ similar units (pages / entities / files / endpoints) | Decomposition flow — split into tracked tasks, confirm concurrency, audit (orchestration.md) |
+| a change spanning 5+ similar units (pages / entities / files / endpoints) | Decomposition flow — split into tracked tasks, confirm concurrency, audit (`task-flow`) |
 | high-stakes decision (architecture, risky migration, security, stubborn bug) | Skill `fullstack-agents-fusion-panel` |
 | **RUST LANE** (Cargo.toml / *.rs detected) | |
-| "rust service", "rust microservice", "structure rust", "rust entity", "where does this go (rust)" | Skill `fullstack-agents-rust-clean-architecture` (agent: `generate-rust-entity`) |
+| "rust service", "rust microservice", "structure rust", "rust entity", "where does this go (rust)" | Skill `fullstack-agents-rust-clean-architecture` |
 | "axum handler", "rust endpoint", "rust route", "rust middleware", "rust websocket" | Skill `fullstack-agents-rust-axum-api` |
 | "sqlx", "rust query", "rust migration", "rust repository" | Skill `fullstack-agents-rust-sqlx` |
 | borrow checker / lifetime / Send/Sync / E0382-E0599 errors | Skill `fullstack-agents-rust-correctness` |
@@ -185,7 +185,7 @@ Three capabilities apply to how you handle every request — no command needed:
   subagents. The `prompt-polish` hook keeps this in the loop on every prompt; ask
   up to 3 clarifying questions only when a point that changes the outcome is
   genuinely ambiguous, otherwise state your interpretation and proceed.
-- **Decompose large, repetitive work** (orchestration.md). When a request spans
+- **Decompose large, repetitive work** (`task-flow`). When a request spans
   5+ similar units, enumerate them, create one tracked task per unit so progress
   is visible, **ask the user before running anything in parallel** (sequential is
   the default), dispatch one worker per unit on opt-in, then audit each unit

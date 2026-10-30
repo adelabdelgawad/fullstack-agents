@@ -5,15 +5,15 @@ Plan the complete fetch layer for a new entity before writing any code. Outputs 
 ## Usage
 
 ```
-/fetch-plan <entity> <section>
+plan <entity> <section>
 ```
 
 **Examples:**
 ```
-/fetch-plan schedules setting
-/fetch-plan campaigns management
-/fetch-plan queue dialer
-/fetch-plan agents report
+plan schedules setting
+plan campaigns management
+plan queue dialer
+plan agents report
 ```
 
 ## Input

@@ -134,14 +134,8 @@ SETTINGS
   ok "Installed ${PLUGIN_NAME} v${version} successfully!"
   echo ""
   info "Available commands:"
-  echo "  /fullstack-agents:generate   - Generate entities, pages, components"
   echo "  /fullstack-agents:review     - Review code quality, security, patterns"
-  echo "  /fullstack-agents:debug      - Debug errors, logs, performance"
-  echo "  /fullstack-agents:analyze    - Analyze codebase and architecture"
-  echo "  /fullstack-agents:scaffold   - Scaffold new projects or modules"
-  echo "  /fullstack-agents:optimize   - Optimize performance and code"
-  echo "  /fullstack-agents:validate   - Validate architecture patterns"
-  echo "  /fullstack-agents:status     - Show project status"
+  echo "  /fullstack-agents:dashboard  - Start, stop or show the agent dashboard"
 }
 
 uninstall_plugin() {

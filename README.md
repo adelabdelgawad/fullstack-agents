@@ -27,41 +27,32 @@ to keep examples and detailed procedures out of context until needed.
 
 ## What You Get
 
-- **29 specialized agents** across generation, review, analysis, scaffolding, debug, and optimization
-- **8 slash commands** for common workflows (`/generate`, `/review`, `/analyze`, `/scaffold`, `/debug`, `/optimize`, `/validate`, `/status`)
-- **30 skill domains** covering FastAPI, Rust/Axum, Next.js, clean architecture + DDD in both backend languages, TanStack Table, Celery, Docker, WebSocket, framework migration (frontend + backend), debugging discipline, prompt refinement, panel reasoning, and more
+- **A session lead** that plans, delegates, audits and concludes, with extractor, test-runner, diff-reviewer, web-researcher and four review agents
+- **2 slash commands**: `/review` and `/dashboard`; everything else is asked in plain language and routed to skills
+- **33 skill domains** covering FastAPI, Rust/Axum, Next.js, clean architecture + DDD in both backend languages, TanStack Table, Celery, Docker, WebSocket, framework migration (frontend + backend), debugging discipline, prompt refinement, panel reasoning, and more
 - **Hard enforcement hooks** — the routing gate is re-armed on every prompt, code-file edits are blocked until the right skills were consulted, and every change is validated with real tooling (ruff, rustfmt, clippy, tsc) before the session can end
 - **Language-lane separation** — Rust and Python skills never cross; lane detection routes per file/service, and idiom transplants are forbidden
 - **Wire-contract parity** — Rust and FastAPI services speak the same dialect (camelCase JSON, limit/skip pagination, shared auth), interchangeable behind the same frontend
 - **Project constitutions** (spec-kit compatible) — versioned, per-project principles files that scanning loads, gates check, and whose machine-readable limits override hook thresholds
 - **Senior-engineer discipline** — search-before-implement, duplication prevention, and complexity limits enforced on all implementation work
-- **Multi-agent orchestration** — `/generate fullstack order` coordinates backend, API routes, and frontend in one shot
+- **Delegated implementation** — the lead splits large work into bounded briefs for an implementer and audits every diff
 
 ## Quick Start
 
-```bash
-/status                          # Detect your stack and available actions
-/generate entity product         # Generate entity with full CRUD (FastAPI or Rust — lane auto-detected)
-/generate data-table products    # Generate Next.js management table
-/generate fullstack order        # Generate complete fullstack feature
-/review patterns src/            # Validate code follows your architecture
-/analyze codebase                # Get a full project health overview
+Ask in plain language in a FastAPI, Rust or Next.js project:
+
+```text
+add a soft-delete flag to the product entity and hide deleted rows in the products table
+the campaigns page takes 4 s to open, find out why
+/review security src/api/
 ```
 
 ## How It Works
 
-Agents follow a structured lifecycle: they detect your project type and existing patterns (including your constitution, if present), ask clarifying questions, show a plan for approval, then generate. Every output is grounded in your actual codebase—not assumptions.
-
-```
-/generate entity product
-
-> Analyzing codebase...
-> Detected: bilingual fields (name_en/name_ar), soft delete (is_active), audit fields
->
-> What relationships should this entity have?
-```
-
-After generation, the chain `REVIEW PATTERNS → FIX → VALIDATE` runs automatically — and the hooks make it non-optional: edits to `.py`/`.rs`/`.ts` files are blocked until the codebase scan and a lane-relevant skill have actually been invoked, and a PostToolUse hook lints every edited Python file with `ruff` (auto-formatting Rust with `rustfmt`) before you continue.
+The prompt router names the skills for each request; the session lead loads them, plans, edits or
+delegates, runs the checks and audits the diff. Edits to `.py`/`.rs`/`.ts` files are blocked until
+the codebase scan and a lane-relevant skill have been invoked, and a PostToolUse hook lints every
+edited Python file with `ruff` (auto-formatting Rust with `rustfmt`) before you continue.
 
 ## Supported Stack
 
