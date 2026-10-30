@@ -219,7 +219,7 @@
   ],
   "source_hashes": {
     ".claude-plugin/marketplace.json": "88540c3d139cc6b4a0594b35273ad2fb90523eb0becec24146df9e130e0a19cb",
-    ".claude-plugin/plugin.json": "1a32666090a94f73c819971bb8ba65afc04f2a504bf845e2ecb591566533717d",
+    ".claude-plugin/plugin.json": "5fff117ea668dc030d1f1da9ce07bc247d46fc98dcfb51600a53163f3d6d313f",
     "README.md": "9d5f0cc671a59443f2cd160f959d2167c4c1505cef9a8e06c7e7af5338d09663",
     "agents/_core/AGENT_BASE.md": "c29fe50773b1f705354beadd48af6018d39bfb830599ff3190e26b6bd9188f1a",
     "agents/_core/detection-patterns.md": "5f4b2d3bf8a5e1559725f60a86d0fa9ea0d4df4ce2e1e622713c26a0a9639389",
@@ -479,7 +479,7 @@
     "skills/team-coordination/references/release-verification.md": "7336b9e0bcd17eb405772eb34f4ffa7d5803779677ded9baeb0e2a587241370c",
     "skills/using-fullstack-agents/SKILL.md": "c351ae52a7ae793534de936b1a5a4a7e55b022ad065902c986545f9f091cdf0a",
     "skills/using-fullstack-agents/references/skill-guide.md": "3e9da75b7b24c7ad2296c5b5b703dfe99812d853560f6e378f08b14c109037bf",
-    "skills/webrtc-media/SKILL.md": "54e1ec365d0f1027ed92f0c8f8910c19a7370efd84826153baaefaa3b618c80b",
+    "skills/webrtc-media/SKILL.md": "ada728d9a285efb72e08f06b16f80681c1ccbc694dd169b67649281684592545",
     "skills/websocket/SKILL.md": "40dbfada7dc9f3e3d3a0bbecc140402953f731b5266e992201a1fdfaae0fb80c",
     "skills/websocket/examples.md": "e7343ce2b3febe08698d0400407c1aa63f3a346e1434c1c5b8999761c2f5f5f4",
     "skills/websocket/references/connection-manager-pattern.md": "67bb0a89d8c4f468dd5ce538d6c5ed699ba241dd431b79fb8c61d8cd96682d0b",
@@ -488,6 +488,6 @@
     "skills/websocket/references/receive-loop-pattern.md": "2ccf7a23b22965e0a6b1adce9200b6f88c63d0dd9c138d09605c8541b67be6be",
     "skills/websocket/references/rooms-pattern.md": "dd9317ab294721298eeec7a1f6b950d69ae5cf216ba3d14f3fe5c924f60420a0",
     "skills/websocket/references/skill-guide.md": "2fa40e9a79b9c6a5c6400a69d9e76e154f16973214335f3ab32c159b98c9c6bc",
-    "skills/workspace-hygiene/SKILL.md": "313703cce8436180f30a261e4e0dad11debc217feed2f4bc44d5a8b14ab3368a"
+    "skills/workspace-hygiene/SKILL.md": "38181f925518acb6a0d094f00e4286914da70f05088695721b5e5c15d2ea98aa"
   }
 }

@@ -19,7 +19,9 @@ classifies every git worktree under the root:
 3. Claims: when other sessions share the repository, read the team board (`team-coordination`); a
    claimed path is keep.
 4. Branches: delete a branch only after its worktree is gone and it is merged; `git branch -d`
-   (never `-D`) unless the user approves that branch by name. Project guard hooks win.
+   (never `-D`) unless the user approves that branch by name. A branch merged only by patch
+   equivalence fails `-d`; when a guard hook blocks `-D`, list it with the command for the user to run
+   on that host. Project guard hooks win.
 5. Caches: never clean a shared cache while a peer builds (`team-coordination`, shared build cache).
 6. Production data, media stores and quarantines are not workspace hygiene: report them, never delete.
 7. Report what was removed, the space freed (`df -h` before and after), and where backups went.

@@ -60,8 +60,9 @@ energy, excluding intentional mute.
   internal address cannot reach a browser that came in through the public hostname; a TURN server can
   stop listening on the expected address after a reboot. Prove TURN with a real relay allocation and
   packets, not with its configuration.
-- Choose the route by the hostname the page was opened on (public name: relay-only TURN over TLS on
-  443; internal name: all candidates), so one internal agent on the public name keeps working.
+- Forcing relay-only TURN over TLS on 443 for pages opened on the public hostname is safe only when
+  internal users never open that name: otherwise every internal agent moves to the relay (TCP/TLS,
+  more delay, one shared path). Confirm who uses which hostname before shipping it.
 - Bound ICE gathering (SIP.js waits 5000 ms by default) while keeping every STUN/TURN server and
   `iceTransportPolicy: "all"`; verify relay calls still connect.
 - Before blaming a recent network change, compare loss on relay and direct calls; equal loss means

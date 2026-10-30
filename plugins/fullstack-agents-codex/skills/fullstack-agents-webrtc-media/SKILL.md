@@ -22,5 +22,5 @@ The complete adapted rules are in [references/engineering-guide.md](references/e
 - Line 37: Noise suppression
 - Line 50: Health semantics
 - Line 57: Network and server
-- Line 74: Pitfalls seen in production
-- Line 91: Verify
+- Line 75: Pitfalls seen in production
+- Line 92: Verify
