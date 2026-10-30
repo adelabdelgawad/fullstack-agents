@@ -35,6 +35,10 @@ steps. Do not assume Claude hooks or tools are active.
 | High-stakes decision | fusion-panel |
 | Shared operational surface | team-coordination |
 | Work spanning two hosts of one repository | cross-host-coordination |
+| Browser call audio / WebRTC media | webrtc-media |
+| Production database row changes | production-data-change |
+| Past sessions: find, cost, recurring prompts | session-review |
+| Workspace disk cleanup | workspace-hygiene |
 
 Route by the file/service: Cargo.toml and `.rs` mean Rust; pyproject.toml,
 requirements.txt and `.py` mean Python; Next.js package.json and `.tsx` mean

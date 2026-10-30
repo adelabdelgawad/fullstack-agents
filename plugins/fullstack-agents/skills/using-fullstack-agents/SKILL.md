@@ -37,6 +37,10 @@ Python/Rust idioms. Resolve an unspecified new service's language first.
 | Ports / principles / costly trade-off | frontend-transformation, backend-migration-from-frontend / constitution / fusion-panel |
 | Shared operations | team-coordination |
 | Work spanning two hosts of one repository (app host and GPU/ASR host) | cross-host-coordination |
+| Browser call audio: microphone, noise suppression, echo, dropouts, TURN/ICE, WebRTC stats | webrtc-media |
+| Changing rows in a production database (load, backfill, correction, delete) | production-data-change |
+| Past sessions: find one, its cost, recurring prompts | session-review |
+| Disk cleanup: worktrees, branches, build caches | workspace-hygiene |
 
 Command/agent mappings and unusual intents: read Routing Table in the guide.
 

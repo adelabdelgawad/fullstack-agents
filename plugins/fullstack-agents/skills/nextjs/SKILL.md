@@ -12,7 +12,8 @@ sorted/paged lists. Default to simple state; use SWR/streams only when needed.
 One coordinator owns refresh. Debounce free-text search, not every control.
 Required: relevant [data-freshness](references/data-freshness.md) and
 [client-performance](references/client-performance.md) rules; for streams also
-[live-updates](references/live-updates.md). For list pages load `data-table`.
+[live-updates](references/live-updates.md). For list pages load `data-table`. A new or redesigned
+page follows [page-composition](references/page-composition.md).
 
 ## Detailed guide
 

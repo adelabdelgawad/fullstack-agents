@@ -671,3 +671,34 @@ ancestry and ownership, and orders coupled rollouts. `scripts/fsa-host-status` r
 
 - `skills/cross-host-coordination/SKILL.md` — ownership, evidence labels, state ladder, workflow, integration and rollout tables
 - `skills/cross-host-coordination/references/remote-session.md` — herdr pane discovery, reading, typing, monitoring, restart
+
+## WebRTC Media Skill
+
+Browser call audio for softphones and voice pages: microphone capture, noise-suppression rollout with
+an automatic fallback, echo and dropouts, TURN/ICE reachability, and evidence from WebRTC stats and
+recordings.
+
+- `skills/webrtc-media/SKILL.md` — triage order, capture rules, noise suppression, network, verification
+
+## Production Data Change Skill
+
+Row changes in a production database: a single-transaction script with count guards, proven on a
+throwaway copy, a dry run ending in `ROLLBACK`, the real run by whoever the project names, and
+read-only verification.
+
+- `skills/production-data-change/SKILL.md` — script shape and order of work
+
+## Session Review Skill
+
+Past Claude Code sessions from their transcript files: find a session by what was asked, cost per
+session, and recurring prompts worth a rule, script, hook or skill. `scripts/fsa-sessions` does the
+reading with no model calls.
+
+- `skills/session-review/SKILL.md` — commands and the review procedure
+
+## Workspace Hygiene Skill
+
+Disk cleanup that never touches another session's work. `scripts/fsa-hygiene` classifies every
+worktree under a root as safe, probably safe or keep, and lists rebuildable caches.
+
+- `skills/workspace-hygiene/SKILL.md` — verdicts and the removal procedure

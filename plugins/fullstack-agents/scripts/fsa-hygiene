@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+"""Read-only cleanup report: every git worktree and rebuildable cache under a root, sized and classified safe / probably safe / keep."""
+import argparse
+import os
+import subprocess
+from pathlib import Path
+
+CACHE_DIRS = ("target", ".next", "node_modules", ".turbo", ".pytest_cache", "dist", "build")
+ENV = {**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"}
+
+
+def git(repo, *args):
+    p = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, env=ENV, timeout=60,
+                       check=False)
+    return p.stdout.strip() if p.returncode == 0 else None
+
+
+def size_mb(path):
+    p = subprocess.run(["du", "-sm", str(path)], capture_output=True, text=True, timeout=300, check=False)
+    return int(p.stdout.split()[0]) if p.stdout else 0
+
+
+def live_cwds():
+    """Working directories of running processes, so a worktree in use is never called safe."""
+    cwds = set()
+    for proc in Path("/proc").glob("[0-9]*"):
+        try:
+            cwds.add(os.readlink(proc / "cwd"))
+        except OSError:
+            continue
+    return cwds
+
+
+def default_ref(repo):
+    head = git(repo, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD")
+    for ref in (head, "refs/remotes/origin/main", "refs/heads/main", "refs/heads/master"):
+        if ref and git(repo, "rev-parse", "--verify", "--quiet", ref):
+            return ref
+    return None
+
+
+def worktrees(repo):
+    out, entry = [], {}
+    for line in (git(repo, "worktree", "list", "--porcelain") or "").splitlines() + [""]:
+        if not line and entry:
+            out.append(entry)
+            entry = {}
+        elif " " in line:
+            key, value = line.split(" ", 1)
+            entry[key] = value
+        elif line:
+            entry[line] = True
+    return out
+
+
+def merged(wt, head, target):
+    if not target:
+        return "unknown"
+    if git(wt, "merge-base", "--is-ancestor", head, target) is not None:
+        return "in history"
+    cherry = git(wt, "cherry", target, head)
+    if cherry is not None and cherry and all(line.startswith("-") for line in cherry.splitlines()):
+        return "patch-equivalent"
+    return "no"
+
+
+def classify(wt, main_path, target, cwds):
+    path = wt["worktree"]
+    status = git(path, "status", "--porcelain=v1", "--untracked-files=normal")
+    if status is None:
+        return "keep", "unreadable", 0
+    lines = status.splitlines()
+    tracked = sum(1 for line in lines if not line.startswith("??"))
+    untracked = len(lines) - tracked
+    state = merged(path, wt.get("HEAD", ""), target)
+    in_use = any(c == path or c.startswith(path + "/") for c in cwds)
+    why = f"merged: {state}; dirty {tracked}, untracked {untracked}{'; a process runs in it' if in_use else ''}"
+    if path == main_path or in_use or tracked or state in ("no", "unknown") or wt.get("locked"):
+        return "keep", why, untracked
+    return ("safe" if not untracked else "probably safe"), why, untracked
+
+
+def report_repo(repo, cwds, with_size):
+    wts = worktrees(repo)
+    if not wts:
+        return []
+    main_path, target = wts[0]["worktree"], default_ref(repo)
+    rows = []
+    for wt in wts:
+        verdict, why, _untracked = classify(wt, main_path, target, cwds)
+        mb = size_mb(wt["worktree"]) if with_size and wt["worktree"] != main_path else 0
+        branch = wt.get("branch", "detached").removeprefix("refs/heads/")
+        rows.append((verdict, mb, wt["worktree"], branch, why))
+    return rows
+
+
+def caches(root, depth=4):
+    for dirpath, dirnames, _files in os.walk(root):
+        rel = Path(dirpath).relative_to(root)
+        if len(rel.parts) >= depth:
+            dirnames[:] = []
+            continue
+        for name in [d for d in dirnames if d in CACHE_DIRS]:
+            yield Path(dirpath) / name
+            dirnames.remove(name)
+        dirnames[:] = [d for d in dirnames if not d.startswith(".git")]
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("root", nargs="?", default=str(Path.home() / "workspace"))
+    p.add_argument("--no-size", action="store_true", help="skip du (faster)")
+    p.add_argument("--caches", action="store_true", help="also list rebuildable cache directories")
+    a = p.parse_args()
+    root, cwds = Path(a.root).resolve(), live_cwds()
+    rows = []
+    for repo in sorted(d for d in root.iterdir() if (d / ".git").is_dir()):
+        rows += report_repo(repo, cwds, not a.no_size)
+    order = {"safe": 0, "probably safe": 1, "keep": 2}
+    for verdict, mb, path, branch, why in sorted(rows, key=lambda r: (order[r[0]], -r[1])):
+        print(f"{verdict:<13} {mb:>7} MB  {path}  [{branch}]  {why}")
+    for verdict in order:
+        group = [r for r in rows if r[0] == verdict]
+        print(f"{verdict}: {len(group)} worktrees, {sum(r[1] for r in group):,} MB")
+    if a.caches:
+        found = [(size_mb(c), c) for c in caches(root)]
+        for mb, c in sorted(found, reverse=True)[:40]:
+            print(f"cache {mb:>7} MB  {c}")
+        print(f"caches: {len(found)} directories, {sum(m for m, _ in found):,} MB (rebuildable)")
+
+
+if __name__ == "__main__":
+    main()

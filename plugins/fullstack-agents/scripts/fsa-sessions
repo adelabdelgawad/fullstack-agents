@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""Claude Code session history from transcript files only: list sessions with cost, find one by what was asked, dump prompts."""
+import argparse
+import json
+import os
+import re
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+import plan_usage  # noqa: E402
+import usage  # noqa: E402
+
+NOT_TYPED = ("<command-", "<local-command", "<bash-", "<task-notification", "Caveat:", "[Request interrupted",
+             "This session is being continued", "Another Claude session sent a message", "<artifact-content")
+
+
+def transcripts(days, project):
+    cutoff, seen = time.time() - days * 86400, set()
+    for base in plan_usage.BASES:
+        root = Path(os.path.expanduser(base)) / "projects" if base else None
+        if not root or not root.is_dir() or root.resolve() in seen:
+            continue
+        seen.add(root.resolve())
+        for path in root.glob("*/*.jsonl"):
+            if path.stat().st_mtime >= cutoff and (not project or project.lower() in path.parent.name.lower()):
+                yield path
+
+
+def project_of(path):
+    return re.sub(r"^-home-[^-]+-(workspace-)?", "", path.parent.name) or path.parent.name
+
+
+def prompts(path):
+    """(timestamp, text) of every prompt the user typed in this transcript."""
+    for line in path.open(errors="ignore"):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        content = (d.get("message") or {}).get("content")
+        if d.get("type") != "user" or d.get("isMeta") or d.get("isSidechain") or not isinstance(content, str):
+            continue
+        text = content.strip()
+        if text.startswith("<command-name>"):
+            m = re.search(r"<command-name>(.*?)</command-name>", text)
+            yield d.get("timestamp", ""), m.group(1) if m else text
+        elif text and not text.startswith(NOT_TYPED):
+            yield d.get("timestamp", ""), text
+
+
+def cmd_list(a):
+    rows = []
+    for path in transcripts(a.days, a.project):
+        asked = list(prompts(path))
+        u = usage.session_usage(path) or {}
+        rows.append((asked[0][0][:16] if asked else "", path.stem[:8], project_of(path), len(asked),
+                     u.get("tokens") or 0, u.get("total_cost")))
+    rows.sort()
+    print("started           session   project                     prompts   tokens      cost")
+    for r in rows:
+        cost = f"${r[5]:,.2f}" if r[5] is not None else "-"
+        print(f"{r[0]:<17} {r[1]:<9} {r[2][:27]:<27} {r[3]:>7} {r[4] / 1e6:>7.1f}M {cost:>9}")
+    total = sum(r[5] or 0 for r in rows)
+    print(f"{len(rows)} sessions, {sum(r[4] for r in rows) / 1e6:,.1f}M tokens, est. ${total:,.2f}")
+
+
+def cmd_find(a):
+    needle = a.text.lower()
+    for path in transcripts(a.days, a.project):
+        hits = [(ts, text) for ts, text in prompts(path) if needle in text.lower()]
+        if hits:
+            print(f"{path.stem}  {project_of(path)}  {len(hits)} matching prompt(s)")
+            for ts, text in hits[:3]:
+                print(f"  {ts[:16]}  {' '.join(text.split())[:140]}")
+
+
+def cmd_prompts(a):
+    for path in transcripts(a.days, a.project):
+        for ts, text in prompts(path):
+            print(f"{ts[:16]}\t{project_of(path)}\t{path.stem[:8]}\t{' '.join(text.split())[:a.width]}")
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    sub = p.add_subparsers(dest="cmd", required=True)
+    for name, fn in (("list", cmd_list), ("find", cmd_find), ("prompts", cmd_prompts)):
+        s = sub.add_parser(name)
+        s.set_defaults(fn=fn)
+        s.add_argument("--days", type=float, default=10)
+        s.add_argument("--project", help="part of the project directory name")
+        if name == "find":
+            s.add_argument("text")
+        if name == "prompts":
+            s.add_argument("--width", type=int, default=300)
+    a = p.parse_args()
+    a.fn(a)
+
+
+if __name__ == "__main__":
+    main()

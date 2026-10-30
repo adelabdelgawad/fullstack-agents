@@ -122,6 +122,10 @@ diagnose, and a root cause reached without it is a guess.
 | High-stakes decision with real trade-offs | `fusion-panel` |
 | A production restart, proxy reload, migration or shared-cache clean while other sessions work on the repository | `team-coordination` |
 | Work spanning two hosts that run the repository (an app host and a GPU/ASR host): delegation to the remote session, syncing commits, rollout order | `cross-host-coordination` |
+| Browser call audio: microphone capture, noise suppression, echo, dropouts, TURN/ICE, WebRTC stats | `webrtc-media` |
+| Changing rows in a production database (load, import, backfill, correction, delete) | `production-data-change` |
+| Past sessions: which one did X, cost per session or week, recurring prompts | `session-review` |
+| Disk cleanup of worktrees, branches and build caches | `workspace-hygiene` |
 
 All names carry the `fullstack-agents:` prefix. A brief to an implementer names the skill files it
 must follow. The project's architecture documents outrank a skill's defaults.
