@@ -23,6 +23,10 @@ herdr pane read <id> --source visible                 # current screen
 herdr pane read <id> --source recent --lines 400      # recent scrollback
 ```
 
+When the remote Codex runs inside tmux over SSH, herdr sees only what tmux draws: the remote session's earlier
+output is not in `--source recent` once it scrolls off. Ask for answers short enough to fit one screen, read each
+answer as soon as the turn ends, and ask the session to repeat a part that scrolled away.
+
 | On screen | State |
 |---|---|
 | `esc to interrupt` in the footer | working: do not type |
@@ -82,6 +86,12 @@ A plugin update reaches a running session only after a restart. Before it, the s
 relaunch with the same command line and configuration directory plus `--resume <session-id>`, and confirm the
 conversation and any pending decision are back. Restart only an idle session, never during active work or an open
 card.
+
+Update the install the session actually loads. Without `--scope`, `claude plugin update <plugin>` auto-detects and
+may update a leftover project-scope entry for the working directory while the enabled user-scope install stays old.
+Before updating, have the session list its `installed_plugins.json` entries for the plugin and the `enabledPlugins`
+setting that enables it, then run `claude plugin update <plugin> --scope <that scope>`. After the restart, confirm
+the new version in the session-start plugin scripts path and the new skill in its skill list.
 
 ## Unavailable host or session
 

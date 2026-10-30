@@ -215,7 +215,7 @@
   ],
   "source_hashes": {
     ".claude-plugin/marketplace.json": "88540c3d139cc6b4a0594b35273ad2fb90523eb0becec24146df9e130e0a19cb",
-    ".claude-plugin/plugin.json": "57addde84a1d212a7c65af2ba7089d11db81edea9fcf500381e3eaccd7452353",
+    ".claude-plugin/plugin.json": "bb731363be04e6d205754952bd747d8d41cda933ddcf9333e770b46ca40b7c3a",
     "README.md": "daae03db6d1a1f939f2f7b6e0ae7e5de8c3389137781473af8aac02a7a0ed28e",
     "agents/_core/AGENT_BASE.md": "c29fe50773b1f705354beadd48af6018d39bfb830599ff3190e26b6bd9188f1a",
     "agents/_core/detection-patterns.md": "5f4b2d3bf8a5e1559725f60a86d0fa9ea0d4df4ce2e1e622713c26a0a9639389",
@@ -373,7 +373,7 @@
     "skills/codebase-scanning/SKILL.md": "f7f629f2075ce56c8a312b1a5ca7125b96d89434c5bf3190c11d00548f8a5add",
     "skills/constitution/SKILL.md": "2e733a9d96e075f0f4a7af9c28cffc177574f20a0fcf2577e296ef88c8d6928e",
     "skills/cross-host-coordination/SKILL.md": "cd82c44057ada617003e773b0c00bc0f746a34e6ba1c25aee154ba4e92175f6a",
-    "skills/cross-host-coordination/references/remote-session.md": "e2aa5ec1fb3ea30a2ff65a6a927d72d1c8ee2f1514ef4f1a28621095c5420988",
+    "skills/cross-host-coordination/references/remote-session.md": "877ef9294d6171b7790da86c74cad6d09dfd4fcafe3ecb7a45eeab94fdb5aaa2",
     "skills/data-table/SKILL.md": "1e4baee50782877ea93784584bb84f517b9818f8b9d7befbd55e18b3701b83cd",
     "skills/data-table/examples.md": "6993cae677f79e78f46d4c1e0b1697d1f8c3e8a935d09afadb2b80485bcaa21a",
     "skills/data-table/references/api-routes-pattern.md": "9ce6f2b50cce01d49bdee31311273d92770c4e902688f992c50662f1826cfe68",
