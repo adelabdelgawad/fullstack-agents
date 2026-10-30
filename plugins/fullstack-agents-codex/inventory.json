@@ -215,7 +215,7 @@
   ],
   "source_hashes": {
     ".claude-plugin/marketplace.json": "88540c3d139cc6b4a0594b35273ad2fb90523eb0becec24146df9e130e0a19cb",
-    ".claude-plugin/plugin.json": "fcdac196d019407d6918fe069aac1b3133093590a28e50c2a6c028ad7c907ddf",
+    ".claude-plugin/plugin.json": "6d2d2cf6eff998b984ea173ef591cc4a5f4950635ba02c92e142e41e9e168a04",
     "README.md": "08692384879d4c318df081e190fde5e8cde34f0905d634b3d3d9b361a0e2ead2",
     "agents/_core/AGENT_BASE.md": "c29fe50773b1f705354beadd48af6018d39bfb830599ff3190e26b6bd9188f1a",
     "agents/_core/detection-patterns.md": "5f4b2d3bf8a5e1559725f60a86d0fa9ea0d4df4ce2e1e622713c26a0a9639389",
@@ -324,7 +324,7 @@
     "scripts/lib/claude_cli.py": "b88e09785032f4713d511dd120ddc809d7ecf22aa2c8a9f200bb789d9bf9ce12",
     "scripts/lib/context_handoff.py": "cd1e4286da89e136862faf4fd15233f21288a8c5a0547afeccfe70cc7c5f7c00",
     "scripts/lib/dashboard.html": "5e8d86fcc271b64f1a8b0c33133472dcf1b594f9e8eb2ba349568d760e596ce4",
-    "scripts/lib/deploy_hold.py": "0d35f645e6b58822a9ea7e93f826bbbd4ce38e39fa84df89c712748835416c4b",
+    "scripts/lib/deploy_hold.py": "1309c5a2f308692d28deaaf91594eb1c5034e5bf89d3f3c59f612962c313e0a8",
     "scripts/lib/extract-result.py": "d49fa538799f294b972db08cf556a0d9561e91ba3f831566ded9f88eab876640",
     "scripts/lib/fleet.css": "016f582ee2e04adaf8cc593b040d3540d28d8539d3e77c77d15a446bafc008fa",
     "scripts/lib/fleet.js": "c832196103ed093d11262f809b2c4d07d4745f70e8a8577d40299323a06c882b",

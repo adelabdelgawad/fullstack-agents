@@ -10,6 +10,8 @@ from pathlib import Path
 MARKER = "DEPLOY HOLD: active"
 LIFT_MAX_CHARS = 400
 PLAN_FRESH_S = 300
+NOT_FROM_USER = ("Another Claude session sent a message", "<teammate-message", "<task-notification",
+                 "[SYSTEM NOTIFICATION")
 NEGATION = re.compile(r"\b(no|not|never|without|avoid|skip|hold)\b|n'?t\b", re.IGNORECASE)
 LATER = re.compile(r"deploy\w*\s+(?:it\s+|them\s+|this\s+)?(?:later|tomorrow)\b", re.IGNORECASE)
 UNDEPLOYED = re.compile(r"\bun-?deploy", re.IGNORECASE)
@@ -63,6 +65,8 @@ def on_prompt(hook):
     if not sid or not prompt:
         return None
     verdict = classify(prompt)
+    if verdict == "lift" and any(m in prompt for m in NOT_FROM_USER):
+        verdict = None
     if prompt.startswith("Implement the following plan:") and MARKER in prompt:
         verdict = "hold"
     if verdict == "hold":
