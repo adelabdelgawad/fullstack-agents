@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""Report this host's repository state for cross-host coordination, as one JSON object.
+
+Read-only by default: no index refresh, no fetch, no ref or worktree change. `--fetch` explicitly
+updates remote-tracking metadata first. Commit checks keep ancestry and patch equivalence apart;
+anything git cannot decide (merge or root commits, unknown shas) is reported as "unknown".
+`--running` only compares a supplied revision; it is never evidence of what a service runs.
+
+Usage: fsa-host-status [--repo DIR] [--role NAME] [--remote NAME] [--target REF] [--fetch]
+                       [--commits SHA ...] [--running SHA] [--timeout SECONDS]
+"""
+import argparse
+import json
+import os
+import socket
+import subprocess
+import sys
+from datetime import UTC, datetime
+
+GIT_ENV = {"GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"}
+
+
+def git(repo, *args, timeout=30):
+    env = {**os.environ, **GIT_ENV}
+    env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes -o ConnectTimeout=8")
+    try:
+        proc = subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True,
+                              timeout=timeout, env=env, check=False)
+    except subprocess.TimeoutExpired:
+        return 124, "", "timed out"
+    return proc.returncode, proc.stdout.rstrip(), proc.stderr.strip()
+
+
+def out(repo, *args):
+    code, stdout, _err = git(repo, *args)
+    return stdout.strip() if code == 0 else None
+
+
+def dirty(repo):
+    code, stdout, err = git(repo, "status", "--porcelain=v1", "--untracked-files=all")
+    if code != 0:
+        return {"error": err}
+    lines = stdout.splitlines()
+    return {"staged": sum(1 for line in lines if line[0] not in " ?"),
+            "unstaged": sum(1 for line in lines if line[1] not in " ?"),
+            "untracked": sum(1 for line in lines if line.startswith("??")),
+            "paths": [line[3:] for line in lines[:30]], "more": max(0, len(lines) - 30)}
+
+
+def tracking(repo):
+    upstream = out(repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+    if not upstream:
+        return {"upstream": None, "ahead": None, "behind": None}
+    counts = out(repo, "rev-list", "--left-right", "--count", "HEAD...@{upstream}")
+    ahead, behind = (int(n) for n in counts.split()) if counts else (None, None)
+    return {"upstream": upstream, "ahead": ahead, "behind": behind}
+
+
+def remote_state(repo, remote, branch, timeout):
+    if out(repo, "remote", "get-url", remote) is None:
+        return {"name": remote, "configured": False, "reachable": None, "branch_published": None}
+    refs = [f"refs/heads/{branch}"] if branch else []
+    code, stdout, err = git(repo, "ls-remote", "--heads", remote, *refs, timeout=timeout)
+    if code != 0:
+        return {"name": remote, "configured": True, "reachable": False, "branch_published": None,
+                "error": err.splitlines()[-1] if err else f"exit {code}"}
+    published = bool(stdout) if branch else None
+    tip = stdout.split()[0] if stdout else None
+    return {"name": remote, "configured": True, "reachable": True, "branch_published": published,
+            "remote_branch_head": tip}
+
+
+def ancestry(repo, sha, target):
+    code, _o, _e = git(repo, "merge-base", "--is-ancestor", sha, target)
+    return {0: "contained", 1: "not-contained"}.get(code, "unknown")
+
+
+def patch_equivalence(repo, sha, target):
+    parents = (out(repo, "rev-list", "--parents", "-n", "1", sha) or "").split()[1:]
+    if len(parents) != 1:
+        return "unknown", "merge or root commit: patch identity is undefined"
+    listing = out(repo, "cherry", target, sha, parents[0])
+    if listing is None or not listing:
+        return "unknown", "git cherry could not compare"
+    return ("equivalent" if listing.startswith("-") else "not-equivalent"), None
+
+
+def integration_options(anc, patch, target_is_ancestor, published):
+    if anc == "contained":
+        return ["none: already in target history"]
+    if patch == "equivalent":
+        return ["none: an equivalent patch is already in target; history differs, verify behaviour"]
+    if anc == "unknown":
+        return ["unknown: resolve the commit locally (fetch) before choosing"]
+    if target_is_ancestor:
+        return ["fast-forward"]
+    options = ["merge", "cherry-pick only for an isolated non-merge commit"]
+    return options + ([] if published else ["rebase source (unpublished branch owned by the integrating session)"])
+
+
+def commit_report(repo, sha, target, published):
+    full = out(repo, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}")
+    if not full:
+        return {"sha": sha, "resolved": None, "ancestry": "unknown", "patch": "unknown",
+                "note": "not present in this repository", "options": ["unknown: fetch or push first"]}
+    anc = ancestry(repo, full, target)
+    patch, note = ("not-checked", None) if anc == "contained" else patch_equivalence(repo, full, target)
+    forward = ancestry(repo, target, full) == "contained"
+    report = {"sha": sha, "resolved": full, "ancestry": anc, "patch": patch,
+              "options": integration_options(anc, patch, forward, published)}
+    return {**report, "note": note} if note else report
+
+
+def running_report(repo, running, commits):
+    full = out(repo, "rev-parse", "--verify", "--quiet", f"{running}^{{commit}}")
+    contains = {c["sha"]: (ancestry(repo, c["resolved"], full) if full and c["resolved"] else "unknown")
+                for c in commits}
+    return {"revision": running, "resolved": full, "contains": contains,
+            "evidence": "comparison only: proves nothing about what the service runs"}
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument("--repo", default=".")
+    p.add_argument("--role")
+    p.add_argument("--remote", default="origin")
+    p.add_argument("--target", default="HEAD")
+    p.add_argument("--fetch", action="store_true")
+    p.add_argument("--commits", nargs="*", default=[])
+    p.add_argument("--running")
+    p.add_argument("--timeout", type=int, default=15)
+    a = p.parse_args(argv)
+    top = out(a.repo, "rev-parse", "--show-toplevel")
+    if top is None:
+        print(json.dumps({"error": f"not a git repository: {a.repo}"}))
+        return 2
+    report = {"observed_at": datetime.now(UTC).isoformat(timespec="seconds"), "host": socket.gethostname(),
+              "role": a.role, "session_id": os.environ.get("CLAUDE_CODE_SESSION_ID"), "worktree": top,
+              "common_dir": out(top, "rev-parse", "--path-format=absolute", "--git-common-dir")}
+    if a.fetch:
+        code, _o, err = git(top, "fetch", "--quiet", a.remote, timeout=a.timeout * 4)
+        report["fetch"] = "ok" if code == 0 else f"failed: {err.splitlines()[-1] if err else code}"
+    branch = out(top, "symbolic-ref", "--quiet", "--short", "HEAD")
+    report.update(branch=branch, head=out(top, "rev-parse", "HEAD"), dirty=dirty(top), **tracking(top))
+    report["remote"] = remote_state(top, a.remote, branch, a.timeout)
+    tip, upstream = report["remote"].get("remote_branch_head"), report["upstream"]
+    if tip and upstream:
+        report["upstream_stale"] = out(top, "rev-parse", upstream) != tip
+    target = out(top, "rev-parse", "--verify", "--quiet", f"{a.target}^{{commit}}")
+    report["target"] = {"ref": a.target, "resolved": target}
+    if a.commits:
+        published = bool(report["remote"].get("branch_published"))
+        report["commits"] = [commit_report(top, sha, target or a.target, published) for sha in a.commits]
+    if a.running:
+        report["running"] = running_report(top, a.running, report.get("commits", []))
+    print(json.dumps(report, indent=1))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

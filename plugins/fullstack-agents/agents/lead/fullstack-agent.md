@@ -121,6 +121,7 @@ diagnose, and a root cause reached without it is a guess.
 | Project principles | `constitution` |
 | High-stakes decision with real trade-offs | `fusion-panel` |
 | A production restart, proxy reload, migration or shared-cache clean while other sessions work on the repository | `team-coordination` |
+| Work spanning two hosts that run the repository (an app host and a GPU/ASR host): delegation to the remote session, syncing commits, rollout order | `cross-host-coordination` |
 
 All names carry the `fullstack-agents:` prefix. A brief to an implementer names the skill files it
 must follow. The project's architecture documents outrank a skill's defaults.

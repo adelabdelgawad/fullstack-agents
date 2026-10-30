@@ -36,6 +36,7 @@ Python/Rust idioms. Resolve an unspecified new service's language first.
 | Bug / multiple check failures | debug / batch-error-resolution plus lane skill |
 | Ports / principles / costly trade-off | frontend-transformation, backend-migration-from-frontend / constitution / fusion-panel |
 | Shared operations | team-coordination |
+| Work spanning two hosts of one repository (app host and GPU/ASR host) | cross-host-coordination |
 
 Command/agent mappings and unusual intents: read Routing Table in the guide.
 

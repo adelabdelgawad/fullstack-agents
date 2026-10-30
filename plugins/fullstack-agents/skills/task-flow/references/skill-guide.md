@@ -344,7 +344,8 @@ deployable work. Hold the `deploy` lock only for the production restart window, 
 versions with a board note, and leave a deploy note (SHA, image, migrations). Never hold a deploy
 for a peer or wait on a peer's uncommitted files. On a bare-metal project, commit to the bound dev
 branch in its checkout (never the default branch, no worktree, no merge) and reload the affected
-services instead of deploying; `team-coordination` "Bare-metal development" has the rules.
+services instead of deploying; `team-coordination` "Bare-metal development" has the rules. Work that
+also needs changes on another host's checkout of the repository follows `cross-host-coordination`.
 
 ## Project bindings
 

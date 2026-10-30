@@ -34,6 +34,7 @@ steps. Do not assume Claude hooks or tools are active.
 | Project principles | constitution |
 | High-stakes decision | fusion-panel |
 | Shared operational surface | team-coordination |
+| Work spanning two hosts of one repository | cross-host-coordination |
 
 Route by the file/service: Cargo.toml and `.rs` mean Rust; pyproject.toml,
 requirements.txt and `.py` mean Python; Next.js package.json and `.tsx` mean

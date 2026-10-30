@@ -661,3 +661,13 @@ and no slash command. Reserve it for architecture choices, risky migrations,
 security-sensitive changes, and stubborn bugs.
 
 - `skills/fusion-panel/SKILL.md` — when to convene, procedure, synthesis structure
+
+## Cross-Host Coordination Skill
+
+One repository running on two hosts (an application host and a GPU/ASR host), each with its own Claude
+session. The coordinator session owns the task end to end, drives the remote session through its herdr
+pane, keeps commits flowing only through the shared remote, chooses merge, rebase or cherry-pick from
+ancestry and ownership, and orders coupled rollouts. `scripts/fsa-host-status` reports each host's facts.
+
+- `skills/cross-host-coordination/SKILL.md` — ownership, evidence labels, state ladder, workflow, integration and rollout tables
+- `skills/cross-host-coordination/references/remote-session.md` — herdr pane discovery, reading, typing, monitoring, restart
