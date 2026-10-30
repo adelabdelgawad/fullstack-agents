@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# layout-hint (UserPromptSubmit): a slash command typed with the Arabic keyboard layout is stopped with the command it meant.
+exec python3 -I "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/../scripts/lib/layout_hint.py"

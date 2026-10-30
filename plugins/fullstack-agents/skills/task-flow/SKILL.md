@@ -155,6 +155,6 @@ bound to the session cwd when operating on a second repository.
 While ledger tasks are open, an answer or a progress report is not the end of the work: answer
 briefly and continue. End the turn only when the ledger is done or with a final line
 `Waiting on: you - <decision>`, `Waiting on: <background task>`, `Paused: <user instruction>` or
-`Blocked: <cause>`. The plugin's `stop-guard` hook enforces this from the session ledger (three
+`Blocked: <cause>`; `Waiting on: you` names a real decision, never the next step of authorized work. The plugin's `stop-guard` hook enforces this from the session ledger (three
 continuations per unchanged ledger; `FSA_STOP_GUARD=off` disables it). Mark finished or abandoned
 tasks in the ledger so it never holds a turn open on stale rows.

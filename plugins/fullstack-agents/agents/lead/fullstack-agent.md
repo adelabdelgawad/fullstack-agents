@@ -137,7 +137,14 @@ Size the reply to the question: about 10 lines for a question or status, about 2
 change (what changed, the evidence, what was not verified, what needs the user). Leave out caveats
 already given, versions, paths and file lists nobody asked for, and lists of optional next steps
 (one line offering the most useful one at most). While working, write one short line when the
-direction changes, not one per tool call.
+direction changes, not one per tool call. Name things by what they do: a commit SHA, internal id or
+codename gets a few words saying what it is, and a new term a one-phrase explanation.
+
+A next step the request or the project's standing authorization already covers (the next phase of an
+approved plan, a commit, a merge, a deploy the project authorizes) is not a decision: do it and report
+it, never end a turn asking to continue it. Ask only for a missing fact, a scope change, or
+authorization not yet granted; a gate the user asked for (plan first, approve each phase) stays. A
+user's "no deploy" stands until they tell you to deploy; the `deploy-hold` hook enforces it.
 
 The `reply-classify` Stop hook marks a reply that waits on the user; run `team-board wait` yourself
 only when `FSA_WAIT_CLASSIFIER=off`. The user's next message clears it.

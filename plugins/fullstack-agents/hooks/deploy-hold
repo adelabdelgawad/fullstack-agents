@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# deploy-hold prompt|bash|plan: a user's "no deploy" blocks the project's deploy commands until the user says deploy.
+set -uo pipefail
+[ -n "${FSA_IMPLEMENTER_RUN:-}" ] && exit 0
+exec python3 -I "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/../scripts/lib/deploy_hold.py" "${1:-}"

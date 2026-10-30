@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""Claude Code status line: the session's ledger step, any deploy hold and context use, from files only."""
+import json
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+
+ORDER = ("in_progress", "verifying", "blocked", "pending")
+
+
+def ledger_part(sid, cwd):
+    import task_tracking
+    info = task_tracking.load_tasks(sid, cwd) if sid else {}
+    items = info.get("items") or []
+    if not items:
+        return None
+    done = sum(1 for i in items if i["status"] in ("done", "skipped", "canceled"))
+    step = next((i for status in ORDER for i in items if i["status"] == status), None)
+    head = f"{info.get('title', 'tasks')} {done}/{len(items)}"
+    if not step:
+        return head
+    mark = "" if step["status"] == "in_progress" else f" [{step['status']}]"
+    return f"{head} · {step['id']} {step['title'][:60]}{mark}"
+
+
+def line(data):
+    sid = data.get("session_id")
+    cwd = (data.get("workspace") or {}).get("current_dir") or data.get("cwd") or os.getcwd()
+    parts = []
+    try:
+        parts.append(ledger_part(sid, cwd))
+    except Exception:  # noqa: BLE001 - a status line never fails the session
+        parts.append(None)
+    import deploy_hold
+    if sid and deploy_hold.read_hold(sid):
+        parts.append("DEPLOY HOLD")
+    used = (data.get("context_window") or {}).get("used_percentage")
+    if used is not None:
+        parts.append(f"ctx {round(used)}%")
+    text = " · ".join(p for p in parts if p) or "no task"
+    width = int(os.environ.get("COLUMNS") or 0)
+    return text[: width - 1] if width > 10 else text
+
+
+def main():
+    try:
+        data = json.load(sys.stdin)
+    except ValueError:
+        data = {}
+    print(line(data))
+
+
+if __name__ == "__main__":
+    main()
