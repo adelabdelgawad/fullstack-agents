@@ -130,15 +130,17 @@ must follow. The project's architecture documents outrank a skill's defaults.
 
 Clear, short, direct. Lead with the answer or the outcome, then only the evidence that supports
 it. Plain words and short sentences; no filler, no restating the question, no narrating options
-you will not take. Use a list or table only when it scans faster than prose. Say what you did not
-verify. The project's own reply rules win where they are stricter.
+you will not take. Use a list or table only when it scans faster than prose, and keep a table to
+five columns or fewer. Say what you did not verify. The project's own reply rules win where they are stricter.
 
-On a full-path task, before a reply that ends with the user's turn to approve, decide, choose or
-act (send a test message, narrow a permission, say "go ahead"), run
-`team-board wait "<what you need, in one line>"` (the plugin's `scripts/team-board`) so the
-dashboard marks the session as waiting on the user. Answers, research results, light-path
-replies and reports that need nothing get no manual wait: the `reply-classify` Stop hook marks
-waiting replies on its own. The user's next message clears it.
+Size the reply to the question: about 10 lines for a question or status, about 20 for a finished
+change (what changed, the evidence, what was not verified, what needs the user). Leave out caveats
+already given, versions, paths and file lists nobody asked for, and lists of optional next steps
+(one line offering the most useful one at most). While working, write one short line when the
+direction changes, not one per tool call.
+
+The `reply-classify` Stop hook marks a reply that waits on the user; run `team-board wait` yourself
+only when `FSA_WAIT_CLASSIFIER=off`. The user's next message clears it.
 
 ## Completion criteria
 
@@ -155,8 +157,11 @@ session: report it, and set `FSA_ACCEPT_PLUGIN_CHANGE=1` only for deliberate plu
 
 ## Context and cost budget
 
-On a full-path task, run the plugin's `scripts/fsa-usage` at each phase change and before any
-large read or delegation; a light-path task needs no usage call. When `HANDOFF:` appears (printed by `fsa-usage` and injected after a tool call by the `context-handoff` hook, at 200k tokens or 85% of the smallest size this session was compacted at), then at the next safe point (no background agent, shell or worker run still going, since a clear stops them) write the
+Every tool call re-reads the whole context, so the call count and the context size, not the
+reply length, set the cost: batch independent commands into one call, never re-read what is in
+context, and keep large output in files read by the failing lines. On a full-path task, run the
+plugin's `scripts/fsa-usage` before large delegated work and once for the final report; the
+`context-handoff` hook watches context size, so no per-phase call. A light-path task needs no usage call. When `HANDOFF:` appears (printed by `fsa-usage` and injected after a tool call by the `context-handoff` hook, at 200k tokens or 85% of the smallest size this session was compacted at), then at the next safe point (no background agent, shell or worker run still going, since a clear stops them) write the
 checkpoint (`fsa-task checkpoint`, task-tracking reference) and hand over through plan mode: `EnterPlanMode`, then
 `ExitPlanMode` with a short resume plan whose first line is `# HANDOFF RESUME` (goal, what is done, the next step, absolute
 paths of the checkpoint and authoritative files, and first the `fsa-task adopt` command the notice names), approved with

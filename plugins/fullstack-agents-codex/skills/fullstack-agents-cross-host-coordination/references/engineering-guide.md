@@ -76,7 +76,7 @@ Track each change per host, each step with its own evidence; a later step is nev
    project has one.
 8. **Deploy** only under existing authorization, in rollout order, each host by its owner; verify each running
    revision with runtime evidence.
-9. **Report** once (status block below), covering both hosts.
+9. **Report** once (status lines below), covering both hosts.
 
 ## Choosing the integration
 
@@ -131,7 +131,8 @@ evidence. Reversed, UCM's requests would be rejected by the old ASR during the g
 
 Use the task ledger (`fsa-task`): one row per host deliverable, its Note holding host, branch, commit and ladder
 state; the checkpoint holds ownership, related commits, dependencies, blockers and next actions. No credentials.
-The final report and every status update use one block:
+The final report and every status update give one line per host:
 
-| Host | Role | Branch | Commit | Dirty | Sync needed | Validation | Deployment (evidence) | Next |
-|---|---|---|---|---|---|---|---|---|
+`<host> (<role>) <branch>@<short sha>: <ladder state>; running <sha or unknown> (<evidence label>); next: <action>`
+
+Add dirty paths, a needed sync or a failing validation to that host's line only when present.

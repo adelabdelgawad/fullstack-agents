@@ -319,7 +319,10 @@ Two transitions are automatic (`hooks/auto-phase`): a successful `git push` from
 branch (or a branch in `FSA_DONE_BRANCHES`) declares `review` (a push never establishes completion), and the user's next real prompt after
 `review` or `complete` declares `investigate`. Plan, Build and Review are derived by the dashboard from
 briefs, implementer runs and edits; declare them explicitly when no brief or run exists.
-| Any reply that needs the user to approve, decide, answer or act | with a v2 ledger: `fsa-task block --kind user --text "<exact question>" --why "<what it blocks>"` (the dashboard shows it); without one: `team-board wait "<what you need>"` (cleared by the user's next message) |
+
+A reply that needs the user to approve, decide, answer or act: with a v2 ledger, `fsa-task block --kind user --text
+"<exact question>" --why "<what it blocks>"` (the dashboard shows it); otherwise the `reply-classify` hook marks it
+(`team-board wait "<need>"` yourself only when `FSA_WAIT_CLASSIFIER=off`).
 
 The card also shows the lead's own steps, so the user can follow investigation, design and
 planning work that no implementer run records. At intake, list the task's steps in plain words
@@ -334,7 +337,8 @@ list"), then keep them current:
 | A step is dropped / a new one appears | `team-board steps skipped <n>` / `team-board steps add "<step>"` |
 
 Implement, Rework, Merged, Deploying and Deployed come from run files, git and the board's
-deploy lock and note; never declare them. The command costs no tokens and never blocks.
+deploy lock and note; never declare them. The command never blocks, but on its own it costs a model call that
+re-reads the whole context: chain it onto the next command you run anyway (`team-board phase audit && git diff …`).
 
 ## Working alongside other sessions
 

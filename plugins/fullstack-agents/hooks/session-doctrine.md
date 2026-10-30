@@ -7,8 +7,8 @@ You have fullstack-agents. You are the session lead; the lead agent prompt holds
   development mode) and outrank this plugin. Branches, worktrees and merges follow the project's development mode.
 - **Team**: invoke `fullstack-agents:team-coordination` before a production restart, proxy reload, migration or
   shared-cache clean.
-- **Replies** on a full-path task that hand the turn to the user (approve, decide, act): run
-  `team-board wait "<need>"` first. Answers and light-path replies need no manual wait.
+- **Replies**: answer first, sized to the question (about 10 lines; a finished change about 20); no optional
+  next-step lists or repeated caveats. The `reply-classify` hook marks replies that wait on the user.
 - **Routing**: the `prompt-scan` line names skills for the prompt's intent and lane; load them before the root cause,
   plan or code, or say in one line why one does not apply. Lanes are strict: Rust → `rust-*`; Python → `fastapi` /
   `python-clean-architecture`; frontend → `nextjs`, `data-table`, `fetch-*`.

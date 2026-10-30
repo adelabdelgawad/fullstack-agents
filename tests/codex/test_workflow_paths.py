@@ -36,10 +36,10 @@ class WorkflowPathTests(unittest.TestCase):
     def test_ledger_usage_and_team_board_rules_apply_to_the_full_path_only(self):
         lead = flat(LEAD)
         self.assertIn("On a full-path task, run the plugin's `scripts/fsa-usage`", lead)
-        self.assertIn("On a full-path task, before a reply that ends with the user's turn", lead)
+        self.assertIn("run `team-board wait` yourself only when `FSA_WAIT_CLASSIFIER=off`", lead)
         self.assertIn("When a full-path task ends, run", lead)
         self.assertIn("For full-path multi-step implementation, create and register", flat(SKILL))
-        self.assertIn("on a full-path task", flat(DOCTRINE).lower())
+        self.assertNotIn("team-board wait", flat(DOCTRINE))
 
     def test_verification_reuse_follows_d6(self):
         skill = flat(SKILL)

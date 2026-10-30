@@ -91,8 +91,9 @@ Read these detailed guide sections when their condition applies:
 - Wide reads: Scanning wide. Narrow before spending a model.
 - User requests Herdr: Visible workers; otherwise workers stay headless.
 - Intake/progress/replies: Reporting the phase; Working alongside other sessions.
-  Keep team-board phases/steps current. `team-board wait` precedes a reply needing
-  the user. Locks cover only shared operation windows, not builds/peer work.
+  Chain team-board phase/step updates onto a command you already run, never a call
+  of their own; `reply-classify` marks a reply needing the user. Locks cover only
+  shared operation windows, not builds/peer work.
 - Missing/changed project values: Project bindings. An unset binding means the
   route is unavailable; do not invent project defaults.
 
