@@ -287,7 +287,8 @@ binds automatically. When the user asks to continue a task and exactly one candi
 the list shows (`--takeover` only for a stale owner, on that instruction); when several match, ask which. A generic new
 request starts fresh. Do not recommend `/clear` or a new session for context size or cost; write the checkpoint instead.
 The one exception is the `HANDOFF:` handover: the lead writes the checkpoint and asks the user to approve a short resume
-plan that names the adopt command; approving it with a cleared context is the user's request to continue.
+plan that names the adopt command; approving it with a cleared context is the user's request to continue. Where the
+plugin approves it automatically (the `auto-handoff` hook in a herdr pane), the user's standing request is that approval.
 
 ## After compaction, `/clear`, resume or a fork
 

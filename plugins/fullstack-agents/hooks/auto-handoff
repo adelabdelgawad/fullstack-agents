@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# PreToolUse(ExitPlanMode): in a herdr pane, approves the HANDOFF RESUME plan with "Yes, clear context".
+set -uo pipefail
+[ -n "${FSA_IMPLEMENTER_RUN:-}" ] || [ "${FSA_AUTO_HANDOFF:-on}" = "off" ] || [ -z "${HERDR_PANE_ID:-}" ] && exit 0
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+source "${SCRIPT_DIR}/lib.sh"
+python3 -I "${SCRIPT_DIR}/../scripts/lib/auto_handoff.py" "$(state_dir)" >/dev/null 2>&1 || true
+exit 0

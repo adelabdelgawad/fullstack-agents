@@ -247,13 +247,15 @@ def _sum_costs(values):
 
 def handoff_line(context, at, adopt=None):
     first = f" The plan's first step is `{adopt}`." if adopt else ""
-    return (f"HANDOFF: context is at {context:,} tokens (checkpoint size {at:,}). At the next safe point, write the "
-            "checkpoint (`fsa-task checkpoint` when a task ledger is bound, otherwise a file with an absolute path), "
-            "then hand over: load EnterPlanMode and ExitPlanMode with ToolSearch when they are deferred, call "
-            "EnterPlanMode, and submit with ExitPlanMode a short resume plan (goal, what is done, the next step, "
-            f"absolute paths of the checkpoint and authoritative files).{first} The user's \"Yes, clear context\" "
-            "continues it in a fresh context. If the user keeps the context or declines, continue; automatic "
-            "compaction summarises the conversation, so reread the ledger, checkpoint and authoritative files when needed.")
+    return (f"HANDOFF: context is at {context:,} tokens (checkpoint size {at:,}). At the next safe point (no background "
+            "agent, shell or worker run still going: a clear stops them), write the checkpoint (`fsa-task checkpoint` "
+            "when a task ledger is bound, otherwise a file with an absolute path), then hand over: load EnterPlanMode "
+            "and ExitPlanMode with ToolSearch when they are deferred, call EnterPlanMode, and submit with ExitPlanMode "
+            "a short resume plan whose first line is `# HANDOFF RESUME` (goal, what is done, the next step, absolute "
+            f"paths of the checkpoint and authoritative files).{first} \"Yes, clear context\" continues it in a fresh "
+            "context; in a herdr pane the auto-handoff hook selects it. If the plan is kept in context or declined, "
+            "continue; automatic compaction summarises the conversation, so reread the ledger, checkpoint and "
+            "authoritative files when needed.")
 
 
 def resume_scan(path, saved):

@@ -21,12 +21,16 @@ def _save(path, state):
     os.replace(tmp, path)
 
 
+def state_path(state_dir, sid):
+    return Path(state_dir) / f"handoff-{''.join(c for c in sid if c.isalnum() or c in '-_')}.json"
+
+
 def notice(hook, state_dir):
     """The HANDOFF line to inject for this hook call, or None."""
     transcript, sid = hook.get("transcript_path"), hook.get("session_id")
     if hook.get("agent_id") or not transcript or not sid:
         return None
-    state_file = Path(state_dir) / f"handoff-{''.join(c for c in sid if c.isalnum() or c in '-_')}.json"
+    state_file = state_path(state_dir, sid)
     saved = _load(state_file)
     st = usage.resume_scan(transcript, saved)
     if not st:
