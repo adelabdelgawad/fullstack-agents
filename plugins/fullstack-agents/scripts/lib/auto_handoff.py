@@ -52,6 +52,17 @@ def _is_handover_plan(screen):
     return MARKER in next((line for line in lines if line.strip()), "")
 
 
+def _press(pane, env, tries=3):
+    """Send a carriage return while the card stays open; the card ignores keys that arrive as it renders."""
+    for _ in range(tries):
+        time.sleep(2)
+        if not re.search(CARD, _herdr(env, "pane", "read", pane, "--source", "visible").stdout):
+            return True
+        _herdr(env, "pane", "send-text", pane, "\r")
+    time.sleep(3)
+    return not re.search(CARD, _herdr(env, "pane", "read", pane, "--source", "visible").stdout)
+
+
 def watch(pane, log, env, wait_ms=120_000):
     """Wait for the approval card, check the plan file's first line, press Enter, record the outcome."""
     result = "no-card"
@@ -60,10 +71,7 @@ def watch(pane, log, env, wait_ms=120_000):
         screen = _herdr(env, "pane", "read", pane, "--source", "visible").stdout
         result = "not-a-handover-plan"
         if re.search(CARD, screen) and _is_handover_plan(screen):
-            _herdr(env, "pane", "send-text", pane, "\r")
-            time.sleep(3)
-            gone = not re.search(CARD, _herdr(env, "pane", "read", pane, "--source", "visible").stdout)
-            result = "approved" if gone else "card-still-open"
+            result = "approved" if _press(pane, env) else "card-still-open"
     with open(log, "a") as stream:
         stream.write(json.dumps({"at": time.time(), "pane": pane, "result": result}) + "\n")
     return result
