@@ -60,7 +60,7 @@ def watch(pane, log, env, wait_ms=120_000):
         screen = _herdr(env, "pane", "read", pane, "--source", "visible").stdout
         result = "not-a-handover-plan"
         if re.search(CARD, screen) and _is_handover_plan(screen):
-            _herdr(env, "pane", "send-keys", pane, "enter")
+            _herdr(env, "pane", "send-text", pane, "\r")
             time.sleep(3)
             gone = not re.search(CARD, _herdr(env, "pane", "read", pane, "--source", "visible").stdout)
             result = "approved" if gone else "card-still-open"

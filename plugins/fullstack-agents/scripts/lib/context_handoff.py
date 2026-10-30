@@ -38,7 +38,7 @@ def notice(hook, state_dir):
     at = usage.handoff_at(usage.window_of(st["model"], st["context"]), st["compact_min"])
     due = st["context"] >= at and saved.get("warned") != st["compactions"]
     st["warned"] = st["compactions"] if due else saved.get("warned")
-    _save(state_file, st)
+    _save(state_file, {**saved, **st})
     return usage.handoff_line(st["context"], at, _adopt(sid)) if due else None
 
 

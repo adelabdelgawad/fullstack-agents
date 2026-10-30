@@ -19,7 +19,7 @@ echo "$*" >> "$d/calls"
 case "$2" in
   wait-output) [ -f "$d/card" ] ;;
   read) if [ -f "$d/card" ] && [ ! -f "$d/pressed" ]; then cat "$d/card"; else echo "idle"; fi ;;
-  send-keys) touch "$d/pressed" ;;
+  send-text) touch "$d/pressed" ;;
 esac
 """
 
@@ -44,6 +44,8 @@ class AutoHandoffTests(unittest.TestCase):
         self.assertIsNone(auto_handoff.armed(self.hook, self.dir, self.env))
         self.assertIsNotNone(self.warn())
         self.assertEqual(auto_handoff.armed(self.hook, self.dir, self.env), "w1:p1")
+        write_lines(self.path, [assistant("m2", read=220_000)])
+        self.assertIsNone(context_handoff.notice(self.hook, self.dir))
         self.assertIsNone(auto_handoff.armed(self.hook, self.dir, self.env))
 
     def test_stays_manual_outside_herdr_when_disabled_or_for_subagents(self):
@@ -69,23 +71,23 @@ class AutoHandoffTests(unittest.TestCase):
                                            f" ctrl+g to edit in Vim · {plan}\n")
         with mock.patch.object(auto_handoff.time, "sleep"):
             result = auto_handoff.watch("w1:p1", self.dir / "log", {"HERDR_BIN_PATH": str(fake)}, wait_ms=10)
-        calls = (self.dir / "calls").read_text()
+        calls = (self.dir / "calls").read_bytes().decode()
         return result, calls
 
     def test_presses_enter_only_on_a_handover_plan(self):
         result, calls = self.watch("# HANDOFF RESUME")
         self.assertEqual(result, "approved")
-        self.assertIn("pane send-keys w1:p1 enter", calls)
+        self.assertIn("pane send-text w1:p1 \r", calls)
 
     def test_other_plans_and_missing_cards_are_left_alone(self):
         result, calls = self.watch("# Refactor the parser")
         self.assertEqual(result, "not-a-handover-plan")
-        self.assertNotIn("send-keys", calls)
+        self.assertNotIn("send-text", calls)
         (self.dir / "card").unlink()
         (self.dir / "calls").unlink()
         result, calls = self.watch("# HANDOFF RESUME", card=False)
         self.assertEqual(result, "no-card")
-        self.assertNotIn("send-keys", calls)
+        self.assertNotIn("send-text", calls)
 
 
 if __name__ == "__main__":
