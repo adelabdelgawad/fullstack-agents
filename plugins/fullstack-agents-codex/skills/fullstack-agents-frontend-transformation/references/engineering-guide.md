@@ -17,6 +17,7 @@ written, and the completion criteria are non-negotiable.
 Use this skill when asked to:
 - Port / migrate / convert a React app to Next.js (or another target framework)
 - Move from React Router to the Next.js App Router while keeping the UI identical
+- Move a Next.js frontend to Leptos (Rust/WASM) page by page
 - "Transform", "recreate", or "rebuild in framework X" an existing frontend
 - Reproduce an existing UI 1:1 in a new stack
 
@@ -29,6 +30,8 @@ Do **not** use it for building new pages from scratch (use `nextjs` or
   Router, server actions, fetch architecture) come from the `nextjs`,
   `data-table`, and `fetch-architecture` skills — invoke those for the *target*
   idioms while this skill governs *fidelity to the source*.
+- **Leptos target:** read [references/leptos.md](../references/leptos.md) before the inventory; the
+  Rust lane skills then govern the target code.
 - **Scan first:** run `codebase-scanning` on BOTH the source and target projects
   before generating, so the migration matches the target project's conventions.
 - **Senior-engineer discipline still applies** to the code you write in the

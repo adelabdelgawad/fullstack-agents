@@ -35,7 +35,7 @@ is_fullstack_project || exit 0
 
 # Requirement 2 (checked together with 1 below): a lane-relevant skill was consulted.
 case "$lane" in
-    rust)     lane_skills="rust-clean-architecture rust-axum-api rust-sqlx rust-correctness rust-testing rust-quality-gates rust-nextjs-contract backend-migration-from-frontend debug batch-error-resolution" ;;
+    rust)     lane_skills="rust-clean-architecture rust-axum-api rust-sqlx rust-correctness rust-testing rust-quality-gates rust-nextjs-contract frontend-transformation backend-migration-from-frontend debug batch-error-resolution" ;;
     python)   lane_skills="fastapi python-clean-architecture celery tasks-management backend-migration-from-frontend debug batch-error-resolution" ;;
     frontend) lane_skills="nextjs data-table fetch-architecture frontend-transformation backend-migration-from-frontend debug batch-error-resolution" ;;
 esac

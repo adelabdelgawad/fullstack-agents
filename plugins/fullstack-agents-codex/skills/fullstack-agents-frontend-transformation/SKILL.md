@@ -1,6 +1,6 @@
 ---
 name: fullstack-agents-frontend-transformation
-description: "Port an existing frontend (React or other) to another framework such as Next.js App Router at 1:1 fidelity, with nothing redesigned."
+description: "Port an existing frontend (React, Next.js) to another framework such as Next.js App Router or Leptos at 1:1 fidelity, nothing redesigned."
 ---
 
 ## Codex runtime binding
@@ -18,13 +18,13 @@ The complete adapted rules are in [references/engineering-guide.md](references/e
 
 - Line 3: Objective
 - Line 15: When to Use This Skill
-- Line 26: How This Fits the Plugin
-- Line 38: Core Principle — Preserve Everything
-- Line 51: Required Investigation Phase (before any code)
-- Line 66: Component Preservation
-- Line 81: Styling Preservation
-- Line 89: UI Library
-- Line 96: What Actually Gets Migrated
-- Line 112: Missing Code Policy
-- Line 119: Completion Criteria
-- Line 128: Final Verification
+- Line 27: How This Fits the Plugin
+- Line 41: Core Principle — Preserve Everything
+- Line 54: Required Investigation Phase (before any code)
+- Line 69: Component Preservation
+- Line 84: Styling Preservation
+- Line 92: UI Library
+- Line 99: What Actually Gets Migrated
+- Line 115: Missing Code Policy
+- Line 122: Completion Criteria
+- Line 131: Final Verification
