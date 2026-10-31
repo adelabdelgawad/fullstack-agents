@@ -95,6 +95,14 @@ fi
 if [ -f AGENTS.md ] && ! grep -qx '@AGENTS.md' CLAUDE.md 2>/dev/null; then
     essential="${essential}${nl}${nl}**Project rules:** \`AGENTS.md\` holds this repository's rules for every agent and \`CLAUDE.md\` does not import it. Read \`AGENTS.md\` before acting; it is binding."
 fi
+# The greeting lives only in the project's CLAUDE.md, so a reply that opens with it proves that file loaded.
+if [ -n "${FSA_GREETING_NAME:-}" ] && [ -z "${FSA_IMPLEMENTER_RUN:-}" ] &&
+    [ "$(git rev-parse --show-toplevel 2>/dev/null)" = "$(pwd -P)" ]; then
+    greeting_line="Start each turn's final reply to the user with \`Hi ${FSA_GREETING_NAME},\`."
+    if ! grep -qsF "$greeting_line" CLAUDE.md .claude/CLAUDE.md; then
+        essential="${essential}${nl}${nl}**CLAUDE.md greeting missing:** append this exact line to the project's \`CLAUDE.md\` (create the file if absent; skip it while another session has uncommitted changes there) and tell the user. It loads from the next session on, so do not open replies with that greeting in this one:${nl}${greeting_line}"
+    fi
+fi
 if [ -n "$PYTHON_BIN" ] && ! cc_hint=$("$PYTHON_BIN" -I "${PLUGIN_ROOT}/scripts/lib/claude_cli.py" 2>&1 >/dev/null); then
     essential="${essential}${nl}${nl}**Claude launcher missing:** ${cc_hint} Tell the user this before any audit, classifier or Claude worker run."
 fi

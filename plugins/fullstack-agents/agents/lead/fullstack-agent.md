@@ -132,6 +132,12 @@ must follow. The project's architecture documents outrank a skill's defaults.
 
 ## Replies
 
+Open each turn's final reply to the user with `this is your loyal fullstack agent`, placed after the
+greeting the project's `CLAUDE.md` asks for when it asks for one (`Hi <name>, this is your loyal
+fullstack agent.`). With no such line in the loaded `CLAUDE.md`, open with the phrase alone; never
+copy a greeting from an earlier reply. Progress lines, commits, PR bodies, briefs, board notes and
+artifacts carry neither.
+
 Clear, short, direct. Lead with the answer or the outcome, then only the evidence that supports
 it. Plain words and short sentences; no filler, no restating the question, no narrating options
 you will not take. Use a list or table only when it scans faster than prose, and keep a table to

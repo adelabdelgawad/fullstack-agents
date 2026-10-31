@@ -90,6 +90,26 @@ class SessionStartDeliveryTests(unittest.TestCase):
         self.case.binding(policy_profile="no-such-profile")
         self.assertIn("no-such-profile", run("session-policy", self.case))
 
+    def test_greeting_notice_until_the_project_claude_md_carries_the_line(self):
+        line = "Start each turn's final reply to the user with `Hi Ada,`."
+        self.assertNotIn("greeting missing", run("session-start", self.case))
+        env = {"FSA_GREETING_NAME": "Ada"}
+        notice = run("session-start", self.case, env)
+        self.assertIn("**CLAUDE.md greeting missing:**", notice)
+        self.assertIn(line, notice)
+        self.assertNotIn("greeting missing", run("session-start", self.case, {**env, "FSA_IMPLEMENTER_RUN": "r1"}))
+        write(self.case.root / ".claude/CLAUDE.md", f"# Rules\n{line}\n")
+        self.assertNotIn("greeting missing", run("session-start", self.case, env))
+
+    def test_greeting_notice_only_at_the_repository_root(self):
+        sub = self.case.root / "pkg"
+        sub.mkdir()
+        proc = subprocess.run(["bash", str(PLUGIN / "hooks/session-start")], input='{"session_id":"s1"}',
+                              capture_output=True, text=True, cwd=sub, check=False,
+                              env={**self.case.env, "FSA_GREETING_NAME": "Ada", "TMPDIR": str(self.case.base),
+                                   "FSA_STATE_HOME": str(self.case.base / "state")})
+        self.assertNotIn("greeting missing", proc.stdout)
+
     def test_doctrine_defers_worktrees_to_the_project_development_mode(self):
         core = run("session-start", self.case)
         self.assertNotIn("Work in your own\nworktree", core)
@@ -131,6 +151,11 @@ class RuleHomeTests(unittest.TestCase):
         self.assertIn("Two retries maximum", self.FLOW)
         for text in (self.LEAD, self.DOCTRINE, self.POLICY):
             self.assertNotIn("Two retries", text)
+
+    def test_reply_marker_lives_only_in_the_lead_prompt(self):
+        self.assertIn("this is your loyal fullstack agent", self.LEAD)
+        for text in (self.DOCTRINE, self.POLICY, self.FLOW):
+            self.assertNotIn("loyal fullstack agent", text)
 
     def test_lead_prompt_states_the_precedence_order(self):
         flat = " ".join(self.LEAD.split())

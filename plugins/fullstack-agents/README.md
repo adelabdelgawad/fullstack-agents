@@ -147,6 +147,7 @@ project's `CLAUDE.md` / `AGENTS.md`, the lead prompt, the `task-flow` skill, the
 | Summary for sessions whose main agent is not the lead | `hooks/session-doctrine.md` | `session-start`, skipped when `agent_type` is the lead |
 | Reusable conventions a project opts into | `policies/<profile>.md` | `session-policy` (own context block) and implementer prompts |
 | Project hard rails, development mode, bindings | the project's `AGENTS.md` / `CLAUDE.md` | Claude Code's project memory; engines natively |
+| Reply markers: the greeting (`Hi <name>,`) and `this is your loyal fullstack agent` | the project's `CLAUDE.md`; the lead prompt | project memory; the lead agent's system prompt. With `FSA_GREETING_NAME` set, `session-start` tells the lead to add the greeting line to a repository root `CLAUDE.md` that lacks it, effective from the next session |
 
 ## Enforced Validation Gates (PostToolUse Hook)
 
