@@ -48,6 +48,12 @@ class AutoHandoffTests(unittest.TestCase):
         self.assertIsNone(context_handoff.notice(self.hook, self.dir))
         self.assertIsNone(auto_handoff.armed(self.hook, self.dir, self.env))
 
+    def test_arms_after_the_notice_when_the_context_shrank_without_compaction(self):
+        self.assertIsNotNone(self.warn(read=266_000))
+        write_lines(self.path, [assistant("m1", read=266_000), assistant("m2", read=136_000)])
+        self.assertIsNone(context_handoff.notice(self.hook, self.dir))
+        self.assertEqual(auto_handoff.armed(self.hook, self.dir, self.env), "w1:p1")
+
     def test_stays_manual_outside_herdr_when_disabled_or_for_subagents(self):
         self.warn()
         self.assertIsNone(auto_handoff.armed(self.hook, self.dir, {}))

@@ -29,7 +29,7 @@ def armed(hook, state_dir, env):
         return None
     usage = context_handoff.usage
     at = usage.handoff_at(usage.window_of(st["model"], st["context"]), st["compact_min"])
-    if at < MIN_THRESHOLD or st["context"] < at:
+    if at < MIN_THRESHOLD:
         return None
     st["auto_cycle"] = cycle
     context_handoff._save(path, st)
