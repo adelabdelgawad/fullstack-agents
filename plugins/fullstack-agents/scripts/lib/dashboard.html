@@ -9,6 +9,10 @@
 <script src="/static/fleet.js"></script>
 <script src="/static/orchestrators.js"></script>
 <style>
+@font-face { font-family: "JetBrains Mono Web"; src: url(/static/fonts/JetBrainsMono-Regular.woff2) format("woff2"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "JetBrains Mono Web"; src: url(/static/fonts/JetBrainsMono-Bold.woff2) format("woff2"); font-weight: 700; font-style: normal; }
+@font-face { font-family: "JetBrains Mono Web"; src: url(/static/fonts/JetBrainsMono-Italic.woff2) format("woff2"); font-weight: 400; font-style: italic; }
+@font-face { font-family: "JetBrains Mono Web"; src: url(/static/fonts/JetBrainsMono-BoldItalic.woff2) format("woff2"); font-weight: 700; font-style: italic; }
 :root {
   --bg: #f4f5f8; --panel: #ffffff; --card: #ffffff; --card-hover: #f7f8fb; --ink: #1b1d26; --muted: #5d6273; --faint: #8b90a3; --line: #dfe2ea;
   --active: #2563eb; --pass: #1d7f3e; --changes: #a85a00; --human: #b0246f;
@@ -263,65 +267,30 @@ aside .gcol pre.diff { margin: 0; border-radius: 0; background: none; padding: 0
 .diff .d { color: var(--red); background: var(--red-bg); }
 .diff .h { color: var(--blue); }
 .hint { color: var(--muted); padding: 14px 10px; font-size: 12px; }
-.herdr-view, #card-terminal {
-  --herdr-accent: #61afef; --herdr-panel-bg: #282c34; --herdr-sidebar-bg: #282c34; --herdr-active-row-bg: #313640;
-  --herdr-selection-bg: #334659; --herdr-surface0: #2c313a; --herdr-surface1: #3e4451; --herdr-surface-dim: #282c34;
-  --herdr-overlay0: #5c6370; --herdr-overlay1: #737a87; --herdr-text: #abb2bf; --herdr-subtext0: #969ca8;
+.herdr-client, #card-terminal {
+  --herdr-accent: #61afef; --herdr-panel-bg: #282c34;
+  --herdr-selection-bg: #334659; --herdr-surface0: #2c313a; --herdr-surface1: #3e4451;
+  --herdr-overlay0: #5c6370; --herdr-overlay1: #737a87; --herdr-text: #abb2bf;
   --herdr-mauve: #c678dd; --herdr-green: #98c379; --herdr-yellow: #e5c07b; --herdr-red: #e06c75;
   --herdr-blue: #61afef; --herdr-teal: #56b6c2; --herdr-peach: #d19a66;
   color: var(--herdr-text); background: var(--herdr-panel-bg); font-family: var(--mono); font-size: 12px; line-height: 1.35;
 }
-.herdr-view { position: relative; display: grid; grid-template-columns: 26ch minmax(0, 1fr); height: calc(100vh - 57px); overflow: hidden; }
-html.herdr-page .herdr-view { height: 100%; }
-.herdr-list { position: relative; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr); overflow: hidden; padding: 0 1ch; background: var(--herdr-sidebar-bg); }
-.herdr-sidebar-edge { position: absolute; z-index: 1; top: 0; right: 0; bottom: 0; width: 1ch; overflow: hidden; border-right: 1px solid var(--herdr-surface-dim); color: var(--herdr-surface-dim); line-height: 1lh; pointer-events: none; }
-.herdr-sidebar-section { min-height: 0; display: flex; flex-direction: column; padding-top: 1lh; }
-.herdr-sidebar-rows { flex: 1; min-height: 0; overflow: auto; padding-top: 1lh; scrollbar-color: var(--herdr-overlay1) var(--herdr-overlay0); scrollbar-width: thin; }
-.herdr-section-title { display: flex; justify-content: space-between; height: 1lh; color: var(--herdr-overlay0); font-weight: 700; white-space: pre; }
-.herdr-sidebar-footer { flex: none; height: 2lh; display: flex; align-items: flex-start; justify-content: space-between; padding: .5lh 1ch 0; }
-.herdr-sidebar-footer button { border: 0; background: transparent; color: var(--herdr-overlay0); padding: 0; font: inherit; cursor: pointer; }
-.herdr-sidebar-footer button:hover, .herdr-sidebar-footer button:focus-visible { color: var(--herdr-text); outline: none; }
-.herdr-sidebar-divider { height: 1lh; overflow: hidden; color: var(--herdr-surface-dim); white-space: nowrap; cursor: row-resize; user-select: none; touch-action: none; }
-.herdr-workspace, .herdr-agent { width: calc(100% - 1ch); border: 0; border-radius: 0; background: transparent; color: var(--herdr-subtext0); padding: 0 1ch; font: inherit; text-align: left; cursor: pointer; }
-.herdr-workspace { display: flex; align-items: center; gap: 1ch; height: 1lh; }
-.herdr-agent { display: grid; grid-template-columns: minmax(0, 1fr); height: 2lh; padding-top: 0; padding-bottom: 0; }
-.herdr-agent .agent-context, .herdr-agent .agent-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.herdr-agent .agent-context { grid-column: 1 / -1; }
-.herdr-agent .agent-name { grid-column: 1; padding-left: 2ch; font-weight: 700; }
-.herdr-agent .agent-separator, .herdr-agent .agent-tab { color: var(--herdr-overlay0); }
-.herdr-workspace[aria-selected="true"], .herdr-agent[aria-selected="true"] { background: var(--herdr-active-row-bg); color: var(--herdr-text); }
-.herdr-workspace[aria-selected="true"] .workspace-label, .herdr-agent[aria-selected="true"] .agent-name { color: var(--herdr-text); font-weight: 700; }
-.herdr-status { flex: none; width: 1ch; font-weight: 700; }
-.herdr-status-working { color: var(--herdr-yellow); } .herdr-status-blocked { color: var(--herdr-red); }
-.herdr-status-done { color: var(--herdr-teal); } .herdr-status-idle { color: var(--herdr-green); }
-.herdr-status-unknown { color: var(--herdr-overlay0); }
-.herdr-main, .herdr-detail { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--herdr-panel-bg); }
-.herdr-detail { flex: 1; overflow: hidden; }
+.herdr-client { position: relative; display: flex; flex-direction: column; height: calc(100vh - 57px); overflow: hidden; margin: 0; padding: 0; border: 0; background: #282c34; }
+html.herdr-page .herdr-client { height: 100%; }
+.herdr-client-head { flex: none; display: flex; align-items: center; gap: 2ch; padding: 4px 1ch; background: var(--herdr-panel-bg); }
+.herdr-client-head button { background: transparent; color: var(--herdr-text); border: 1px solid var(--herdr-overlay0); padding: 1px 1ch; font: inherit; cursor: pointer; }
+.herdr-client-head button:hover { border-color: var(--herdr-accent); }
+.herdr-client-status { margin-left: auto; color: var(--herdr-overlay0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.herdr-client-host { flex: 1; min-height: 0; margin: 0; padding: 0; border: 0; background: #282c34; }
+.herdr-client-host .xterm { height: 100%; }
+.herdr-client .xterm-viewport { overflow-y: hidden; }
+.herdr-detail { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--herdr-panel-bg); flex: 1; overflow: hidden; }
 #card-terminal { flex: 1; overflow: hidden; padding: 1lh 1ch; }
 .terminal { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .terminal-head { flex: none; height: 1lh; display: flex; align-items: center; gap: 1ch; padding: 0 1ch; background: var(--herdr-panel-bg); }
-.herdr-tabs { --strip: color-mix(in srgb, var(--herdr-panel-bg) 72%, #000); flex: none; min-width: 0; display: flex; align-items: flex-end; gap: 0; padding: 6px 8px 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; background: var(--strip); font: 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif; }
-.herdr-tabs::-webkit-scrollbar { display: none; }
-.herdr-tab { position: relative; flex: 0 1 220px; min-width: 56px; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-radius: 8px 8px 0 0; color: var(--herdr-overlay1); cursor: pointer; user-select: none; outline: none; }
-.herdr-tab:not([aria-selected="true"]):hover { background: color-mix(in srgb, var(--herdr-panel-bg) 55%, var(--strip)); color: var(--herdr-text); }
-.herdr-tab[aria-selected="true"] { z-index: 1; background: var(--herdr-panel-bg); color: var(--herdr-text); }
-.herdr-tab[aria-selected="true"]::before, .herdr-tab[aria-selected="true"]::after { content: ""; position: absolute; bottom: 0; width: 8px; height: 8px; pointer-events: none; }
-.herdr-tab[aria-selected="true"]::before { left: -8px; background: radial-gradient(circle at 0 0, transparent 8px, var(--herdr-panel-bg) 8.5px); }
-.herdr-tab[aria-selected="true"]::after { right: -8px; background: radial-gradient(circle at 100% 0, transparent 8px, var(--herdr-panel-bg) 8.5px); }
-.herdr-tab:not([aria-selected="true"]) + .herdr-tab:not([aria-selected="true"]) .herdr-tab-sep { position: absolute; left: 0; top: 9px; bottom: 9px; width: 1px; background: var(--herdr-overlay0); opacity: .45; }
-.herdr-tab:hover .herdr-tab-sep, .herdr-tab:hover + .herdr-tab .herdr-tab-sep { opacity: 0 !important; }
-.herdr-tab:focus-visible { box-shadow: inset 0 0 0 2px var(--herdr-accent); }
-.herdr-tab[aria-disabled="true"] { opacity: .5; cursor: default; }
-.herdr-tab .herdr-status { flex: none; width: 10px; text-align: center; font-size: 11px; }
-.herdr-tab-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); }
-.herdr-tab-close { flex: none; width: 18px; height: 18px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: inherit; font: 14px/1 system-ui, sans-serif; cursor: pointer; visibility: hidden; padding: 0; }
-.herdr-tab:hover .herdr-tab-close, .herdr-tab[aria-selected="true"] .herdr-tab-close, .herdr-tab-close:focus-visible { visibility: visible; }
-.herdr-tab-close:hover { background: color-mix(in srgb, var(--herdr-text) 18%, transparent); }
-.herdr-tab-new { flex: none; align-self: center; width: 28px; height: 28px; margin: 0 0 2px 4px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--herdr-overlay1); font: 18px/1 system-ui, sans-serif; cursor: pointer; }
-.herdr-tab-new:hover, .herdr-tab-new:focus-visible { background: color-mix(in srgb, var(--herdr-text) 14%, transparent); color: var(--herdr-text); }
 .terminal-source { display: flex; gap: 1ch; margin-left: auto; white-space: nowrap; }
 .terminal-head .chip { display: none; }
-.terminal button:not(.herdr-tab), .terminal select { border: 0; border-radius: 0; background: transparent; color: var(--herdr-overlay1); padding: 0; font: inherit; cursor: pointer; }
+.terminal button, .terminal select { border: 0; border-radius: 0; background: transparent; color: var(--herdr-overlay1); padding: 0; font: inherit; cursor: pointer; }
 .terminal button[aria-pressed="true"] { color: var(--herdr-accent); }
 .terminal-screen-box { flex: 1; min-height: 180px; position: relative; display: flex; margin: 0 1ch; border: 1px solid var(--herdr-accent); }
 .terminal-screen-box.file-drag-over { outline: 2px dashed var(--herdr-accent); outline-offset: -4px; }
@@ -411,7 +380,7 @@ html.herdr-page .herdr-view { height: 100%; }
 #ctx button.danger { color: var(--red); border-top: 1px solid var(--line); border-radius: 0 0 5px 5px; margin-top: 3px; }
 #ctx button.danger:disabled { color: var(--muted); }
 @keyframes slide { from { transform: translateX(30px); opacity: 0; } }
-@media (max-width: 640px) { header { padding: 18px 16px 4px; } .herdr-view { grid-template-columns: 1fr; grid-template-rows: minmax(0, 30vh) minmax(62vh, 1fr); height: auto; } .herdr-list { max-height: 30vh; } .herdr-sidebar-edge { display: none; } .herdr-detail { min-height: 62vh; } .terminal-head { align-items: flex-start; flex-wrap: wrap; } .terminal-source { margin-left: 0; } }
+@media (max-width: 640px) { header { padding: 18px 16px 4px; } .herdr-detail { min-height: 62vh; } .terminal-head { align-items: flex-start; flex-wrap: wrap; } .terminal-source { margin-left: 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .card:hover { transform: none; } }
 .tracked-plan + .tracked-plan { margin-top: 16px; }
 .tracked-plan progress { display: block; width: 100%; height: 8px; margin: 10px 0; accent-color: var(--blue); }
@@ -613,6 +582,7 @@ aside .tracked-plan progress::-moz-progress-bar { background: var(--blue); borde
 </div>
 <script src="/static/xterm/xterm.js"></script>
 <script src="/static/xterm/addon-fit.js"></script>
+<script src="/static/xterm/addon-webgl.js"></script>
 <script>
 const STAGES = [
   {key: "investigate", label: "Investigate", who: "lead", phases: ["idle", "investigate"], flow: true},
@@ -628,10 +598,9 @@ let favOnly = false;
 try { favOnly = localStorage.getItem("fsa-fav-only") === "1"; } catch (e) {}
 let view = "agents";
 try { const v = localStorage.getItem("fsa-view"); view = ["herdr", "history"].includes(v) ? v : "agents"; } catch (e) {}
-let uiSeen = null, state = null, seen = null, herdrData = null, herdrLoading = null, selectedHerdrPane = null, herdrKnownTabs = null;
-let herdrSidebarRatio = .5, herdrOverlay = null, herdrDragging = false, herdrActionError = "";
-try { const storedRatio = localStorage.getItem("fsa-herdr-sidebar-ratio"), value = Number(storedRatio); if (storedRatio !== null && Number.isFinite(value)) herdrSidebarRatio = Math.max(.1, Math.min(.9, value)); } catch (e) {}
-let terminal = null, terminalTimer = null;
+let uiSeen = null, state = null, seen = null, herdrData = null, herdrLoading = null;
+let herdrOverlay = null, herdrActionError = "";
+let terminal = null, terminalTimer = null, herdrClient = null;
 const cardPaneChoice = new Map();
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -685,16 +654,6 @@ function ansiHtml(input) {
   add(text.slice(at));
   return out.replace(/\x1b/g, "");
 }
-
-const statusMeta = status => ({
-  working: {icon: "●", word: "working"}, blocked: {icon: "●", word: "blocked"}, done: {icon: "●", word: "done"},
-  idle: {icon: "○", word: "idle"}, unknown: {icon: "·", word: "unknown"},
-}[status] || {icon: "·", word: "unknown"});
-
-const statusHtml = status => {
-  const meta = statusMeta(status);
-  return `<span class="herdr-status herdr-status-${esc(meta.word)}" title="${esc(meta.word)}">${esc(meta.icon)}</span>`;
-};
 
 function terminalHtml(pane, panes, pickMessage) {
   const options = (panes || []).map(x => `<option value="${esc(x.pane_id)}" ${pane && x.pane_id === pane.pane_id ? "selected" : ""}>${esc(x.title || x.pane_id)}</option>`).join("");
@@ -1073,7 +1032,7 @@ function openLiveStream(current, takeover = false) {
     liveTerminalStatus(current, null);
     flushTerminalInput(current);
     const active = document.activeElement;
-    if (!active || active === document.body || active.matches(".tab2, [data-pane-pick], .herdr-tab, .herdr-agent, [data-mode]")) current.term.focus();
+    if (!active || active === document.body || active.matches(".tab2, [data-pane-pick], [data-mode]")) current.term.focus();
   });
   stream.addEventListener("frame", event => {
     if (terminal !== current || current.stream !== stream) return;
@@ -1115,6 +1074,13 @@ addEventListener("online", () => {
   if (terminal?.mode === "live" && terminal.term && !terminal.stream && terminal.reconnectTimer) openLiveStream(terminal);
 });
 
+function terminalTheme(root, foreground) {
+  const css = getComputedStyle(root), colour = name => css.getPropertyValue(name).trim();
+  return {background: colour("--herdr-panel-bg"), foreground, cursor: colour("--herdr-accent"), selectionBackground: colour("--herdr-selection-bg"),
+    black: "#282c34", red: "#e06c75", green: "#98c379", yellow: "#e5c07b", blue: "#61afef", magenta: "#c678dd", cyan: "#56b6c2", white: "#abb2bf",
+    brightBlack: "#5c6370", brightRed: "#e06c75", brightGreen: "#98c379", brightYellow: "#e5c07b", brightBlue: "#61afef", brightMagenta: "#c678dd", brightCyan: "#56b6c2", brightWhite: "#ffffff"};
+}
+
 function startLiveTerminal(current, restoreFocus = false) {
   const host = current.root.querySelector(".terminal-live"), box = current.root.querySelector(".terminal-screen-box");
   current.root.querySelector(".terminal-screen").hidden = true;
@@ -1122,12 +1088,8 @@ function startLiveTerminal(current, restoreFocus = false) {
   host.hidden = false;
   current.retries = 0;
   if (!window.Terminal || !window.FitAddon?.FitAddon) return liveTerminalStatus(current, "Terminal assets unavailable");
-  const css = getComputedStyle(current.root), colour = name => css.getPropertyValue(name).trim();
-  current.term = new window.Terminal({scrollback: 0, fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--mono").trim(), fontSize: 12, cursorBlink: true, theme: {
-    background: colour("--herdr-panel-bg"), foreground: colour("--herdr-text"), cursor: colour("--herdr-accent"), selectionBackground: colour("--herdr-selection-bg"),
-    black: "#282c34", red: "#e06c75", green: "#98c379", yellow: "#e5c07b", blue: "#61afef", magenta: "#c678dd", cyan: "#56b6c2", white: "#abb2bf",
-    brightBlack: "#5c6370", brightRed: "#e06c75", brightGreen: "#98c379", brightYellow: "#e5c07b", brightBlue: "#61afef", brightMagenta: "#c678dd", brightCyan: "#56b6c2", brightWhite: "#ffffff"
-  }});
+  current.term = new window.Terminal({scrollback: 0, fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--mono").trim(), fontSize: 12, cursorBlink: true,
+    theme: terminalTheme(current.root, getComputedStyle(current.root).getPropertyValue("--herdr-text").trim())});
   current.fit = new window.FitAddon.FitAddon();
   current.term.loadAddon(current.fit);
   current.term.attachCustomKeyEventHandler(event => {
@@ -1226,14 +1188,6 @@ function mountTerminal(container, pane, panes, restore) {
   if (old?.focus && old.focus !== "live") root.querySelector(old.focus)?.focus();
 }
 
-function followNewHerdrTab(data) {
-  const panes = data.panes || [], seen = herdrKnownTabs;
-  const ready = (data.tabs || []).filter(tab => panes.some(pane => pane.tab_id === tab.tab_id));
-  herdrKnownTabs = data.running ? new Set(ready.map(tab => tab.tab_id)) : null;
-  const fresh = seen ? ready.filter(tab => !seen.has(tab.tab_id)).pop() : null;
-  if (fresh) selectedHerdrPane = panes.find(pane => pane.tab_id === fresh.tab_id).pane_id;
-}
-
 async function loadHerdr(force = false) {
   if (herdrLoading) {
     if (!force) return herdrLoading;
@@ -1242,7 +1196,7 @@ async function loadHerdr(force = false) {
   herdrLoading = fetch("/api/herdr", {cache: "no-store"}).then(r => {
     if (!r.ok) throw new Error(r.status);
     return r.json();
-  }).then(data => { herdrData = data; followNewHerdrTab(data); }).catch(() => {
+  }).then(data => { herdrData = data; }).catch(() => {
     herdrData = {running: false, workspaces: [], tabs: [], panes: [], focused_pane_id: null};
   }).finally(() => {
     herdrLoading = null;
@@ -1251,11 +1205,6 @@ async function loadHerdr(force = false) {
   });
   return herdrLoading;
 }
-
-const workspaceStatus = panes => {
-  const priority = {unknown: 0, idle: 1, working: 2, done: 3, blocked: 4};
-  return (panes || []).reduce((best, pane) => (priority[pane.status] ?? 0) > priority[best] ? pane.status : best, "unknown");
-};
 
 function herdrErrorMessage(error) {
   const text = typeof error === "string" ? error : JSON.stringify(error || "");
@@ -1428,7 +1377,6 @@ function openStartAgent(pane, returnFocus) {
         herdrActionError = "";
         document.querySelectorAll(".herdr-page-error").forEach(x => x.textContent = "");
         closeHerdrOverlay(false);
-        selectedHerdrPane = pane.pane_id;
         renderHerdrPage();
         showHerdrToast(`${selectedKind} started — waiting for input in the pane`);
       }
@@ -1445,16 +1393,6 @@ function showHerdrToast(message) {
   toast.innerHTML = `<span class="dot">●</span><b>${esc(message)}</b>`;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 1800);
-}
-
-function openHerdrGlobalMenu(button) {
-  const rect = button.getBoundingClientRect();
-  openHerdrMenu([
-    {label: "settings", disabled: true, title: "Available in the herdr terminal"},
-    {label: "keybinds", disabled: true, title: "Available in the herdr terminal"},
-    {label: "reload config", run: async () => { const result = await herdrAction("server.reload_config"); if (result.ok) showHerdrToast("config reloaded"); }},
-    {label: "detach", disabled: true, title: "Available in the herdr terminal"},
-  ], rect.left, rect.top, button, true);
 }
 
 function openHerdrContextMenu(kind, record, x, y, returnFocus) {
@@ -1493,174 +1431,141 @@ function openHerdrContextMenu(kind, record, x, y, returnFocus) {
   openHerdrMenu(items, x, y, returnFocus);
 }
 
-function herdrSidebarHtml(data, panes, selectedPane) {
-  const tabs = data.tabs || [], focused = data.focused_pane_id;
-  const workspaces = (data.workspaces || []).map(workspace => {
-    const items = panes.filter(pane => pane.workspace_id === workspace.workspace_id);
-    const target = items.find(pane => pane.pane_id === focused) || items[0];
-    const selected = items.some(pane => pane.pane_id === selectedPane);
-    return `<button class="herdr-workspace" data-herdr-pane="${esc((target || {}).pane_id || "")}" data-herdr-context="workspace" data-herdr-workspace-id="${esc(workspace.workspace_id)}" aria-selected="${selected}">${statusHtml(workspaceStatus(items))}<span class="workspace-label">${esc(workspace.label || workspace.workspace_id)}</span></button>`;
-  }).join("");
-  const agents = panes.filter(pane => pane.agent).map(pane => {
-    const workspace = (data.workspaces || []).find(item => item.workspace_id === pane.workspace_id);
-    const tab = tabs.find(item => item.tab_id === pane.tab_id);
-    const meta = statusMeta(pane.status);
-    return `<button class="herdr-agent" data-herdr-pane="${esc(pane.pane_id)}" data-herdr-context="pane" aria-selected="${pane.pane_id === selectedPane}" title="${esc(meta.word)}"><span class="agent-context">${statusHtml(pane.status)} <span>${esc((workspace || {}).label || pane.workspace_id)}</span><span class="agent-separator"> · </span><span class="agent-tab">${esc((tab || {}).label || `Tab ${(tab || {}).number || ""}`.trim())}</span></span><span class="agent-name">${esc(pane.title || pane.agent)}</span></button>`;
-  }).join("");
-  return `<div class="herdr-sidebar-edge" aria-hidden="true">│</div><section class="herdr-sidebar-section herdr-spaces"><div class="herdr-section-title"><span> spaces</span></div><div class="herdr-sidebar-rows">${workspaces}</div><footer class="herdr-sidebar-footer"><button data-herdr-action="workspace.create"> new</button><button data-herdr-global-menu>menu</button></footer></section><div class="herdr-sidebar-divider" role="separator" aria-label="Resize spaces and agents">${"─".repeat(25)}</div><section class="herdr-sidebar-section herdr-agents"><div class="herdr-section-title"><span> agents</span><span>grouped </span></div><div class="herdr-sidebar-rows">${agents}</div></section>`;
-}
-
-function herdrTabsHtml(data, panes, selectedPane) {
-  const pane = panes.find(item => item.pane_id === selectedPane);
-  const tabs = (data.tabs || []).filter(tab => pane && tab.workspace_id === pane.workspace_id).map(tab => {
-    const members = panes.filter(item => item.tab_id === tab.tab_id), first = members[0], label = tab.label || `Tab ${tab.number}`;
-    const selected = tab.tab_id === pane.tab_id;
-    return `<div class="herdr-tab" role="tab" tabindex="${selected ? 0 : -1}" title="${esc(label)}" data-herdr-pane="${esc((first || {}).pane_id || "")}" data-herdr-context="tab" data-herdr-tab-id="${esc(tab.tab_id)}" aria-selected="${selected}" ${first ? "" : 'aria-disabled="true"'}><span class="herdr-tab-sep" aria-hidden="true"></span>${statusHtml(workspaceStatus(members))}<span class="herdr-tab-title">${esc(label)}</span><button class="herdr-tab-close" data-herdr-close-tab="${esc(tab.tab_id)}" tabindex="-1" aria-label="Close ${esc(label)}" title="Close tab">×</button></div>`;
-  }).join("");
-  const add = pane ? `<button class="herdr-tab-new" data-herdr-new-tab="${esc(pane.workspace_id)}" aria-label="New tab" title="New tab">+</button>` : "";
-  return `<div class="herdr-tabs" role="tablist" aria-label="Workspace tabs">${tabs}${add}</div>`;
-}
-
-function updateHerdrTabOverflow(root) {
-  root.querySelector('.herdr-tab[aria-selected="true"]')?.scrollIntoView({block: "nearest", inline: "nearest"});
-}
-
-function closeHerdrTab(tabId, returnFocus) {
-  const tab = (herdrData.tabs || []).find(x => x.tab_id === tabId);
-  if (!tab) return;
-  const count = (herdrData.panes || []).filter(x => x.tab_id === tabId).length;
-  openHerdrConfirm("Close tab?", `${tab.label || `Tab ${tab.number}`} — ${count} ${count === 1 ? "pane" : "panes"}`, "tab.close", {tab_id: tabId}, returnFocus);
-}
-
-function applyHerdrSidebarRatio(root) {
-  const list = root.querySelector(".herdr-list");
-  if (list) list.style.gridTemplateRows = `minmax(0, ${herdrSidebarRatio}fr) auto minmax(0, ${1 - herdrSidebarRatio}fr)`;
-}
-
-function herdrChromeSnapshot(root) {
-  const active = document.activeElement;
-  let focus = null;
-  if (root.contains(active)) {
-    if (active.matches(".herdr-workspace")) focus = ["workspace", active.dataset.herdrWorkspaceId];
-    else if (active.matches(".herdr-agent")) focus = ["pane", active.dataset.herdrPane];
-    else if (active.matches(".herdr-tab")) focus = ["tab", active.dataset.herdrTabId];
-    else if (active.matches('[data-herdr-action="workspace.create"]')) focus = ["new", ""];
-    else if (active.matches("[data-herdr-global-menu]")) focus = ["menu", ""];
-  }
-  return {scroll: [...root.querySelectorAll(".herdr-sidebar-rows")].map(x => x.scrollTop), focus};
-}
-
-function restoreHerdrChrome(root, snapshot) {
-  root.querySelectorAll(".herdr-sidebar-rows").forEach((x, index) => { x.scrollTop = snapshot.scroll[index] || 0; });
-  if (!snapshot.focus) return;
-  const [kind, id] = snapshot.focus;
-  const target = kind === "workspace" ? [...root.querySelectorAll(".herdr-workspace")].find(x => x.dataset.herdrWorkspaceId === id)
-    : kind === "pane" ? [...root.querySelectorAll(".herdr-agent")].find(x => x.dataset.herdrPane === id)
-      : kind === "tab" ? [...root.querySelectorAll(".herdr-tab")].find(x => x.dataset.herdrTabId === id)
-        : root.querySelector(kind === "new" ? '[data-herdr-action="workspace.create"]' : "[data-herdr-global-menu]");
-  target?.focus();
-}
-
-function wireHerdrPicks(root) {
-  root.querySelectorAll("[data-herdr-pane]").forEach(button => button.onclick = () => {
-    if (!button.dataset.herdrPane) return;
-    selectedHerdrPane = button.dataset.herdrPane;
-    renderHerdrPage();
-  });
-  root.querySelector('[data-herdr-action="workspace.create"]')?.addEventListener("click", event => herdrAction("workspace.create"));
-  root.querySelectorAll("[data-herdr-close-tab]").forEach(button => button.onclick = event => {
-    event.stopPropagation();
-    closeHerdrTab(button.dataset.herdrCloseTab, button.closest(".herdr-tab"));
-  });
-  root.querySelectorAll(".herdr-tab").forEach(tab => {
-    tab.onauxclick = event => { if (event.button === 1) { event.preventDefault(); closeHerdrTab(tab.dataset.herdrTabId, tab); } };
-    tab.onmousedown = event => { if (event.button === 1) event.preventDefault(); };
-    tab.onkeydown = event => {
-      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); tab.click(); return; }
-      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
-      const all = [...root.querySelectorAll(".herdr-tab")], next = all[(all.indexOf(tab) + (event.key === "ArrowRight" ? 1 : all.length - 1)) % all.length];
-      event.preventDefault();
-      next?.focus();
-    };
-  });
-  root.querySelectorAll("[data-herdr-new-tab]").forEach(button => button.onclick = () => {
-    const workspace = button.dataset.herdrNewTab, number = (herdrData.tabs || []).filter(x => x.workspace_id === workspace).length + 1;
-    openHerdrPrompt("new tab", String(number), "tab.create", {workspace_id: workspace}, button);
-  });
-  const globalMenu = root.querySelector("[data-herdr-global-menu]");
-  if (globalMenu) globalMenu.onclick = () => openHerdrGlobalMenu(globalMenu);
-  root.querySelectorAll("[data-herdr-context]").forEach(target => target.oncontextmenu = event => {
-    event.preventDefault();
-    const kind = target.dataset.herdrContext;
-    const record = kind === "workspace"
-      ? (herdrData.workspaces || []).find(x => x.workspace_id === target.dataset.herdrWorkspaceId)
-      : kind === "tab"
-        ? (herdrData.tabs || []).find(x => x.tab_id === target.dataset.herdrTabId)
-        : (herdrData.panes || []).find(x => x.pane_id === target.dataset.herdrPane);
-    if (record) openHerdrContextMenu(kind, record, event.clientX, event.clientY, target);
-  });
-  const divider = root.querySelector(".herdr-sidebar-divider"), list = root.querySelector(".herdr-list");
-  if (divider && list) divider.onpointerdown = event => {
-    event.preventDefault();
-    herdrDragging = true;
-    divider.setPointerCapture?.(event.pointerId);
-    const move = pointer => {
-      const rect = list.getBoundingClientRect(), usable = Math.max(1, rect.height - divider.offsetHeight);
-      herdrSidebarRatio = Math.max(.1, Math.min(.9, (pointer.clientY - rect.top - divider.offsetHeight / 2) / usable));
-      applyHerdrSidebarRatio(root);
-    };
-    const done = () => {
-      herdrDragging = false;
-      divider.onpointermove = divider.onpointerup = divider.onpointercancel = null;
-      try { localStorage.setItem("fsa-herdr-sidebar-ratio", String(herdrSidebarRatio)); } catch (e) {}
-    };
-    divider.onpointermove = move;
-    divider.onpointerup = divider.onpointercancel = done;
+function createOsc52Scanner(onText) {
+  const PREFIX = [0x1b, 0x5d, 0x35, 0x32, 0x3b];
+  let matched = 0, bytes = null;
+  const finish = () => {
+    const text = new TextDecoder("latin1").decode(Uint8Array.from(bytes)), payload = text.slice(text.indexOf(";") + 1);
+    bytes = null;
+    if (!payload || payload === "?") return;
+    try { onText(new TextDecoder().decode(Uint8Array.from(atob(payload), c => c.charCodeAt(0)))); } catch (e) {}
   };
-  applyHerdrSidebarRatio(root);
+  return chunk => {
+    for (const b of chunk) {
+      if (bytes) {
+        if (b === 0x07) finish();
+        else if (b === 0x5c && bytes.at(-1) === 0x1b) { bytes.pop(); finish(); }
+        else if (bytes.length < (4 << 20)) bytes.push(b);
+        else bytes = null;
+        continue;
+      }
+      matched = b === PREFIX[matched] ? matched + 1 : (b === 0x1b ? 1 : 0);
+      if (matched === PREFIX.length) { bytes = []; matched = 0; }
+    }
+  };
+}
+
+function webglRendererOk() {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl2");
+    if (!gl) return false;
+    const info = gl.getExtension("WEBGL_debug_renderer_info");
+    return !/SwiftShader/i.test(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : "");
+  } catch (e) { return false; }
+}
+
+function closeHerdrClient() {
+  if (!herdrClient) return;
+  herdrClient.ws?.close();
+  herdrClient.resizeObserver?.disconnect();
+  herdrClient.term?.dispose();
+  herdrClient = null;
+}
+
+function connectHerdrClient(client) {
+  const {term, root} = client;
+  root.querySelector("[data-herdr-client-reconnect]").hidden = true;
+  client.size = `${term.cols}x${term.rows}`;
+  client.setStatus(`connecting · ${client.renderer} · ${term.cols}×${term.rows}`);
+  const query = new URLSearchParams({cols: term.cols, rows: term.rows});
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/herdr/client?${query}`);
+  ws.binaryType = "arraybuffer";
+  client.ws = ws;
+  ws.onopen = () => client.setStatus(`live · ${client.renderer} · ${term.cols}×${term.rows}`);
+  ws.onmessage = event => {
+    if (typeof event.data === "string") return;
+    const bytes = new Uint8Array(event.data);
+    client.scanOsc52(bytes);
+    term.write(bytes);
+  };
+  ws.onclose = event => {
+    client.setStatus(`disconnected${event.reason ? `: ${event.reason}` : ""} (code ${event.code})`);
+    root.querySelector("[data-herdr-client-reconnect]").hidden = false;
+  };
+}
+
+async function mountHerdrClient(root) {
+  const client = {root};
+  herdrClient = client;
+  const host = root.querySelector(".herdr-client-host"), statusEl = root.querySelector("[data-herdr-client-status]");
+  client.setStatus = text => { statusEl.textContent = text; };
+  root.oncontextmenu = event => event.preventDefault();
+  await Promise.all(["400", "700"].flatMap(weight => ["normal", "italic"].map(style =>
+    document.fonts.load(`${style === "italic" ? "italic " : ""}${weight} 14.5px "JetBrains Mono Web"`))));
+  if (herdrClient !== client) return;
+  const mono = getComputedStyle(document.documentElement).getPropertyValue("--mono").trim();
+  const term = new window.Terminal({fontFamily: `"JetBrains Mono Web", ${mono}`, fontSize: 14.5, letterSpacing: 1, scrollback: 0, cursorBlink: true, theme: terminalTheme(root, "#ffffff")});
+  const fit = new window.FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(host);
+  client.term = term;
+  client.fit = fit;
+  client.renderer = "dom";
+  if (window.WebglAddon && webglRendererOk()) {
+    const addon = new window.WebglAddon.WebglAddon();
+    addon.onContextLoss(() => { addon.dispose(); client.renderer = "dom"; fit.fit(); });
+    term.loadAddon(addon);
+    client.renderer = "webgl";
+  }
+  fit.fit();
+  const onCopyText = async text => {
+    if (!text) return;
+    try { await copyText(text); } catch (e) {}
+    showHerdrToast(`copied ${text.length} chars`);
+    term.focus();
+  };
+  client.scanOsc52 = createOsc52Scanner(onCopyText);
+  host.addEventListener("mouseup", () => setTimeout(() => { if (term.hasSelection()) onCopyText(term.getSelection()); }));
+  root.querySelector("[data-herdr-client-lock]").onclick = async () => {
+    try {
+      await root.requestFullscreen();
+      if (!navigator.keyboard?.lock) { client.setStatus("fullscreen only: this browser has no Keyboard Lock"); return; }
+      await navigator.keyboard.lock();
+      client.setStatus("keyboard locked: hold Esc to leave");
+    } catch (error) { client.setStatus(`key lock failed: ${error.message}`); }
+  };
+  root.querySelector("[data-herdr-client-reconnect]").onclick = () => connectHerdrClient(client);
+  client.resizeObserver = new ResizeObserver(() => {
+    fit.fit();
+    const next = `${term.cols}x${term.rows}`;
+    if (next === client.size) return;
+    client.size = next;
+    if (client.ws?.readyState === WebSocket.OPEN) client.ws.send(JSON.stringify({type: "resize", cols: term.cols, rows: term.rows}));
+  });
+  client.resizeObserver.observe(host);
+  term.onData(data => { if (client.ws?.readyState === WebSocket.OPEN) client.ws.send(new TextEncoder().encode(data)); });
+  term.onBinary(data => { if (client.ws?.readyState === WebSocket.OPEN) client.ws.send(Uint8Array.from(data, c => c.charCodeAt(0) & 255)); });
+  connectHerdrClient(client);
+  term.focus();
 }
 
 function renderHerdrPage() {
   if (view !== "herdr") return;
   const main = document.getElementById("main");
   if (!herdrData) {
-    stopTerminal();
+    closeHerdrClient();
     main.innerHTML = '<div class="hint">Loading Herdr…</div>';
     loadHerdr();
     return;
   }
   if (!herdrData.running) {
-    stopTerminal();
+    closeHerdrClient();
     main.innerHTML = '<div class="empty" style="padding:24px 32px">herdr is not running on this server</div>';
     return;
   }
-  const panes = herdrData.panes || [];
-  if (!panes.some(x => x.pane_id === selectedHerdrPane)) selectedHerdrPane = herdrData.focused_pane_id || (panes[0] || {}).pane_id || null;
-  const pane = panes.find(x => x.pane_id === selectedHerdrPane) || null;
-  const sidebar = herdrSidebarHtml(herdrData, panes, selectedHerdrPane);
-  const tabs = herdrTabsHtml(herdrData, panes, selectedHerdrPane);
-  const list = main.querySelector(".herdr-list");
-  if (list && (herdrOverlay || herdrDragging)) {
-    updateTerminalStatus(pane);
-    return;
-  }
-  if (list && terminalCanStay(pane, panes) && main.querySelector(".herdr-detail")?.contains(terminal.root)) {
-    const chrome = herdrChromeSnapshot(main);
-    list.innerHTML = sidebar;
-    const tabsRoot = main.querySelector(".herdr-tabs");
-    if (tabsRoot) tabsRoot.outerHTML = tabs;
-    wireHerdrPicks(main);
-    updateHerdrTabOverflow(main);
-    restoreHerdrChrome(main, chrome);
-    updateTerminalStatus(pane);
-    return;
-  }
-  const restore = terminalSnapshot();
-  stopTerminal();
-  main.innerHTML = `<div class="herdr-view"><nav class="herdr-list" aria-label="Herdr panes">${sidebar}</nav><section class="herdr-main">${tabs}<div class="herdr-detail">${terminalHtml(pane, panes, "")}</div></section><div class="herdr-page-error" aria-live="polite">${esc(herdrActionError)}</div></div>`;
-  wireHerdrPicks(main);
-  updateHerdrTabOverflow(main);
-  mountTerminal(main.querySelector(".herdr-detail"), pane, panes, restore);
+  if (herdrClient && main.contains(herdrClient.root)) return;
+  main.innerHTML = '<div class="herdr-client"><header class="herdr-client-head"><button data-herdr-client-lock title="Fullscreen with Keyboard Lock (Chromium)">key lock</button><button data-herdr-client-reconnect hidden>reconnect</button><span class="herdr-client-status" data-herdr-client-status>starting…</span></header><div class="herdr-client-host"></div></div>';
+  mountHerdrClient(main.querySelector(".herdr-client"));
 }
 
 function setView(next) {
@@ -1674,6 +1579,7 @@ function setView(next) {
   syncNav();
   stopTerminal();
   closePanel();
+  if (view !== "herdr") closeHerdrClient();
   if (view === "herdr") renderHerdrPage(); else if (view === "history") renderHistory(); else render();
 }
 document.addEventListener("pointerdown", event => {
@@ -2561,19 +2467,9 @@ function closePanel() {
   render();
 }
 
-function sessionHerdrPane(session) {
-  const panes = (herdrData && herdrData.panes) || [], owned = (state && state.session_panes) || {};
-  const card = (state && state.cards || []).find(c => c.key === session.card);
-  const names = [session.name, session.title].filter(Boolean);
-  const tab = ((herdrData && herdrData.tabs) || []).find(t => names.includes(t.label) && panes.some(p => p.tab_id === t.tab_id));
-  return panes.find(p => p.pane_id === owned[session.id]) || (card && matchedCardPane(card)) || panes.find(p => names.includes(p.title))
-    || (tab && panes.find(p => p.tab_id === tab.tab_id)) || null;
-}
-
 function openToastTarget(target, session) {
-  const pane = view === "herdr" && session ? sessionHerdrPane(session) : null;
-  if (pane) { selectedHerdrPane = pane.pane_id; renderHerdrPage(); }
-  else if (target) openCard(target);
+  if (view === "herdr") setView("agents");
+  if (target) openCard(target);
 }
 
 function toast(text, tone, target, session) {
@@ -2828,7 +2724,6 @@ document.addEventListener("contextmenu", e => {
 document.addEventListener("click", e => { if (!e.target.closest("#ctx")) closeCtx(); });
 addEventListener("scroll", closeCtx, true);
 addEventListener("resize", closeCtx);
-addEventListener("resize", () => updateHerdrTabOverflow(document));
 ctx().addEventListener("keydown", e => {
   if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
   e.preventDefault();
@@ -2846,10 +2741,10 @@ ctx().addEventListener("click", e => {
   else if (act === "copy") copyText(card.dataset.sid).then(() => toast(`<b>Copied</b> ${esc(card.dataset.sid)}`, "blue"), () => toast("<b>Copy failed</b>", "red"));
 });
 
-document.addEventListener("keydown", e => { if (e.key !== "Escape" || out || e.target.closest?.(".terminal")) return; if (closeCtx()) return; if (openRun) toggleTask(openRun); else closePanel(); });
+document.addEventListener("keydown", e => { if (e.key !== "Escape" || out || e.target.closest?.(".terminal, .herdr-client")) return; if (closeCtx()) return; if (openRun) toggleTask(openRun); else closePanel(); });
 document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => setView(b.dataset.view));
 document.addEventListener("visibilitychange", () => { if (!document.hidden && openRun) pollLog(openRun); if (!document.hidden && terminal) pollTerminal(); });
-addEventListener("pagehide", stopTerminal);
+addEventListener("pagehide", () => { stopTerminal(); closeHerdrClient(); });
 addEventListener("pageshow", event => {
   if (!event.persisted || terminal) return;
   if (view === "herdr") renderHerdrPage();

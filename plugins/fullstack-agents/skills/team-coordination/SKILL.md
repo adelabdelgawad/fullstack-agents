@@ -87,7 +87,8 @@ After any deploy or reload, verify the running release:
 
 `scripts/fsa-dashboard start` serves a read-only web board of every agent running in a herdr pane on
 this host, in any repository and whatever harness herdr reports (Claude, Codex, Grok, ...), with
-their implementer runs and worktrees; without herdr it shows the starting repository's sessions. It prints a URL that carries an access token, and `stop` and `status` manage it.
+their implementer runs and worktrees; without herdr it shows the starting repository's sessions. It prints a URL that carries an access token, and `stop` and `status` manage it. Its Herdr tab runs a
+full `herdr` client over one same-origin WebSocket (`/api/herdr/client`), so that token grants terminal access.
 It is a script, not an agent: it reads files sessions already write (transcripts, run files, the
 board) and costs no tokens. Never poll it from a session. It moves each task card through
 Investigate → Plan → Implement → Rework → Audit → Review → Merged → Deploying → Deployed; a session that stopped without a phase sits in Idle and leaves the board after 12 hours. It flags runs

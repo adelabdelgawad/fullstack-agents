@@ -18,6 +18,7 @@ import socket
 import sqlite3
 import signal
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
@@ -38,6 +39,7 @@ from activity import ActivityFeed, card_usage, history_rows, run_cause, totals
 from plan_usage import plan_usage
 from runs_dir import read_dirs, runs_dir
 import liveness
+import herdr_web
 HTML = HERE / "lib" / "dashboard.html"
 FIRST_PROMPTS = {}
 LAST_ASKS = {}
@@ -98,15 +100,21 @@ JUDGED = {}
 HERDR_KEYS = {"enter", "esc", "ctrl+c", "up", "down", "left", "right", "tab", "backspace", "1", "2", "3", "y", "n"}
 HERDR_AGENT_KINDS = ("claude", "codex", "grok", "gemini", "opencode", "cursor", "copilot", "amp", "qwen", "kimi")
 HERDR_LIVE_MAX = 6
+HERDR_CLIENT_MAX = 4
 HERDR_UPLOAD_MAX = 50 * 1024 * 1024
 UNSAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 XTERM_FILES = {
     "/static/xterm/xterm.js": (HERE / "lib" / "vendor" / "xterm" / "xterm.js", "application/javascript"),
     "/static/xterm/addon-fit.js": (HERE / "lib" / "vendor" / "xterm" / "addon-fit.js", "application/javascript"),
+    "/static/xterm/addon-webgl.js": (HERE / "lib" / "vendor" / "xterm" / "addon-webgl.js", "application/javascript"),
     "/static/xterm/xterm.css": (HERE / "lib" / "vendor" / "xterm" / "xterm.css", "text/css"),
     "/static/fleet.js": (HERE / "lib" / "fleet.js", "application/javascript"),
     "/static/fleet.css": (HERE / "lib" / "fleet.css", "text/css"),
     "/static/orchestrators.js": (HERE / "lib" / "orchestrators.js", "application/javascript"),
+    "/static/fonts/JetBrainsMono-Regular.woff2": (HERE / "lib" / "vendor" / "jetbrains-mono" / "JetBrainsMono-Regular.woff2", "font/woff2"),
+    "/static/fonts/JetBrainsMono-Bold.woff2": (HERE / "lib" / "vendor" / "jetbrains-mono" / "JetBrainsMono-Bold.woff2", "font/woff2"),
+    "/static/fonts/JetBrainsMono-Italic.woff2": (HERE / "lib" / "vendor" / "jetbrains-mono" / "JetBrainsMono-Italic.woff2", "font/woff2"),
+    "/static/fonts/JetBrainsMono-BoldItalic.woff2": (HERE / "lib" / "vendor" / "jetbrains-mono" / "JetBrainsMono-BoldItalic.woff2", "font/woff2"),
 }
 
 
@@ -2432,6 +2440,7 @@ class Server(http.server.ThreadingHTTPServer):
         self.lock, self.cached, self.cached_at, self.sources, self.docs, self.scopes = threading.Lock(), None, 0.0, {}, {}, {}
         self.herdr_lock, self.herdr_cached, self.herdr_cached_at = threading.Lock(), None, 0.0
         self.herdr_live_lock, self.herdr_live = threading.Lock(), {}
+        self.herdr_client_slots = threading.BoundedSemaphore(HERDR_CLIENT_MAX)
         self.feed = ActivityFeed()
         self.roots, self.cwd_roots, self.card_roots, self.card_worktrees = {str(repo.root): (repo, self.gc)}, {}, {}, {}
 
@@ -2743,6 +2752,61 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if self.server.herdr_live.get(session_id) is live:
                         self.server.herdr_live.pop(session_id, None)
 
+    def herdr_client(self, q):
+        if self.headers.get("Upgrade", "").lower() != "websocket" or \
+                not herdr_web.same_origin(self.headers.get("Origin", ""), self.headers.get("Host", "")):
+            return self.send(400, b"same-origin websocket upgrade required", "text/plain")
+        try:
+            cols, rows = int(q["cols"][0]), int(q["rows"][0])
+        except (KeyError, ValueError):
+            return self.send(400, b"cols and rows required", "text/plain")
+        if not (10 <= cols <= 500 and 5 <= rows <= 200):
+            return self.send(400, b"bad terminal size", "text/plain")
+        executable = shutil.which("herdr")
+        if not executable or not self.server.herdr_state()["running"]:
+            return self.send(503, b"herdr is not running", "text/plain")
+        if not self.server.herdr_client_slots.acquire(blocking=False):
+            return self.send(429, b"too many clients", "text/plain")
+        try:
+            ws = self.herdr_client_upgrade()
+            self.herdr_client_serve(ws, executable, cols, rows)
+        finally:
+            self.server.herdr_client_slots.release()
+
+    def herdr_client_upgrade(self):
+        accept = herdr_web.accept_key(self.headers.get("Sec-WebSocket-Key", ""))
+        self.send_response(101)
+        self.send_header("Upgrade", "websocket")
+        self.send_header("Connection", "Upgrade")
+        self.send_header("Sec-WebSocket-Accept", accept)
+        self.end_headers()
+        self.wfile.flush()
+        self.close_connection = True
+        self.connection.settimeout(None)
+        return herdr_web.WebSocket(self.connection, self.rfile)
+
+    def herdr_client_serve(self, ws, executable, cols, rows):
+        pid, fd = herdr_web.spawn_herdr(executable, cols, rows)
+        pump = threading.Thread(target=herdr_web.pump_output, args=(fd, ws), daemon=True)
+        pump.start()
+        try:
+            while True:
+                op, payload = ws.receive()
+                if op == herdr_web.OP_CLOSE:
+                    break
+                if op == herdr_web.OP_BIN:
+                    herdr_web.write_all(fd, payload)
+                elif op == herdr_web.OP_TEXT:
+                    herdr_web.apply_control(fd, payload)
+        except (ConnectionError, OSError, ValueError, KeyError):
+            pass
+        finally:
+            herdr_web.stop_child(pid, fd, pump)
+            try:
+                ws.send(herdr_web.OP_CLOSE, struct.pack("!H", 1000))
+            except OSError:
+                pass
+
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(url.query)
@@ -2757,6 +2821,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(200, json.dumps(self.server.herdr_state()).encode())
         if url.path == "/api/herdr/live":
             return self.live_stream(q)
+        if url.path == "/api/herdr/client":
+            return self.herdr_client(q)
         if url.path == "/api/herdr/screen":
             source = (q.get("source") or ["visible"])[0]
             if source not in ("visible", "recent"):

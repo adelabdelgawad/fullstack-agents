@@ -29,6 +29,7 @@ to keep examples and detailed procedures out of context until needed.
 
 - **A session lead** that plans, delegates, audits and concludes, with extractor, test-runner, diff-reviewer, web-researcher and four review agents
 - **2 slash commands**: `/review` and `/dashboard`; everything else is asked in plain language and routed to skills
+- **Host dashboard** (`/dashboard`): agent cards with live pane terminals, and a Herdr tab that runs a full `herdr` client in the browser (xterm.js over one WebSocket, WebGL when the GPU allows, JetBrains Mono at Ghostty's cell size)
 - **33 skill domains** covering FastAPI, Rust/Axum, Next.js, clean architecture + DDD in both backend languages, TanStack Table, Celery, Docker, WebSocket, framework migration (frontend + backend), debugging discipline, prompt refinement, panel reasoning, and more
 - **Hard enforcement hooks** — the routing gate is re-armed on every prompt, code-file edits are blocked until the right skills were consulted, and every change is validated with real tooling (ruff, rustfmt, clippy, tsc) before the session can end
 - **Language-lane separation** — Rust and Python skills never cross; lane detection routes per file/service, and idiom transplants are forbidden
