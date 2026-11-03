@@ -326,8 +326,10 @@ html .herdr-client.herdr-fill { position: fixed; inset: 0; z-index: 1000; height
 .herdr-modal-actions .danger { color: var(--herdr-red); font-weight: 700; }
 .herdr-modal-actions .primary { color: var(--herdr-green); font-weight: 700; }
 .herdr-modal-actions button:disabled { color: var(--herdr-overlay0); cursor: default; }
-.herdr-copy-toast { position: fixed; z-index: 62; right: 2ch; bottom: 2lh; padding: .5lh 1ch; background: var(--herdr-panel-bg); border: 1px solid var(--herdr-overlay0); }
+.herdr-copy-toast { position: fixed; z-index: 1001; right: 2ch; bottom: 2lh; padding: .5lh 1ch; background: var(--herdr-panel-bg); border: 1px solid var(--herdr-overlay0); }
 .herdr-copy-toast .dot { color: var(--herdr-green); margin-right: 1ch; }
+.herdr-copy-toast.is-failed .dot { color: var(--herdr-red); }
+.herdr-copy-toast button { margin-left: 1ch; background: transparent; color: var(--herdr-green); border: 1px solid var(--herdr-green); padding: 0 .75ch; font: inherit; font-weight: 700; cursor: pointer; }
 .terminal-pick { flex: none; padding: .5lh 1ch; color: var(--herdr-overlay0); }
 #card-terminal .terminal-head { justify-content: flex-end; padding-left: 0; padding-right: 0; }
 #card-terminal .terminal-screen-box { margin-left: 0; margin-right: 0; }
@@ -877,7 +879,8 @@ async function copySelection(text, restore) {
   let ok = false;
   try { ok = await writeClipboard(text); } catch (err) { ok = false; }
   if (restore) restore();
-  showHerdrToast(ok ? "Copied" : "Copy failed");
+  if (ok) showHerdrToast(`copied ${text.length} chars`);
+  else showHerdrToast("copy blocked by the browser", {label: `copy ${text.length} chars`, run: () => copySelection(text, restore)});
 }
 
 function mountTerminalFiles(current) {
@@ -1397,13 +1400,14 @@ function openStartAgent(pane, returnFocus) {
   select.onchange = () => { if (!input.value || input.value === kind || kinds.includes(input.value)) input.value = select.value; };
 }
 
-function showHerdrToast(message) {
+function showHerdrToast(message, action) {
   document.querySelector(".herdr-copy-toast")?.remove();
   const toast = document.createElement("div");
-  toast.className = "herdr-copy-toast";
-  toast.innerHTML = `<span class="dot">●</span><b>${esc(message)}</b>`;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 1800);
+  toast.className = "herdr-copy-toast" + (action ? " is-failed" : "");
+  toast.innerHTML = `<span class="dot">●</span><b>${esc(message)}</b>${action ? `<button>${esc(action.label)}</button>` : ""}`;
+  if (action) toast.querySelector("button").onclick = () => { toast.remove(); action.run(); };
+  (fullscreenNow() || document.body).appendChild(toast);
+  setTimeout(() => toast.remove(), action ? 15000 : 1800);
 }
 
 function openHerdrContextMenu(kind, record, x, y, returnFocus) {
@@ -1610,12 +1614,7 @@ async function mountHerdrClient(root) {
     client.renderer = "webgl";
   }
   fit.fit();
-  const onCopyText = async text => {
-    if (!text) return;
-    try { await copyText(text); } catch (e) {}
-    showHerdrToast(`copied ${text.length} chars`);
-    term.focus();
-  };
+  const onCopyText = text => { if (text) copySelection(text, () => term.focus()); };
   client.scanOsc52 = createOsc52Scanner(onCopyText);
   host.addEventListener("mouseup", () => setTimeout(() => { if (term.hasSelection()) onCopyText(term.getSelection()); }));
   wireHerdrFullscreen(client);

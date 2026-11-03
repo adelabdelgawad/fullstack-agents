@@ -77,7 +77,7 @@
     }
   ],
   "source_hashes": {
-    ".claude-plugin/plugin.json": "13216da5ecdf6337cf4f3f376059213420021949d43f8f972be1de2172183610",
+    ".claude-plugin/plugin.json": "06cf9699d42bdd34d8bddf70aa305e93bad15dd0e4ad46c27425a71b57adddd8",
     ".ruff_cache/.gitignore": "9e3a60f1e6ec4ae60215c11d54b171392745ec25e9dded433d5bd921363af316",
     ".ruff_cache/0.17.3/15465963306022667406": "0a8a06c0a77ef8e90d3fc2676fc7095103003497106cdfe36ffab7ad576bb8cd",
     ".ruff_cache/0.17.3/5747855808491737748": "a64c5b874511a1bfe2bb3553d1872c25a0d98739c526aeb2803d43bbffe20b7e",
@@ -186,7 +186,7 @@
     "scripts/lib/auto_handoff.py": "5d6d7ce4e0c2cc07ab954bcc921eb0c0088f63ec800fe242714e25d95e1a216b",
     "scripts/lib/claude_cli.py": "79be204fa1b67ed5b95a088256b204b0e2a17d5526a9f962b47e38677270e381",
     "scripts/lib/context_handoff.py": "cd1e4286da89e136862faf4fd15233f21288a8c5a0547afeccfe70cc7c5f7c00",
-    "scripts/lib/dashboard.html": "ef83a211d052bc9e8141b497e1decacf062cfcda7ebb84d01917fcc3f2107142",
+    "scripts/lib/dashboard.html": "a6eb99c61d0661a71e12054adcc0bb1306800fbc7ca6c6f9970f9ab5ed31b8cf",
     "scripts/lib/deploy_hold.py": "1309c5a2f308692d28deaaf91594eb1c5034e5bf89d3f3c59f612962c313e0a8",
     "scripts/lib/extract-result.py": "d49fa538799f294b972db08cf556a0d9561e91ba3f831566ded9f88eab876640",
     "scripts/lib/fleet.css": "016f582ee2e04adaf8cc593b040d3540d28d8539d3e77c77d15a446bafc008fa",

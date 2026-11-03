@@ -101,6 +101,34 @@ process.stdout.write(JSON.stringify(received));
         self.assertEqual(out, [])
 
 
+@unittest.skipUnless(shutil.which("node"), "node unavailable: herdr client tests require Node.js")
+class CopySelectionTests(unittest.TestCase):
+    def test_blocked_copy_offers_a_click_that_retries_the_same_text(self):
+        source = HTML.read_text()
+        code = re.search(r"async function copySelection[\s\S]*?\n}\n", source).group()
+        script = code + """
+const toasts = [], writes = [];
+let allow = false, restored = 0;
+async function writeClipboard(text) { writes.push(text.length); return allow; }
+function showHerdrToast(message, action) { toasts.push({message, action}); }
+(async () => {
+  const text = "x".repeat(40000);
+  await copySelection(text, () => restored++);
+  allow = true;
+  await toasts[0].action.run();
+  process.stdout.write(JSON.stringify({toasts: toasts.map(t => [t.message, t.action && t.action.label]), writes, restored}));
+})();
+"""
+        out = json.loads(subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True).stdout)
+        self.assertEqual(out["toasts"], [["copy blocked by the browser", "copy 40000 chars"], ["copied 40000 chars", None]])
+        self.assertEqual(out["writes"], [40000, 40000])
+        self.assertEqual(out["restored"], 2)
+
+    def test_herdr_client_copy_reports_the_real_result(self):
+        source = HTML.read_text()
+        self.assertIn("const onCopyText = text => { if (text) copySelection(text, () => term.focus()); };", source)
+
+
 class RemovedChromeTests(unittest.TestCase):
     def test_removed_herdr_sidebar_and_tab_chrome_left_no_references(self):
         source = HTML.read_text()
