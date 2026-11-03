@@ -89,8 +89,8 @@
       "text": "U0 parity harness committed af23ae4 + states e705b2d; contract 77dd272 in docs/REACT_DASHBOARD.md 'Module contract'; / vs / green 75/75"
     },
     {
-      "evidence": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/logs/u1-build.log",
-      "text": "U1 implementer run implement-20261103-132435-541185 finished; files uncommitted (staged by dispatcher) in worktree; build + 25 vitest tests pass"
+      "evidence": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/74648219-b630-4dfc-9bf2-9f49d6dfc6fc/scratchpad/logs/parity-u1-shell.log",
+      "text": "U1 audited, repaired by lead and committed 151132d + 3ded64c; ledger checks BUILD/C1/C2/R1/R2 pass; shell parity 6/6"
     }
   ],
   "evidence": [
@@ -99,22 +99,23 @@
     "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/fixtures/fixtures.json",
     "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/briefs/u1.md",
     "/home/ashadmin/.codex/fsa-runs/implement-20261103-132435-541185.last.txt",
-    "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/handoff-next.md"
+    "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/74648219-b630-4dfc-9bf2-9f49d6dfc6fc/scratchpad/handoff-next.md",
+    "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/74648219-b630-4dfc-9bf2-9f49d6dfc6fc/scratchpad/logs/u1-review.md"
   ],
   "goal": "Port the agent dashboard (dashboard.html, fleet.js, orchestrators.js, fleet.css) 1:1 to React 18 + TypeScript with Vite; source dashboard/, dist committed at plugins/fullstack-agents/scripts/lib/dashboard-react/, served at /next beside the old UI; switch / in U6.",
   "identity": {
     "branch": "react-dashboard",
     "checkout": "/home/ashadmin/workspace/fullstack-agents-react",
     "detached": false,
-    "head": "e705b2d5835e6289bbb48a17a155d58b9befed9d",
+    "head": "3ded64c8198d4d7460a05332d2481650d9dfc2d2",
     "root": "/home/ashadmin/workspace/fullstack-agents-react",
     "schema": 1,
-    "session_id": "34f94a84-a134-4113-8eba-235795412266",
+    "session_id": "74648219-b630-4dfc-9bf2-9f49d6dfc6fc",
     "task_id": "react-dashboard",
-    "written_at": "2026-11-03T13:39:12.222669Z"
+    "written_at": "2026-11-03T13:46:23.392905Z"
   },
   "next": {
-    "action": "U1 audit then U2-U4 dispatch and U5 direct port; full step list in /tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/handoff-next.md",
+    "action": "write U2/U3/U4 briefs and dispatch in parallel, port U5 directly; full notes in /tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/74648219-b630-4dfc-9bf2-9f49d6dfc6fc/scratchpad/handoff-next.md",
     "owner": "lead"
   },
   "scope": {
@@ -189,6 +190,12 @@
 - 2026-11-03T13:43:48Z U1 check_finish check="R2" run="e6090b44b137c55f366703df6a340781" result="pass" executor="attested" reason=""
 - 2026-11-03T13:44:07Z U1 status from="verifying" to="done" reason=""
 - 2026-11-03T13:44:07Z U1 done_gate accepted="BUILD, C1, C2, R1, R2"
+- 2026-11-03T13:48:49Z U2 accept reason="" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/704b0464-bfd3-4f1b-a591-af0eec8e6151/scratchpad/briefs/u2.md"
+- 2026-11-03T13:48:49Z U3 accept reason="" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/704b0464-bfd3-4f1b-a591-af0eec8e6151/scratchpad/briefs/u3.md"
+- 2026-11-03T13:48:49Z U4 accept reason="" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/704b0464-bfd3-4f1b-a591-af0eec8e6151/scratchpad/briefs/u4.md"
+- 2026-11-03T13:50:41Z U2 accept reason="advisor fixes: tsx test paths, showRunLog exception, shared lib helpers, no second contextmenu handler" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/704b0464-bfd3-4f1b-a591-af0eec8e6151/scratchpad/briefs/u2.md"
+- 2026-11-03T13:50:41Z U3 accept reason="advisor fixes: tsx test paths, showRunLog exception, shared lib helpers, no second contextmenu handler" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/704b0464-bfd3-4f1b-a591-af0eec8e6151/scratchpad/briefs/u3.md"
+- 2026-11-03T13:50:41Z U4 accept reason="advisor fixes: tsx test paths, showRunLog exception, shared lib helpers, no second contextmenu handler" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/704b0464-bfd3-4f1b-a591-af0eec8e6151/scratchpad/briefs/u4.md"
 <!-- fsa:log:end -->
 
 <!-- fsa:blockers:start -->
@@ -706,6 +713,329 @@
         "rationale": "the build reads the manifest, configs and CSS; the port reads the old UI sources"
       },
       "spec_at": "2026-11-03T13:24:31.622900Z"
+    },
+    "U2": {
+      "automated_waiver": null,
+      "checks": {
+        "BUILD": {
+          "command": "cd dashboard && npx tsc -p . --noEmit 2>&1 | (! grep -E '^src/views/(AgentsView|agents/)') && npx vitest run src/views/agents",
+          "cwd": ".",
+          "definition_digest": "4fbac26138777a6213634df10be3b761acdb7e8b8c581db10d6af2fb922f6b58",
+          "expect": {
+            "none": "compile/lint success is silent"
+          },
+          "method": "command"
+        },
+        "C1": {
+          "command": "npx tsc -p . --noEmit 2>&1 | (! grep -E '^src/views/(AgentsView|agents/)') && npx vitest run src/views/agents",
+          "cwd": "dashboard",
+          "definition_digest": "0a6b7d5dc533a4e915c8f60ffa7c0ac2fa3798a7d742f6d2cbf7efb602b90330",
+          "expect": {
+            "patterns": [
+              "Tests +[0-9]+ passed"
+            ],
+            "reject": []
+          },
+          "method": "command"
+        },
+        "R1": {
+          "definition_digest": "1cd47b664121beee44f3153e8e30e5f8d4fe6be1298726f827e3317a450c1b1d",
+          "method": "inspection"
+        },
+        "R2": {
+          "definition_digest": "fa1d1d41710eaa10a41571329587e2a06e3e497fc635a5105c40310717eaa7ad",
+          "method": "review"
+        },
+        "R3": {
+          "definition_digest": "b482a99d6073cf27a79777d4cb35a6d85dae471dcab89d37828c461b8cf24683",
+          "method": "review"
+        }
+      },
+      "criteria": [
+        {
+          "checks": [
+            "C1"
+          ],
+          "id": "1",
+          "text": "Own paths type-check and agents tests pass"
+        },
+        {
+          "checks": [
+            "R1"
+          ],
+          "id": "2",
+          "text": "Every agents* state in parity/states.mjs plus ctx-menu (right-clicking a card rendered by U2) is DOM-equal to the old UI"
+        },
+        {
+          "checks": [
+            "R2"
+          ],
+          "id": "3",
+          "text": "Keyboard: Enter/Space open a focused card, w toggles wall (App), favourite buttons do not open the card"
+        },
+        {
+          "checks": [
+            "R3"
+          ],
+          "id": "4",
+          "text": "No file outside ALLOWED_PATHS; store.ts/types.ts changes only reported"
+        },
+        {
+          "checks": [
+            "BUILD"
+          ],
+          "id": "BUILD",
+          "text": "BUILD passes"
+        }
+      ],
+      "kind": "code",
+      "results": {},
+      "scope": {
+        "dependencies": [
+          "dashboard/src/App.tsx",
+          "dashboard/src/components/OutDialog.tsx",
+          "dashboard/src/lib/",
+          "dashboard/src/panel/Panel.tsx",
+          "dashboard/src/store.ts",
+          "plugins/fullstack-agents/scripts/lib/dashboard.html",
+          "plugins/fullstack-agents/scripts/lib/fleet.js",
+          "plugins/fullstack-agents/scripts/lib/orchestrators.js"
+        ],
+        "dependencies_none": null,
+        "env": [],
+        "inputs": [],
+        "paths": [
+          "dashboard/src/views/AgentsView.tsx",
+          "dashboard/src/views/agents/Activity.tsx",
+          "dashboard/src/views/agents/FleetTiles.tsx",
+          "dashboard/src/views/agents/FleetToolbar.tsx",
+          "dashboard/src/views/agents/OrcCard.tsx",
+          "dashboard/src/views/agents/Orchestrators.tsx",
+          "dashboard/src/views/agents/Workers.tsx",
+          "dashboard/src/views/agents/agents.test.ts",
+          "dashboard/src/views/agents/agents.test.tsx",
+          "dashboard/src/views/agents/tpm.ts",
+          "none (new vitest file only)"
+        ],
+        "rationale": "the view reads U1's store and libs and calls U3's stubbed openAgent/openRunLog by their fixed signatures"
+      },
+      "spec_at": "2026-11-03T13:50:41.038700Z"
+    },
+    "U3": {
+      "automated_waiver": null,
+      "checks": {
+        "BUILD": {
+          "command": "cd dashboard && npx tsc -p . --noEmit 2>&1 | (! grep -E '^src/(panel/|components/OutDialog)') && npx vitest run src/panel",
+          "cwd": ".",
+          "definition_digest": "bbeaaf53368cfbaeb2fa846d1a0a4562ceae1872bcf0e2f2dcc0c5437c965846",
+          "expect": {
+            "none": "compile/lint success is silent"
+          },
+          "method": "command"
+        },
+        "C1": {
+          "command": "npx tsc -p . --noEmit 2>&1 | (! grep -E '^src/(panel/|components/OutDialog)') && npx vitest run src/panel",
+          "cwd": "dashboard",
+          "definition_digest": "d69972c7fadca676c365015721c4f6dd3c3b3786c93ce42a8b3fdcfa844b7432",
+          "expect": {
+            "patterns": [
+              "Tests +[0-9]+ passed"
+            ],
+            "reject": []
+          },
+          "method": "command"
+        },
+        "R1": {
+          "definition_digest": "974f0db9c2d5c9562cf351e376929bc8cb06a7c6518066802c6621a9ca4c3b04",
+          "method": "inspection"
+        },
+        "R2": {
+          "definition_digest": "43f2ceac599e6a341a269cd5b3044ac17d4ee46a7313454245f939b3798a9c7d",
+          "method": "review"
+        },
+        "R3": {
+          "definition_digest": "e38643223f80b7a4a034172ace034ec902c9ddbc4ee235de4451ae4ce92cc4fb",
+          "method": "review"
+        }
+      },
+      "criteria": [
+        {
+          "checks": [
+            "C1"
+          ],
+          "id": "1",
+          "text": "Own paths type-check and panel tests pass"
+        },
+        {
+          "checks": [
+            "R1"
+          ],
+          "id": "2",
+          "text": "States panel-info, panel-git, panel-run-log, out-console, panel-close are DOM-equal to the old UI"
+        },
+        {
+          "checks": [
+            "R2"
+          ],
+          "id": "3",
+          "text": "Must-haves (a)-(d) hold"
+        },
+        {
+          "checks": [
+            "R3"
+          ],
+          "id": "4",
+          "text": "No file outside ALLOWED_PATHS; store.ts/types.ts changes only reported"
+        },
+        {
+          "checks": [
+            "BUILD"
+          ],
+          "id": "BUILD",
+          "text": "BUILD passes"
+        }
+      ],
+      "kind": "code",
+      "results": {},
+      "scope": {
+        "dependencies": [
+          "dashboard/src/App.tsx",
+          "dashboard/src/lib/",
+          "dashboard/src/store.ts",
+          "dashboard/src/terminal/CardTerminal.tsx",
+          "plugins/fullstack-agents/scripts/lib/dashboard.html",
+          "tests/dashboard/test_information_ui.py"
+        ],
+        "dependencies_none": null,
+        "env": [],
+        "inputs": [],
+        "paths": [
+          "dashboard/src/components/OutDialog.tsx",
+          "dashboard/src/panel/GitTab.tsx",
+          "dashboard/src/panel/InfoTab.tsx",
+          "dashboard/src/panel/Panel.tsx",
+          "dashboard/src/panel/PanelHead.tsx",
+          "dashboard/src/panel/RunCards.tsx",
+          "dashboard/src/panel/TaskList.tsx",
+          "dashboard/src/panel/docs.ts",
+          "dashboard/src/panel/panel.test.ts",
+          "dashboard/src/panel/panel.test.tsx",
+          "dashboard/src/panel/panelLib.ts",
+          "none (new vitest file only)"
+        ],
+        "rationale": "the panel reads U1's store and libs and mounts U4's CardTerminal by its fixed {card} signature"
+      },
+      "spec_at": "2026-11-03T13:50:41.131934Z"
+    },
+    "U4": {
+      "automated_waiver": null,
+      "checks": {
+        "BUILD": {
+          "command": "cd dashboard && npx tsc -p . --noEmit 2>&1 | (! grep -E '^src/(terminal/|views/HerdrView)') && npx vitest run src/terminal",
+          "cwd": ".",
+          "definition_digest": "9550e218d5a604b2e5e1f70f855bf61106b53de07e6fc42d7838d64d76dbc8e0",
+          "expect": {
+            "none": "compile/lint success is silent"
+          },
+          "method": "command"
+        },
+        "C1": {
+          "command": "npx tsc -p . --noEmit 2>&1 | (! grep -E '^src/(terminal/|views/HerdrView)') && npx vitest run src/terminal",
+          "cwd": "dashboard",
+          "definition_digest": "f56767e174c1dabaa7a9a5127e2f94a60cd15c76b32fdd0be95a20009a52877a",
+          "expect": {
+            "patterns": [
+              "Tests +[0-9]+ passed"
+            ],
+            "reject": []
+          },
+          "method": "command"
+        },
+        "R1": {
+          "definition_digest": "f68c62d5f9ee7fb72cadd2fc793cebcea842325977376fc214bd817ad7889bed",
+          "method": "inspection"
+        },
+        "R2": {
+          "definition_digest": "f9e48a1fe8d34ffd395c228dc2f939738f8d8df6daa16358fb1efc8b95cb648a",
+          "method": "review"
+        },
+        "R3": {
+          "definition_digest": "8261c1b8bfe2abaebda50aef061f66b4f9466a91724842891b7b7091dd22efcb",
+          "method": "review"
+        }
+      },
+      "criteria": [
+        {
+          "checks": [
+            "C1"
+          ],
+          "id": "1",
+          "text": "Own paths type-check and terminal tests pass"
+        },
+        {
+          "checks": [
+            "R1"
+          ],
+          "id": "2",
+          "text": "States panel-terminal, herdr-new-session, herdr are DOM-equal to the old UI"
+        },
+        {
+          "checks": [
+            "R2"
+          ],
+          "id": "3",
+          "text": "Must-haves (a)-(e) hold"
+        },
+        {
+          "checks": [
+            "R3"
+          ],
+          "id": "4",
+          "text": "No file outside ALLOWED_PATHS; store.ts/types.ts changes only reported"
+        },
+        {
+          "checks": [
+            "BUILD"
+          ],
+          "id": "BUILD",
+          "text": "BUILD passes"
+        }
+      ],
+      "kind": "code",
+      "results": {},
+      "scope": {
+        "dependencies": [
+          "dashboard/index.html",
+          "dashboard/src/App.tsx",
+          "dashboard/src/components/Header.tsx",
+          "dashboard/src/lib/",
+          "dashboard/src/store.ts",
+          "plugins/fullstack-agents/scripts/lib/dashboard.html",
+          "tests/dashboard/test_herdr_client_ui.py",
+          "tests/dashboard/test_terminal_scroll.py"
+        ],
+        "dependencies_none": null,
+        "env": [],
+        "inputs": [],
+        "paths": [
+          "dashboard/src/terminal/CardTerminal.tsx",
+          "dashboard/src/terminal/HerdrOverlay.tsx",
+          "dashboard/src/terminal/copy.test.ts",
+          "dashboard/src/terminal/copy.ts",
+          "dashboard/src/terminal/files.ts",
+          "dashboard/src/terminal/herdrClient.ts",
+          "dashboard/src/terminal/herdrMenus.tsx",
+          "dashboard/src/terminal/liveTerminal.test.ts",
+          "dashboard/src/terminal/liveTerminal.ts",
+          "dashboard/src/terminal/osc52.test.ts",
+          "dashboard/src/terminal/osc52.ts",
+          "dashboard/src/terminal/snapshotTerminal.ts",
+          "dashboard/src/views/HerdrView.tsx",
+          "none (new vitest files only)"
+        ],
+        "rationale": "the terminals read U1's store and libs; the header button and xterm globals come from U1/U0"
+      },
+      "spec_at": "2026-11-03T13:50:41.198354Z"
     }
   },
   "runs": {},
@@ -717,3 +1047,4 @@
 ## Ownership log
 - 2026-11-03T13:09:18.581136Z adopted by 34f94a84-a134-4113-8eba-235795412266 from 978905e0-a5f6-4f3f-af8b-b26011a41634 (free)
 - 2026-11-03T13:39:36.511004Z adopted by 74648219-b630-4dfc-9bf2-9f49d6dfc6fc from 34f94a84-a134-4113-8eba-235795412266 (free)
+- 2026-11-03T13:46:51.071379Z adopted by 704b0464-bfd3-4f1b-a591-af0eec8e6151 from 74648219-b630-4dfc-9bf2-9f49d6dfc6fc (free)

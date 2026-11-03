@@ -86,3 +86,32 @@ export function fleetCompare(a: Card, b: Card, fleet: FleetState): number {
   if (fleet.sort === "context") return ((uy.fill as number) || 0) - ((ux.fill as number) || 0) || b.updated - a.updated;
   return rank(a) - rank(b) || b.updated - a.updated;
 }
+
+export const STATE_TEXT: Record<string, string> = { working: "working", waiting: "waiting on you", idle: "just finished a turn", still_open: "stopped", quiet: "stale · no output for 5+ min" };
+
+export interface Step {
+  text?: string;
+  state: string;
+  [key: string]: unknown;
+}
+
+export interface CardAgent {
+  id: string;
+  sid: string;
+  state: string;
+  at: number;
+  shell?: unknown;
+  [key: string]: unknown;
+}
+
+const stepsOf = (c: Card): Step[] => (c.steps || []) as Step[];
+
+export const stepsDone = (c: Card): number => stepsOf(c).filter((x) => x.state === "done" || x.state === "skipped").length;
+
+export const activeStep = (c: Card): Step | undefined => stepsOf(c).find((x) => x.state === "active");
+
+export function cardAgents(c: Partial<Card>): CardAgent[] {
+  return (c.now || [])
+    .flatMap((s) => ((s.agents || []) as CardAgent[]).map((a) => ({ ...a, sid: s.id })))
+    .sort((a, b) => Number(b.state === "running") - Number(a.state === "running") || b.at - a.at);
+}
