@@ -277,6 +277,7 @@ aside .gcol pre.diff { margin: 0; border-radius: 0; background: none; padding: 0
 }
 .herdr-client { position: relative; display: flex; flex-direction: column; height: calc(100vh - 57px); overflow: hidden; margin: 0; padding: 0; border: 0; background: #282c34; }
 html.herdr-page .herdr-client { height: 100%; }
+html .herdr-client.herdr-fill { position: fixed; inset: 0; z-index: 1000; height: 100vh; height: 100dvh; }
 .herdr-client-head { flex: none; display: flex; align-items: center; gap: 2ch; padding: 4px 1ch; background: var(--herdr-panel-bg); }
 .herdr-client-head button { background: transparent; color: var(--herdr-text); border: 1px solid var(--herdr-overlay0); padding: 1px 1ch; font: inherit; cursor: pointer; }
 .herdr-client-head button:hover { border-color: var(--herdr-accent); }
@@ -1472,6 +1473,50 @@ function closeHerdrClient() {
   herdrClient = null;
 }
 
+function herdrLiveStatus(client) {
+  return `live · ${client.renderer} · ${client.term.cols}×${client.term.rows}`;
+}
+
+function fullscreenNow() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+
+function wireHerdrFullscreen(client) {
+  const {root, term} = client, button = root.querySelector("[data-herdr-client-fullscreen]");
+  const request = root.requestFullscreen || root.webkitRequestFullscreen;
+  const exit = document.exitFullscreen || document.webkitExitFullscreen;
+  const sync = () => {
+    const on = fullscreenNow() === root || root.classList.contains("herdr-fill");
+    button.textContent = on ? "exit full screen" : "full screen";
+    button.setAttribute("aria-pressed", String(on));
+    if (on) return;
+    navigator.keyboard?.unlock?.();
+    if (client.ws?.readyState === WebSocket.OPEN) client.setStatus(herdrLiveStatus(client));
+    if (!matchMedia("(pointer: coarse)").matches) term.focus();
+  };
+  root.addEventListener("fullscreenchange", sync);
+  root.addEventListener("webkitfullscreenchange", sync);
+  button.onclick = async () => {
+    if (root.classList.contains("herdr-fill")) {
+      root.classList.remove("herdr-fill");
+      return sync();
+    }
+    if (fullscreenNow()) return Promise.resolve(exit?.call(document)).catch(() => {});
+    try {
+      if (!request) throw new Error("no element fullscreen");
+      await request.call(root);
+    } catch (error) {
+      root.classList.add("herdr-fill");
+      return sync();
+    }
+    if (!navigator.keyboard?.lock) return;
+    try {
+      await navigator.keyboard.lock();
+      client.setStatus("keyboard locked: hold Esc to leave");
+    } catch (error) {}
+  };
+}
+
 function connectHerdrClient(client) {
   const {term, root} = client;
   root.querySelector("[data-herdr-client-reconnect]").hidden = true;
@@ -1481,7 +1526,7 @@ function connectHerdrClient(client) {
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/herdr/client?${query}`);
   ws.binaryType = "arraybuffer";
   client.ws = ws;
-  ws.onopen = () => client.setStatus(`live · ${client.renderer} · ${term.cols}×${term.rows}`);
+  ws.onopen = () => client.setStatus(herdrLiveStatus(client));
   ws.onmessage = event => {
     if (typeof event.data === "string") return;
     const bytes = new Uint8Array(event.data);
@@ -1526,20 +1571,14 @@ async function mountHerdrClient(root) {
   };
   client.scanOsc52 = createOsc52Scanner(onCopyText);
   host.addEventListener("mouseup", () => setTimeout(() => { if (term.hasSelection()) onCopyText(term.getSelection()); }));
-  root.querySelector("[data-herdr-client-lock]").onclick = async () => {
-    try {
-      await root.requestFullscreen();
-      if (!navigator.keyboard?.lock) { client.setStatus("fullscreen only: this browser has no Keyboard Lock"); return; }
-      await navigator.keyboard.lock();
-      client.setStatus("keyboard locked: hold Esc to leave");
-    } catch (error) { client.setStatus(`key lock failed: ${error.message}`); }
-  };
+  wireHerdrFullscreen(client);
   root.querySelector("[data-herdr-client-reconnect]").onclick = () => connectHerdrClient(client);
   client.resizeObserver = new ResizeObserver(() => {
     fit.fit();
     const next = `${term.cols}x${term.rows}`;
     if (next === client.size) return;
     client.size = next;
+    if (statusEl.textContent.startsWith("live")) client.setStatus(herdrLiveStatus(client));
     if (client.ws?.readyState === WebSocket.OPEN) client.ws.send(JSON.stringify({type: "resize", cols: term.cols, rows: term.rows}));
   });
   client.resizeObserver.observe(host);
@@ -1564,7 +1603,7 @@ function renderHerdrPage() {
     return;
   }
   if (herdrClient && main.contains(herdrClient.root)) return;
-  main.innerHTML = '<div class="herdr-client"><header class="herdr-client-head"><button data-herdr-client-lock title="Fullscreen with Keyboard Lock (Chromium)">key lock</button><button data-herdr-client-reconnect hidden>reconnect</button><span class="herdr-client-status" data-herdr-client-status>starting…</span></header><div class="herdr-client-host"></div></div>';
+  main.innerHTML = '<div class="herdr-client"><header class="herdr-client-head"><button data-herdr-client-fullscreen aria-pressed="false" title="Full screen; desktop Chromium also locks the keyboard (hold Esc to leave)">full screen</button><button data-herdr-client-reconnect hidden>reconnect</button><span class="herdr-client-status" data-herdr-client-status>starting…</span></header><div class="herdr-client-host"></div></div>';
   mountHerdrClient(main.querySelector(".herdr-client"));
 }
 
