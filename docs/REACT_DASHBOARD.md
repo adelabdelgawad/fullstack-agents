@@ -46,6 +46,21 @@ For each named state (view, open card, panel tab, open menu or dialog, filter, w
 `outerHTML` of `header`, `#main`, `#panel`, `#ctx` and `#out` (attributes sorted, whitespace-only text dropped). A unit
 is accepted when its states are DOM-equal and its tests pass.
 
+Normalization also compares `html` classes and `document.title`, rewrites `style` from `el.style.cssText`, sorts class
+tokens, drops the old UI's render caches (`data-h`, `data-sig`), and replaces the inside of `.terminal` and
+`.herdr-client` with `[opaque]` (xterm is checked by U4's own tests). `WebSocket` and `EventSource` are inert stubs.
+
+| Step | Command (from `dashboard/`) |
+|---|---|
+| Scratch server | `parity/serve.sh 18766` (127.0.0.1, herdr wrapper on `PATH` bound to session `fsatest`) |
+| Record fixtures | `PARITY_LIVE_TOKEN=<live dashboard token> node parity/run.mjs record --fixtures <scratch dir>`; drives `/` through every state, saves GET responses, takes `/api/herdr*` read-only from the live dashboard (`--live`, default `http://127.0.0.1:8766`) |
+| Compare | `node parity/run.mjs compare --fixtures <scratch dir> [--unit U2] [--state panel-git]`; exit 0 only when every root is equal and no harness error |
+| Self-check | `--right /` must be green; a red self-check means the harness, not the port, is wrong |
+
+Fixtures hold real session data: keep them in a scratch directory, never in the repository. A request with no fixture is
+answered 404 and reported as a harness error; nothing passes through to a server. States are data in
+`parity/states.mjs` (`name`, owning `unit`, `seed`, `steps`, `roots`); a unit adds the states it needs.
+
 ## Source tests to port
 
 | Python test (old UI) | React owner |

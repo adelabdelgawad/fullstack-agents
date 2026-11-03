@@ -3,7 +3,7 @@
 <!-- fsa:tasks:start -->
 | ID | Status | Task | Note | Owner | Activity | Active until | Parent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| U0 | in_progress | Scaffold Vite React TS, /next route, parity harness | scaffold+route+test committed 845d03a; remaining: parity harness (dashboard/parity/, herdr --session fsatest wrapper, recorded API fixtures in scratchpad) |  |  |  |  |
+| U0 | done | Scaffold Vite React TS, /next route, parity harness | scaffold 845d03a; parity harness dashboard/parity (serve.sh, run.mjs record\|compare, states.mjs); / vs / green 48/48; fixtures in session scratchpad |  |  |  |  |
 | U1 | pending | Core: store, API, shell, header, toasts, context menu | depends U0 |  |  |  |  |
 | U2 | pending | Agents view: tiles, toolbar, orchestrator wall, feed | depends U1 |  |  |  |  |
 | U3 | pending | Detail panel: info, git, log, output dialog | depends U1 |  |  |  |  |
@@ -142,4 +142,239 @@
 ## Task log
 <!-- fsa:log:start -->
 - 2026-11-03T13:06:07Z - init
+- 2026-11-03T13:19:04Z U0 accept reason="" invalidated=""
+- 2026-11-03T13:19:08Z U0 check_start check="C1" run="6ea9f895143cdd59872f4350319a0f0a"
+- 2026-11-03T13:19:17Z U0 check_finish check="C1" run="6ea9f895143cdd59872f4350319a0f0a" result="pass" executor="tool" reason=""
+- 2026-11-03T13:19:17Z U0 check_start check="C2" run="4965d9fb7773fd44e7478ee8ca89a12c"
+- 2026-11-03T13:19:20Z U0 check_finish check="C2" run="4965d9fb7773fd44e7478ee8ca89a12c" result="pass" executor="tool" reason=""
+- 2026-11-03T13:19:20Z U0 check_start check="C3" run="f76d65ded73d0f871341e9c52135b17b"
+- 2026-11-03T13:19:55Z U0 check_finish check="C3" run="f76d65ded73d0f871341e9c52135b17b" result="pass" executor="tool" reason=""
+- 2026-11-03T13:20:03Z U0 check_start check="R1" run="0d77b4f761084adbea39a0467761cb6d"
+- 2026-11-03T13:20:03Z U0 check_finish check="R1" run="0d77b4f761084adbea39a0467761cb6d" result="pass" executor="attested" reason=""
+- 2026-11-03T13:20:08Z U0 status from="in_progress" to="done" reason=""
+- 2026-11-03T13:20:08Z U0 done_gate accepted="C1, C2, C3, R1"
 <!-- fsa:log:end -->
+
+<!-- fsa:evidence:start -->
+```json
+{
+  "baselines": {},
+  "deliverables": {
+    "U0": {
+      "automated_waiver": null,
+      "checks": {
+        "C1": {
+          "command": "python3 -m unittest tests.dashboard.test_herdr_web",
+          "cwd": ".",
+          "definition_digest": "8bee8fc3e7245deebec29b194057e672802db25fdef5752dde5c23e643b0e399",
+          "expect": {
+            "patterns": [
+              "OK"
+            ],
+            "reject": [
+              "FAILED"
+            ]
+          },
+          "method": "command"
+        },
+        "C2": {
+          "command": "npm run -s typecheck && echo typecheck-ok",
+          "cwd": "dashboard",
+          "definition_digest": "ed513a4003d1fd32fa7f73af3da7b6e4699e5abe8c5df125e5dacae38926ae94",
+          "expect": {
+            "patterns": [
+              "typecheck-ok"
+            ],
+            "reject": []
+          },
+          "method": "command"
+        },
+        "C3": {
+          "command": "node parity/run.mjs compare --fixtures /tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/fixtures --right / --out /tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/parity-selfcheck",
+          "cwd": "dashboard",
+          "definition_digest": "23c7e8c89635bd80035a15001ffbd0ae0c8c00e404efb18b7388472b7fd2e63a",
+          "expect": {
+            "patterns": [
+              "GREEN: (\\d+)/\\1 equal"
+            ],
+            "reject": [
+              "RED",
+              "ERROR"
+            ]
+          },
+          "method": "command"
+        },
+        "R1": {
+          "definition_digest": "1d651262f5bf6511bfd0306399cca0e1009a6aa5c6f4d470ef563a582d3a4c13",
+          "method": "review"
+        }
+      },
+      "completed": {
+        "at": "2026-11-03T13:20:08.922213Z",
+        "with": {
+          "C1": "pass",
+          "C2": "pass",
+          "C3": "pass",
+          "R1": "pass"
+        }
+      },
+      "criteria": [
+        {
+          "checks": [
+            "C1"
+          ],
+          "id": "AC1",
+          "text": "/next, /next/app.js and /next/app.css are served behind the token"
+        },
+        {
+          "checks": [
+            "C2"
+          ],
+          "id": "AC2",
+          "text": "TypeScript scaffold type-checks"
+        },
+        {
+          "checks": [
+            "C3",
+            "R1"
+          ],
+          "id": "AC3",
+          "text": "Parity harness is deterministic: / vs / green on every state, no API pass-through"
+        }
+      ],
+      "kind": "code",
+      "results": {
+        "C1": {
+          "definition_digest": "8bee8fc3e7245deebec29b194057e672802db25fdef5752dde5c23e643b0e399",
+          "evidence": [
+            {
+              "path": "/home/ashadmin/.local/state/fullstack-agents/tasks/evidence/66bc761938bc58fb/U0-C1-20261103T131908Z.log",
+              "sha256": "28d884c8c29a1580199d6a65f1713ae9d4b3d7ec55e6843140453a962f49854a"
+            }
+          ],
+          "executor": "tool",
+          "exit": 0,
+          "finished_at": "2026-11-03T13:19:17.401925Z",
+          "reason": null,
+          "result": "pass",
+          "started_at": "2026-11-03T13:19:08.721076Z",
+          "state_after": {
+            "digest": "3fe193105e0bdfbeea72f8d362953df4723d5b954da8c8cfccd0dc90725399b6",
+            "files": 18,
+            "head": "a63380d948e8711ff406df2b478e936caadc48a5"
+          },
+          "state_before": {
+            "digest": "3fe193105e0bdfbeea72f8d362953df4723d5b954da8c8cfccd0dc90725399b6",
+            "files": 18,
+            "head": "a63380d948e8711ff406df2b478e936caadc48a5"
+          }
+        },
+        "C2": {
+          "definition_digest": "ed513a4003d1fd32fa7f73af3da7b6e4699e5abe8c5df125e5dacae38926ae94",
+          "evidence": [
+            {
+              "path": "/home/ashadmin/.local/state/fullstack-agents/tasks/evidence/66bc761938bc58fb/U0-C2-20261103T131917Z.log",
+              "sha256": "f49bcff8482b2b6c648f036f1a0e49773ede65a11581bd8732f2ff8756ddade3"
+            }
+          ],
+          "executor": "tool",
+          "exit": 0,
+          "finished_at": "2026-11-03T13:19:20.230059Z",
+          "reason": null,
+          "result": "pass",
+          "started_at": "2026-11-03T13:19:17.619255Z",
+          "state_after": {
+            "digest": "3fe193105e0bdfbeea72f8d362953df4723d5b954da8c8cfccd0dc90725399b6",
+            "files": 18,
+            "head": "a63380d948e8711ff406df2b478e936caadc48a5"
+          },
+          "state_before": {
+            "digest": "3fe193105e0bdfbeea72f8d362953df4723d5b954da8c8cfccd0dc90725399b6",
+            "files": 18,
+            "head": "a63380d948e8711ff406df2b478e936caadc48a5"
+          }
+        },
+        "C3": {
+          "definition_digest": "23c7e8c89635bd80035a15001ffbd0ae0c8c00e404efb18b7388472b7fd2e63a",
+          "evidence": [
+            {
+              "path": "/home/ashadmin/.local/state/fullstack-agents/tasks/evidence/66bc761938bc58fb/U0-C3-20261103T131920Z.log",
+              "sha256": "0ac9101a07c00505209514492568041684090517bd083de2bf8e83144f6402f0"
+            }
+          ],
+          "executor": "tool",
+          "exit": 0,
+          "finished_at": "2026-11-03T13:19:55.998105Z",
+          "reason": null,
+          "result": "pass",
+          "started_at": "2026-11-03T13:19:20.402611Z",
+          "state_after": {
+            "digest": "3fe193105e0bdfbeea72f8d362953df4723d5b954da8c8cfccd0dc90725399b6",
+            "files": 18,
+            "head": "a63380d948e8711ff406df2b478e936caadc48a5"
+          },
+          "state_before": {
+            "digest": "3fe193105e0bdfbeea72f8d362953df4723d5b954da8c8cfccd0dc90725399b6",
+            "files": 18,
+            "head": "a63380d948e8711ff406df2b478e936caadc48a5"
+          }
+        },
+        "R1": {
+          "definition_digest": "1d651262f5bf6511bfd0306399cca0e1009a6aa5c6f4d470ef563a582d3a4c13",
+          "evidence": [
+            {
+              "path": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/u0-review.md",
+              "sha256": "3d3b60e049a7509f021e5bd67642699f7b3d1fa47cae744d6395baac1c87b818"
+            }
+          ],
+          "executor": "attested",
+          "finished_at": "2026-11-03T13:20:03.177520Z",
+          "reason": null,
+          "result": "pass",
+          "started_at": "2026-11-03T13:20:03.082882Z",
+          "state_after": {
+            "digest": "3fe193105e0bdfbeea72f8d362953df4723d5b954da8c8cfccd0dc90725399b6",
+            "files": 18,
+            "head": "a63380d948e8711ff406df2b478e936caadc48a5"
+          },
+          "state_before": {
+            "digest": "3fe193105e0bdfbeea72f8d362953df4723d5b954da8c8cfccd0dc90725399b6",
+            "files": 18,
+            "head": "a63380d948e8711ff406df2b478e936caadc48a5"
+          }
+        }
+      },
+      "scope": {
+        "dependencies": [
+          "plugins/fullstack-agents/scripts/lib/dashboard.html",
+          "plugins/fullstack-agents/scripts/lib/fleet.js",
+          "plugins/fullstack-agents/scripts/lib/orchestrators.js",
+          "plugins/fullstack-agents/scripts/lib/fleet.css"
+        ],
+        "dependencies_none": null,
+        "env": [],
+        "inputs": [],
+        "paths": [
+          "dashboard/parity/",
+          "dashboard/package.json",
+          "dashboard/package-lock.json",
+          "dashboard/vite.config.ts",
+          "dashboard/tsconfig.json",
+          "dashboard/index.html",
+          "dashboard/src/",
+          "plugins/fullstack-agents/scripts/fsa-dashboard",
+          "tests/dashboard/test_herdr_web.py"
+        ],
+        "rationale": "scaffold, /next route and parity harness; the harness drives the old UI files"
+      },
+      "spec_at": "2026-11-03T13:19:04.463323Z"
+    }
+  },
+  "runs": {},
+  "schema": 1
+}
+```
+<!-- fsa:evidence:end -->
+
+## Ownership log
+- 2026-11-03T13:09:18.581136Z adopted by 34f94a84-a134-4113-8eba-235795412266 from 978905e0-a5f6-4f3f-af8b-b26011a41634 (free)
