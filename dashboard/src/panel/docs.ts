@@ -3,8 +3,10 @@ import { esc } from "../lib/format";
 import { saidText } from "../lib/markup";
 import type { DashState, Session } from "../lib/types";
 
-export const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-const CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>';
+export const COPY_ICON =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+const CHECK_ICON =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>';
 
 export function resumeCmd(s: Session, state: DashState | null): string {
   if (s.engine === "codex") return `codex resume ${s.id}`;
@@ -24,12 +26,26 @@ export async function copyDoc(button: HTMLButtonElement, state: DashState | null
   let ok = false;
   const title = button.dataset.title || (button.dataset.title = button.title);
   try {
-    const response = button.dataset.said ? null : await fetch(`/api/doc?sid=${encodeURIComponent(button.dataset.docSid || "")}&path=${encodeURIComponent(button.dataset.doc || "")}`);
-    const text = button.dataset.said ? saidText(button.dataset.said, state) : response?.ok ? await response.text() : null;
+    const response = button.dataset.said
+      ? null
+      : await fetch(
+          `/api/doc?sid=${encodeURIComponent(button.dataset.docSid || "")}&path=${encodeURIComponent(button.dataset.doc || "")}`,
+        );
+    const text = button.dataset.said
+      ? saidText(button.dataset.said, state)
+      : response?.ok
+        ? await response.text()
+        : null;
     if (text !== null) ok = await writeClipboard(text || "");
-  } catch { ok = false; }
+  } catch {
+    ok = false;
+  }
   button.innerHTML = ok ? CHECK_ICON : "✕";
   button.classList.toggle("ok", ok);
   button.title = ok ? "Copied" : "Copy failed";
-  setTimeout(() => { button.innerHTML = COPY_ICON; button.classList.remove("ok"); button.title = title; }, 1500);
+  setTimeout(() => {
+    button.innerHTML = COPY_ICON;
+    button.classList.remove("ok");
+    button.title = title;
+  }, 1500);
 }

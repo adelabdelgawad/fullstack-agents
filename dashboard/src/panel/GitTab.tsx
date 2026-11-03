@@ -3,21 +3,294 @@ import { ago } from "../lib/format";
 import type { Card } from "../lib/types";
 import { diffHtml, enc, stc } from "./panelLib";
 
-interface GitFile { path: string; status: string; own?: boolean }
-interface GitItems { dirty: number; own?: number; recent?: boolean; commits: Array<{ sha: string; subject: string; at: number }> }
-const fresh = () => ({ sig: "", at: 0, items: null as GitItems | null, open: { unc: true, com: true, other: false }, item: null as string | null, files: null as GitFile[] | null, file: null as string | null, diff: "" });
+interface GitFile {
+  path: string;
+  status: string;
+  own?: boolean;
+}
+interface GitItems {
+  dirty: number;
+  own?: number;
+  recent?: boolean;
+  commits: Array<{ sha: string; subject: string; at: number }>;
+}
+const fresh = () => ({
+  sig: "",
+  at: 0,
+  items: null as GitItems | null,
+  open: { unc: true, com: true, other: false },
+  item: null as string | null,
+  files: null as GitFile[] | null,
+  file: null as string | null,
+  diff: "",
+});
 let git = { ...fresh(), hide1: false, hide2: false };
-export const resetGit = () => { git = { ...fresh(), hide1: git.hide1, hide2: git.hide2 }; };
+export const resetGit = () => {
+  git = { ...fresh(), hide1: git.hide1, hide2: git.hide2 };
+};
 
 export function GitTab({ card }: { card: Card }) {
-  const [, repaint] = useState(0), paint = () => repaint((n) => n + 1);
-  const loadDiff = async () => { const { item, file } = git; if (!item || !file) return; try { const text = await (await fetch(`/api/diff?key=${enc(card.key)}&ref=${enc(item)}&path=${enc(file)}`, { cache: "no-store" })).text(); if (git.item === item && git.file === file) { git.diff = text; paint(); } } catch {} };
-  const pickFile = (path: string) => { git.file = path; git.diff = ""; paint(); void loadDiff(); };
-  const loadFiles = async () => { const ref = git.item; if (!ref) return; try { git.files = await (await fetch(`/api/files?key=${enc(card.key)}&ref=${enc(ref)}`, { cache: "no-store" })).json(); } catch { return; } if (git.item !== ref) return; if (git.file && !git.files!.some((f) => f.path === git.file)) git.file = null; const first = git.files!.find((f) => f.own !== false); if (!git.file && first) pickFile(first.path); else { paint(); if (git.file) void loadDiff(); } };
-  const pickItem = (ref: string) => { git.item = ref; git.files = null; git.file = null; git.diff = ""; paint(); void loadFiles(); };
-  useEffect(() => { let active = true; void (async () => { const tree: any = card.tree, sig = tree ? `${tree.head}|${tree.dirty}|${tree.edited}` : ""; if (git.items && git.sig === sig && Date.now() - git.at < 15000) return; git.sig = sig; git.at = Date.now(); try { git.items = await (await fetch(`/api/changes?key=${enc(card.key)}`, { cache: "no-store" })).json(); } catch { return; } if (!active) return; const pick = git.items!.dirty ? "WORKTREE" : git.items!.commits[0]?.sha; if (!git.item && pick) pickItem(pick); else { paint(); if (git.item) void loadFiles(); } })(); return () => { active = false; }; }, [card]);
-  const unc = git.items ? git.items.dirty : Number(card.tree?.dirty || 0), commits = git.items?.commits || [];
-  const fileRow = (f: GitFile) => { const i = f.path.lastIndexOf("/"); return <button className={`gf${git.file === f.path ? " on" : ""}`} data-file={f.path} onClick={() => pickFile(f.path)} key={f.path}><span className={`st st-${stc(f.status)}`}>{f.status}</span><span className="fn">{f.path.slice(i + 1)}</span><span className="fd">{i < 0 ? "" : f.path.slice(0, i)}</span></button>; };
-  const scoped = git.files?.some((f) => "own" in f), mine = scoped ? git.files?.filter((f) => f.own) : git.files, rest = scoped ? git.files?.filter((f) => !f.own) : [];
-  return <div className="gitview"><section className={`gcol g1${git.hide1 ? " hid" : ""}`} id="g1">{git.hide1 ? <button className="rail" data-show="1" title="Show changes" aria-label="Show changes" onClick={() => { git.hide1 = false; paint(); }}>»</button> : <><div className="gh"><span className="gt">Changes</span><button className="action-button" data-hide="1" title="Hide changes" onClick={() => { git.hide1 = true; paint(); }}>Hide «</button></div><div className="gb"><button className="grp" data-g="unc" onClick={() => { git.open.unc = !git.open.unc; paint(); }}>{git.open.unc ? "▾" : "▸"} Uncommitted changes <span className="badge">{unc}</span></button>{git.open.unc ? unc ? <button className={`gi${git.item === "WORKTREE" ? " on" : ""}`} data-ref="WORKTREE" onClick={() => pickItem("WORKTREE")}><b>Working tree</b><span className="sub">{unc} file{unc === 1 ? "" : "s"} · not committed yet{git.items && typeof git.items.own === "number" ? ` · ${git.items.own} from this task, ${unc - git.items.own} other` : ""}</span></button> : <div className="hint">Working tree is clean.</div> : null}<button className="grp" data-g="com" onClick={() => { git.open.com = !git.open.com; paint(); }}>{git.open.com ? "▾" : "▸"} {git.items?.recent ? "This task's commits" : "Commits ahead of main"} <span className="badge">{commits.length}</span></button>{git.open.com ? !git.items ? <div className="hint">Loading…</div> : commits.length ? commits.map((m) => <button className={`gi${git.item === m.sha ? " on" : ""}`} data-ref={m.sha} onClick={() => pickItem(m.sha)} key={m.sha}><span className="sha">{m.sha}</span>{m.subject}<span className="sub">{ago(m.at)} ago</span></button>) : <div className="hint">{git.items.recent ? "No commits from this task." : "No commits."}</div> : null}</div></>}</section><section className={`gcol g2${git.hide2 ? " hid" : ""}`} id="g2">{git.hide2 ? <button className="rail" data-show="2" title="Show files" aria-label="Show files" onClick={() => { git.hide2 = false; paint(); }}>»</button> : <><div className="gh"><span className="gt">Files</span><button className="action-button" data-hide="2" title="Hide files" onClick={() => { git.hide2 = true; paint(); }}>Hide «</button></div><div className="gb">{!git.item ? <div className="hint">Pick a change on the left.</div> : !git.files ? <div className="hint">Loading…</div> : !git.files.length ? <div className="hint">No files.</div> : <>{mine?.length ? mine.map(fileRow) : <div className="hint">No uncommitted files from this task.</div>}{rest?.length ? <><button className="grp" data-g="other" onClick={() => { git.open.other = !git.open.other; paint(); }}>{git.open.other ? "▾" : "▸"} Not from this task <span className="badge">{rest.length}</span></button>{git.open.other ? rest.map(fileRow) : null}</> : null}</>}</div></>}</section><section className="gcol g3" id="g3"><div className="gh"><span className="gt">{git.file || "Changes"}</span></div><div className="gb">{git.file ? <pre className="diff" dangerouslySetInnerHTML={{ __html: diffHtml(git.diff) }}></pre> : <div className="hint">Pick a file to see its changes.</div>}</div></section></div>;
+  const [, repaint] = useState(0),
+    paint = () => repaint((n) => n + 1);
+  const loadDiff = async () => {
+    const { item, file } = git;
+    if (!item || !file) return;
+    try {
+      const text = await (
+        await fetch(`/api/diff?key=${enc(card.key)}&ref=${enc(item)}&path=${enc(file)}`, { cache: "no-store" })
+      ).text();
+      if (git.item === item && git.file === file) {
+        git.diff = text;
+        paint();
+      }
+    } catch {}
+  };
+  const pickFile = (path: string) => {
+    git.file = path;
+    git.diff = "";
+    paint();
+    void loadDiff();
+  };
+  const loadFiles = async () => {
+    const ref = git.item;
+    if (!ref) return;
+    try {
+      git.files = await (await fetch(`/api/files?key=${enc(card.key)}&ref=${enc(ref)}`, { cache: "no-store" })).json();
+    } catch {
+      return;
+    }
+    if (git.item !== ref) return;
+    if (git.file && !git.files!.some((f) => f.path === git.file)) git.file = null;
+    const first = git.files!.find((f) => f.own !== false);
+    if (!git.file && first) pickFile(first.path);
+    else {
+      paint();
+      if (git.file) void loadDiff();
+    }
+  };
+  const pickItem = (ref: string) => {
+    git.item = ref;
+    git.files = null;
+    git.file = null;
+    git.diff = "";
+    paint();
+    void loadFiles();
+  };
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const tree: any = card.tree,
+        sig = tree ? `${tree.head}|${tree.dirty}|${tree.edited}` : "";
+      if (git.items && git.sig === sig && Date.now() - git.at < 15000) return;
+      git.sig = sig;
+      git.at = Date.now();
+      try {
+        git.items = await (await fetch(`/api/changes?key=${enc(card.key)}`, { cache: "no-store" })).json();
+      } catch {
+        return;
+      }
+      if (!active) return;
+      const pick = git.items!.dirty ? "WORKTREE" : git.items!.commits[0]?.sha;
+      if (!git.item && pick) pickItem(pick);
+      else {
+        paint();
+        if (git.item) void loadFiles();
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [card]);
+  const unc = git.items ? git.items.dirty : Number(card.tree?.dirty || 0),
+    commits = git.items?.commits || [];
+  const fileRow = (f: GitFile) => {
+    const i = f.path.lastIndexOf("/");
+    return (
+      <button
+        className={`gf${git.file === f.path ? " on" : ""}`}
+        data-file={f.path}
+        onClick={() => pickFile(f.path)}
+        key={f.path}
+      >
+        <span className={`st st-${stc(f.status)}`}>{f.status}</span>
+        <span className="fn">{f.path.slice(i + 1)}</span>
+        <span className="fd">{i < 0 ? "" : f.path.slice(0, i)}</span>
+      </button>
+    );
+  };
+  const scoped = git.files?.some((f) => "own" in f),
+    mine = scoped ? git.files?.filter((f) => f.own) : git.files,
+    rest = scoped ? git.files?.filter((f) => !f.own) : [];
+  return (
+    <div className="gitview">
+      <section className={`gcol g1${git.hide1 ? " hid" : ""}`} id="g1">
+        {git.hide1 ? (
+          <button
+            className="rail"
+            data-show="1"
+            title="Show changes"
+            aria-label="Show changes"
+            onClick={() => {
+              git.hide1 = false;
+              paint();
+            }}
+          >
+            »
+          </button>
+        ) : (
+          <>
+            <div className="gh">
+              <span className="gt">Changes</span>
+              <button
+                className="action-button"
+                data-hide="1"
+                title="Hide changes"
+                onClick={() => {
+                  git.hide1 = true;
+                  paint();
+                }}
+              >
+                Hide «
+              </button>
+            </div>
+            <div className="gb">
+              <button
+                className="grp"
+                data-g="unc"
+                onClick={() => {
+                  git.open.unc = !git.open.unc;
+                  paint();
+                }}
+              >
+                {git.open.unc ? "▾" : "▸"} Uncommitted changes <span className="badge">{unc}</span>
+              </button>
+              {git.open.unc ? (
+                unc ? (
+                  <button
+                    className={`gi${git.item === "WORKTREE" ? " on" : ""}`}
+                    data-ref="WORKTREE"
+                    onClick={() => pickItem("WORKTREE")}
+                  >
+                    <b>Working tree</b>
+                    <span className="sub">
+                      {unc} file{unc === 1 ? "" : "s"} · not committed yet
+                      {git.items && typeof git.items.own === "number"
+                        ? ` · ${git.items.own} from this task, ${unc - git.items.own} other`
+                        : ""}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="hint">Working tree is clean.</div>
+                )
+              ) : null}
+              <button
+                className="grp"
+                data-g="com"
+                onClick={() => {
+                  git.open.com = !git.open.com;
+                  paint();
+                }}
+              >
+                {git.open.com ? "▾" : "▸"} {git.items?.recent ? "This task's commits" : "Commits ahead of main"}{" "}
+                <span className="badge">{commits.length}</span>
+              </button>
+              {git.open.com ? (
+                !git.items ? (
+                  <div className="hint">Loading…</div>
+                ) : commits.length ? (
+                  commits.map((m) => (
+                    <button
+                      className={`gi${git.item === m.sha ? " on" : ""}`}
+                      data-ref={m.sha}
+                      onClick={() => pickItem(m.sha)}
+                      key={m.sha}
+                    >
+                      <span className="sha">{m.sha}</span>
+                      {m.subject}
+                      <span className="sub">{ago(m.at)} ago</span>
+                    </button>
+                  ))
+                ) : (
+                  <div className="hint">{git.items.recent ? "No commits from this task." : "No commits."}</div>
+                )
+              ) : null}
+            </div>
+          </>
+        )}
+      </section>
+      <section className={`gcol g2${git.hide2 ? " hid" : ""}`} id="g2">
+        {git.hide2 ? (
+          <button
+            className="rail"
+            data-show="2"
+            title="Show files"
+            aria-label="Show files"
+            onClick={() => {
+              git.hide2 = false;
+              paint();
+            }}
+          >
+            »
+          </button>
+        ) : (
+          <>
+            <div className="gh">
+              <span className="gt">Files</span>
+              <button
+                className="action-button"
+                data-hide="2"
+                title="Hide files"
+                onClick={() => {
+                  git.hide2 = true;
+                  paint();
+                }}
+              >
+                Hide «
+              </button>
+            </div>
+            <div className="gb">
+              {!git.item ? (
+                <div className="hint">Pick a change on the left.</div>
+              ) : !git.files ? (
+                <div className="hint">Loading…</div>
+              ) : !git.files.length ? (
+                <div className="hint">No files.</div>
+              ) : (
+                <>
+                  {mine?.length ? mine.map(fileRow) : <div className="hint">No uncommitted files from this task.</div>}
+                  {rest?.length ? (
+                    <>
+                      <button
+                        className="grp"
+                        data-g="other"
+                        onClick={() => {
+                          git.open.other = !git.open.other;
+                          paint();
+                        }}
+                      >
+                        {git.open.other ? "▾" : "▸"} Not from this task <span className="badge">{rest.length}</span>
+                      </button>
+                      {git.open.other ? rest.map(fileRow) : null}
+                    </>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </section>
+      <section className="gcol g3" id="g3">
+        <div className="gh">
+          <span className="gt">{git.file || "Changes"}</span>
+        </div>
+        <div className="gb">
+          {git.file ? (
+            <pre className="diff" dangerouslySetInnerHTML={{ __html: diffHtml(git.diff) }}></pre>
+          ) : (
+            <div className="hint">Pick a file to see its changes.</div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
 }

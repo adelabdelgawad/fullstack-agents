@@ -208,7 +208,10 @@ function notify(data: DashState): void {
           const [html, tone] = fmt(s);
           toast(html, tone, s.card, s);
         });
-    notifyNew(data.waiting, seen.waiting, (s) => [`<b>Needs you:</b> ${esc(s.name)}<div class="s">${esc(s.snippet.slice(-140))}</div>`, ""]);
+    notifyNew(data.waiting, seen.waiting, (s) => [
+      `<b>Needs you:</b> ${esc(s.name)}<div class="s">${esc(s.snippet.slice(-140))}</div>`,
+      "",
+    ]);
     notifyNew(data.still_open, seen.still_open, (s) => [`<b>Stopped:</b> ${esc(s.name)}`, "blue"]);
   }
   seen = ids;

@@ -4,7 +4,13 @@ export const esc = (s: unknown): string => String(s ?? "").replace(/[&<>"']/g, (
 
 export const ago = (t: number): string => {
   const s = Math.max(0, Date.now() / 1000 - t);
-  return s < 90 ? `${Math.round(s)}s` : s < 5400 ? `${Math.round(s / 60)}m` : s < 172800 ? `${Math.round(s / 3600)}h` : `${Math.round(s / 86400)}d`;
+  return s < 90
+    ? `${Math.round(s)}s`
+    : s < 5400
+      ? `${Math.round(s / 60)}m`
+      : s < 172800
+        ? `${Math.round(s / 3600)}h`
+        : `${Math.round(s / 86400)}d`;
 };
 
 export interface ChipLike {
@@ -22,9 +28,18 @@ export const chip = (c: ChipLike): string => {
 export const kb = (n: number): string => (n < 1024 ? `${n} B` : `${Math.round(n / 1024)} KB`);
 
 export const fmtTokens = (n: number): string =>
-  !n ? "0" : n >= 1e9 ? (n / 1e9).toFixed(2) + "B" : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e8 ? 0 : 1) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(n);
+  !n
+    ? "0"
+    : n >= 1e9
+      ? (n / 1e9).toFixed(2) + "B"
+      : n >= 1e6
+        ? (n / 1e6).toFixed(n >= 1e8 ? 0 : 1) + "M"
+        : n >= 1e3
+          ? Math.round(n / 1e3) + "k"
+          : String(n);
 
-export const fmtCost = (c: number | null | undefined): string => (c === null || c === undefined ? "—" : c >= 100 ? "$" + Math.round(c) : "$" + c.toFixed(2));
+export const fmtCost = (c: number | null | undefined): string =>
+  c === null || c === undefined ? "—" : c >= 100 ? "$" + Math.round(c) : "$" + c.toFixed(2);
 
 const MODELS: Array<[string, string]> = [
   ["opus", "Opus"],

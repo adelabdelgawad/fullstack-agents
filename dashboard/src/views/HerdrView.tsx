@@ -16,6 +16,44 @@ export function HerdrView() {
   }, [herdrData?.running]);
 
   if (!herdrData) return <div className="hint">Loading Herdr…</div>;
-  if (!herdrData.running) return <div className="empty" style={{ padding: "24px 32px" }}>herdr is not running on this server</div>;
-  return <div className="herdr-client" ref={rootRef}><div className="herdr-client-host"><div className="terminal-drop" aria-hidden="true"><span>+</span><b>Drop to attach</b></div></div><header className="herdr-client-head"><span className="herdr-client-status" data-herdr-client-status="">starting…</span><button data-herdr-client-reconnect="" hidden>reconnect</button><button data-herdr-client-fullscreen="" aria-pressed="false" title="Full screen; desktop Chromium also locks the keyboard (hold Esc to leave)">full screen</button><button data-herdr-client-attach="" className="herdr-client-attach" aria-label="Attach files" title="Attach files: their paths are typed into the focused pane">+</button><input type="file" multiple hidden data-herdr-client-attach-input="" /></header></div>;
+  if (!herdrData.running)
+    return (
+      <div className="empty" style={{ padding: "24px 32px" }}>
+        herdr is not running on this server
+      </div>
+    );
+  return (
+    <div className="herdr-client" ref={rootRef}>
+      <div className="herdr-client-host">
+        <div className="terminal-drop" aria-hidden="true">
+          <span>+</span>
+          <b>Drop to attach</b>
+        </div>
+      </div>
+      <header className="herdr-client-head">
+        <span className="herdr-client-status" data-herdr-client-status="">
+          starting…
+        </span>
+        <button data-herdr-client-reconnect="" hidden>
+          reconnect
+        </button>
+        <button
+          data-herdr-client-fullscreen=""
+          aria-pressed="false"
+          title="Full screen; desktop Chromium also locks the keyboard (hold Esc to leave)"
+        >
+          full screen
+        </button>
+        <button
+          data-herdr-client-attach=""
+          className="herdr-client-attach"
+          aria-label="Attach files"
+          title="Attach files: their paths are typed into the focused pane"
+        >
+          +
+        </button>
+        <input type="file" multiple hidden data-herdr-client-attach-input="" />
+      </header>
+    </div>
+  );
 }

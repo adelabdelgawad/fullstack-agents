@@ -38,5 +38,9 @@ export async function copySelection(
   }
   restore?.();
   if (ok) show(`copied ${text.length} chars`);
-  else show("copy blocked by the browser", { label: `copy ${text.length} chars`, run: () => copySelection(text, restore, write, show) });
+  else
+    show("copy blocked by the browser", {
+      label: `copy ${text.length} chars`,
+      run: () => copySelection(text, restore, write, show),
+    });
 }

@@ -8,7 +8,8 @@ describe("terminal scroll queue", () => {
     const state = current();
     const releases: Array<() => void> = [];
     const posts: unknown[] = [];
-    const post = (_state: ScrollState, body: unknown) => new Promise<void>((resolve) => (posts.push(body), releases.push(resolve)));
+    const post = (_state: ScrollState, body: unknown) =>
+      new Promise<void>((resolve) => (posts.push(body), releases.push(resolve)));
     for (let index = 0; index < 30; index++) queueTerminalScroll(state, -1, () => 1);
     flushTerminalScroll(state, post);
     for (let index = 0; index < 20; index++) queueTerminalScroll(state, -1, () => 1);
@@ -53,10 +54,16 @@ describe("terminal reconnect", () => {
     const delays: number[] = [];
     const status = vi.fn();
     const state = { retries: 0, reconnectTimer: null as ReturnType<typeof setTimeout> | null };
-    for (let index = 0; index < 6; index++) liveTerminalClosed(state, "Connection closed", status, (_fn, delay) => (delays.push(delay ?? 0), 1 as never));
+    for (let index = 0; index < 6; index++)
+      liveTerminalClosed(state, "Connection closed", status, (_fn, delay) => (delays.push(delay ?? 0), 1 as never));
     expect(delays).toEqual([1000, 2000, 4000, 8000, 10000, 10000]);
     expect(status).toHaveBeenCalledTimes(3);
-    liveTerminalClosed(state, "pane already has an attached client", status, (_fn, delay) => (delays.push(delay ?? 0), 1 as never));
+    liveTerminalClosed(
+      state,
+      "pane already has an attached client",
+      status,
+      (_fn, delay) => (delays.push(delay ?? 0), 1 as never),
+    );
     expect(delays).toHaveLength(6);
     expect(status).toHaveBeenLastCalledWith("pane already has an attached client");
   });

@@ -62,7 +62,8 @@ function wireAttach(client: HerdrClientState): void {
   const picker = client.root.querySelector<HTMLInputElement>("[data-herdr-client-attach-input]");
   if (!host || !picker) return;
   const attach = async (files: File[]) => {
-    if (files.some((file) => file.size > LIVE_UPLOAD_MAX_BYTES)) return flashStatus(client, "file is too large (50 MB maximum)");
+    if (files.some((file) => file.size > LIVE_UPLOAD_MAX_BYTES))
+      return flashStatus(client, "file is too large (50 MB maximum)");
     client.setStatus?.(uploadingText(files));
     try {
       const paths = await uploadFiles(files, "/api/herdr/file?");
@@ -80,15 +81,23 @@ function wireAttach(client: HerdrClientState): void {
     picker.value = "";
     if (files.length) void attach(files);
   };
-  host.addEventListener("paste", (event) => {
-    const files = filesFromPaste(event);
-    if (files.length) void attach(files);
-  }, true);
+  host.addEventListener(
+    "paste",
+    (event) => {
+      const files = filesFromPaste(event);
+      if (files.length) void attach(files);
+    },
+    true,
+  );
   wireFileDrop(host, (files) => void attach(files));
 }
 
 function fullscreenElement(): Element | null {
-  return document.fullscreenElement || (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement || null;
+  return (
+    document.fullscreenElement ||
+    (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement ||
+    null
+  );
 }
 
 function wireFullscreen(client: HerdrClientState): void {
@@ -126,7 +135,9 @@ function connectHerdrClient(client: HerdrClientState): void {
   client.size = `${term.cols}x${term.rows}`;
   client.setStatus?.(`connecting · ${client.renderer} · ${term.cols}×${term.rows}`);
   const query = new URLSearchParams({ cols: String(term.cols), rows: String(term.rows) });
-  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/herdr/client?${query}`);
+  const ws = new WebSocket(
+    `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/herdr/client?${query}`,
+  );
   ws.binaryType = "arraybuffer";
   client.ws = ws;
   ws.onopen = () => client.setStatus?.(liveStatus(client));
@@ -155,10 +166,23 @@ export async function mountHerdrClient(root: HTMLElement): Promise<void> {
     status.classList.toggle("is-live", text.startsWith("live"));
   };
   root.oncontextmenu = (event) => event.preventDefault();
-  await Promise.all(["400", "700"].flatMap((weight) => ["normal", "italic"].map((style) => document.fonts.load(`${style === "italic" ? "italic " : ""}${weight} 14.5px "JetBrains Mono Web"`))));
+  await Promise.all(
+    ["400", "700"].flatMap((weight) =>
+      ["normal", "italic"].map((style) =>
+        document.fonts.load(`${style === "italic" ? "italic " : ""}${weight} 14.5px "JetBrains Mono Web"`),
+      ),
+    ),
+  );
   if (herdrClient !== client) return;
   const mono = getComputedStyle(document.documentElement).getPropertyValue("--mono").trim();
-  const term = new window.Terminal({ fontFamily: `"JetBrains Mono Web", ${mono}`, fontSize: 14.5, letterSpacing: 1, scrollback: 0, cursorBlink: true, theme: { background: getComputedStyle(root).getPropertyValue("--herdr-panel-bg").trim(), foreground: "#ffffff" } });
+  const term = new window.Terminal({
+    fontFamily: `"JetBrains Mono Web", ${mono}`,
+    fontSize: 14.5,
+    letterSpacing: 1,
+    scrollback: 0,
+    cursorBlink: true,
+    theme: { background: getComputedStyle(root).getPropertyValue("--herdr-panel-bg").trim(), foreground: "#ffffff" },
+  });
   const fit = new window.FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(host);
@@ -167,14 +191,24 @@ export async function mountHerdrClient(root: HTMLElement): Promise<void> {
   client.renderer = "dom";
   if (window.WebglAddon && webglRendererOk()) {
     const addon = new window.WebglAddon.WebglAddon();
-    addon.onContextLoss(() => { addon.dispose(); client.renderer = "dom"; fit.fit(); });
+    addon.onContextLoss(() => {
+      addon.dispose();
+      client.renderer = "dom";
+      fit.fit();
+    });
     term.loadAddon(addon);
     client.renderer = "webgl";
   }
   fit.fit();
-  const onCopyText = (text: string) => { if (text) void copySelection(text, () => term.focus()); };
+  const onCopyText = (text: string) => {
+    if (text) void copySelection(text, () => term.focus());
+  };
   client.scanOsc52 = createOsc52Scanner(onCopyText);
-  host.addEventListener("mouseup", () => setTimeout(() => { if (term.hasSelection()) onCopyText(term.getSelection()); }));
+  host.addEventListener("mouseup", () =>
+    setTimeout(() => {
+      if (term.hasSelection()) onCopyText(term.getSelection());
+    }),
+  );
   wireFullscreen(client);
   wireAttach(client);
   root.querySelector<HTMLElement>("[data-herdr-client-reconnect]")!.onclick = () => connectHerdrClient(client);
@@ -184,11 +218,17 @@ export async function mountHerdrClient(root: HTMLElement): Promise<void> {
     if (next === client.size) return;
     client.size = next;
     if (status.textContent?.startsWith("live")) client.setStatus?.(liveStatus(client));
-    if (client.ws?.readyState === WebSocket.OPEN) client.ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+    if (client.ws?.readyState === WebSocket.OPEN)
+      client.ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
   });
   client.resizeObserver.observe(host);
-  term.onData((data) => { if (client.ws?.readyState === WebSocket.OPEN) client.ws.send(new TextEncoder().encode(data)); });
-  term.onBinary((data) => { if (client.ws?.readyState === WebSocket.OPEN) client.ws.send(Uint8Array.from(data, (char) => char.charCodeAt(0) & 255)); });
+  term.onData((data) => {
+    if (client.ws?.readyState === WebSocket.OPEN) client.ws.send(new TextEncoder().encode(data));
+  });
+  term.onBinary((data) => {
+    if (client.ws?.readyState === WebSocket.OPEN)
+      client.ws.send(Uint8Array.from(data, (char) => char.charCodeAt(0) & 255));
+  });
   connectHerdrClient(client);
   term.focus();
 }

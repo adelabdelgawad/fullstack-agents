@@ -8,7 +8,8 @@ describe("copySelection", () => {
     const offers: Array<{ message: string; action?: { label: string; run: () => Promise<void> } }> = [];
     let allowed = false;
     const write = async (text: string) => (writes.push(text), allowed);
-    const show = (message: string, action?: { label: string; run: () => Promise<void> }) => offers.push({ message, action });
+    const show = (message: string, action?: { label: string; run: () => Promise<void> }) =>
+      offers.push({ message, action });
 
     await copySelection("x".repeat(40_000), restore, write, show);
     allowed = true;

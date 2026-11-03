@@ -2,7 +2,13 @@ import type { IDisposable, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { LIVE_UPLOAD_MAX_BYTES, filesFromPaste, uploadFiles, uploadingText, wireFileDrop } from "./files";
 import { copySelection } from "./copy";
-import { applyPendingTerminalText, pollTerminal, startSnapshotPolling, stopSnapshotPolling, updateTerminalCaption } from "./snapshotTerminal";
+import {
+  applyPendingTerminalText,
+  pollTerminal,
+  startSnapshotPolling,
+  stopSnapshotPolling,
+  updateTerminalCaption,
+} from "./snapshotTerminal";
 
 declare global {
   interface Window {
@@ -62,7 +68,8 @@ export function terminalSelection(current = terminal): string {
 
 const bytes64 = (bytes: Uint8Array): string => {
   let binary = "";
-  for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  for (let index = 0; index < bytes.length; index += 0x8000)
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
   return btoa(binary);
 };
 
@@ -89,7 +96,10 @@ function liveTerminalStatus(current: TerminalState, reason: string | null): void
   status.classList.remove("lagging");
   status.textContent = `${reason} · ${current.term.cols}×${current.term.rows}`;
   const reasonEl = current.root.querySelector<HTMLElement>("[data-terminal-reason]");
-  if (reasonEl) reasonEl.textContent = /already has an attached client/.test(reason) ? "This pane is open live in another view" : reason;
+  if (reasonEl)
+    reasonEl.textContent = /already has an attached client/.test(reason)
+      ? "This pane is open live in another view"
+      : reason;
   actions.hidden = false;
   disconnected.hidden = false;
 }
@@ -109,23 +119,25 @@ async function postLiveTerminal(current: TerminalState, body: unknown): Promise<
   if (!current.session || terminal !== current) return;
   const session = current.session;
   const epoch = current.liveEpoch;
-  current.postChain = current.postChain.then(async () => {
-    if (current.liveEpoch !== epoch || terminal !== current) return;
-    const started = performance.now();
-    const response = await fetch("/api/herdr/live/input", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session, ...body as object }),
-      signal: current.postAbort?.signal,
+  current.postChain = current.postChain
+    .then(async () => {
+      if (current.liveEpoch !== epoch || terminal !== current) return;
+      const started = performance.now();
+      const response = await fetch("/api/herdr/live/input", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session, ...(body as object) }),
+        signal: current.postAbort?.signal,
+      });
+      current.rtt = current.rtt ? current.rtt * 0.7 + (performance.now() - started) * 0.3 : performance.now() - started;
+      if (!response.ok) throw new Error((await response.text()) || `terminal input error ${response.status}`);
+    })
+    .catch((error: Error) => {
+      if (error.name !== "AbortError" && terminal === current) {
+        const target = current.root.querySelector<HTMLElement>(".terminal-error");
+        if (target) target.textContent = error.message || "Could not write to the pane";
+      }
     });
-    current.rtt = current.rtt ? current.rtt * 0.7 + (performance.now() - started) * 0.3 : performance.now() - started;
-    if (!response.ok) throw new Error((await response.text()) || `terminal input error ${response.status}`);
-  }).catch((error: Error) => {
-    if (error.name !== "AbortError" && terminal === current) {
-      const target = current.root.querySelector<HTMLElement>(".terminal-error");
-      if (target) target.textContent = error.message || "Could not write to the pane";
-    }
-  });
   return current.postChain;
 }
 
@@ -158,7 +170,8 @@ export function queueTerminalScroll(current: ScrollState, lines: number, frame =
 
 export function flushTerminalScroll(
   current: ScrollState,
-  post: (state: ScrollState, body: unknown) => Promise<void> = (state, body) => postLiveTerminal(state as TerminalState, body),
+  post: (state: ScrollState, body: unknown) => Promise<void> = (state, body) =>
+    postLiveTerminal(state as TerminalState, body),
 ): void {
   current.scrollFrame = 0;
   if (!current.session) {
@@ -207,7 +220,9 @@ function openLiveStream(current: TerminalState, takeover = false): void {
   current.postAbort = new AbortController();
   const cols = current.term?.cols ?? 0;
   const rows = current.term?.rows ?? 0;
-  const stream = new EventSource(`/api/herdr/live?pane=${encodeURIComponent(current.pane)}&cols=${cols}&rows=${rows}${takeover ? "&takeover=1" : ""}`);
+  const stream = new EventSource(
+    `/api/herdr/live?pane=${encodeURIComponent(current.pane)}&cols=${cols}&rows=${rows}${takeover ? "&takeover=1" : ""}`,
+  );
   current.stream = stream;
   stream.addEventListener("ready", (event) => {
     if (terminal !== current || current.stream !== stream) return;
@@ -230,30 +245,66 @@ function openLiveStream(current: TerminalState, takeover = false): void {
   });
   stream.addEventListener("closed", (event) => {
     let reason = "Terminal closed";
-    try { reason = (JSON.parse((event as MessageEvent<string>).data) as { reason?: string }).reason || reason; } catch {}
+    try {
+      reason = (JSON.parse((event as MessageEvent<string>).data) as { reason?: string }).reason || reason;
+    } catch {}
     if (terminal === current && current.stream === stream) liveTerminalClosed(current, reason);
   });
-  stream.onerror = () => terminal === current && current.stream === stream && liveTerminalClosed(current, "Connection closed");
+  stream.onerror = () =>
+    terminal === current && current.stream === stream && liveTerminalClosed(current, "Connection closed");
 }
 
 function terminalTheme(root: HTMLElement, foreground: string): Record<string, string> {
   const css = getComputedStyle(root);
   const colour = (name: string) => css.getPropertyValue(name).trim();
-  return { background: colour("--herdr-panel-bg"), foreground, cursor: colour("--herdr-accent"), selectionBackground: colour("--herdr-selection-bg"), black: "#282c34", red: "#e06c75", green: "#98c379", yellow: "#e5c07b", blue: "#61afef", magenta: "#c678dd", cyan: "#56b6c2", white: "#abb2bf", brightBlack: "#5c6370", brightRed: "#e06c75", brightGreen: "#98c379", brightYellow: "#e5c07b", brightBlue: "#61afef", brightMagenta: "#c678dd", brightCyan: "#56b6c2", brightWhite: "#ffffff" };
+  return {
+    background: colour("--herdr-panel-bg"),
+    foreground,
+    cursor: colour("--herdr-accent"),
+    selectionBackground: colour("--herdr-selection-bg"),
+    black: "#282c34",
+    red: "#e06c75",
+    green: "#98c379",
+    yellow: "#e5c07b",
+    blue: "#61afef",
+    magenta: "#c678dd",
+    cyan: "#56b6c2",
+    white: "#abb2bf",
+    brightBlack: "#5c6370",
+    brightRed: "#e06c75",
+    brightGreen: "#98c379",
+    brightYellow: "#e5c07b",
+    brightBlue: "#61afef",
+    brightMagenta: "#c678dd",
+    brightCyan: "#56b6c2",
+    brightWhite: "#ffffff",
+  };
 }
 
 function startLiveTerminal(current: TerminalState, restoreFocus = false): void {
   const host = current.root.querySelector<HTMLElement>(".terminal-live");
   const box = current.root.querySelector<HTMLElement>(".terminal-screen-box");
-  if (!host || !box || !window.Terminal || !window.FitAddon?.FitAddon) return liveTerminalStatus(current, "Terminal assets unavailable");
-  current.term = new window.Terminal({ scrollback: 0, fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--mono").trim(), fontSize: 12, cursorBlink: true, theme: terminalTheme(current.root, getComputedStyle(current.root).getPropertyValue("--herdr-text").trim()) });
+  if (!host || !box || !window.Terminal || !window.FitAddon?.FitAddon)
+    return liveTerminalStatus(current, "Terminal assets unavailable");
+  current.term = new window.Terminal({
+    scrollback: 0,
+    fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--mono").trim(),
+    fontSize: 12,
+    cursorBlink: true,
+    theme: terminalTheme(current.root, getComputedStyle(current.root).getPropertyValue("--herdr-text").trim()),
+  });
   current.fit = new window.FitAddon.FitAddon();
   current.term.loadAddon(current.fit);
   current.term.open(host);
   current.fit.fit();
   current.liveDisposables = [
     current.term.onData((data) => queueTerminalInput(current, new TextEncoder().encode(data))),
-    current.term.onBinary((data) => queueTerminalInput(current, Uint8Array.from(data, (char) => char.charCodeAt(0) & 255))),
+    current.term.onBinary((data) =>
+      queueTerminalInput(
+        current,
+        Uint8Array.from(data, (char) => char.charCodeAt(0) & 255),
+      ),
+    ),
   ];
   current.term.attachCustomWheelEventHandler((event) => {
     if (!event.deltaY) return false;
@@ -270,7 +321,8 @@ function startLiveTerminal(current: TerminalState, restoreFocus = false): void {
 
 async function attachLiveFiles(current: TerminalState, files: File[]): Promise<void> {
   if (terminal !== current || current.mode !== "live" || !current.session || !current.term) return;
-  if (files.some((file) => file.size > LIVE_UPLOAD_MAX_BYTES)) return showStatus(current, "file is too large (50 MB maximum)");
+  if (files.some((file) => file.size > LIVE_UPLOAD_MAX_BYTES))
+    return showStatus(current, "file is too large (50 MB maximum)");
   showStatus(current, uploadingText(files));
   try {
     const paths = await uploadFiles(files, `/api/herdr/live/file?session=${encodeURIComponent(current.session)}&`);
@@ -307,20 +359,29 @@ function wireTerminalExtras(current: TerminalState): void {
     if (files.length) void attachLiveFiles(current, files);
   };
   wireFileDrop(box, (files) => void attachLiveFiles(current, files));
-  host.addEventListener("mouseup", () => setTimeout(() => {
-    if (current.term?.hasSelection()) void copySelection(current.term.getSelection(), () => current.term?.focus());
-  }));
-  history.addEventListener("mouseup", () => setTimeout(() => {
-    const selection = getSelection();
-    if (!selection?.rangeCount || !history.contains(selection.anchorNode)) return;
-    const range = selection.getRangeAt(0).cloneRange();
-    const text = selection.toString();
-    if (text.trim()) void copySelection(text, () => { selection.removeAllRanges(); selection.addRange(range); });
-  }));
+  host.addEventListener("mouseup", () =>
+    setTimeout(() => {
+      if (current.term?.hasSelection()) void copySelection(current.term.getSelection(), () => current.term?.focus());
+    }),
+  );
+  history.addEventListener("mouseup", () =>
+    setTimeout(() => {
+      const selection = getSelection();
+      if (!selection?.rangeCount || !history.contains(selection.anchorNode)) return;
+      const range = selection.getRangeAt(0).cloneRange();
+      const text = selection.toString();
+      if (text.trim())
+        void copySelection(text, () => {
+          selection.removeAllRanges();
+          selection.addRange(range);
+        });
+    }),
+  );
   const jump = current.root.querySelector<HTMLElement>(".terminal-jump")!;
   jump.onclick = () => applyPendingTerminalText(current);
   history.onscroll = () => {
-    if (current.pending !== null && history.scrollHeight - history.scrollTop - history.clientHeight < 40) applyPendingTerminalText(current);
+    if (current.pending !== null && history.scrollHeight - history.scrollTop - history.clientHeight < 40)
+      applyPendingTerminalText(current);
   };
 }
 
@@ -330,7 +391,9 @@ export function switchTerminalMode(current: TerminalState, mode: "live" | "histo
   if (current.mode === "live" && mode !== "live") disposeLiveTerminal(current);
   current.mode = mode;
   current.mode = mode;
-  current.root.querySelectorAll<HTMLElement>("[data-mode]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.mode === mode)));
+  current.root
+    .querySelectorAll<HTMLElement>("[data-mode]")
+    .forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.mode === mode)));
   const history = current.root.querySelector<HTMLElement>(".terminal-screen");
   const host = current.root.querySelector<HTMLElement>(".terminal-live");
   if (!history || !host) return;
@@ -339,8 +402,7 @@ export function switchTerminalMode(current: TerminalState, mode: "live" | "histo
     current.root.querySelector<HTMLElement>(".terminal-jump")!.hidden = true;
     host.hidden = false;
     startLiveTerminal(current, restoreFocus);
-  }
-  else {
+  } else {
     host.hidden = true;
     history.hidden = false;
     updateTerminalCaption(current);
@@ -371,17 +433,50 @@ export function stopTerminal(): void {
 
 export function mountTerminal(root: HTMLElement, pane: string, mode: "live" | "history" = "live"): void {
   stopTerminal();
-  terminal = { root, pane, mode, text: null, hash: null, pending: null, polling: false, pollAgain: false, term: null, fit: null, stream: null, session: null, resizeObserver: null, resizeTimer: null, reconnectTimer: null, retries: 0, inputQueue: [], inputFrame: 0, inputSending: false, postChain: Promise.resolve(), postAbort: null, liveEpoch: 0, liveDisposables: [], imageStatus: "", imageStatusTimer: null, started: false, scrollLines: 0, scrollFrame: 0, scrollSending: false };
+  terminal = {
+    root,
+    pane,
+    mode,
+    text: null,
+    hash: null,
+    pending: null,
+    polling: false,
+    pollAgain: false,
+    term: null,
+    fit: null,
+    stream: null,
+    session: null,
+    resizeObserver: null,
+    resizeTimer: null,
+    reconnectTimer: null,
+    retries: 0,
+    inputQueue: [],
+    inputFrame: 0,
+    inputSending: false,
+    postChain: Promise.resolve(),
+    postAbort: null,
+    liveEpoch: 0,
+    liveDisposables: [],
+    imageStatus: "",
+    imageStatusTimer: null,
+    started: false,
+    scrollLines: 0,
+    scrollFrame: 0,
+    scrollSending: false,
+  };
   const current = terminal;
   current.root.querySelectorAll<HTMLElement>("[data-mode]").forEach((button) => {
     button.onclick = () => switchTerminalMode(current, button.dataset.mode === "history" ? "history" : "live", true);
   });
   current.root.querySelector<HTMLElement>("[data-reconnect]")!.onclick = () => openLiveStream(current);
-  current.root.querySelectorAll<HTMLElement>("[data-takeover]").forEach((button) => button.onclick = () => openLiveStream(current, true));
+  current.root
+    .querySelectorAll<HTMLElement>("[data-takeover]")
+    .forEach((button) => (button.onclick = () => openLiveStream(current, true)));
   wireTerminalExtras(current);
   switchTerminalMode(current, mode);
 }
 
 addEventListener("online", () => {
-  if (terminal?.mode === "live" && terminal.term && !terminal.stream && terminal.reconnectTimer) openLiveStream(terminal);
+  if (terminal?.mode === "live" && terminal.term && !terminal.stream && terminal.reconnectTimer)
+    openLiveStream(terminal);
 });

@@ -111,7 +111,11 @@ function onMenuClick(card: HTMLElement | undefined, e: ReactMouseEvent<HTMLDivEl
   if (act === "open") openCard(card.dataset.key!);
   else if (act === "fav") toggleFavourite(card.dataset.key!);
   else if (act === "end") endSession(card);
-  else if (act === "copy") copyText(card.dataset.sid!).then(() => toast(`<b>Copied</b> ${esc(card.dataset.sid)}`, "blue"), () => toast("<b>Copy failed</b>", "red"));
+  else if (act === "copy")
+    copyText(card.dataset.sid!).then(
+      () => toast(`<b>Copied</b> ${esc(card.dataset.sid)}`, "blue"),
+      () => toast("<b>Copy failed</b>", "red"),
+    );
 }
 
 export function CardContextMenu() {
@@ -133,7 +137,15 @@ export function CardContextMenu() {
   const v = last.current;
 
   return (
-    <div id="ctx" role="menu" aria-label="Card actions" hidden={!ctx} ref={ref} onKeyDown={(e) => onMenuKeyDown(ref.current, e)} onClick={(e) => onMenuClick(ctx?.cardEl, e)}>
+    <div
+      id="ctx"
+      role="menu"
+      aria-label="Card actions"
+      hidden={!ctx}
+      ref={ref}
+      onKeyDown={(e) => onMenuKeyDown(ref.current, e)}
+      onClick={(e) => onMenuClick(ctx?.cardEl, e)}
+    >
       <button role="menuitem" data-act="open" disabled={v?.open}>
         Open
       </button>

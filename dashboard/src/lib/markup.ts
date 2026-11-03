@@ -32,7 +32,14 @@ function sgrStyle(s: Sgr): string {
   let fg = s.fg;
   let bg = s.bg;
   if (s.inverse) [fg, bg] = [bg || "#e8e8e8", fg || "#101218"];
-  return [s.bold && "font-weight:bold", s.dim && "opacity:.65", s.italic && "font-style:italic", s.underline && "text-decoration:underline", fg && `color:${fg}`, bg && `background-color:${bg}`]
+  return [
+    s.bold && "font-weight:bold",
+    s.dim && "opacity:.65",
+    s.italic && "font-style:italic",
+    s.underline && "text-decoration:underline",
+    fg && `color:${fg}`,
+    bg && `background-color:${bg}`,
+  ]
     .filter(Boolean)
     .join(";");
 }
@@ -60,8 +67,16 @@ function applySgr(s: Sgr, raw: string): void {
     else if ((c === 38 || c === 48) && codes[i + 1] === 5 && Number.isInteger(codes[i + 2])) {
       s[c === 38 ? "fg" : "bg"] = indexed(Math.max(0, Math.min(255, codes[i + 2])));
       i += 2;
-    } else if ((c === 38 || c === 48) && codes[i + 1] === 2 && i + 4 < codes.length && codes.slice(i + 2, i + 5).every(Number.isFinite)) {
-      s[c === 38 ? "fg" : "bg"] = `rgb(${codes.slice(i + 2, i + 5).map((x) => Math.max(0, Math.min(255, x))).join(",")})`;
+    } else if (
+      (c === 38 || c === 48) &&
+      codes[i + 1] === 2 &&
+      i + 4 < codes.length &&
+      codes.slice(i + 2, i + 5).every(Number.isFinite)
+    ) {
+      s[c === 38 ? "fg" : "bg"] = `rgb(${codes
+        .slice(i + 2, i + 5)
+        .map((x) => Math.max(0, Math.min(255, x)))
+        .join(",")})`;
       i += 4;
     }
   }
@@ -153,7 +168,8 @@ export function saidHtml(s: Session): string {
 }
 
 export function saidText(sid: string, state: DashState | null): string | null {
-  for (const c of (state && state.cards) || []) for (const x of c.now || []) if (x.id === sid) return x.said_full || x.said || null;
+  for (const c of (state && state.cards) || [])
+    for (const x of c.now || []) if (x.id === sid) return x.said_full || x.said || null;
   return null;
 }
 
@@ -168,7 +184,9 @@ export function lastPara(text: string | undefined): string {
 
 export function toolLine(s: Session): string {
   if (!s.action) return "";
-  return s.action_running ? `Running ${ago(s.action_at!)} · ${s.action}` : `Done ${ago(s.action_at!)} ago · ${s.action}`;
+  return s.action_running
+    ? `Running ${ago(s.action_at!)} · ${s.action}`
+    : `Done ${ago(s.action_at!)} ago · ${s.action}`;
 }
 
 export function questionLine(c: Pick<Card, "now">): string {

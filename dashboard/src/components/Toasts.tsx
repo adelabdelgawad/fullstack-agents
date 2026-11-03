@@ -25,5 +25,7 @@ function ToastItem({ toast }: { toast: Toast }) {
     dismissToast(toast.id);
   };
   const html = `<button class="toast-x" aria-label="Dismiss notification" title="Dismiss">×</button>${toast.html}`;
-  return <div className={`toast ${toast.tone}`.trim()} onClick={handleClick} dangerouslySetInnerHTML={{ __html: html }} />;
+  return (
+    <div className={`toast ${toast.tone}`.trim()} onClick={handleClick} dangerouslySetInnerHTML={{ __html: html }} />
+  );
 }

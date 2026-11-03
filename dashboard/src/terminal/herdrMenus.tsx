@@ -45,5 +45,23 @@ export function HerdrMenu({ items, x, y, above = false, close }: HerdrMenuProps)
     const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
     buttons[(at + (event.key === "ArrowDown" ? 1 : buttons.length - 1)) % buttons.length].focus();
   };
-  return <div ref={ref} className="herdr-menu" role="menu" onKeyDown={onKeyDown}>{items.map((item, index) => <button key={index} role="menuitem" data-herdr-menu-item={index} disabled={item.disabled} title={item.disabled ? item.title || "" : undefined} onClick={() => { close(false); item.run(); }}>{item.label}</button>)}</div>;
+  return (
+    <div ref={ref} className="herdr-menu" role="menu" onKeyDown={onKeyDown}>
+      {items.map((item, index) => (
+        <button
+          key={index}
+          role="menuitem"
+          data-herdr-menu-item={index}
+          disabled={item.disabled}
+          title={item.disabled ? item.title || "" : undefined}
+          onClick={() => {
+            close(false);
+            item.run();
+          }}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
 }

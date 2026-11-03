@@ -3,7 +3,9 @@ import { ansiHtml, mdHtml } from "./markup";
 
 describe("ansiHtml", () => {
   it("wraps SGR runs in a span and resets afterwards", () => {
-    expect(ansiHtml("\x1b[1;31mHello\x1b[0m World")).toBe('<span style="font-weight:bold;color:#aa0000">Hello</span> World');
+    expect(ansiHtml("\x1b[1;31mHello\x1b[0m World")).toBe(
+      '<span style="font-weight:bold;color:#aa0000">Hello</span> World',
+    );
   });
 
   it("renders 256-colour codes as rgb()", () => {
@@ -11,7 +13,7 @@ describe("ansiHtml", () => {
   });
 
   it("escapes html-sensitive characters in plain text", () => {
-    expect(ansiHtml("<tag> & \"quote\"")).toBe("&lt;tag&gt; &amp; &quot;quote&quot;");
+    expect(ansiHtml('<tag> & "quote"')).toBe("&lt;tag&gt; &amp; &quot;quote&quot;");
   });
 });
 

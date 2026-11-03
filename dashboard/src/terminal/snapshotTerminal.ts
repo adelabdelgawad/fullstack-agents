@@ -35,7 +35,9 @@ export async function pollTerminal(): Promise<void> {
   current.polling = true;
   try {
     const since = current.hash ? `&since=${encodeURIComponent(current.hash)}` : "";
-    const response = await fetch(`/api/herdr/screen?pane=${encodeURIComponent(current.pane)}&source=recent${since}`, { cache: "no-store" });
+    const response = await fetch(`/api/herdr/screen?pane=${encodeURIComponent(current.pane)}&source=recent${since}`, {
+      cache: "no-store",
+    });
     if (getTerminal() !== current || current.mode !== "history") return;
     current.hash = response.headers.get("X-Screen-Hash") || current.hash;
     if (response.status === 204) return;

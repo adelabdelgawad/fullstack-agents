@@ -9,7 +9,24 @@ import { Orchestrators } from "./Orchestrators";
 import { WorkerSquares } from "./Workers";
 
 function card(patch: Partial<Card> = {}): Card {
-  return { key: "k", title: "Search", label: "", tree: null, updated: 100, runs: [], now: [], sessions: [{ id: "s1", name: "lead", state: "idle", branch: "main" }], usage: null, needs_you: [], phase: "implement", steps: [], rounds: [], repo: "/home/u/repo", worktree: "", ...patch };
+  return {
+    key: "k",
+    title: "Search",
+    label: "",
+    tree: null,
+    updated: 100,
+    runs: [],
+    now: [],
+    sessions: [{ id: "s1", name: "lead", state: "idle", branch: "main" }],
+    usage: null,
+    needs_you: [],
+    phase: "implement",
+    steps: [],
+    rounds: [],
+    repo: "/home/u/repo",
+    worktree: "",
+    ...patch,
+  };
 }
 
 function dash(cards: Card[] = []): DashState {
@@ -29,7 +46,12 @@ beforeEach(() => {
   document.body.appendChild(host);
   root = createRoot(host);
   localStorage.clear();
-  store.set({ state: dash(), openKey: null, tab2: "info", fleet: { filter: "all", sort: "stage", text: "", feed: true, tilesHidden: false, tpm: [] } });
+  store.set({
+    state: dash(),
+    openKey: null,
+    tab2: "info",
+    fleet: { filter: "all", sort: "stage", text: "", feed: true, tilesHidden: false, tpm: [] },
+  });
 });
 
 afterEach(() => {
@@ -39,8 +61,21 @@ afterEach(() => {
 
 describe("agents view renderers", () => {
   it("renders orchestrator usage, git, and unknown prices", () => {
-    const usage = { fill: 0.93, context: 930000, window: 1000000, model: "claude-opus-5-5", compactions: 2, cost: 12.5, tokens: 3000000, blowout: true };
-    const html = render(<OrcCard card={card({ usage, tree: { branch: "feat/search", dirty: 4 }, worktree: "/home/u/wt", phase: "Build" })} />).innerHTML;
+    const usage = {
+      fill: 0.93,
+      context: 930000,
+      window: 1000000,
+      model: "claude-opus-5-5",
+      compactions: 2,
+      cost: 12.5,
+      tokens: 3000000,
+      blowout: true,
+    };
+    const html = render(
+      <OrcCard
+        card={card({ usage, tree: { branch: "feat/search", dirty: 4 }, worktree: "/home/u/wt", phase: "Build" })}
+      />,
+    ).innerHTML;
     expect(html).toContain("card orc st-idle blowout");
     expect(html).toContain('<span class="bad">93%</span>');
     expect(html).toContain("2×");
@@ -55,16 +90,25 @@ describe("agents view renderers", () => {
   });
 
   it("offers respond and preserves terminal choice", () => {
-    const waiting = card({ now: [{ id: "s1", name: "lead", state: "waiting", need: "answer" }], sessions: [{ id: "s1", name: "lead", state: "waiting" }] });
+    const waiting = card({
+      now: [{ id: "s1", name: "lead", state: "waiting", need: "answer" }],
+      sessions: [{ id: "s1", name: "lead", state: "waiting" }],
+    });
     store.set({ state: { ...dash([waiting]), session_panes: { s1: "pane" } } });
-    render(<OrcCard card={waiting} />).querySelector<HTMLButtonElement>("[data-respond]")!.click();
+    render(<OrcCard card={waiting} />)
+      .querySelector<HTMLButtonElement>("[data-respond]")!
+      .click();
     expect(store.get().openKey).toBe("k");
     expect(store.get().tab2).toBe("terminal");
   });
 
   it("uses task tracking for plan progress", () => {
     const task = { title: "Ship search", completed: 2, total: 5, items: [{ status: "in_progress", title: "Index" }] };
-    expect(orcPlan(card({ sessions: [{ id: "s1", name: "lead", state: "working", task_tracking: task }] }))).toEqual({ title: "Ship search · Index", done: 2, total: 5 });
+    expect(orcPlan(card({ sessions: [{ id: "s1", name: "lead", state: "working", task_tracking: task }] }))).toEqual({
+      title: "Ship search · Index",
+      done: 2,
+      total: 5,
+    });
   });
 
   it("renders sidebar counts and selection", () => {
@@ -76,8 +120,22 @@ describe("agents view renderers", () => {
   });
 
   it("colours worker squares and marks failures", () => {
-    const runs = ["done", "failed", "running"].map((state, index) => ({ id: `implement-${index}`, mode: "implement", unit: `u${index}`, state, model: "gpt-5.6-sol", cause: state === "failed" ? "error: x" : "" }));
-    const current = [{ id: "s1", name: "lead", state: "working", agents: [{ id: "a1", state: "running", model: "claude-sonnet-5-5", label: "reviewer" }] }];
+    const runs = ["done", "failed", "running"].map((state, index) => ({
+      id: `implement-${index}`,
+      mode: "implement",
+      unit: `u${index}`,
+      state,
+      model: "gpt-5.6-sol",
+      cause: state === "failed" ? "error: x" : "",
+    }));
+    const current = [
+      {
+        id: "s1",
+        name: "lead",
+        state: "working",
+        agents: [{ id: "a1", state: "running", model: "claude-sonnet-5-5", label: "reviewer" }],
+      },
+    ];
     const html = render(<WorkerSquares card={card({ runs, now: current })} />).innerHTML;
     expect(html.match(/class="sq /g)).toHaveLength(4);
     expect(html).toContain("sq m-gpt failed");
@@ -88,7 +146,28 @@ describe("agents view renderers", () => {
   it("renders summary plans, spend, toggle, and empty squares", () => {
     const state = dash();
     state.totals = { live: 2 };
-    state.plan = { claude: { plan: "team", windows: [{ name: "5 h", pct: 14, resets_at: "" }, { name: "week", pct: 92, resets_at: "" }] }, codex: { plan: "plus", windows: [{ name: "week", pct: 100, resets_at: "" }], credits: { balance: 59210.4, unlimited: false } }, grok: { plan: "xAI", spend: [{ name: "today", cost: 0, tokens: 0 }, { name: "7 days", cost: 13.12, tokens: 19537829 }], last_at: 0 } };
+    state.plan = {
+      claude: {
+        plan: "team",
+        windows: [
+          { name: "5 h", pct: 14, resets_at: "" },
+          { name: "week", pct: 92, resets_at: "" },
+        ],
+      },
+      codex: {
+        plan: "plus",
+        windows: [{ name: "week", pct: 100, resets_at: "" }],
+        credits: { balance: 59210.4, unlimited: false },
+      },
+      grok: {
+        plan: "xAI",
+        spend: [
+          { name: "today", cost: 0, tokens: 0 },
+          { name: "7 days", cost: 13.12, tokens: 19537829 },
+        ],
+        last_at: 0,
+      },
+    };
     store.set({ state });
     const html = render(<FleetTiles />).innerHTML;
     expect(html.indexOf('id="fleet-tiles"')).toBeLessThan(html.indexOf('id="ftiles"'));
@@ -97,7 +176,9 @@ describe("agents view renderers", () => {
     expect(html).toContain("on credits · 59,210 left");
     expect(html).toContain("19.5M");
     expect(html).toContain("$13.12");
-    expect(html).not.toContain("Grok · xAI</div><div class=\"plan-row spend\"><span>today</span><b>0</b><em>$0.00</em><em>%");
+    expect(html).not.toContain(
+      'Grok · xAI</div><div class="plan-row spend"><span>today</span><b>0</b><em>$0.00</em><em>%',
+    );
     act(() => host.querySelector<HTMLButtonElement>("#ftiles")!.click());
     expect(host.innerHTML).not.toContain("fleet-tiles");
     expect(host.innerHTML).toContain("Show summary");
