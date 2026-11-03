@@ -210,13 +210,13 @@ describe("fleet UI Python parity", () => {
     expect(html).not.toContain("%");
   });
 
-  it("summary_cards_collapse_behind_a_toggle_under_them", () => {
+  it("summary_cards_collapse_behind_a_toggle_at_the_strip_end", () => {
     const state = dash();
     state.totals = { live: 2 };
     store.set({ state });
     let html = render(<FleetTiles />).innerHTML;
     expect(html).toContain('id="fleet-tiles"');
-    expect(html.indexOf('id="fleet-tiles"')).toBeLessThan(html.indexOf('id="ftiles"'));
+    expect(host.querySelector("#fleet-tiles > #ftiles")).not.toBeNull();
     expect(html).toContain('aria-expanded="true" aria-controls="fleet-tiles"');
     expect(html).toContain("Hide summary");
     act(() => host.querySelector<HTMLButtonElement>("#ftiles")!.click());

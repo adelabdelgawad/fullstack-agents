@@ -19,9 +19,9 @@ const MODELS = [
 
 function savedCollapsed(): boolean {
   try {
-    return localStorage.getItem("fsa-orc-collapsed") === "1";
+    return localStorage.getItem("fsa-orc-collapsed") !== "0";
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -31,32 +31,23 @@ function SidebarRow({ card }: { card: Card }) {
     plan = orcPlan(card),
     workers = orcWorkers(card),
     usage = card.usage || {};
-  const pct = plan ? Math.round((plan.done / Math.max(plan.total, 1)) * 100) : 0;
+  const sub = `${plan ? `${plan.done}/${plan.total} plan` : "no plan"}${workers.total ? ` · ${workers.done}/${workers.total} workers` : ""}`;
   return (
     <button
       className={`orc-row${openKey === card.key ? " sel" : ""} st-${status.key}`}
       data-orc={card.key}
       aria-current={openKey === card.key}
-      title={`${card.title} — ${status.label}`}
+      title={`${card.title} — ${status.label} — ${sub}`}
       onClick={() => openCard(card.key, true)}
     >
-      <span className="orc-row-top">
-        <span className="dot" aria-hidden="true" />
-        <b>{card.title}</b>
-        {usage.compactions ? <span className="cbadge">{usage.compactions}×</span> : null}
-        {usage.model && (
-          <span className={`mchip m-${modelFamily(String(usage.model))}`} title={String(usage.model)}>
-            {modelShort(String(usage.model))}
-          </span>
-        )}
-      </span>
-      <span className="orc-row-sub">
-        {plan ? `${plan.done}/${plan.total} plan` : "no plan"}
-        <span>{workers.total ? `${workers.done}/${workers.total} workers` : ""}</span>
-      </span>
-      <span className="orc-mini" aria-hidden="true">
-        <span style={{ width: `${pct}%` }} />
-      </span>
+      <span className="dot" aria-hidden="true" />
+      <b>{card.title}</b>
+      {usage.model && (
+        <span className={`mchip m-${modelFamily(String(usage.model))}`} title={String(usage.model)}>
+          {modelShort(String(usage.model))}
+        </span>
+      )}
+      {usage.compactions ? <span className="cbadge">{usage.compactions}×</span> : null}
     </button>
   );
 }
@@ -90,6 +81,7 @@ function Sidebar({ cards }: { cards: Card[] }) {
         className={`orc-row orc-all${openKey ? "" : " sel"}`}
         data-orc=""
         aria-current={!openKey}
+        title={`${count("running")} running · ${count("waiting")} waiting · ${count("stale")} stale`}
         onClick={closePanel}
       >
         <b>All orchestrators</b>

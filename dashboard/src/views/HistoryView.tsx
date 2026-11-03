@@ -1,3 +1,4 @@
+import { Layout } from "../components/Layout";
 import type { HistoryEntry } from "../lib/types";
 import { STATE_TEXT } from "../lib/cards";
 import { ago, fmtCost, fmtTokens, modelFamily, modelShort } from "../lib/format";
@@ -42,7 +43,7 @@ export function HistoryView() {
     (h) => !text || `${h.name} ${h.branch} ${h.model}`.toLowerCase().includes(text.toLowerCase()),
   );
   return (
-    <>
+    <Layout>
       <FleetTiles />
       <div className="fleet-toolbar">
         <input
@@ -81,6 +82,6 @@ export function HistoryView() {
           </tbody>
         </table>
       </div>
-    </>
+    </Layout>
   );
 }

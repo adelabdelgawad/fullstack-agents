@@ -169,8 +169,9 @@ describe("agents view renderers", () => {
       },
     };
     store.set({ state });
-    const html = render(<FleetTiles />).innerHTML;
-    expect(html.indexOf('id="fleet-tiles"')).toBeLessThan(html.indexOf('id="ftiles"'));
+    const summary = render(<FleetTiles />);
+    const html = summary.innerHTML;
+    expect(summary.querySelector("#fleet-tiles > #ftiles")).not.toBeNull();
     expect(html).toContain('aria-expanded="true"');
     expect(html).toContain("Claude plan · team");
     expect(html).toContain("on credits · 59,210 left");

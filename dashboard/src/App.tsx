@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { CardContextMenu } from "./components/CardContextMenu";
-import { Header } from "./components/Header";
 import { isOutOpen, OutDialog } from "./components/OutDialog";
 import { Toasts } from "./components/Toasts";
 import { Panel } from "./panel/Panel";
@@ -59,10 +58,7 @@ export function App() {
   const View = view === "herdr" ? HerdrView : view === "history" ? HistoryView : AgentsView;
   return (
     <>
-      <Header />
-      <main id="main">
-        <View />
-      </main>
+      <View />
       <Panel />
       <Toasts />
       <div className="wall-hint">wall mode · press w or Esc to exit</div>

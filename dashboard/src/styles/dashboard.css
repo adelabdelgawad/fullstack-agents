@@ -77,41 +77,65 @@ body {
   color: var(--ink);
   border-color: var(--muted);
 }
-header {
+body > header {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: stretch;
   gap: 16px;
-  flex-wrap: wrap;
-  padding: 24px 32px 4px;
+  height: 49px;
+  padding: 8px 32px 0;
+  border-bottom: 1px solid var(--line);
 }
-header h1 {
+body > header h1 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 .viewtabs {
-  display: inline-flex;
-  gap: 3px;
-  padding: 3px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  height: 40px;
+  overflow-x: auto;
 }
 .viewtab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  margin-bottom: -1px;
   border: 0;
-  border-radius: 5px;
-  padding: 4px 11px;
+  border-bottom: 2px solid transparent;
+  padding: 0 12px;
   background: none;
   color: var(--muted);
   font: inherit;
-  font-weight: 600;
   cursor: pointer;
 }
+.viewtab:hover {
+  color: var(--ink);
+}
 .viewtab[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--amber);
+  font-weight: 600;
+}
+.viewtab svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.viewtab-count {
+  min-width: 20px;
+  border-radius: 10px;
+  padding: 0 6px;
   background: var(--chip);
   color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
 }
 .status {
   font-family: var(--mono);
@@ -140,7 +164,8 @@ header h1 {
   display: flex;
   align-items: center;
   gap: 16px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  margin-left: auto;
 }
 .favsw {
   display: inline-flex;
@@ -605,11 +630,6 @@ html.herdr-page body {
 html.herdr-page body {
   display: flex;
   flex-direction: column;
-}
-html.herdr-page header {
-  flex: none;
-  padding-top: 6px;
-  padding-bottom: 2px;
 }
 html.herdr-page main {
   flex: 1;
@@ -2145,8 +2165,21 @@ aside pre.terminal-screen {
   }
 }
 @media (max-width: 640px) {
-  header {
-    padding: 18px 16px 4px;
+  body > header {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 0 16px;
+    padding: 6px 16px 0;
+  }
+  .viewtabs {
+    width: 100%;
+  }
+  .hright {
+    flex: 1 0 100%;
+    flex-wrap: wrap;
+    min-height: 40px;
+    margin-left: 0;
+    padding: 6px 0;
   }
   .herdr-detail {
     min-height: 62vh;

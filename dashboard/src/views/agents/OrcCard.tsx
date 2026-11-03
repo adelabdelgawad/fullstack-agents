@@ -157,11 +157,11 @@ function Metrics({ card }: { card: Card }) {
   const usage = card.usage;
   const tone = usage ? (Number(usage.fill) >= 0.9 ? "bad" : Number(usage.fill) >= 0.8 ? "warn" : "") : "";
   const metric = (label: React.ReactNode, value: React.ReactNode, extra?: React.ReactNode) => (
-    <div className="orc-m">
+    <span className="orc-metric">
       <span>{label}</span>
       <b>{value}</b>
       {extra}
-    </div>
+    </span>
   );
   return (
     <div className="orc-metrics">
@@ -202,6 +202,7 @@ function OrcHead({ card, state, lead }: { card: Card; state: OrcState; lead: Ses
         {state.icon}
       </span>
       <h3 title={card.title}>{card.title}</h3>
+      <span className="stage">{STAGE_LABEL(card)}</span>
       <ModelChip model={String(card.usage?.model || lead.model || "") || undefined} />
       <button
         className="star"
@@ -225,30 +226,29 @@ function OrcIdentity({ card, lead }: { card: Card; lead: Session }) {
     dirty = gitBadge(card),
     cwd = String(card.worktree || card.repo || "");
   return (
-    <>
-      <div className="orc-meta">
-        <span className="orc-role">orchestrator · {lead.engine || "claude"}</span>
-        <span className="stage">{STAGE_LABEL(card)}</span>
-        {card.sessions.length > 1 && <span>{card.sessions.length} sessions</span>}
-      </div>
-      <div className="orc-path" title={cwd}>
-        {cwd.replace(/^\/home\/[^/]+/, "~")}
-      </div>
-      <div className="orc-git">
-        <span className="br" title="branch">
-          <BranchIcon />
-          {branch || "no branch"}
-        </span>
-        <span className="chip">{card.worktree && card.worktree !== card.repo ? "worktree" : "main checkout"}</span>
-        <span className={dirty ? "dirty" : "clean"}>{dirty ? `${dirty} modified` : "clean"}</span>
-      </div>
-    </>
+    <div className="orc-meta" title={cwd}>
+      <span className="orc-role">orchestrator · {lead.engine || "claude"}</span>
+      <span aria-hidden="true">·</span>
+      <span className="br" title="branch">
+        <BranchIcon />
+        {branch || "no branch"}
+      </span>
+      <span aria-hidden="true">·</span>
+      <span className="chip">{card.worktree && card.worktree !== card.repo ? "worktree" : "main checkout"}</span>
+      <span aria-hidden="true">·</span>
+      <span className={dirty ? "dirty" : "clean"}>{dirty ? `${dirty} modified` : "clean"}</span>
+      {card.sessions.length > 1 && (
+        <>
+          <span aria-hidden="true">·</span>
+          <span>{card.sessions.length} sessions</span>
+        </>
+      )}
+    </div>
   );
 }
 
-function OrcProgress({ card, plan }: { card: Card; plan: OrcPlanData | null }) {
+function OrcProgress({ plan }: { plan: OrcPlanData | null }) {
   const percent = plan ? Math.round((plan.done / Math.max(plan.total, 1)) * 100) : 0;
-  const hasQuestion = card.now.some((session) => session.question);
   return (
     <div className="orc-plan">
       {plan ? (
@@ -266,7 +266,14 @@ function OrcProgress({ card, plan }: { card: Card; plan: OrcPlanData | null }) {
       ) : (
         <div className="orc-plan-t muted">No plan reported. Workers launched ad hoc.</div>
       )}
-      {hasQuestion ? <QuestionLine card={card} /> : <CardNow card={card} />}
+    </div>
+  );
+}
+
+function OrcNow({ card }: { card: Card }) {
+  return (
+    <div className="orc-now">
+      {card.now.some((session) => session.question) ? <QuestionLine card={card} /> : <CardNow card={card} />}
     </div>
   );
 }
@@ -297,26 +304,46 @@ function OrcWorkers({ card, workers }: { card: Card; workers: ReturnType<typeof 
   );
 }
 
-function OrcStatus({ card, state, flag }: { card: Card; state: OrcState; flag: string }) {
+function OrcFooter({
+  card,
+  state,
+  flag,
+  workers,
+}: {
+  card: Card;
+  state: OrcState;
+  flag: string;
+  workers: ReturnType<typeof orcWorkers>;
+}) {
   return (
-    <footer className="orc-status">
-      <span aria-hidden="true">{state.icon}</span>
-      <span>{state.label}</span>
-      {flag && <span className="flag">{flag}</span>}
-      {state.key === "waiting" && (
-        <button
-          className="tbtn orc-respond"
-          data-respond={card.key}
-          onClick={(event) => {
-            event.stopPropagation();
-            respondTo(card);
-          }}
-          onKeyDown={(event) => event.stopPropagation()}
-        >
-          Respond
-        </button>
-      )}
+    <footer className="orc-footer">
+      <Metrics card={card} />
+      <OrcWorkers card={card} workers={workers} />
+      <span className="orc-actions">
+        <span className="orc-state">
+          <span aria-hidden="true">{state.icon}</span>
+          <span>{state.label}</span>
+          {flag && <span className="flag">{flag}</span>}
+        </span>
+        {state.key === "waiting" && <RespondButton card={card} />}
+      </span>
     </footer>
+  );
+}
+
+function RespondButton({ card }: { card: Card }) {
+  return (
+    <button
+      className="tbtn orc-respond"
+      data-respond={card.key}
+      onClick={(event) => {
+        event.stopPropagation();
+        respondTo(card);
+      }}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      Respond
+    </button>
   );
 }
 
@@ -345,10 +372,9 @@ export function OrcCard({ card }: { card: Card }) {
     >
       <OrcHead card={card} state={state} lead={lead} />
       <OrcIdentity card={card} lead={lead} />
-      <OrcProgress card={card} plan={plan} />
-      <OrcWorkers card={card} workers={workers} />
-      <Metrics card={card} />
-      <OrcStatus card={card} state={state} flag={flag} />
+      <OrcProgress plan={plan} />
+      <OrcNow card={card} />
+      <OrcFooter card={card} state={state} flag={flag} workers={workers} />
     </article>
   );
 }
