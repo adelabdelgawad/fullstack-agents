@@ -3,7 +3,7 @@ export function snapshot(roots) {
   const RAW = new Set(["PRE", "TEXTAREA"]);
   const CACHE = new Set(["data-h", "data-sig"]);
   const attrs = el => {
-    const out = [...el.attributes].filter(a => !CACHE.has(a.name)).map(a => {
+    const out = [...el.attributes].filter(a => !CACHE.has(a.name) && !(a.name === "selected" && el.tagName === "OPTION")).map(a => {
       if (a.name === "style") return ["style", el.style.cssText];
       if (a.name === "class") return ["class", [...el.classList].sort().join(" ")];
       return [a.name, a.value];
@@ -13,6 +13,13 @@ export function snapshot(roots) {
     return out.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
       .map(([k, v]) => (v === "" ? ` ${k}` : ` ${k}="${v.replace(/"/g, "&quot;")}"`)).join("");
   };
+  // Adjacent text nodes render as one run of text, so they compare as one.
+  const merged = node => [...node.childNodes].reduce((acc, c) => {
+    const prev = acc[acc.length - 1];
+    if (c.nodeType === Node.TEXT_NODE && prev && prev.nodeType === Node.TEXT_NODE) acc[acc.length - 1] = {nodeType: Node.TEXT_NODE, data: prev.data + c.data};
+    else acc.push(c);
+    return acc;
+  }, []);
   const ser = (node, depth, raw) => {
     const pad = "  ".repeat(depth);
     if (node.nodeType === Node.TEXT_NODE) {
@@ -23,7 +30,7 @@ export function snapshot(roots) {
     const tag = node.tagName.toLowerCase();
     const open = `${pad}<${tag}${attrs(node)}>`;
     if (node.matches(OPAQUE)) return [open, `${pad}  [opaque]`, `${pad}</${tag}>`];
-    const inner = [...node.childNodes].flatMap(c => ser(c, depth + 1, raw || RAW.has(node.tagName)));
+    const inner = merged(node).flatMap(c => ser(c, depth + 1, raw || RAW.has(node.tagName)));
     return inner.length ? [open, ...inner, `${pad}</${tag}>`] : [`${open}</${tag}>`];
   };
   const out = {"html.class": [...document.documentElement.classList].sort().join(" "), title: document.title};

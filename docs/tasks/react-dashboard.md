@@ -5,11 +5,11 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | U0 | done | Scaffold Vite React TS, /next route, parity harness | scaffold 845d03a; parity harness dashboard/parity (serve.sh, run.mjs record\|compare, states.mjs); / vs / green 48/48; fixtures in session scratchpad |  |  |  |  |
 | U1 | done | Core: store, API, shell, header, toasts, context menu | lead audit + repairs; build, 25 vitest, shell parity 6/6 green; ctx-menu state re-checked once U2 renders cards |  |  |  |  |
-| U2 | pending | Agents view: tiles, toolbar, orchestrator wall, feed | depends U1 |  |  |  |  |
-| U3 | pending | Detail panel: info, git, log, output dialog | depends U1 |  |  |  |  |
-| U4 | pending | Terminals: card terminal, Herdr client, menus and modals | depends U1 |  |  |  |  |
-| U5 | pending | History view | depends U1 |  |  |  |  |
-| U6 | pending | Parity green, switch / to React, remove old UI | depends U2-U5 |  |  |  |  |
+| U2 | blocked | Agents view: tiles, toolbar, orchestrator wall, feed | depends U1 | claude | implementing u2 |  |  |
+| U3 | blocked | Detail panel: info, git, log, output dialog | depends U1 | claude | implementing u3 |  |  |
+| U4 | blocked | Terminals: card terminal, Herdr client, menus and modals | depends U1 | claude | implementing u4 |  |  |
+| U5 | blocked | History view | depends U1 |  |  |  |  |
+| U6 | blocked | Parity green, switch / to React, remove old UI | depends U2-U5 |  |  |  |  |
 <!-- fsa:tasks:end -->
 
 <!-- fsa:checkpoint:start -->
@@ -49,7 +49,9 @@
       "used": true
     }
   ],
-  "blockers": [],
+  "blockers": [
+    "B4: worker Codex implementer runs implement-20261103-140842/140844/140846 (bg b1p9kq4hq, bpprlfr2j, biysh48fp) — blocks U2,U3,U4,U5,U6"
+  ],
   "constraints": [
     "AGENTS.md: commit on main, linear history; land branch react-dashboard by rebase + fast-forward",
     "commit with -c user.name='Adel Abd Elgawad' -c user.email=tech.ade87@gmail.com; this account cannot push",
@@ -91,6 +93,10 @@
     {
       "evidence": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/74648219-b630-4dfc-9bf2-9f49d6dfc6fc/scratchpad/logs/parity-u1-shell.log",
       "text": "U1 audited, repaired by lead and committed 151132d + 3ded64c; ledger checks BUILD/C1/C2/R1/R2 pass; shell parity 6/6"
+    },
+    {
+      "evidence": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/704b0464-bfd3-4f1b-a591-af0eec8e6151/scratchpad/logs/tsc-hoist.log",
+      "text": "U2-U4 briefs written, advisor-fixed, accepted; shared card helpers hoisted to lib/cards.ts in 5208635"
     }
   ],
   "evidence": [
@@ -99,23 +105,24 @@
     "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/fixtures/fixtures.json",
     "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/briefs/u1.md",
     "/home/ashadmin/.codex/fsa-runs/implement-20261103-132435-541185.last.txt",
-    "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/74648219-b630-4dfc-9bf2-9f49d6dfc6fc/scratchpad/handoff-next.md",
-    "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/74648219-b630-4dfc-9bf2-9f49d6dfc6fc/scratchpad/logs/u1-review.md"
+    "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/74648219-b630-4dfc-9bf2-9f49d6dfc6fc/scratchpad/logs/u1-review.md",
+    "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/704b0464-bfd3-4f1b-a591-af0eec8e6151/scratchpad/handoff-next.md",
+    "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/704b0464-bfd3-4f1b-a591-af0eec8e6151/scratchpad/briefs"
   ],
   "goal": "Port the agent dashboard (dashboard.html, fleet.js, orchestrators.js, fleet.css) 1:1 to React 18 + TypeScript with Vite; source dashboard/, dist committed at plugins/fullstack-agents/scripts/lib/dashboard-react/, served at /next beside the old UI; switch / in U6.",
   "identity": {
     "branch": "react-dashboard",
     "checkout": "/home/ashadmin/workspace/fullstack-agents-react",
     "detached": false,
-    "head": "3ded64c8198d4d7460a05332d2481650d9dfc2d2",
+    "head": "5208635fdf450c8688ec302ae3a532abc3c7cfb8",
     "root": "/home/ashadmin/workspace/fullstack-agents-react",
     "schema": 1,
-    "session_id": "74648219-b630-4dfc-9bf2-9f49d6dfc6fc",
+    "session_id": "8e8bcdf0-3e60-4d17-82d8-39e596b25f9a",
     "task_id": "react-dashboard",
-    "written_at": "2026-11-03T13:46:23.392905Z"
+    "written_at": "2026-11-03T14:09:18.287890Z"
   },
   "next": {
-    "action": "write U2/U3/U4 briefs and dispatch in parallel, port U5 directly; full notes in /tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/74648219-b630-4dfc-9bf2-9f49d6dfc6fc/scratchpad/handoff-next.md",
+    "action": "audit each finished run, build dist, parity, commit",
     "owner": "lead"
   },
   "scope": {
@@ -196,6 +203,18 @@
 - 2026-11-03T13:50:41Z U2 accept reason="advisor fixes: tsx test paths, showRunLog exception, shared lib helpers, no second contextmenu handler" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/704b0464-bfd3-4f1b-a591-af0eec8e6151/scratchpad/briefs/u2.md"
 - 2026-11-03T13:50:41Z U3 accept reason="advisor fixes: tsx test paths, showRunLog exception, shared lib helpers, no second contextmenu handler" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/704b0464-bfd3-4f1b-a591-af0eec8e6151/scratchpad/briefs/u3.md"
 - 2026-11-03T13:50:41Z U4 accept reason="advisor fixes: tsx test paths, showRunLog exception, shared lib helpers, no second contextmenu handler" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/704b0464-bfd3-4f1b-a591-af0eec8e6151/scratchpad/briefs/u4.md"
+- 2026-11-03T13:51:47Z U2 status from="pending" to="in_progress" reason=""
+- 2026-11-03T13:51:49Z U3 status from="pending" to="in_progress" reason=""
+- 2026-11-03T13:51:52Z U4 status from="pending" to="in_progress" reason=""
+- 2026-11-03T13:52:25Z U5 accept reason="" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/8e8bcdf0-3e60-4d17-82d8-39e596b25f9a/scratchpad/briefs/u5.md"
+- 2026-11-03T13:53:13Z B2 block kind="worker" rows="U5,U6"
+- 2026-11-03T14:05:35Z B3 block kind="worker" rows="U2,U3,U4"
+- 2026-11-03T14:08:34Z U2 accept reason="user: implementer is Codex; Sonnet attempt stopped and archived; criteria unchanged" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/704b0464-bfd3-4f1b-a591-af0eec8e6151/scratchpad/briefs/u2.md"
+- 2026-11-03T14:08:34Z U3 accept reason="user: implementer is Codex; Sonnet attempt stopped and archived; criteria unchanged" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/704b0464-bfd3-4f1b-a591-af0eec8e6151/scratchpad/briefs/u3.md"
+- 2026-11-03T14:08:34Z U4 accept reason="user: implementer is Codex; Sonnet attempt stopped and archived; criteria unchanged" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/704b0464-bfd3-4f1b-a591-af0eec8e6151/scratchpad/briefs/u4.md"
+- 2026-11-03T14:09:14Z B4 block kind="worker" rows="U2,U3,U4,U5,U6"
+- 2026-11-03T14:09:18Z B2 resolve kind="worker" reason="user chose Codex; Sonnet runs stopped (U3/U4 killed, U2 finished), output archived in session scratchpad sonnet-attempt/"
+- 2026-11-03T14:09:18Z B3 resolve kind="worker" reason="user chose Codex; Sonnet runs stopped (U3/U4 killed, U2 finished), output archived in session scratchpad sonnet-attempt/"
 <!-- fsa:log:end -->
 
 <!-- fsa:blockers:start -->
@@ -229,6 +248,75 @@
       "status": "resolved",
       "text": "U1 implementer run implement-20261103-132435-541185 in progress",
       "why": "U2-U5 build on U1's store, libs and stubs; U6 needs U2-U5"
+    },
+    "B2": {
+      "created_at": "2026-11-03T13:53:13.178850Z",
+      "kind": "worker",
+      "next": "audit each finished run, build dist, parity, commit; then U5 parity and U6",
+      "resolution": {
+        "at": "2026-11-03T14:09:18.210661Z",
+        "by": "tool",
+        "evidence": "/home/ashadmin/.codex/fsa-runs/implement-20261103-135147-689188.result.json: state=succeeded",
+        "reason": "user chose Codex; Sonnet runs stopped (U3/U4 killed, U2 finished), output archived in session scratchpad sonnet-attempt/"
+      },
+      "resumes": {
+        "U5": "pending",
+        "U6": "pending"
+      },
+      "rows": [
+        "U5",
+        "U6"
+      ],
+      "status": "resolved",
+      "text": "U2/U3/U4 implementer runs in progress (bg br6b3sqs3, bnso3gf4v, bn0aehl06)",
+      "why": "U5 HistoryView imports U2's FleetTiles; U6 needs U2-U5 landed"
+    },
+    "B3": {
+      "created_at": "2026-11-03T14:05:35.162596Z",
+      "kind": "worker",
+      "next": "audit each finished run, build dist, parity, commit",
+      "resolution": {
+        "at": "2026-11-03T14:09:18.283463Z",
+        "by": "tool",
+        "evidence": "/home/ashadmin/.codex/fsa-runs/implement-20261103-135147-689188.result.json: state=succeeded",
+        "reason": "user chose Codex; Sonnet runs stopped (U3/U4 killed, U2 finished), output archived in session scratchpad sonnet-attempt/"
+      },
+      "resumes": {
+        "U2": "in_progress",
+        "U3": "in_progress",
+        "U4": "in_progress"
+      },
+      "rows": [
+        "U2",
+        "U3",
+        "U4"
+      ],
+      "status": "resolved",
+      "text": "Sonnet implementer runs in progress (bg br6b3sqs3, bnso3gf4v, bn0aehl06); user may ask to redispatch on Codex/Grok",
+      "why": "rows finish when their runs end and the lead audits them"
+    },
+    "B4": {
+      "created_at": "2026-11-03T14:09:14.941455Z",
+      "kind": "worker",
+      "next": "audit each finished run, build dist, parity, commit",
+      "resolution": null,
+      "resumes": {
+        "U2": "in_progress",
+        "U3": "in_progress",
+        "U4": "in_progress",
+        "U5": "pending",
+        "U6": "pending"
+      },
+      "rows": [
+        "U2",
+        "U3",
+        "U4",
+        "U5",
+        "U6"
+      ],
+      "status": "open",
+      "text": "Codex implementer runs implement-20261103-140842/140844/140846 (bg b1p9kq4hq, bpprlfr2j, biysh48fp)",
+      "why": "U5 needs U2's FleetTiles; U6 needs U2-U5"
     }
   },
   "schema": 1
@@ -819,7 +907,7 @@
         ],
         "rationale": "the view reads U1's store and libs and calls U3's stubbed openAgent/openRunLog by their fixed signatures"
       },
-      "spec_at": "2026-11-03T13:50:41.038700Z"
+      "spec_at": "2026-11-03T14:08:34.660614Z"
     },
     "U3": {
       "automated_waiver": null,
@@ -925,7 +1013,7 @@
         ],
         "rationale": "the panel reads U1's store and libs and mounts U4's CardTerminal by its fixed {card} signature"
       },
-      "spec_at": "2026-11-03T13:50:41.131934Z"
+      "spec_at": "2026-11-03T14:08:34.745140Z"
     },
     "U4": {
       "automated_waiver": null,
@@ -1035,7 +1123,79 @@
         ],
         "rationale": "the terminals read U1's store and libs; the header button and xterm globals come from U1/U0"
       },
-      "spec_at": "2026-11-03T13:50:41.198354Z"
+      "spec_at": "2026-11-03T14:08:34.824581Z"
+    },
+    "U5": {
+      "automated_waiver": null,
+      "checks": {
+        "BUILD": {
+          "command": "cd dashboard && npx tsc -p . --noEmit 2>&1 | (! grep -E '^src/views/HistoryView')",
+          "cwd": ".",
+          "definition_digest": "914b235f59b476b1035d570cfe6996abc61ce0daaa140be17574d98627b9f835",
+          "expect": {
+            "none": "compile/lint success is silent"
+          },
+          "method": "command"
+        },
+        "C1": {
+          "command": "npx tsc -p . --noEmit 2>&1 | (! grep -E '^src/views/HistoryView')",
+          "cwd": "dashboard",
+          "definition_digest": "1b55b7db924c700dc86b25e5387d3047474144a3bcb1a962195c3dc875161049",
+          "expect": {
+            "patterns": [
+              "^$"
+            ],
+            "reject": []
+          },
+          "method": "command"
+        },
+        "R1": {
+          "definition_digest": "6f2aa01bd6e6c89a21b1a7533a8c9f211939bdd6ea0afc7c1818fe5755f14fff",
+          "method": "inspection"
+        }
+      },
+      "criteria": [
+        {
+          "checks": [
+            "C1"
+          ],
+          "id": "1",
+          "text": "HistoryView type-checks"
+        },
+        {
+          "checks": [
+            "R1"
+          ],
+          "id": "2",
+          "text": "The history parity state is DOM-equal to the old UI"
+        },
+        {
+          "checks": [
+            "BUILD"
+          ],
+          "id": "BUILD",
+          "text": "BUILD passes"
+        }
+      ],
+      "kind": "code",
+      "results": {},
+      "scope": {
+        "dependencies": [
+          "dashboard/src/store.ts",
+          "dashboard/src/lib/",
+          "dashboard/src/views/agents/FleetTiles.tsx",
+          "plugins/fullstack-agents/scripts/lib/fleet.js"
+        ],
+        "dependencies_none": null,
+        "env": [],
+        "inputs": [],
+        "paths": [
+          "dashboard/src/views/HistoryView.tsx",
+          "none"
+        ],
+        "rationale": "one view file; FleetTiles and store are fixed-contract imports"
+      },
+      "spec_at": "2026-11-03T13:52:25.680160Z"
     }
   },
   "runs": {},
@@ -1048,3 +1208,4 @@
 - 2026-11-03T13:09:18.581136Z adopted by 34f94a84-a134-4113-8eba-235795412266 from 978905e0-a5f6-4f3f-af8b-b26011a41634 (free)
 - 2026-11-03T13:39:36.511004Z adopted by 74648219-b630-4dfc-9bf2-9f49d6dfc6fc from 34f94a84-a134-4113-8eba-235795412266 (free)
 - 2026-11-03T13:46:51.071379Z adopted by 704b0464-bfd3-4f1b-a591-af0eec8e6151 from 74648219-b630-4dfc-9bf2-9f49d6dfc6fc (free)
+- 2026-11-03T13:51:29.459267Z adopted by 8e8bcdf0-3e60-4d17-82d8-39e596b25f9a from 704b0464-bfd3-4f1b-a591-af0eec8e6151 (free)

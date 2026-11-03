@@ -33,7 +33,7 @@ function AgentsControls({ state }: { state: DashState | null }) {
   const favOnly = useStore((s) => s.favOnly);
   const feed = useStore((s) => s.fleet.feed);
   const hidden = useStore((s) => s.view) !== "agents";
-  const favCount = state ? `Favourites only (${state.cards.filter((c) => c.favourite).length})` : "Favourites only";
+  const favCount = state && !hidden ? `Favourites only (${state.cards.filter((c) => c.favourite).length})` : "Favourites only";
   return (
     <>
       <button className="newsess" id="newsess" title="Open a new herdr tab and start Claude, Codex or Grok in it" hidden={hidden} onClick={(e) => openNewSession(e.currentTarget)}>
