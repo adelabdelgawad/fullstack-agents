@@ -41,6 +41,7 @@ from runs_dir import read_dirs, runs_dir
 import liveness
 import herdr_web
 HTML = HERE / "lib" / "dashboard.html"
+REACT = HERE / "lib" / "dashboard-react"
 FIRST_PROMPTS = {}
 LAST_ASKS = {}
 CODEX_META = {}
@@ -111,6 +112,8 @@ XTERM_FILES = {
     "/static/fleet.js": (HERE / "lib" / "fleet.js", "application/javascript"),
     "/static/fleet.css": (HERE / "lib" / "fleet.css", "text/css"),
     "/static/orchestrators.js": (HERE / "lib" / "orchestrators.js", "application/javascript"),
+    "/next/app.js": (REACT / "app.js", "application/javascript"),
+    "/next/app.css": (REACT / "app.css", "text/css"),
     "/static/fonts/JetBrainsMono-Regular.woff2": (HERE / "lib" / "vendor" / "jetbrains-mono" / "JetBrainsMono-Regular.woff2", "font/woff2"),
     "/static/fonts/JetBrainsMono-Bold.woff2": (HERE / "lib" / "vendor" / "jetbrains-mono" / "JetBrainsMono-Bold.woff2", "font/woff2"),
     "/static/fonts/JetBrainsMono-Italic.woff2": (HERE / "lib" / "vendor" / "jetbrains-mono" / "JetBrainsMono-Italic.woff2", "font/woff2"),
@@ -2812,9 +2815,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         q = urllib.parse.parse_qs(url.query)
         if not self.authorised(q):
             return self.send(403, b"forbidden: open the URL printed by 'fsa-dashboard start'", "text/plain")
-        if url.path == "/":
+        if url.path in ("/", "/next", "/next/"):
             cookie = f"fsa_t={self.server.token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000"
-            return self.send(200, HTML.read_bytes(), "text/html; charset=utf-8", {"Set-Cookie": cookie})
+            page = HTML if url.path == "/" else REACT / "index.html"
+            return self.send(200, page.read_bytes(), "text/html; charset=utf-8", {"Set-Cookie": cookie})
         if url.path == "/api/state":
             return self.send(200, self.server.state())
         if url.path == "/api/herdr":

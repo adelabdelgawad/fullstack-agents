@@ -323,6 +323,15 @@ class HerdrClientServerTests(unittest.TestCase):
             else:
                 self.assertEqual(headers["content-type"], "font/woff2", path)
 
+    def test_react_ui_served_at_next_with_cookie(self):
+        for path in ("/next", "/next/"):
+            _, _, status, headers = self.request(f"{path}?t=t", upgrade=False)
+            self.assertEqual(status, 200, path)
+            self.assertTrue(headers["content-type"].startswith("text/html"), path)
+            self.assertIn("fsa_t=t", headers["set-cookie"], path)
+        _, _, status, headers = self.request("/next/app.css?t=t", upgrade=False)
+        self.assertEqual((status, headers["content-type"]), (200, "text/css"))
+
 
 if __name__ == "__main__":
     unittest.main()
