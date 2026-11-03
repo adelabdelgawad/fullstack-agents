@@ -65,8 +65,9 @@ host, straight from one checkout), these replace "How sessions work" 1–2 and t
 3. **Rollback.** Once a release applied a migration, an older image may refuse to boot against
    it. Write the rollback in every deploy plan as a forward fix unless the project proves the old
    image boots against the new schema.
-4. **Shared build cache.** Clean it only when no peer is building, or build with a private cache;
-   a stale shared artifact from another worktree can fake a compile error.
+4. **Shared build cache** (a `CARGO_TARGET_DIR` several worktrees use counts). Clean it only when no peer is
+   building, or build with a private cache; a stale shared artifact from another worktree can fake a
+   compile error.
 
 After any deploy or reload, verify the running release:
 [release verification](references/release-verification.md).

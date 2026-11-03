@@ -18,6 +18,6 @@ The complete adapted rules are in [references/engineering-guide.md](references/e
 
 - Line 7: Per change set (fast, scoped to the touched crates)
 - Line 18: Tests (through the project's runner)
-- Line 30: Release only
-- Line 35: Always
-- Line 43: Remediation
+- Line 36: Release only
+- Line 41: Always
+- Line 49: Remediation

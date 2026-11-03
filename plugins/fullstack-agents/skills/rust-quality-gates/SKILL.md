@@ -30,6 +30,12 @@ all units of the deliverable landed), not again merely because work changed hand
 - Split a run expected to exceed ~8 minutes into target groups, each its own command with its own log, run one after
   another (never two Cargo jobs on one build directory at once). A group that timed out or did not run is not a pass;
   report which groups completed.
+- **The build directory is shared state.** Before a Cargo job, know the `CARGO_TARGET_DIR` it uses (a project wrapper
+  may point every worktree at one directory). A target that other worktrees or sessions also use serializes every job on
+  it: do not start a job there while a peer builds. Do not override the project's binding silently; report the shared
+  target as the cause and propose a per-worktree one. `Blocking waiting for file lock on build directory` means a peer
+  holds it: report that time as waiting, not build time. `cargo clean -p` on a shared target is a shared-cache clean
+  (team-coordination).
 - Add tests at the cheapest layer that proves the behaviour (see rust-testing). There is no coverage percentage gate.
 
 ## Release only
