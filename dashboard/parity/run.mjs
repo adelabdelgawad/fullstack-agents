@@ -73,6 +73,7 @@ async function runSteps(page, activity, steps, errors) {
       if (step.click) await page.click(step.click, {timeout: 3000});
       else if (step.rightclick) await page.click(step.rightclick, {button: "right", timeout: 3000});
       else if (step.fill) await page.fill(step.fill, step.value, {timeout: 3000});
+      else if (step.select) await page.selectOption(step.select, step.value, {timeout: 3000});
       else if (step.key) await page.keyboard.press(step.key);
     } catch (e) {
       errors.push(`step ${JSON.stringify(step)}: ${e.message.split("\n")[0]}`);
