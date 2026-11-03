@@ -142,7 +142,12 @@ function BranchIcon() {
     <svg viewBox="0 0 16 16" aria-hidden="true">
       <path
         fill="currentColor"
-        d="M5 3.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm0 9.5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm7-7a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM4.25 1a2.25 2.25 0 0 0-.75 4.37v5.26a2.25 2.25 0 1 0 1.5 0V9.5c.5.3 1.1.5 1.75.5h1.5a2.25 2.25 0 0 0 2.12-1.5 2.25 2.25 0 1 0-1.5-.88A.75.75 0 0 1 8.25 8.5h-1.5A1.75 1.75 0 0 1 5 6.75V5.37A2.25 2.25 0 0 0 4.25 1Z"
+        d={
+          "M5 3.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm0 9.5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" +
+          "m7-7a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM4.25 1a2.25 2.25 0 0 0-.75 4.37v5.26a2.25 2.25 0 1 0 1.5 0" +
+          "V9.5c.5.3 1.1.5 1.75.5h1.5a2.25 2.25 0 0 0 2.12-1.5 2.25 2.25 0 1 0-1.5-.88A.75.75 0 0 1 8.25 8.5h-1.5" +
+          "A1.75 1.75 0 0 1 5 6.75V5.37A2.25 2.25 0 0 0 4.25 1Z"
+        }
       />
     </svg>
   );
@@ -190,55 +195,37 @@ function respondTo(card: Card): void {
   openCard(card.key, true);
 }
 
-export function OrcCard({ card }: { card: Card }) {
-  const openKey = useStore((state) => state.openKey);
-  const state = orcState(card),
-    plan = orcPlan(card),
-    workers = orcWorkers(card),
-    usage = card.usage,
-    lead = card.sessions[0] || ({} as Session);
+function OrcHead({ card, state, lead }: { card: Card; state: OrcState; lead: Session }) {
+  return (
+    <header className="orc-head">
+      <span className="orc-ico" aria-hidden="true">
+        {state.icon}
+      </span>
+      <h3 title={card.title}>{card.title}</h3>
+      <ModelChip model={String(card.usage?.model || lead.model || "") || undefined} />
+      <button
+        className="star"
+        data-fav={card.key}
+        aria-pressed={!!card.favourite}
+        aria-label={card.favourite ? "Remove from favourites" : "Add to favourites"}
+        onClick={(event) => {
+          event.stopPropagation();
+          void toggleFavourite(card.key);
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        {card.favourite ? "★" : "☆"}
+      </button>
+    </header>
+  );
+}
+
+function OrcIdentity({ card, lead }: { card: Card; lead: Session }) {
   const branch = card.tree ? card.tree.branch : lead.branch,
     dirty = gitBadge(card),
     cwd = String(card.worktree || card.repo || "");
-  const flag = card.needs_you.length ? FLAG_TEXT[card.needs_you[0]] || card.needs_you[0] : "";
-  const pct = plan ? Math.round((plan.done / Math.max(plan.total, 1)) * 100) : 0;
-  const open = () => openCard(card.key);
-  const keyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) {
-      event.preventDefault();
-      open();
-    }
-  };
-  const hasQuestion = card.now.some((session) => session.question);
   return (
-    <article
-      className={`card orc st-${state.key}${usage?.blowout ? " blowout" : ""}${openKey === card.key ? " open-here" : ""}`}
-      tabIndex={0}
-      data-key={card.key}
-      data-sid={lead.id || ""}
-      onClick={open}
-      onKeyDown={keyDown}
-    >
-      <header className="orc-head">
-        <span className="orc-ico" aria-hidden="true">
-          {state.icon}
-        </span>
-        <h3 title={card.title}>{card.title}</h3>
-        <ModelChip model={String(usage?.model || lead.model || "") || undefined} />
-        <button
-          className="star"
-          data-fav={card.key}
-          aria-pressed={!!card.favourite}
-          aria-label={card.favourite ? "Remove from favourites" : "Add to favourites"}
-          onClick={(event) => {
-            event.stopPropagation();
-            void toggleFavourite(card.key);
-          }}
-          onKeyDown={(event) => event.stopPropagation()}
-        >
-          {card.favourite ? "★" : "☆"}
-        </button>
-      </header>
+    <>
       <div className="orc-meta">
         <span className="orc-role">orchestrator · {lead.engine || "claude"}</span>
         <span className="stage">{STAGE_LABEL(card)}</span>
@@ -255,64 +242,113 @@ export function OrcCard({ card }: { card: Card }) {
         <span className="chip">{card.worktree && card.worktree !== card.repo ? "worktree" : "main checkout"}</span>
         <span className={dirty ? "dirty" : "clean"}>{dirty ? `${dirty} modified` : "clean"}</span>
       </div>
-      <div className="orc-plan">
-        {plan ? (
-          <>
-            <div className="orc-plan-t">
-              <span title={plan.title}>{plan.title}</span>
-              <b>
-                {plan.done}/{plan.total}
-              </b>
-            </div>
-            <div className="orc-bar" aria-hidden="true">
-              <span style={{ width: `${pct}%` }} />
-            </div>
-          </>
-        ) : (
-          <div className="orc-plan-t muted">No plan reported. Workers launched ad hoc.</div>
-        )}
-        {hasQuestion ? <QuestionLine card={card} /> : <CardNow card={card} />}
+    </>
+  );
+}
+
+function OrcProgress({ card, plan }: { card: Card; plan: OrcPlanData | null }) {
+  const percent = plan ? Math.round((plan.done / Math.max(plan.total, 1)) * 100) : 0;
+  const hasQuestion = card.now.some((session) => session.question);
+  return (
+    <div className="orc-plan">
+      {plan ? (
+        <>
+          <div className="orc-plan-t">
+            <span title={plan.title}>{plan.title}</span>
+            <b>
+              {plan.done}/{plan.total}
+            </b>
+          </div>
+          <div className="orc-bar" aria-hidden="true">
+            <span style={{ width: `${percent}%` }} />
+          </div>
+        </>
+      ) : (
+        <div className="orc-plan-t muted">No plan reported. Workers launched ad hoc.</div>
+      )}
+      {hasQuestion ? <QuestionLine card={card} /> : <CardNow card={card} />}
+    </div>
+  );
+}
+
+function OrcWorkers({ card, workers }: { card: Card; workers: ReturnType<typeof orcWorkers> }) {
+  return (
+    <div className="orc-workers">
+      <WorkerSquares card={card} />
+      <div className="orc-wsum">
+        <span>
+          {workers.total ? (
+            <>
+              {workers.running} running · {workers.done} done
+              {workers.failed ? (
+                <>
+                  {" "}
+                  · <span className="bad">{workers.failed} failed</span>
+                </>
+              ) : null}
+            </>
+          ) : (
+            "no workers"
+          )}
+        </span>
+        <Sparkline points={cardTpm.get(card.key) || []} />
       </div>
-      <div className="orc-workers">
-        <WorkerSquares card={card} />
-        <div className="orc-wsum">
-          <span>
-            {workers.total ? (
-              <>
-                {workers.running} running · {workers.done} done
-                {workers.failed ? (
-                  <>
-                    {" "}
-                    · <span className="bad">{workers.failed} failed</span>
-                  </>
-                ) : null}
-              </>
-            ) : (
-              "no workers"
-            )}
-          </span>
-          <Sparkline points={cardTpm.get(card.key) || []} />
-        </div>
-      </div>
+    </div>
+  );
+}
+
+function OrcStatus({ card, state, flag }: { card: Card; state: OrcState; flag: string }) {
+  return (
+    <footer className="orc-status">
+      <span aria-hidden="true">{state.icon}</span>
+      <span>{state.label}</span>
+      {flag && <span className="flag">{flag}</span>}
+      {state.key === "waiting" && (
+        <button
+          className="tbtn orc-respond"
+          data-respond={card.key}
+          onClick={(event) => {
+            event.stopPropagation();
+            respondTo(card);
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          Respond
+        </button>
+      )}
+    </footer>
+  );
+}
+
+export function OrcCard({ card }: { card: Card }) {
+  const openKey = useStore((state) => state.openKey);
+  const state = orcState(card),
+    plan = orcPlan(card),
+    workers = orcWorkers(card),
+    lead = card.sessions[0] || ({} as Session);
+  const flag = card.needs_you.length ? FLAG_TEXT[card.needs_you[0]] || card.needs_you[0] : "";
+  const open = () => openCard(card.key);
+  const keyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) {
+      event.preventDefault();
+      open();
+    }
+  };
+  return (
+    <article
+      className={`card orc st-${state.key}${card.usage?.blowout ? " blowout" : ""}${openKey === card.key ? " open-here" : ""}`}
+      tabIndex={0}
+      data-key={card.key}
+      data-sid={lead.id || ""}
+      onClick={open}
+      onKeyDown={keyDown}
+    >
+      <OrcHead card={card} state={state} lead={lead} />
+      <OrcIdentity card={card} lead={lead} />
+      <OrcProgress card={card} plan={plan} />
+      <OrcWorkers card={card} workers={workers} />
       <Metrics card={card} />
-      <footer className="orc-status">
-        <span aria-hidden="true">{state.icon}</span>
-        <span>{state.label}</span>
-        {flag && <span className="flag">{flag}</span>}
-        {state.key === "waiting" && (
-          <button
-            className="tbtn orc-respond"
-            data-respond={card.key}
-            onClick={(event) => {
-              event.stopPropagation();
-              respondTo(card);
-            }}
-            onKeyDown={(event) => event.stopPropagation()}
-          >
-            Respond
-          </button>
-        )}
-      </footer>
+      <OrcStatus card={card} state={state} flag={flag} />
     </article>
   );
 }

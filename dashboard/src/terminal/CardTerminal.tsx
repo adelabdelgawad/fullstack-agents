@@ -23,6 +23,63 @@ interface TerminalMarkupProps {
   onPick: (paneId: string) => void;
 }
 
+function TerminalHead({ pane }: { pane: HerdrPane }) {
+  return (
+    <div className="terminal-head">
+      <span className="terminal-pane-title"> {pane.title || pane.pane_id} </span>
+      <span className={`chip st-${pane.status}`}>{pane.status}</span>
+      <div className="terminal-source">
+        <button data-mode="live" aria-pressed="true">
+          Live
+        </button>
+        <button data-mode="history" aria-pressed="false">
+          History
+        </button>
+        <button data-attach="" aria-label="Attach files" title="Attach files: their paths are typed into the session">
+          +
+        </button>
+        <input type="file" multiple hidden data-attach-input="" />
+      </div>
+    </div>
+  );
+}
+
+function TerminalScreen({ pane }: { pane: HerdrPane }) {
+  return (
+    <div className="terminal-screen-box" data-herdr-pane-context={pane.pane_id}>
+      <div className="terminal-live"></div>
+      <div className="terminal-drop" aria-hidden="true">
+        <span>+</span>
+        <b>Drop to attach</b>
+      </div>
+      <div className="terminal-disconnected" hidden>
+        <div className="terminal-blocked">
+          <span data-terminal-reason=""></span>
+          <button data-takeover="">take over</button>
+        </div>
+      </div>
+      <pre className="terminal-screen" tabIndex={0} hidden>
+        loading…
+      </pre>
+      <button className="terminal-jump" hidden>
+        New output — jump to latest
+      </button>
+    </div>
+  );
+}
+
+function TerminalCaption() {
+  return (
+    <div className="terminal-caption">
+      <span data-terminal-status="">live · connecting</span>
+      <span data-terminal-reconnect="" hidden>
+        <button data-reconnect="">reconnect</button>
+        <button data-takeover="">take over</button>
+      </span>
+    </div>
+  );
+}
+
 function TerminalMarkup({ pane, panes, pickMessage, onPick }: TerminalMarkupProps) {
   const pick = pickMessage ? (
     <div className="terminal-pick">
@@ -46,48 +103,9 @@ function TerminalMarkup({ pane, panes, pickMessage, onPick }: TerminalMarkupProp
   return (
     <div className="terminal" data-terminal-pane={pane.pane_id}>
       {pick}
-      <div className="terminal-head">
-        <span className="terminal-pane-title"> {pane.title || pane.pane_id} </span>
-        <span className={`chip st-${pane.status}`}>{pane.status}</span>
-        <div className="terminal-source">
-          <button data-mode="live" aria-pressed="true">
-            Live
-          </button>
-          <button data-mode="history" aria-pressed="false">
-            History
-          </button>
-          <button data-attach="" aria-label="Attach files" title="Attach files: their paths are typed into the session">
-            +
-          </button>
-          <input type="file" multiple hidden data-attach-input="" />
-        </div>
-      </div>
-      <div className="terminal-screen-box" data-herdr-pane-context={pane.pane_id}>
-        <div className="terminal-live"></div>
-        <div className="terminal-drop" aria-hidden="true">
-          <span>+</span>
-          <b>Drop to attach</b>
-        </div>
-        <div className="terminal-disconnected" hidden>
-          <div className="terminal-blocked">
-            <span data-terminal-reason=""></span>
-            <button data-takeover="">take over</button>
-          </div>
-        </div>
-        <pre className="terminal-screen" tabIndex={0} hidden>
-          loading…
-        </pre>
-        <button className="terminal-jump" hidden>
-          New output — jump to latest
-        </button>
-      </div>
-      <div className="terminal-caption">
-        <span data-terminal-status="">live · connecting</span>
-        <span data-terminal-reconnect="" hidden>
-          <button data-reconnect="">reconnect</button>
-          <button data-takeover="">take over</button>
-        </span>
-      </div>
+      <TerminalHead pane={pane} />
+      <TerminalScreen pane={pane} />
+      <TerminalCaption />
       <div className="terminal-error" aria-live="polite"></div>
     </div>
   );

@@ -17,11 +17,17 @@ export const infoOpen = new Map<string, Map<string, boolean>>();
 export const infoShown = (c: Card, key: string, open: boolean): boolean => infoOpen.get(c.key)?.get(key) ?? open;
 
 export function infoDisclosure(c: Card, key: string, title: string, body: string): string {
-  return `<details class="info-card" data-info-section="${esc(key)}"${infoShown(c, key, false) ? " open" : ""}><summary>${esc(title)}</summary>${body}</details>`;
+  return (
+    `<details class="info-card" data-info-section="${esc(key)}"${infoShown(c, key, false) ? " open" : ""}>` +
+    `<summary>${esc(title)}</summary>${body}</details>`
+  );
 }
 
 export function infoSection(c: Card, key: string, title: string, body: string, extra = "", open = false): string {
-  return `<details class="info-card info-top ${esc(key)}" data-info-section="${esc(key)}"${infoShown(c, key, open) ? " open" : ""}><summary><h4>${esc(title)}</h4>${extra}</summary>${body}</details>`;
+  return (
+    `<details class="info-card info-top ${esc(key)}" data-info-section="${esc(key)}"` +
+    `${infoShown(c, key, open) ? " open" : ""}><summary><h4>${esc(title)}</h4>${extra}</summary>${body}</details>`
+  );
 }
 
 const scrollKey = (el: Element): string =>
@@ -58,10 +64,17 @@ export const stc = (s: string): string => (s === "?" ? "U" : s);
 export const diffHtml = (text: string): string =>
   (text || "")
     .split("\n")
-    .map(
-      (line) =>
-        `<span class="${line.startsWith("+") && !line.startsWith("+++") ? "a" : line.startsWith("-") && !line.startsWith("---") ? "d" : line.startsWith("@@") ? "h" : ""}">${esc(line) || "&#8203;"}</span>`,
-    )
+    .map((line) => {
+      const tone =
+        line.startsWith("+") && !line.startsWith("+++")
+          ? "a"
+          : line.startsWith("-") && !line.startsWith("---")
+            ? "d"
+            : line.startsWith("@@")
+              ? "h"
+              : "";
+      return `<span class="${tone}">${esc(line) || "&#8203;"}</span>`;
+    })
     .join("");
 
 export const dismissed = (() => {
@@ -82,7 +95,8 @@ export function dismiss(ids: string[]): void {
 }
 export const dismissButton = (x: any): string =>
   x && isDone(x)
-    ? `<button class="action-button dismiss" data-dismiss="${esc(x.id)}" aria-label="Dismiss ${esc(x.unit || x.label || x.id)}">Dismiss</button>`
+    ? `<button class="action-button dismiss" data-dismiss="${esc(x.id)}" ` +
+      `aria-label="Dismiss ${esc(x.unit || x.label || x.id)}">Dismiss</button>`
     : "";
 export const factRow = (key: string, value: unknown): string =>
   value ? `<dt>${esc(key)}</dt><dd>${esc(value)}</dd>` : "";
@@ -102,7 +116,10 @@ export const shortPath = (p: unknown): string =>
 
 export function factList(c: Card | null, key: string, title: string, items: unknown[]): string {
   if (!items?.length) return "";
-  return `<details data-info-section="${esc(key)}"${c && infoShown(c, key, false) ? " open" : ""}><summary>${esc(title)} (${items.length})</summary><pre>${esc(items.join("\n"))}</pre></details>`;
+  return (
+    `<details data-info-section="${esc(key)}"${c && infoShown(c, key, false) ? " open" : ""}>` +
+    `<summary>${esc(title)} (${items.length})</summary><pre>${esc(items.join("\n"))}</pre></details>`
+  );
 }
 
 export function shellRun(a: any, c: Card | null): Run | null {

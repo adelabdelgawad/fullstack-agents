@@ -21,7 +21,9 @@ function squareState(state: string): string {
 }
 
 function SquareButton({ card, square }: { card: Card; square: Square }) {
-  const title = `${square.label} — ${square.state}${square.model ? ` · ${modelShort(square.model)}` : ""}${square.cause ? `\n${square.cause}` : ""}`;
+  const title =
+    `${square.label} — ${square.state}${square.model ? ` · ${modelShort(square.model)}` : ""}` +
+    `${square.cause ? `\n${square.cause}` : ""}`;
   const activate = (event: React.MouseEvent | React.KeyboardEvent) => {
     event.stopPropagation();
     if (square.kind === "run") openRunLog(card.key, square.id);

@@ -134,9 +134,10 @@ export function mdHtml(text: string): string {
     } else if (/^#{1,6} /.test(l)) out.push(`<div class="mdh">${mdInline(l.replace(/^#+ /, ""))}</div>`);
     else if (/^\s*([-*]|\d+\.) /.test(l))
       out.push(
-        `<div class="mdli" style="padding-left:${12 + l.search(/\S/) * 6}px">${/^\s*\d/.test(l) ? esc(l.trim().split(" ")[0]) : "•"} ${mdInline(
-          l.trim().replace(/^([-*]|\d+\.) /, ""),
-        )}</div>`,
+        `<div class="mdli" style="padding-left:${12 + l.search(/\S/) * 6}px">` +
+          `${/^\s*\d/.test(l) ? esc(l.trim().split(" ")[0]) : "•"} ${mdInline(
+            l.trim().replace(/^([-*]|\d+\.) /, ""),
+          )}</div>`,
       );
     else out.push(l.trim() ? `<div>${mdInline(l)}</div>` : '<div class="mdgap"></div>');
   }
@@ -149,7 +150,8 @@ function docsHtml(s: Session): string {
   return `<div class="lbl">Files in this message · ${docs.length}</div><div class="docs">${docs
     .map(
       (d) =>
-        `<div class="doc" title="${esc(d.path)}"><b>${esc(d.name)}</b><button class="copy-ico" data-doc-sid="${esc(s.id)}" data-doc="${esc(d.path)}" aria-label="Copy ${esc(
+        `<div class="doc" title="${esc(d.path)}"><b>${esc(d.name)}</b>` +
+        `<button class="copy-ico" data-doc-sid="${esc(s.id)}" data-doc="${esc(d.path)}" aria-label="Copy ${esc(
           d.name,
         )}" title="Copy file content">${COPY_ICON}</button><span class="s">${esc(d.shown)} · ${kb(d.size)}</span></div>`,
     )
@@ -157,14 +159,18 @@ function docsHtml(s: Session): string {
 }
 
 const COPY_ICON =
-  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" ' +
+  'rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 
 export function saidHtml(s: Session): string {
   const text = s.said_full || s.said;
   if (!text) return "";
-  return `<div class="now"><div><b>${esc(s.name)}</b>${s.said_at ? ` <span class="s">sent ${ago(s.said_at)} ago</span>` : ""}</div><div class="said-full">${mdHtml(
-    text,
-  )}</div>${docsHtml(s)}</div>`;
+  return (
+    `<div class="now"><div><b>${esc(s.name)}</b>` +
+    `${s.said_at ? ` <span class="s">sent ${ago(s.said_at)} ago</span>` : ""}</div>` +
+    `<div class="said-full">${mdHtml(text)}</div>${docsHtml(s)}</div>`
+  );
 }
 
 export function saidText(sid: string, state: DashState | null): string | null {

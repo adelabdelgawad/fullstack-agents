@@ -2,26 +2,7 @@ import { useEffect, useRef } from "react";
 import { loadHerdr, useStore } from "../store";
 import { closeHerdrClient, mountHerdrClient } from "../terminal/herdrClient";
 
-export function HerdrView() {
-  const herdrData = useStore((state) => state.herdrData);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!herdrData) void loadHerdr();
-  }, [herdrData]);
-
-  useEffect(() => {
-    if (herdrData?.running && rootRef.current) void mountHerdrClient(rootRef.current);
-    return closeHerdrClient;
-  }, [herdrData?.running]);
-
-  if (!herdrData) return <div className="hint">Loading Herdr…</div>;
-  if (!herdrData.running)
-    return (
-      <div className="empty" style={{ padding: "24px 32px" }}>
-        herdr is not running on this server
-      </div>
-    );
+function HerdrClient({ rootRef }: { rootRef: React.RefObject<HTMLDivElement> }) {
   return (
     <div className="herdr-client" ref={rootRef}>
       <div className="herdr-client-host">
@@ -56,4 +37,27 @@ export function HerdrView() {
       </header>
     </div>
   );
+}
+
+export function HerdrView() {
+  const herdrData = useStore((state) => state.herdrData);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!herdrData) void loadHerdr();
+  }, [herdrData]);
+
+  useEffect(() => {
+    if (herdrData?.running && rootRef.current) void mountHerdrClient(rootRef.current);
+    return closeHerdrClient;
+  }, [herdrData?.running]);
+
+  if (!herdrData) return <div className="hint">Loading Herdr…</div>;
+  if (!herdrData.running)
+    return (
+      <div className="empty" style={{ padding: "24px 32px" }}>
+        herdr is not running on this server
+      </div>
+    );
+  return <HerdrClient rootRef={rootRef} />;
 }

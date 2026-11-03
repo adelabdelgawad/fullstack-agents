@@ -57,6 +57,59 @@ function outInfo(cur: any): string {
   return (cur.shell ? shellFacts({ ...cur, sid: out.sid }, card) : "") + bar;
 }
 
+function wireOutInfo(box: HTMLElement, info: string): void {
+  const opened = new Set(
+    [...box.querySelectorAll("details")]
+      .filter((detail) => detail.open)
+      .map((detail) => detail.querySelector("summary")?.textContent),
+  );
+  keepScroll(box, () => {
+    box.innerHTML = info;
+    box.querySelectorAll("details").forEach((detail) => {
+      if (opened.has(detail.querySelector("summary")?.textContent)) detail.open = true;
+    });
+  });
+  box.dataset.html = info;
+  box.querySelectorAll<HTMLElement>("[data-view]").forEach((button) => {
+    button.onclick = () => {
+      if (!out) return;
+      out.view = button.dataset.view || "console";
+      out.file = null;
+      out.text = null;
+      el("out-pre").textContent = "loading…";
+      paintOutItems();
+      void pollOutput();
+    };
+  });
+  box.querySelectorAll<HTMLElement>("[data-dismiss]").forEach((button) => {
+    button.onclick = () => {
+      dismiss([button.dataset.dismiss || ""]);
+      if (out) out.text = null;
+      paintOutItems();
+      void pollOutput();
+    };
+  });
+}
+
+function paintOutChooser(items: any[]): void {
+  const chooser = el("out-items"),
+    list = items
+      .map(
+        (item) =>
+          `<button data-oid="${esc(item.id)}" aria-pressed="${item.id === out!.id}" title="${esc(item.label)}">` +
+          `${item.state === "running" ? '<span class="live-dot"></span>' : ""}${esc(item.label || item.id)}</button>`,
+      )
+      .join("");
+  if (chooser.dataset.html === list) return;
+  keepScroll(chooser, () => {
+    chooser.innerHTML = list;
+  });
+  chooser.dataset.html = list;
+  chooser.querySelectorAll<HTMLElement>("[data-oid]").forEach((button) => {
+    button.onclick = () => pickOut(button.dataset.oid || "");
+  });
+}
+
 function paintOutItems(): void {
   if (!out) return;
   const items = outItems();
@@ -66,55 +119,8 @@ function paintOutItems(): void {
   el("out-meta").textContent = cur?.state || "";
   const box = el("out-info"),
     info = outInfo(cur);
-  if (box.dataset.html !== info) {
-    const opened = new Set(
-      [...box.querySelectorAll("details")].filter((d) => d.open).map((d) => d.querySelector("summary")?.textContent),
-    );
-    keepScroll(box, () => {
-      box.innerHTML = info;
-      box.querySelectorAll("details").forEach((d) => {
-        if (opened.has(d.querySelector("summary")?.textContent)) d.open = true;
-      });
-    });
-    box.dataset.html = info;
-    box.querySelectorAll<HTMLElement>("[data-view]").forEach(
-      (b) =>
-        (b.onclick = () => {
-          if (!out) return;
-          out.view = b.dataset.view || "console";
-          out.file = null;
-          out.text = null;
-          el("out-pre").textContent = "loading…";
-          paintOutItems();
-          void pollOutput();
-        }),
-    );
-    box.querySelectorAll<HTMLElement>("[data-dismiss]").forEach(
-      (b) =>
-        (b.onclick = () => {
-          dismiss([b.dataset.dismiss || ""]);
-          if (out) out.text = null;
-          paintOutItems();
-          void pollOutput();
-        }),
-    );
-  }
-  const chooser = el("out-items"),
-    list = items
-      .map(
-        (x) =>
-          `<button data-oid="${esc(x.id)}" aria-pressed="${x.id === out!.id}" title="${esc(x.label)}">${x.state === "running" ? '<span class="live-dot"></span>' : ""}${esc(x.label || x.id)}</button>`,
-      )
-      .join("");
-  if (chooser.dataset.html !== list) {
-    keepScroll(chooser, () => {
-      chooser.innerHTML = list;
-    });
-    chooser.dataset.html = list;
-    chooser
-      .querySelectorAll<HTMLElement>("[data-oid]")
-      .forEach((b) => (b.onclick = () => pickOut(b.dataset.oid || "")));
-  }
+  if (box.dataset.html !== info) wireOutInfo(box, info);
+  paintOutChooser(items);
 }
 
 function pickOut(id: string): void {
@@ -140,9 +146,22 @@ function paintFiles(files: any[] | null, cur?: any): void {
   const allowed = new Set(cur.run.allowed || []),
     inBrief = (f: any) => !allowed.size || allowed.has(f.path);
   const head = files.length
-    ? `${files.length} uncommitted file${files.length > 1 ? "s" : ""} in ${cur.run.root}${allowed.size ? ` · ${files.filter(inBrief).length} in the brief's allowed paths` : ""}`
+    ? `${files.length} uncommitted file${files.length > 1 ? "s" : ""} in ${cur.run.root}` +
+      `${allowed.size ? ` · ${files.filter(inBrief).length} in the brief's allowed paths` : ""}`
     : `No uncommitted changes in ${cur.run.root} yet.`;
-  const html = `<div class="s">${esc(head)}</div><div class="flist" role="group" aria-label="Changed files">${files.map((f) => `<button data-file="${esc(f.path)}" aria-pressed="${f.path === out!.file}" title="${esc(inBrief(f) ? f.path : `${f.path} — outside the brief's allowed paths`)}"><span class="st st-${esc(stc(f.status))}">${esc(f.status)}</span><span class="fp">${esc(f.path)}</span>${inBrief(f) ? "" : '<span class="pill bad">outside brief</span>'}</button>`).join("")}</div>`;
+  const html =
+    `<div class="s">${esc(head)}</div><div class="flist" role="group" aria-label="Changed files">` +
+    files
+      .map(
+        (file) =>
+          `<button data-file="${esc(file.path)}" aria-pressed="${file.path === out!.file}" ` +
+          `title="${esc(inBrief(file) ? file.path : `${file.path} — outside the brief's allowed paths`)}">` +
+          `<span class="st st-${esc(stc(file.status))}">${esc(file.status)}</span>` +
+          `<span class="fp">${esc(file.path)}</span>` +
+          `${inBrief(file) ? "" : '<span class="pill bad">outside brief</span>'}</button>`,
+      )
+      .join("") +
+    `</div>`;
   if (box.dataset.html === html) return;
   keepScroll(box, () => {
     box.innerHTML = html;

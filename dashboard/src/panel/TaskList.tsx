@@ -30,7 +30,12 @@ export function taskStatusIcon(status: string, active = false): string {
   };
   const canonical = status === "running" ? "in_progress" : status;
   const label = taskStatusLabel(status) + (active ? " — actively executing (agent-reported)" : "");
-  return `<span class="task-status-icon ${esc(canonical)}${active ? " executing" : ""}" role="img" aria-label="${esc(label)}" title="${esc(label)}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[canonical] || paths.pending}</svg></span>`;
+  return (
+    `<span class="task-status-icon ${esc(canonical)}${active ? " executing" : ""}" role="img" ` +
+    `aria-label="${esc(label)}" title="${esc(label)}"><svg viewBox="0 0 24 24" width="18" height="18" ` +
+    `fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" ` +
+    `aria-hidden="true" focusable="false">${paths[canonical] || paths.pending}</svg></span>`
+  );
 }
 
 const SESSION_STATE_LABELS: Record<string, string> = {
@@ -54,7 +59,10 @@ function sessionStateHtml(state: any): string {
         : `${e.id}: ${e.text} — blocks ${rows(e.rows)}`,
     ),
   ];
-  return `<div class="task-state"><span class="pill">${esc(SESSION_STATE_LABELS[state.state] || state.state)}</span></div>${lines.length ? `<ul class="task-blockers">${lines.map((line) => `<li>${esc(line)}</li>`).join("")}</ul>` : ""}`;
+  return (
+    `<div class="task-state"><span class="pill">${esc(SESSION_STATE_LABELS[state.state] || state.state)}</span></div>` +
+    `${lines.length ? `<ul class="task-blockers">${lines.map((line) => `<li>${esc(line)}</li>`).join("")}</ul>` : ""}`
+  );
 }
 
 export function taskProgressHtml(c: Card, compact = false): string {
@@ -66,16 +74,38 @@ export function taskProgressHtml(c: Card, compact = false): string {
         return `<div class="task-overview task-error" role="alert">Task list needs attention: ${esc(t.error)}</div>`;
       const active = t.items.filter(taskIsActive),
         percent = t.total ? Math.round((t.completed / t.total) * 100) : 0;
-      const counts = `${active.length} actively executing · ${t.counts.in_progress ?? t.counts.running ?? 0} in progress${t.format === "v2" ? ` · ${t.counts.verifying || 0} verifying` : ""} · ${t.counts.pending || 0} pending · ${t.counts.blocked || 0} blocked`;
+      const counts =
+        `${active.length} actively executing · ${t.counts.in_progress ?? t.counts.running ?? 0} in progress` +
+        `${t.format === "v2" ? ` · ${t.counts.verifying || 0} verifying` : ""} · ${t.counts.pending || 0} pending` +
+        ` · ${t.counts.blocked || 0} blocked`;
       const timeline = compact
         ? ""
-        : `<ol class="task-stage-timeline" aria-label="Task stage timeline">${t.items.map((x: any) => `<li class="${esc(x.status)}" title="${esc(`${x.id}: ${x.title} — ${taskStatusLabel(x.status)}`)}" aria-label="${esc(`${x.id}: ${x.title} — ${taskStatusLabel(x.status)}`)}"><span aria-hidden="true">${taskStatusIcon(x.status, taskIsActive(x))}</span><small>${esc(x.id)}</small></li>`).join("")}</ol>`;
+        : `<ol class="task-stage-timeline" aria-label="Task stage timeline">${t.items
+            .map(
+              (item: any) =>
+                `<li class="${esc(item.status)}" title="${esc(`${item.id}: ${item.title} — ${taskStatusLabel(item.status)}`)}" ` +
+                `aria-label="${esc(`${item.id}: ${item.title} — ${taskStatusLabel(item.status)}`)}">` +
+                `<span aria-hidden="true">${taskStatusIcon(item.status, taskIsActive(item))}</span>` +
+                `<small>${esc(item.id)}</small></li>`,
+            )
+            .join("")}</ol>`;
       const unrecorded = t.format === "v2" ? t.deliverables?.completion?.unrecorded || 0 : 0;
       const title =
         t.format === "v2"
-          ? `${t.completed}/${t.total} deliverables done${t.steps?.total ? ` · steps ${t.steps.completed}/${t.steps.total}` : ""}${unrecorded ? ` · ${unrecorded} without evidence` : ""}`
+          ? `${t.completed}/${t.total} deliverables done` +
+            `${t.steps?.total ? ` · steps ${t.steps.completed}/${t.steps.total}` : ""}` +
+            `${unrecorded ? ` · ${unrecorded} without evidence` : ""}`
           : `${t.completed}/${t.total} tasks done`;
-      return `<section class="task-overview ${compact ? "compact" : "session-task-overview"}" aria-label="Task progress"><div class="task-progress-title"><b>${esc(title)}</b><span>${percent}%</span></div><progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress><div class="s">${esc(counts)}</div>${compact && active.length ? `<div class="s task-current">${esc(`${active[0].id}: ${active[0].title}`)}${active.length > 1 ? ` · +${active.length - 1} active` : ""}</div>` : ""}${timeline}${t.format === "v2" ? sessionStateHtml(t.session_state) : ""}</section>`;
+      return (
+        `<section class="task-overview ${compact ? "compact" : "session-task-overview"}" aria-label="Task progress">` +
+        `<div class="task-progress-title"><b>${esc(title)}</b><span>${percent}%</span></div>` +
+        `<progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress>` +
+        `<div class="s">${esc(counts)}</div>` +
+        `${compact && active.length ? `<div class="s task-current">${esc(`${active[0].id}: ${active[0].title}`)}` : ""}` +
+        `${compact && active.length > 1 ? ` · +${active.length - 1} active` : ""}` +
+        `${compact && active.length ? "</div>" : ""}` +
+        `${timeline}${t.format === "v2" ? sessionStateHtml(t.session_state) : ""}</section>`
+      );
     })
     .join("");
 }
@@ -85,11 +115,23 @@ function taskRow(t: any, x: any): string {
     live = taskIsActive(x);
   const completion =
     t.format === "v2" && x.status === "done" && x.completion === "unrecorded"
-      ? '<span class="tt-badge unrecorded" title="Marked done before evidence tracking, or upgraded from a legacy ledger">no recorded evidence</span>'
+      ? '<span class="tt-badge unrecorded" title="Marked done before evidence tracking, or upgraded from a legacy ledger">' +
+        "no recorded evidence</span>"
       : t.format === "v2" && x.status === "done" && x.completion === "evidence_with_baseline"
         ? '<span class="tt-badge baseline" title="Completed using an attributed baseline failure">baseline failures</span>'
         : "";
-  return `<li class="tracked-task ${esc(state)}${live ? " executing" : ""}">${taskStatusIcon(x.status, live)}<div class="tt-main"><div class="tt-top"><b>${esc(x.id)}</b><span class="tt-title">${esc(x.title)}${t.format === "v2" && x.parent ? ` <span class="s">(step of ${esc(x.parent)})</span>` : ""}</span><span class="tt-badges">${live ? '<span class="tt-badge live" title="Agent-reported activity expires automatically; it is separate from process detection">Actively executing</span>' : ""}<span class="tt-badge ${esc(state)}">${esc(taskStatusLabel(x.status))}</span>${completion}</span></div>\n        <div class="s task-activity"><span class="tt-owner">${esc(x.owner || "Unassigned")}</span>${x.activity ? ` · ${esc(x.activity)}` : ""}</div>${x.note ? `<div class="s tt-note">${esc(x.note)}</div>` : ""}</div></li>`;
+  return (
+    `<li class="tracked-task ${esc(state)}${live ? " executing" : ""}">${taskStatusIcon(x.status, live)}` +
+    `<div class="tt-main"><div class="tt-top"><b>${esc(x.id)}</b><span class="tt-title">${esc(x.title)}` +
+    `${t.format === "v2" && x.parent ? ` <span class="s">(step of ${esc(x.parent)})</span>` : ""}</span>` +
+    `<span class="tt-badges">` +
+    `${live ? '<span class="tt-badge live" title="Agent-reported activity expires automatically; ' : ""}` +
+    `${live ? 'it is separate from process detection">Actively executing</span>' : ""}` +
+    `<span class="tt-badge ${esc(state)}">${esc(taskStatusLabel(x.status))}</span>${completion}</span></div>\n        ` +
+    `<div class="s task-activity"><span class="tt-owner">${esc(x.owner || "Unassigned")}</span>` +
+    `${x.activity ? ` · ${esc(x.activity)}` : ""}</div>${x.note ? `<div class="s tt-note">${esc(x.note)}</div>` : ""}` +
+    `</div></li>`
+  );
 }
 
 export function taskListHtml(c: Card): string {
@@ -104,7 +146,9 @@ export function taskListHtml(c: Card): string {
         .filter((key) => count(key) || ["in_progress", "blocked", "pending", "done"].includes(key))
         .map(
           (key) =>
-            `<div class="tt-tile ${esc(key)}" title="${esc(taskStatusLabel(key))}">${taskStatusIcon(key)}<div><div class="so-l">${esc(taskStatusLabel(key))}</div><div class="tt-n">${esc(count(key))}</div></div></div>`,
+            `<div class="tt-tile ${esc(key)}" title="${esc(taskStatusLabel(key))}">${taskStatusIcon(key)}` +
+            `<div><div class="so-l">${esc(taskStatusLabel(key))}</div>` +
+            `<div class="tt-n">${esc(count(key))}</div></div></div>`,
         )
         .join("");
       const order: Record<string, number> = {
@@ -122,7 +166,15 @@ export function taskListHtml(c: Card): string {
       );
       const source = `/api/doc?sid=${encodeURIComponent(s.id)}&path=${encodeURIComponent(t.file)}`,
         percent = t.total ? Math.round((t.completed / t.total) * 100) : 0;
-      return `<article class="tracked-plan"><div class="tp-head"><div class="tp-title"><b>${esc(t.title)}</b><a class="tp-file" href="${esc(source)}" target="_blank" rel="noopener">${esc(t.relative_file)}</a></div><div class="tp-done"><b>${esc(t.completed)}/${esc(t.total)} done</b><span>${percent}%</span></div></div>${t.format === "v2" ? sessionStateHtml(t.session_state) : ""}\n      <progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress><div class="task-counts">${tiles}</div><ul class="tracked-tasks" tabindex="0" aria-label="Tasks; scroll for more">${sorted.map((x) => taskRow(t, x)).join("")}</ul></article>`;
+      return (
+        `<article class="tracked-plan"><div class="tp-head"><div class="tp-title"><b>${esc(t.title)}</b>` +
+        `<a class="tp-file" href="${esc(source)}" target="_blank" rel="noopener">${esc(t.relative_file)}</a></div>` +
+        `<div class="tp-done"><b>${esc(t.completed)}/${esc(t.total)} done</b><span>${percent}%</span></div></div>` +
+        `${t.format === "v2" ? sessionStateHtml(t.session_state) : ""}\n      ` +
+        `<progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress>` +
+        `<div class="task-counts">${tiles}</div><ul class="tracked-tasks" tabindex="0" aria-label="Tasks; scroll for more">` +
+        `${sorted.map((item) => taskRow(t, item)).join("")}</ul></article>`
+      );
     })
     .join("");
   const ok: any[] = sessions.map((s) => s.task_tracking).filter((t: any) => !t.error),

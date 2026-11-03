@@ -42,7 +42,15 @@ export function runFacts(r: any, c: Card | null, withGoal = true): string {
   ]
     .filter(Boolean)
     .join(" · ");
-  return `${withGoal ? goalBox(r) : ""}<dl class="shell-facts">${factRow("Kind", `implementer run (${r.mode || "implement"})`)}${factRow("Target", r.root)}${factRow("Brief", r.unit)}${factRow("Status", status)}${factRow("Agent", [r.engine, r.model].filter(Boolean).join(" · "))}${factRow("Launched by", launched)}${factRow("Run id", r.id)}</dl>${factList(c, `run-files-${r.id}`, "Files touched", r.touched)}${factList(c, `run-out-${r.id}`, "Outside allowed paths", r.outside)}${factList(c, `run-risks-${r.id}`, "Open risks", r.open_risks)}`;
+  return (
+    `${withGoal ? goalBox(r) : ""}<dl class="shell-facts">` +
+    `${factRow("Kind", `implementer run (${r.mode || "implement"})`)}${factRow("Target", r.root)}` +
+    `${factRow("Brief", r.unit)}${factRow("Status", status)}` +
+    `${factRow("Agent", [r.engine, r.model].filter(Boolean).join(" · "))}${factRow("Launched by", launched)}` +
+    `${factRow("Run id", r.id)}</dl>${factList(c, `run-files-${r.id}`, "Files touched", r.touched)}` +
+    `${factList(c, `run-out-${r.id}`, "Outside allowed paths", r.outside)}` +
+    `${factList(c, `run-risks-${r.id}`, "Open risks", r.open_risks)}`
+  );
 }
 
 export function shellFacts(a: any, c: Card | null): string {
@@ -60,11 +68,19 @@ export function shellFacts(a: any, c: Card | null): string {
       ? "Bash command still running (started in the foreground)"
       : "background task (run_in_background)"
     : "";
-  return `<dl class="shell-facts">${factRow("Kind", kind)}${factRow("Target", x.cwd)}${factRow("Brief", x.brief)}${factRow("Status", status)}${factRow("Agent", x.run ? `${x.run} (not listed on this card)` : "none")}${factRow("Task id", a.id)}</dl>${x.command ? `<details data-info-section="cmd-${esc(a.id)}"${c && infoShown(c, `cmd-${a.id}`, false) ? " open" : ""}><summary>Command</summary><pre>${esc(x.command)}</pre></details>` : ""}`;
+  return (
+    `<dl class="shell-facts">${factRow("Kind", kind)}${factRow("Target", x.cwd)}${factRow("Brief", x.brief)}` +
+    `${factRow("Status", status)}${factRow("Agent", x.run ? `${x.run} (not listed on this card)` : "none")}` +
+    `${factRow("Task id", a.id)}</dl>` +
+    `${x.command ? `<details data-info-section="cmd-${esc(a.id)}"` : ""}` +
+    `${x.command && c && infoShown(c, `cmd-${a.id}`, false) ? " open" : ""}` +
+    `${x.command ? `><summary>Command</summary><pre>${esc(x.command)}</pre></details>` : ""}`
+  );
 }
 
 const statePill = (state: string) =>
-  `<span class="pill ${["running", "stalled"].includes(state) ? "live" : /fail|error|kill|stalled/.test(state) ? "bad" : "done"}">${esc(state)}</span>`;
+  `<span class="pill ${["running", "stalled"].includes(state) ? "live" : /fail|error|kill|stalled/.test(state) ? "bad" : "done"}">` +
+  `${esc(state)}</span>`;
 const countBadges = (pairs: any[][]) =>
   pairs
     .filter(([, n]) => n)
@@ -75,7 +91,13 @@ const countBadges = (pairs: any[][]) =>
     .join("");
 
 function liveCard(x: any): string {
-  return `<div class="live-shell${x.running ? " running" : ""}"><div class="ls-head"><b class="ls-title" title="${esc(x.title)}">${esc(x.title)}</b>${statePill(x.state)}${x.time ? `<span class="ls-time">${esc(x.time)}</span>` : ""}</div><div class="ls-sub">${x.sub}</div>${x.badges ? `<div class="ls-badges">${x.badges}</div>` : ""}${x.details}<div class="ls-actions">${x.actions}${dismissButton(x.dismissItem)}</div></div>`;
+  return (
+    `<div class="live-shell${x.running ? " running" : ""}"><div class="ls-head">` +
+    `<b class="ls-title" title="${esc(x.title)}">${esc(x.title)}</b>${statePill(x.state)}` +
+    `${x.time ? `<span class="ls-time">${esc(x.time)}</span>` : ""}</div><div class="ls-sub">${x.sub}</div>` +
+    `${x.badges ? `<div class="ls-badges">${x.badges}</div>` : ""}${x.details}` +
+    `<div class="ls-actions">${x.actions}${dismissButton(x.dismissItem)}</div></div>`
+  );
 }
 
 const runCard =
@@ -91,8 +113,15 @@ const runCard =
     ]
       .filter(Boolean)
       .join(" · ");
-    const details = `<details data-info-section="run-more-${esc(r.id)}"${infoShown(c, `run-more-${r.id}`, false) ? " open" : ""}><summary>Details</summary>${runFacts(r, c, false)}</details>`;
-    const actions = `<button class="action-button" data-asid="${sid}" data-agent="${esc(r.id)}" aria-haspopup="dialog">Console</button>${r.root ? `<button class="action-button" data-asid="${sid}" data-run-changes="${esc(r.id)}" aria-haspopup="dialog">Git changes</button>` : ""}<button class="action-button" data-open-run="${esc(r.id)}">Panel</button>`;
+    const details =
+      `<details data-info-section="run-more-${esc(r.id)}"` +
+      `${infoShown(c, `run-more-${r.id}`, false) ? " open" : ""}><summary>Details</summary>` +
+      `${runFacts(r, c, false)}</details>`;
+    const actions =
+      `<button class="action-button" data-asid="${sid}" data-agent="${esc(r.id)}" aria-haspopup="dialog">Console</button>` +
+      `${r.root ? `<button class="action-button" data-asid="${sid}" data-run-changes="${esc(r.id)}" ` : ""}` +
+      `${r.root ? 'aria-haspopup="dialog">Git changes</button>' : ""}` +
+      `<button class="action-button" data-open-run="${esc(r.id)}">Panel</button>`;
     return liveCard({
       running: LIVE(r),
       title: r.desc || r.goal || r.unit || r.id,
@@ -145,7 +174,10 @@ const shellCard =
     ]
       .filter(Boolean)
       .join(" · ");
-    const details = `<details data-info-section="shell-more-${esc(a.id)}"${infoShown(c, `shell-more-${a.id}`, false) ? " open" : ""}><summary>Details</summary>${shellFacts(a, c)}</details>`;
+    const details =
+      `<details data-info-section="shell-more-${esc(a.id)}"` +
+      `${infoShown(c, `shell-more-${a.id}`, false) ? " open" : ""}><summary>Details</summary>` +
+      `${shellFacts(a, c)}</details>`;
     return liveCard({
       running: a.state === "running",
       title: x.description || rest.join(" · ") || a.id,
@@ -180,8 +212,16 @@ const flowCard =
     ]
       .filter(Boolean)
       .join(" · ");
-    const facts = `<dl class="shell-facts">${factRow("Role", r.role)}${factRow("Target", r.root)}${factRow("Verdict", r.verdict)}${factRow("Started", r.started ? new Date(r.started * 1000).toLocaleString() : "")}${factRow("Report", r.artifact)}${factRow("Run id", r.run_id)}</dl>${factList(c, `flow-sum-${r.run_id}`, "Summary", r.summary ? [r.summary] : [])}${factList(c, `flow-brief-${r.run_id}`, "Brief", r.brief ? [r.brief] : [])}`;
-    const details = `<details data-info-section="flow-more-${esc(r.run_id)}"${infoShown(c, `flow-more-${r.run_id}`, false) ? " open" : ""}><summary>Details</summary>${facts}</details>`;
+    const facts =
+      `<dl class="shell-facts">${factRow("Role", r.role)}${factRow("Target", r.root)}` +
+      `${factRow("Verdict", r.verdict)}${factRow("Started", r.started ? new Date(r.started * 1000).toLocaleString() : "")}` +
+      `${factRow("Report", r.artifact)}${factRow("Run id", r.run_id)}</dl>` +
+      `${factList(c, `flow-sum-${r.run_id}`, "Summary", r.summary ? [r.summary] : [])}` +
+      `${factList(c, `flow-brief-${r.run_id}`, "Brief", r.brief ? [r.brief] : [])}`;
+    const details =
+      `<details data-info-section="flow-more-${esc(r.run_id)}"` +
+      `${infoShown(c, `flow-more-${r.run_id}`, false) ? " open" : ""}>` +
+      `<summary>Details</summary>${facts}</details>`;
     return liveCard({
       running: r.state === "running",
       title: r.summary || `${r.role || "run"} run`,
@@ -213,8 +253,13 @@ export const allLiveItems = (c: Card): any[] => [...recentRuns(c), ...flowRuns(c
 function liveGroup(title: string, items: any[], tile: (x: any) => string, cls: string): string {
   if (!items.length) return "";
   const running = items.filter((x) => x.state === "running").length;
-  const count = ` <span class="chip">${running} running${items.length > running ? ` · ${items.length - running} recent` : ""}</span>`;
-  return `<div class="live-group"><h5>${esc(title)}${count}</h5><div class="${cls}" tabindex="0" role="region" aria-label="${esc(title)}; scroll sideways for more">${items.map(tile).join("")}</div></div>`;
+  const count =
+    ` <span class="chip">${running} running` +
+    `${items.length > running ? ` · ${items.length - running} recent` : ""}</span>`;
+  return (
+    `<div class="live-group"><h5>${esc(title)}${count}</h5><div class="${cls}" tabindex="0" role="region" ` +
+    `aria-label="${esc(title)}; scroll sideways for more">${items.map(tile).join("")}</div></div>`
+  );
 }
 
 export function liveHtml(c: Card): string {
@@ -222,7 +267,10 @@ export function liveHtml(c: Card): string {
     { agents, flows, runs } = sets,
     shell = (a: any) => a.label.startsWith("shell");
   const lead = (s: any) =>
-    `<div class="live-lead"><span class="pill ${s.state === "working" ? "live" : ""}">${esc(STATE_TEXT[s.state] || s.state)}</span> <b>${esc(s.name)}</b>${s.action ? `<div class="s lead-act" title="${esc(toolLine(s))}">${esc(toolLine(s).replace(/\\n|\s+/g, " "))}</div>` : ""}${s.question ? `<div class="ask-q">Question for you (it keeps working meanwhile): ${esc(s.question)}</div>` : ""}</div>`;
+    `<div class="live-lead"><span class="pill ${s.state === "working" ? "live" : ""}">` +
+    `${esc(STATE_TEXT[s.state] || s.state)}</span> <b>${esc(s.name)}</b>` +
+    `${s.action ? `<div class="s lead-act" title="${esc(toolLine(s))}">${esc(toolLine(s).replace(/\\n|\s+/g, " "))}</div>` : ""}` +
+    `${s.question ? `<div class="ask-q">Question for you (it keeps working meanwhile): ${esc(s.question)}</div>` : ""}</div>`;
   const groups = [
     liveGroup(
       "Implementer runs",
@@ -244,7 +292,9 @@ export function liveHtml(c: Card): string {
     c,
     "live",
     "Running now",
-    `<div class="live-top"><div>${c.now.map(lead).join("")}</div>${done ? `<button class="action-button" data-dismiss-all="1">Dismiss all done (${done})</button>` : ""}</div>\n    ${groups || '<div class="s">Nothing running or recently finished.</div>'}`,
+    `<div class="live-top"><div>${c.now.map(lead).join("")}</div>` +
+      `${done ? `<button class="action-button" data-dismiss-all="1">Dismiss all done (${done})</button>` : ""}` +
+      `</div>\n    ${groups || '<div class="s">Nothing running or recently finished.</div>'}`,
     `<span class="chip">${liveTotal(sets)} running</span>`,
     true,
   );

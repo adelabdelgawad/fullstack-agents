@@ -76,7 +76,10 @@ const bytes64 = (bytes: Uint8Array): string => {
 const base64Bytes = (value: string): Uint8Array => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
 
 function liveStatusText(current: TerminalState): string {
-  return `live · ${current.term?.cols ?? 0}×${current.term?.rows ?? 0}${current.lagging ? " · sending…" : current.rtt ? ` · ${Math.round(current.rtt)} ms` : ""}`;
+  return (
+    `live · ${current.term?.cols ?? 0}×${current.term?.rows ?? 0}` +
+    `${current.lagging ? " · sending…" : current.rtt ? ` · ${Math.round(current.rtt)} ms` : ""}`
+  );
 }
 
 function liveTerminalStatus(current: TerminalState, reason: string | null): void {

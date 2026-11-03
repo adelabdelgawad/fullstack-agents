@@ -347,6 +347,39 @@ const engines = {
   grok: ["Grok", "Opens a new tab in the space, named <name>, and runs opencode -m xai/grok-4.7"],
 };
 
+async function submitNewSession(form: HTMLFormElement): Promise<void> {
+  const name = (form.elements.namedItem("name") as HTMLInputElement).value.trim();
+  if (!name || name.length > 80 || name.startsWith("-"))
+    return setHerdrError(
+      'Name must be 1–80 characters and not start with "-"',
+      form.closest<HTMLElement>(".herdr-modal-backdrop"),
+    );
+  const button = form.querySelector<HTMLButtonElement>('[type="submit"]')!;
+  button.disabled = true;
+  button.textContent = "starting…";
+  const result = await herdrAction(
+    "session.create",
+    {
+      workspace_id: (form.elements.namedItem("space") as HTMLSelectElement).value,
+      name,
+      engine: (form.elements.namedItem("engine") as HTMLSelectElement).value,
+    },
+    form.closest<HTMLElement>(".herdr-modal-backdrop"),
+  );
+  if (result.ok) {
+    closeHerdrOverlay();
+    void load();
+  } else {
+    button.disabled = false;
+    button.textContent = "start";
+  }
+}
+
+function changeEngine(event: React.ChangeEvent<HTMLSelectElement>): void {
+  const note = event.currentTarget.form?.querySelector<HTMLElement>("[data-engine-note]");
+  if (note) note.textContent = engines[event.currentTarget.value as keyof typeof engines][1];
+}
+
 function NewSessionModal() {
   const data = store.get().herdrData!;
   const workspaces = data.workspaces as Record<string, unknown>[];
@@ -354,46 +387,12 @@ function NewSessionModal() {
     (pane) => field(pane, "pane_id") === data.focused_pane_id,
   );
   const current = focused ? field(focused, "workspace_id") : field(workspaces[0], "workspace_id");
-  const submit = async (form: HTMLFormElement) => {
-    const name = (form.elements.namedItem("name") as HTMLInputElement).value.trim();
-    if (!name || name.length > 80 || name.startsWith("-"))
-      return setHerdrError(
-        'Name must be 1–80 characters and not start with "-"',
-        form.closest<HTMLElement>(".herdr-modal-backdrop"),
-      );
-    const button = form.querySelector<HTMLButtonElement>('[type="submit"]')!;
-    button.disabled = true;
-    button.textContent = "starting…";
-    const result = await herdrAction(
-      "session.create",
-      {
-        workspace_id: (form.elements.namedItem("space") as HTMLSelectElement).value,
-        name,
-        engine: (form.elements.namedItem("engine") as HTMLSelectElement).value,
-      },
-      form.closest<HTMLElement>(".herdr-modal-backdrop"),
-    );
-    if (result.ok) {
-      closeHerdrOverlay();
-      void load();
-    } else {
-      button.disabled = false;
-      button.textContent = "start";
-    }
-  };
   return (
-    <ModalFrame submit={(form) => void submit(form)}>
+    <ModalFrame submit={(form) => void submitNewSession(form)}>
       <h2>new session</h2>
       <label>
         agent
-        <select
-          name="engine"
-          defaultValue="claude"
-          onChange={(event) => {
-            const note = event.currentTarget.form?.querySelector<HTMLElement>("[data-engine-note]");
-            if (note) note.textContent = engines[event.currentTarget.value as keyof typeof engines][1];
-          }}
-        >
+        <select name="engine" defaultValue="claude" onChange={changeEngine}>
           {Object.entries(engines).map(([key, value]) => (
             <option key={key} value={key}>
               {value[0]}

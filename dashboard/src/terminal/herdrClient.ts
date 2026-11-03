@@ -153,19 +153,13 @@ function connectHerdrClient(client: HerdrClientState): void {
   };
 }
 
-export async function mountHerdrClient(root: HTMLElement): Promise<void> {
-  closeHerdrClient();
-  const client: HerdrClientState = { root };
-  herdrClient = client;
-  const host = root.querySelector<HTMLElement>(".herdr-client-host");
-  const status = root.querySelector<HTMLElement>("[data-herdr-client-status]");
-  if (!host || !status || !window.Terminal || !window.FitAddon?.FitAddon) return;
+async function prepareHerdrClient(client: HerdrClientState, status: HTMLElement): Promise<void> {
   client.setStatus = (text) => {
     status.textContent = text;
     status.title = text;
     status.classList.toggle("is-live", text.startsWith("live"));
   };
-  root.oncontextmenu = (event) => event.preventDefault();
+  client.root.oncontextmenu = (event) => event.preventDefault();
   await Promise.all(
     ["400", "700"].flatMap((weight) =>
       ["normal", "italic"].map((style) =>
@@ -173,9 +167,14 @@ export async function mountHerdrClient(root: HTMLElement): Promise<void> {
       ),
     ),
   );
-  if (herdrClient !== client) return;
+}
+
+function createHerdrTerminal(client: HerdrClientState, host: HTMLElement): { term: Terminal; fit: FitAddon } {
+  const root = client.root;
   const mono = getComputedStyle(document.documentElement).getPropertyValue("--mono").trim();
-  const term = new window.Terminal({
+  const TerminalCtor = window.Terminal!,
+    FitAddonCtor = window.FitAddon!.FitAddon;
+  const term = new TerminalCtor({
     fontFamily: `"JetBrains Mono Web", ${mono}`,
     fontSize: 14.5,
     letterSpacing: 1,
@@ -183,12 +182,16 @@ export async function mountHerdrClient(root: HTMLElement): Promise<void> {
     cursorBlink: true,
     theme: { background: getComputedStyle(root).getPropertyValue("--herdr-panel-bg").trim(), foreground: "#ffffff" },
   });
-  const fit = new window.FitAddon.FitAddon();
+  const fit = new FitAddonCtor();
   term.loadAddon(fit);
   term.open(host);
   client.term = term;
   client.fit = fit;
   client.renderer = "dom";
+  return { term, fit };
+}
+
+function loadHerdrRenderer(client: HerdrClientState, term: Terminal, fit: FitAddon): void {
   if (window.WebglAddon && webglRendererOk()) {
     const addon = new window.WebglAddon.WebglAddon();
     addon.onContextLoss(() => {
@@ -200,6 +203,15 @@ export async function mountHerdrClient(root: HTMLElement): Promise<void> {
     client.renderer = "webgl";
   }
   fit.fit();
+}
+
+function wireHerdrTerminal(
+  client: HerdrClientState,
+  host: HTMLElement,
+  status: HTMLElement,
+  term: Terminal,
+  fit: FitAddon,
+): void {
   const onCopyText = (text: string) => {
     if (text) void copySelection(text, () => term.focus());
   };
@@ -211,7 +223,7 @@ export async function mountHerdrClient(root: HTMLElement): Promise<void> {
   );
   wireFullscreen(client);
   wireAttach(client);
-  root.querySelector<HTMLElement>("[data-herdr-client-reconnect]")!.onclick = () => connectHerdrClient(client);
+  client.root.querySelector<HTMLElement>("[data-herdr-client-reconnect]")!.onclick = () => connectHerdrClient(client);
   client.resizeObserver = new ResizeObserver(() => {
     fit.fit();
     const next = `${term.cols}x${term.rows}`;
@@ -231,6 +243,20 @@ export async function mountHerdrClient(root: HTMLElement): Promise<void> {
   });
   connectHerdrClient(client);
   term.focus();
+}
+
+export async function mountHerdrClient(root: HTMLElement): Promise<void> {
+  closeHerdrClient();
+  const client: HerdrClientState = { root };
+  herdrClient = client;
+  const host = root.querySelector<HTMLElement>(".herdr-client-host");
+  const status = root.querySelector<HTMLElement>("[data-herdr-client-status]");
+  if (!host || !status || !window.Terminal || !window.FitAddon?.FitAddon) return;
+  await prepareHerdrClient(client, status);
+  if (herdrClient !== client) return;
+  const { term, fit } = createHerdrTerminal(client, host);
+  loadHerdrRenderer(client, term, fit);
+  wireHerdrTerminal(client, host, status, term, fit);
 }
 
 export function remountHerdrClient(): void {
