@@ -4,7 +4,7 @@
 | ID | Status | Task | Note | Owner | Activity | Active until | Parent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | U0 | done | Scaffold Vite React TS, /next route, parity harness | scaffold 845d03a; parity harness dashboard/parity (serve.sh, run.mjs record\|compare, states.mjs); / vs / green 48/48; fixtures in session scratchpad |  |  |  |  |
-| U1 | pending | Core: store, API, shell, header, toasts, context menu | depends U0 |  |  |  |  |
+| U1 | done | Core: store, API, shell, header, toasts, context menu | lead audit + repairs; build, 25 vitest, shell parity 6/6 green; ctx-menu state re-checked once U2 renders cards |  |  |  |  |
 | U2 | pending | Agents view: tiles, toolbar, orchestrator wall, feed | depends U1 |  |  |  |  |
 | U3 | pending | Detail panel: info, git, log, output dialog | depends U1 |  |  |  |  |
 | U4 | pending | Terminals: card terminal, Herdr client, menus and modals | depends U1 |  |  |  |  |
@@ -83,26 +83,38 @@
     {
       "evidence": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/978905e0-a5f6-4f3f-af8b-b26011a41634/scratchpad/logs/u0-web.log",
       "text": "U0 scaffold committed 845d03a on branch react-dashboard in worktree /home/ashadmin/workspace/fullstack-agents-react"
+    },
+    {
+      "evidence": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/logs/parity-self4.log",
+      "text": "U0 parity harness committed af23ae4 + states e705b2d; contract 77dd272 in docs/REACT_DASHBOARD.md 'Module contract'; / vs / green 75/75"
+    },
+    {
+      "evidence": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/logs/u1-build.log",
+      "text": "U1 implementer run implement-20261103-132435-541185 finished; files uncommitted (staged by dispatcher) in worktree; build + 25 vitest tests pass"
     }
   ],
   "evidence": [
     "/home/ashadmin/workspace/fullstack-agents-react/docs/REACT_DASHBOARD.md",
-    "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/978905e0-a5f6-4f3f-af8b-b26011a41634/scratchpad/logs"
+    "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/978905e0-a5f6-4f3f-af8b-b26011a41634/scratchpad/logs",
+    "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/fixtures/fixtures.json",
+    "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/briefs/u1.md",
+    "/home/ashadmin/.codex/fsa-runs/implement-20261103-132435-541185.last.txt",
+    "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/handoff-next.md"
   ],
   "goal": "Port the agent dashboard (dashboard.html, fleet.js, orchestrators.js, fleet.css) 1:1 to React 18 + TypeScript with Vite; source dashboard/, dist committed at plugins/fullstack-agents/scripts/lib/dashboard-react/, served at /next beside the old UI; switch / in U6.",
   "identity": {
     "branch": "react-dashboard",
     "checkout": "/home/ashadmin/workspace/fullstack-agents-react",
     "detached": false,
-    "head": "845d03a339c8ac4cd47199c43e97f3a62b436fd3",
+    "head": "e705b2d5835e6289bbb48a17a155d58b9befed9d",
     "root": "/home/ashadmin/workspace/fullstack-agents-react",
     "schema": 1,
-    "session_id": "978905e0-a5f6-4f3f-af8b-b26011a41634",
+    "session_id": "34f94a84-a134-4113-8eba-235795412266",
     "task_id": "react-dashboard",
-    "written_at": "2026-11-03T13:08:56.194212Z"
+    "written_at": "2026-11-03T13:39:12.222669Z"
   },
   "next": {
-    "action": "U0: build parity harness in dashboard/parity/ (playwright-core already installed at scratchpad/pw with chromium ~/.cache/ms-playwright/chromium-1234; replay recorded /api/** fixtures, fixed clock, seeded fsa-* localStorage, compare normalized outerHTML of header,#main,#panel,#ctx,#out on / vs /next) THEN Write and dispatch the U1 core brief via codex-task.sh implement",
+    "action": "U1 audit then U2-U4 dispatch and U5 direct port; full step list in /tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/handoff-next.md",
     "owner": "lead"
   },
   "scope": {
@@ -153,7 +165,69 @@
 - 2026-11-03T13:20:03Z U0 check_finish check="R1" run="0d77b4f761084adbea39a0467761cb6d" result="pass" executor="attested" reason=""
 - 2026-11-03T13:20:08Z U0 status from="in_progress" to="done" reason=""
 - 2026-11-03T13:20:08Z U0 done_gate accepted="C1, C2, C3, R1"
+- 2026-11-03T13:23:00Z U1 accept reason="" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/briefs/u1.md"
+- 2026-11-03T13:23:45Z U1 accept reason="PLAN line reformatted for the dispatcher; criteria unchanged" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/briefs/u1.md"
+- 2026-11-03T13:24:31Z U1 accept reason="blank line ends the path list; criteria unchanged" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/34f94a84-a134-4113-8eba-235795412266/scratchpad/briefs/u1.md"
+- 2026-11-03T13:24:35Z U1 status from="pending" to="in_progress" reason=""
+- 2026-11-03T13:28:54Z B1 block kind="worker" rows="U2,U3,U4,U5,U6"
+- 2026-11-03T13:39:00Z B1 resolve kind="worker" reason="U1 run ended (scope_violation = lead's own parity edits only)"
+- 2026-11-03T13:39:00Z U2 status from="blocked" to="pending" reason="blocker B1 resolved"
+- 2026-11-03T13:39:00Z U3 status from="blocked" to="pending" reason="blocker B1 resolved"
+- 2026-11-03T13:39:00Z U4 status from="blocked" to="pending" reason="blocker B1 resolved"
+- 2026-11-03T13:39:00Z U5 status from="blocked" to="pending" reason="blocker B1 resolved"
+- 2026-11-03T13:39:00Z U6 status from="blocked" to="pending" reason="blocker B1 resolved"
+- 2026-11-03T13:39:00Z U1 status from="in_progress" to="verifying" reason=""
+- 2026-11-03T13:43:13Z U1 check_start check="BUILD" run="72fe813d9e7d66b8e163d52707e18394"
+- 2026-11-03T13:43:25Z U1 check_finish check="BUILD" run="72fe813d9e7d66b8e163d52707e18394" result="pass" executor="tool" reason=""
+- 2026-11-03T13:43:26Z U1 check_start check="C1" run="cc56b5de73ef2a6253119d84cbcddc81"
+- 2026-11-03T13:43:32Z U1 check_finish check="C1" run="cc56b5de73ef2a6253119d84cbcddc81" result="pass" executor="tool" reason=""
+- 2026-11-03T13:43:32Z U1 check_start check="C2" run="4c42f00a0e22f0e7b254e75e74c3046c"
+- 2026-11-03T13:43:39Z U1 check_finish check="C2" run="4c42f00a0e22f0e7b254e75e74c3046c" result="pass" executor="tool" reason=""
+- 2026-11-03T13:43:47Z U1 check_start check="R1" run="7df04d227f851abc9520c0584782b5e5"
+- 2026-11-03T13:43:48Z U1 check_finish check="R1" run="7df04d227f851abc9520c0584782b5e5" result="pass" executor="attested" reason=""
+- 2026-11-03T13:43:48Z U1 check_start check="R2" run="e6090b44b137c55f366703df6a340781"
+- 2026-11-03T13:43:48Z U1 check_finish check="R2" run="e6090b44b137c55f366703df6a340781" result="pass" executor="attested" reason=""
+- 2026-11-03T13:44:07Z U1 status from="verifying" to="done" reason=""
+- 2026-11-03T13:44:07Z U1 done_gate accepted="BUILD, C1, C2, R1, R2"
 <!-- fsa:log:end -->
+
+<!-- fsa:blockers:start -->
+```json
+{
+  "blockers": {
+    "B1": {
+      "created_at": "2026-11-03T13:28:54.800172Z",
+      "kind": "worker",
+      "next": "audit U1, then dispatch U2-U4 in parallel and port U5 directly",
+      "resolution": {
+        "at": "2026-11-03T13:39:00.869120Z",
+        "by": "tool",
+        "evidence": "/home/ashadmin/.codex/fsa-runs/implement-20261103-132435-541185.result.json: state=scope_violation",
+        "reason": "U1 run ended (scope_violation = lead's own parity edits only)"
+      },
+      "resumes": {
+        "U2": "pending",
+        "U3": "pending",
+        "U4": "pending",
+        "U5": "pending",
+        "U6": "pending"
+      },
+      "rows": [
+        "U2",
+        "U3",
+        "U4",
+        "U5",
+        "U6"
+      ],
+      "status": "resolved",
+      "text": "U1 implementer run implement-20261103-132435-541185 in progress",
+      "why": "U2-U5 build on U1's store, libs and stubs; U6 needs U2-U5"
+    }
+  },
+  "schema": 1
+}
+```
+<!-- fsa:blockers:end -->
 
 <!-- fsa:evidence:start -->
 ```json
@@ -368,6 +442,270 @@
         "rationale": "scaffold, /next route and parity harness; the harness drives the old UI files"
       },
       "spec_at": "2026-11-03T13:19:04.463323Z"
+    },
+    "U1": {
+      "automated_waiver": null,
+      "checks": {
+        "BUILD": {
+          "command": "cd dashboard && npm run -s build && npx vitest run",
+          "cwd": ".",
+          "definition_digest": "240efb98d2ac82eabf2b1533640743598945d9c712c8a8d07fce77b12af0b6d7",
+          "expect": {
+            "none": "compile/lint success is silent"
+          },
+          "method": "command"
+        },
+        "C1": {
+          "command": "npm run -s build",
+          "cwd": "dashboard",
+          "definition_digest": "c941c01e5a1a1c58dd6b14f5a2dd9bbfa78a725705040934ce2d1ccdaeed8412",
+          "expect": {
+            "patterns": [
+              "built in"
+            ],
+            "reject": []
+          },
+          "method": "command"
+        },
+        "C2": {
+          "command": "npx vitest run",
+          "cwd": "dashboard",
+          "definition_digest": "c124477e51ddd1ce826476643efacf3da6b0ff0f9220d7a5486529e85515e7b2",
+          "expect": {
+            "patterns": [
+              "Tests +[0-9]+ passed"
+            ],
+            "reject": []
+          },
+          "method": "command"
+        },
+        "R1": {
+          "definition_digest": "2b78b990a90a7c8d87ce9c0ca3ac62c8e4db6b07ec63a134fb2c1e4fe94818b1",
+          "method": "inspection"
+        },
+        "R2": {
+          "definition_digest": "3eced88db8b9bcc815eeb0c0f2e26abe6089513699870d8b519066ea66ca6267",
+          "method": "review"
+        }
+      },
+      "completed": {
+        "at": "2026-11-03T13:44:07.932094Z",
+        "with": {
+          "BUILD": "pass",
+          "C1": "pass",
+          "C2": "pass",
+          "R1": "pass",
+          "R2": "pass"
+        }
+      },
+      "criteria": [
+        {
+          "checks": [
+            "C1"
+          ],
+          "id": "1",
+          "text": "Type-check and build pass, emitting app.js and app.css"
+        },
+        {
+          "checks": [
+            "C2"
+          ],
+          "id": "2",
+          "text": "Library tests pass"
+        },
+        {
+          "checks": [
+            "R1"
+          ],
+          "id": "3",
+          "text": "Shell state is DOM-equal to the old UI (header, #ctx, #out, #toasts, html classes, title)"
+        },
+        {
+          "checks": [
+            "R2"
+          ],
+          "id": "4",
+          "text": "Every module and stub matches the contract table; no file outside ALLOWED_PATHS"
+        },
+        {
+          "checks": [
+            "BUILD"
+          ],
+          "id": "BUILD",
+          "text": "BUILD passes"
+        }
+      ],
+      "kind": "code",
+      "results": {
+        "BUILD": {
+          "definition_digest": "240efb98d2ac82eabf2b1533640743598945d9c712c8a8d07fce77b12af0b6d7",
+          "evidence": [
+            {
+              "path": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/74648219-b630-4dfc-9bf2-9f49d6dfc6fc/scratchpad/logs/u1-BUILD.log",
+              "sha256": "3bb4271981a55ba1d47c343ab05601564028eebfa38987fce0ae4d4235fd7a01"
+            }
+          ],
+          "executor": "tool",
+          "exit": 0,
+          "finished_at": "2026-11-03T13:43:25.846324Z",
+          "reason": null,
+          "result": "pass",
+          "started_at": "2026-11-03T13:43:13.008205Z",
+          "state_after": {
+            "digest": "f71282323390d670d7c977cd278838321fb7484fdcbacfdda0b6ae271b034816",
+            "files": 34,
+            "head": "e705b2d5835e6289bbb48a17a155d58b9befed9d"
+          },
+          "state_before": {
+            "digest": "f71282323390d670d7c977cd278838321fb7484fdcbacfdda0b6ae271b034816",
+            "files": 34,
+            "head": "e705b2d5835e6289bbb48a17a155d58b9befed9d"
+          }
+        },
+        "C1": {
+          "definition_digest": "c941c01e5a1a1c58dd6b14f5a2dd9bbfa78a725705040934ce2d1ccdaeed8412",
+          "evidence": [
+            {
+              "path": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/74648219-b630-4dfc-9bf2-9f49d6dfc6fc/scratchpad/logs/u1-C1.log",
+              "sha256": "fbf130eff9cc05b19c904670cb62bb4bc0215273eb278417dc1ecf33f90057f1"
+            }
+          ],
+          "executor": "tool",
+          "exit": 0,
+          "finished_at": "2026-11-03T13:43:32.632100Z",
+          "reason": null,
+          "result": "pass",
+          "started_at": "2026-11-03T13:43:26.165313Z",
+          "state_after": {
+            "digest": "f71282323390d670d7c977cd278838321fb7484fdcbacfdda0b6ae271b034816",
+            "files": 34,
+            "head": "e705b2d5835e6289bbb48a17a155d58b9befed9d"
+          },
+          "state_before": {
+            "digest": "f71282323390d670d7c977cd278838321fb7484fdcbacfdda0b6ae271b034816",
+            "files": 34,
+            "head": "e705b2d5835e6289bbb48a17a155d58b9befed9d"
+          }
+        },
+        "C2": {
+          "definition_digest": "c124477e51ddd1ce826476643efacf3da6b0ff0f9220d7a5486529e85515e7b2",
+          "evidence": [
+            {
+              "path": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/74648219-b630-4dfc-9bf2-9f49d6dfc6fc/scratchpad/logs/u1-C2.log",
+              "sha256": "c5487e7bb6170b5a47cb06d194efa21a6622c0c7896afcc7c47cd9df75780837"
+            }
+          ],
+          "executor": "tool",
+          "exit": 0,
+          "finished_at": "2026-11-03T13:43:39.023558Z",
+          "reason": null,
+          "result": "pass",
+          "started_at": "2026-11-03T13:43:32.755831Z",
+          "state_after": {
+            "digest": "f71282323390d670d7c977cd278838321fb7484fdcbacfdda0b6ae271b034816",
+            "files": 34,
+            "head": "e705b2d5835e6289bbb48a17a155d58b9befed9d"
+          },
+          "state_before": {
+            "digest": "f71282323390d670d7c977cd278838321fb7484fdcbacfdda0b6ae271b034816",
+            "files": 34,
+            "head": "e705b2d5835e6289bbb48a17a155d58b9befed9d"
+          }
+        },
+        "R1": {
+          "definition_digest": "2b78b990a90a7c8d87ce9c0ca3ac62c8e4db6b07ec63a134fb2c1e4fe94818b1",
+          "evidence": [
+            {
+              "path": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/74648219-b630-4dfc-9bf2-9f49d6dfc6fc/scratchpad/logs/parity-u1-shell.log",
+              "sha256": "78171333f6f4766cdbcf8d8e2a5dac98ff527f15976b883e56c9dc6cdf815445"
+            }
+          ],
+          "executor": "attested",
+          "finished_at": "2026-11-03T13:43:48.072477Z",
+          "reason": null,
+          "result": "pass",
+          "started_at": "2026-11-03T13:43:47.881184Z",
+          "state_after": {
+            "digest": "f71282323390d670d7c977cd278838321fb7484fdcbacfdda0b6ae271b034816",
+            "files": 34,
+            "head": "e705b2d5835e6289bbb48a17a155d58b9befed9d"
+          },
+          "state_before": {
+            "digest": "f71282323390d670d7c977cd278838321fb7484fdcbacfdda0b6ae271b034816",
+            "files": 34,
+            "head": "e705b2d5835e6289bbb48a17a155d58b9befed9d"
+          }
+        },
+        "R2": {
+          "definition_digest": "3eced88db8b9bcc815eeb0c0f2e26abe6089513699870d8b519066ea66ca6267",
+          "evidence": [
+            {
+              "path": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/74648219-b630-4dfc-9bf2-9f49d6dfc6fc/scratchpad/logs/u1-review.md",
+              "sha256": "5d05a76e1c388d29e26ae2f0c55f8bb0216920ac776bb108f0c1a5b8dfeb0198"
+            }
+          ],
+          "executor": "attested",
+          "finished_at": "2026-11-03T13:43:48.454339Z",
+          "reason": null,
+          "result": "pass",
+          "started_at": "2026-11-03T13:43:48.260713Z",
+          "state_after": {
+            "digest": "f71282323390d670d7c977cd278838321fb7484fdcbacfdda0b6ae271b034816",
+            "files": 34,
+            "head": "e705b2d5835e6289bbb48a17a155d58b9befed9d"
+          },
+          "state_before": {
+            "digest": "f71282323390d670d7c977cd278838321fb7484fdcbacfdda0b6ae271b034816",
+            "files": 34,
+            "head": "e705b2d5835e6289bbb48a17a155d58b9befed9d"
+          }
+        }
+      },
+      "scope": {
+        "dependencies": [
+          "dashboard/index.html",
+          "dashboard/package.json",
+          "dashboard/src/styles/",
+          "dashboard/tsconfig.json",
+          "dashboard/vite.config.ts",
+          "plugins/fullstack-agents/scripts/lib/dashboard.html",
+          "plugins/fullstack-agents/scripts/lib/fleet.js"
+        ],
+        "dependencies_none": null,
+        "env": [],
+        "inputs": [],
+        "paths": [
+          "dashboard/src/App.tsx",
+          "dashboard/src/components/CardContextMenu.tsx",
+          "dashboard/src/components/Header.tsx",
+          "dashboard/src/components/OutDialog.tsx",
+          "dashboard/src/components/Toasts.tsx",
+          "dashboard/src/lib/api.ts",
+          "dashboard/src/lib/cards.test.ts",
+          "dashboard/src/lib/cards.ts",
+          "dashboard/src/lib/clipboard.test.ts",
+          "dashboard/src/lib/clipboard.ts",
+          "dashboard/src/lib/format.test.ts",
+          "dashboard/src/lib/format.ts",
+          "dashboard/src/lib/markup.test.ts",
+          "dashboard/src/lib/markup.ts",
+          "dashboard/src/lib/types.ts",
+          "dashboard/src/main.tsx",
+          "dashboard/src/panel/Panel.tsx",
+          "dashboard/src/store.ts",
+          "dashboard/src/terminal/CardTerminal.tsx",
+          "dashboard/src/terminal/HerdrOverlay.tsx",
+          "dashboard/src/views/AgentsView.tsx",
+          "dashboard/src/views/HerdrView.tsx",
+          "dashboard/src/views/HistoryView.tsx",
+          "none (new vitest files only)",
+          "plugins/fullstack-agents/scripts/lib/dashboard-react/app.css",
+          "plugins/fullstack-agents/scripts/lib/dashboard-react/app.js",
+          "plugins/fullstack-agents/scripts/lib/dashboard-react/index.html"
+        ],
+        "rationale": "the build reads the manifest, configs and CSS; the port reads the old UI sources"
+      },
+      "spec_at": "2026-11-03T13:24:31.622900Z"
     }
   },
   "runs": {},
@@ -378,3 +716,4 @@
 
 ## Ownership log
 - 2026-11-03T13:09:18.581136Z adopted by 34f94a84-a134-4113-8eba-235795412266 from 978905e0-a5f6-4f3f-af8b-b26011a41634 (free)
+- 2026-11-03T13:39:36.511004Z adopted by 74648219-b630-4dfc-9bf2-9f49d6dfc6fc from 34f94a84-a134-4113-8eba-235795412266 (free)
