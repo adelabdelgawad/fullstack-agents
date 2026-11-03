@@ -14,25 +14,12 @@
 @font-face { font-family: "JetBrains Mono Web"; src: url(/static/fonts/JetBrainsMono-Italic.woff2) format("woff2"); font-weight: 400; font-style: italic; }
 @font-face { font-family: "JetBrains Mono Web"; src: url(/static/fonts/JetBrainsMono-BoldItalic.woff2) format("woff2"); font-weight: 700; font-style: italic; }
 :root {
-  --bg: #f4f5f8; --panel: #ffffff; --card: #ffffff; --card-hover: #f7f8fb; --ink: #1b1d26; --muted: #5d6273; --faint: #8b90a3; --line: #dfe2ea;
-  --active: #2563eb; --pass: #1d7f3e; --changes: #a85a00; --human: #b0246f;
-  --amber: #a85a00; --amber-bg: #fff1dd; --blue: #2563eb; --blue-bg: #e6eefe;
-  --red: #b42318; --red-bg: #fde8e6; --green: #1d7f3e; --green-bg: #e2f4e8; --chip: #eef0f5; --yellow: #a85a00;
+  color-scheme: dark;
+  --bg: #0b0f17; --panel: #0f1520; --card: #141b27; --card-hover: #18212f; --ink: #e5e9f0; --muted: #8c96a8; --faint: #5d6779; --line: #222b3a;
+  --active: #4f8ff7; --pass: #4ade80; --changes: #f2b24c; --human: #f472b6;
+  --amber: #f2b24c; --amber-bg: #2e2412; --blue: #4f8ff7; --blue-bg: #14233d;
+  --red: #f47272; --red-bg: #33171b; --green: #4ade80; --green-bg: #12291c; --chip: #1b2331; --yellow: #f2b24c;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0b0f17; --panel: #0f1520; --card: #141b27; --card-hover: #18212f; --ink: #e5e9f0; --muted: #8c96a8; --faint: #5d6779; --line: #222b3a;
-    --active: #4f8ff7; --pass: #4ade80; --changes: #f2b24c; --human: #f472b6;
-    --amber: #f2b24c; --amber-bg: #2e2412; --blue: #4f8ff7; --blue-bg: #14233d;
-    --red: #f47272; --red-bg: #33171b; --green: #4ade80; --green-bg: #12291c; --chip: #1b2331; --yellow: #f2b24c;
-  }
-}
-:root[data-theme="dark"] {
-    --bg: #0b0f17; --panel: #0f1520; --card: #141b27; --card-hover: #18212f; --ink: #e5e9f0; --muted: #8c96a8; --faint: #5d6779; --line: #222b3a;
-    --active: #4f8ff7; --pass: #4ade80; --changes: #f2b24c; --human: #f472b6;
-    --amber: #f2b24c; --amber-bg: #2e2412; --blue: #4f8ff7; --blue-bg: #14233d;
-    --red: #f47272; --red-bg: #33171b; --green: #4ade80; --green-bg: #12291c; --chip: #1b2331; --yellow: #f2b24c;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
@@ -129,7 +116,7 @@ aside.open { transform: none; }
 html.lock, html.lock body { overflow: hidden; }
 html.herdr-page, html.herdr-page body { height: 100%; overflow: hidden; }
 html.herdr-page body { display: flex; flex-direction: column; }
-html.herdr-page header { flex: none; }
+html.herdr-page header { flex: none; padding-top: 6px; padding-bottom: 2px; }
 html.herdr-page main { flex: 1; min-height: 0; }
 aside h3 { margin: 0 0 4px; font-size: 16px; }
 aside h4 { margin: 14px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
@@ -278,11 +265,14 @@ aside .gcol pre.diff { margin: 0; border-radius: 0; background: none; padding: 0
 .herdr-client { position: relative; display: flex; flex-direction: column; height: calc(100vh - 57px); overflow: hidden; margin: 0; padding: 0; border: 0; background: #282c34; }
 html.herdr-page .herdr-client { height: 100%; }
 html .herdr-client.herdr-fill { position: fixed; inset: 0; z-index: 1000; height: 100vh; height: 100dvh; }
-.herdr-client-head { flex: none; display: flex; align-items: center; gap: 2ch; padding: 4px 1ch; background: var(--herdr-panel-bg); }
-.herdr-client-head button { background: transparent; color: var(--herdr-text); border: 1px solid var(--herdr-overlay0); padding: 1px 1ch; font: inherit; cursor: pointer; }
+.herdr-client-head { position: absolute; top: 0; right: 0; z-index: 4; display: flex; align-items: center; gap: .5ch; padding: 0 .5ch; height: 21px; background: var(--herdr-panel-bg); }
+.herdr-client-head button { background: transparent; color: var(--herdr-text); border: 1px solid var(--herdr-overlay0); padding: 0 .75ch; line-height: 17px; font: inherit; cursor: pointer; }
 .herdr-client-head button:hover { border-color: var(--herdr-accent); }
-.herdr-client-status { margin-left: auto; color: var(--herdr-overlay0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.herdr-client-host { flex: 1; min-height: 0; margin: 0; padding: 0; border: 0; background: #282c34; }
+.herdr-client-status { max-width: 40ch; color: var(--herdr-overlay0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.herdr-client-status.is-live { font-size: 0; max-width: none; }
+.herdr-client-status.is-live::before { content: "●"; font-size: 12px; color: var(--herdr-green); }
+.herdr-client-head .herdr-client-attach { color: var(--herdr-red); border-color: var(--herdr-red); font-weight: 700; }
+.herdr-client-host { position: relative; flex: 1; min-height: 0; margin: 0; padding: 0; border: 0; background: #282c34; }
 .herdr-client-host .xterm { height: 100%; }
 .herdr-client .xterm-viewport { overflow-y: hidden; }
 .herdr-detail { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--herdr-panel-bg); flex: 1; overflow: hidden; }
@@ -558,7 +548,7 @@ aside .tracked-plan progress::-moz-progress-bar { background: var(--blue); borde
     <button class="favsw" id="favsw" role="switch" aria-checked="false"><span class="track" aria-hidden="true"></span>Favourites only</button>
     <button class="tbtn" id="ffeed" aria-pressed="true" title="Show or hide the activity feed">Activity</button>
     <button class="favsw" id="fwall" role="switch" aria-checked="false" title="Wall mode: hide the sidebar, filters and feed (key w)"><span class="track" aria-hidden="true"></span>Wall mode</button>
-    <div class="fseg" role="group" aria-label="Theme"><button data-ftheme="light">Light</button><button data-ftheme="dark">Dark</button><button data-ftheme="system">System</button></div>
+    
     <div class="status" id="meta"><span class="dot"></span>loading…</div>
   </div>
 </header>
@@ -786,6 +776,52 @@ function showTerminalStatus(current, message, resetAfter = 0) {
   }, resetAfter);
 }
 
+function uploadingText(files) {
+  return files.length === 1 ? `uploading ${files[0].name}…` : `uploading ${files.length} files…`;
+}
+
+async function uploadFiles(files, prefix) {
+  const paths = [];
+  for (const file of files) {
+    const response = await fetch(`${prefix}name=${enc(file.name || "file")}`, {method: "POST", headers: {"Content-Type": "application/octet-stream"}, body: file});
+    if (!response.ok) throw new Error((await response.text()) || `upload failed (${response.status})`);
+    const data = await response.json();
+    if (!data.ok || typeof data.path !== "string") throw new Error("invalid upload response");
+    paths.push(data.path);
+  }
+  return paths;
+}
+
+function wireFileDrop(box, onFiles) {
+  const hasFiles = event => [...(event.dataTransfer?.types || [])].includes("Files");
+  box.addEventListener("dragover", event => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    box.classList.add("file-drag-over");
+  });
+  box.addEventListener("dragleave", event => {
+    if (!event.relatedTarget || !box.contains(event.relatedTarget)) box.classList.remove("file-drag-over");
+  });
+  box.addEventListener("drop", event => {
+    box.classList.remove("file-drag-over");
+    const files = [...(event.dataTransfer?.files || [])];
+    if (!files.length) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onFiles(files);
+  });
+}
+
+function filesFromPaste(event) {
+  const files = [...(event.clipboardData?.items || [])].filter(entry => entry.kind === "file").map(entry => entry.getAsFile()).filter(Boolean);
+  if (files.length) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  return files;
+}
+
 async function attachLiveFiles(current, files) {
   if (terminal !== current || current.mode !== "live" || !current.session || !current.term) {
     showTerminalStatus(current, "connect live to attach files");
@@ -797,16 +833,10 @@ async function attachLiveFiles(current, files) {
     focusTerminalAfterAttach(current);
     return;
   }
-  const session = current.session, paths = [];
-  showTerminalStatus(current, files.length === 1 ? `uploading ${files[0].name}…` : `uploading ${files.length} files…`);
+  const session = current.session;
+  showTerminalStatus(current, uploadingText(files));
   try {
-    for (const file of files) {
-      const response = await fetch(`/api/herdr/live/file?session=${enc(session)}&name=${enc(file.name || "file")}`, {method: "POST", headers: {"Content-Type": "application/octet-stream"}, body: file});
-      if (!response.ok) throw new Error((await response.text()) || `upload failed (${response.status})`);
-      const data = await response.json();
-      if (!data.ok || typeof data.path !== "string") throw new Error("invalid upload response");
-      paths.push(data.path);
-    }
+    const paths = await uploadFiles(files, `/api/herdr/live/file?session=${enc(session)}&`);
     if (terminal !== current || current.mode !== "live" || current.session !== session || !current.term) {
       showTerminalStatus(current, "connect live to attach files");
       return;
@@ -854,11 +884,8 @@ function mountTerminalFiles(current) {
   const host = current.root.querySelector(".terminal-live"), history = current.root.querySelector(".terminal-screen"), box = current.root.querySelector(".terminal-screen-box");
   const picker = current.root.querySelector("[data-attach-input]");
   const pasteFile = event => {
-    const files = [...(event.clipboardData?.items || [])].filter(entry => entry.kind === "file").map(entry => entry.getAsFile()).filter(Boolean);
-    if (!files.length) return;
-    event.preventDefault();
-    event.stopPropagation();
-    attachLiveFiles(current, files);
+    const files = filesFromPaste(event);
+    if (files.length) attachLiveFiles(current, files);
   };
   host.addEventListener("paste", pasteFile, true);
   history.addEventListener("paste", pasteFile, true);
@@ -868,24 +895,7 @@ function mountTerminalFiles(current) {
     picker.value = "";
     if (files.length) attachLiveFiles(current, files);
   };
-  const hasFiles = event => [...(event.dataTransfer?.types || [])].includes("Files");
-  box.addEventListener("dragover", event => {
-    if (!hasFiles(event)) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-    box.classList.add("file-drag-over");
-  });
-  box.addEventListener("dragleave", event => {
-    if (!event.relatedTarget || !box.contains(event.relatedTarget)) box.classList.remove("file-drag-over");
-  });
-  box.addEventListener("drop", event => {
-    box.classList.remove("file-drag-over");
-    const files = [...(event.dataTransfer?.files || [])];
-    if (!files.length) return;
-    event.preventDefault();
-    event.stopPropagation();
-    attachLiveFiles(current, files);
-  });
+  wireFileDrop(box, files => attachLiveFiles(current, files));
 }
 
 function setLiveLag(current, epoch, lagging) {
@@ -1473,6 +1483,39 @@ function closeHerdrClient() {
   herdrClient = null;
 }
 
+function flashHerdrStatus(client, text) {
+  client.setStatus(text);
+  setTimeout(() => { if (herdrClient === client && client.ws?.readyState === WebSocket.OPEN) client.setStatus(herdrLiveStatus(client)); }, 2000);
+}
+
+function wireHerdrAttach(client) {
+  const {root} = client, host = root.querySelector(".herdr-client-host"), picker = root.querySelector("[data-herdr-client-attach-input]");
+  const attach = async files => {
+    if (files.some(file => file.size > LIVE_UPLOAD_MAX_BYTES)) return flashHerdrStatus(client, "file is too large (50 MB maximum)");
+    client.setStatus(uploadingText(files));
+    try {
+      const paths = await uploadFiles(files, "/api/herdr/file?");
+      if (herdrClient !== client) return;
+      client.term.paste(paths.join(" ") + " ");
+      flashHerdrStatus(client, paths.length === 1 ? "file attached" : `${paths.length} files attached`);
+    } catch (error) {
+      flashHerdrStatus(client, error.message || "upload failed");
+    }
+    if (!matchMedia("(pointer: coarse)").matches) client.term.focus();
+  };
+  root.querySelector("[data-herdr-client-attach]").onclick = () => picker.click();
+  picker.onchange = () => {
+    const files = [...picker.files];
+    picker.value = "";
+    if (files.length) attach(files);
+  };
+  host.addEventListener("paste", event => {
+    const files = filesFromPaste(event);
+    if (files.length) attach(files);
+  }, true);
+  wireFileDrop(host, attach);
+}
+
 function herdrLiveStatus(client) {
   return `live · ${client.renderer} · ${client.term.cols}×${client.term.rows}`;
 }
@@ -1543,7 +1586,11 @@ async function mountHerdrClient(root) {
   const client = {root};
   herdrClient = client;
   const host = root.querySelector(".herdr-client-host"), statusEl = root.querySelector("[data-herdr-client-status]");
-  client.setStatus = text => { statusEl.textContent = text; };
+  client.setStatus = text => {
+    statusEl.textContent = text;
+    statusEl.title = text;
+    statusEl.classList.toggle("is-live", text.startsWith("live"));
+  };
   root.oncontextmenu = event => event.preventDefault();
   await Promise.all(["400", "700"].flatMap(weight => ["normal", "italic"].map(style =>
     document.fonts.load(`${style === "italic" ? "italic " : ""}${weight} 14.5px "JetBrains Mono Web"`))));
@@ -1572,6 +1619,7 @@ async function mountHerdrClient(root) {
   client.scanOsc52 = createOsc52Scanner(onCopyText);
   host.addEventListener("mouseup", () => setTimeout(() => { if (term.hasSelection()) onCopyText(term.getSelection()); }));
   wireHerdrFullscreen(client);
+  wireHerdrAttach(client);
   root.querySelector("[data-herdr-client-reconnect]").onclick = () => connectHerdrClient(client);
   client.resizeObserver = new ResizeObserver(() => {
     fit.fit();
@@ -1603,7 +1651,7 @@ function renderHerdrPage() {
     return;
   }
   if (herdrClient && main.contains(herdrClient.root)) return;
-  main.innerHTML = '<div class="herdr-client"><header class="herdr-client-head"><button data-herdr-client-fullscreen aria-pressed="false" title="Full screen; desktop Chromium also locks the keyboard (hold Esc to leave)">full screen</button><button data-herdr-client-reconnect hidden>reconnect</button><span class="herdr-client-status" data-herdr-client-status>starting…</span></header><div class="herdr-client-host"></div></div>';
+  main.innerHTML = '<div class="herdr-client"><div class="herdr-client-host"><div class="terminal-drop" aria-hidden="true"><span>+</span><b>Drop to attach</b></div></div><header class="herdr-client-head"><span class="herdr-client-status" data-herdr-client-status>starting…</span><button data-herdr-client-reconnect hidden>reconnect</button><button data-herdr-client-fullscreen aria-pressed="false" title="Full screen; desktop Chromium also locks the keyboard (hold Esc to leave)">full screen</button><button data-herdr-client-attach class="herdr-client-attach" aria-label="Attach files" title="Attach files: their paths are typed into the focused pane">+</button><input type="file" multiple hidden data-herdr-client-attach-input></header></div>';
   mountHerdrClient(main.querySelector(".herdr-client"));
 }
 

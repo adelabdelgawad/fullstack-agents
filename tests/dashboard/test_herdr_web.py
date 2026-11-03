@@ -1,5 +1,7 @@
 """Frame codec, handshake and the pty round trip for the full herdr client over one WebSocket."""
+import http.client
 import importlib.util
+import json
 import os
 import socket
 import stat
@@ -282,6 +284,32 @@ class HerdrClientServerTests(unittest.TestCase):
         finally:
             for _ in range(dash.HERDR_CLIENT_MAX):
                 self.server.herdr_client_slots.release()
+
+    def post_file(self, path, body=b"hello", length=None, token="t"):
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        headers = {"Content-Type": "application/octet-stream", "Cookie": f"fsa_t={token}"}
+        if length is not None:
+            headers["Content-Length"] = length
+        conn.request("POST", path, body=body, headers=headers)
+        response = conn.getresponse()
+        data = response.read()
+        conn.close()
+        return response.status, data
+
+    def test_file_upload_stages_without_live_session(self):
+        status, data = self.post_file("/api/herdr/file?name=note.txt")
+        self.assertEqual(status, 200)
+        path = Path(json.loads(data)["path"])
+        self.addCleanup(path.unlink, missing_ok=True)
+        self.assertEqual(path.read_bytes(), b"hello")
+
+    def test_file_upload_forbidden_without_token(self):
+        status, _ = self.post_file("/api/herdr/file?name=note.txt", token="wrong")
+        self.assertEqual(status, 403)
+
+    def test_file_upload_rejects_bad_content_length(self):
+        status, _ = self.post_file("/api/herdr/file?name=note.txt", length="abc")
+        self.assertEqual(status, 413)
 
     def test_static_assets_served(self):
         paths = ["/static/xterm/addon-webgl.js", "/static/fonts/JetBrainsMono-Regular.woff2",

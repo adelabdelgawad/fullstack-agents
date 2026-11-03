@@ -2574,11 +2574,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         length_header = self.headers.get("Content-Length")
         if length_header is None or not re.fullmatch(r"\d+", length_header):
             self.send(413, b"invalid Content-Length", "text/plain")
-            return None, None
+            return None
         normalized_length = length_header.lstrip("0") or "0"
         if len(normalized_length) > 8:
             self.send(413, b"invalid Content-Length", "text/plain")
-            return None, None
+            return None
         length = int(normalized_length)
         if not 1 <= length <= HERDR_UPLOAD_MAX:
             self.send(413, b"invalid Content-Length", "text/plain")
@@ -2905,15 +2905,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.body_read = False
         url = urllib.parse.urlparse(self.path)
         if not self.authorised({}) or url.path not in ("/api/favourite", "/api/herdr/send", "/api/herdr/action",
-                                                          "/api/herdr/live/input", "/api/herdr/live/file"):
+                                                          "/api/herdr/live/input", "/api/herdr/live/file", "/api/herdr/file"):
             return self.send(403, b"forbidden", "text/plain")
-        if url.path == "/api/herdr/live/file":
+        if url.path in ("/api/herdr/live/file", "/api/herdr/file"):
             q = urllib.parse.parse_qs(url.query)
-            session_id = (q.get("session") or [""])[0]
-            with self.server.herdr_live_lock:
-                live = self.server.herdr_live.get(session_id)
-            if live is None:
-                return self.send(404, b"unknown session", "text/plain")
+            if url.path == "/api/herdr/live/file":
+                session_id = (q.get("session") or [""])[0]
+                with self.server.herdr_live_lock:
+                    live = self.server.herdr_live.get(session_id)
+                if live is None:
+                    return self.send(404, b"unknown session", "text/plain")
             body = self.herdr_upload_body()
             if body is None:
                 return

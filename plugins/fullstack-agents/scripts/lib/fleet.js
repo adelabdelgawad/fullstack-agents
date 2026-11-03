@@ -1,28 +1,19 @@
-// Fleet overview: summary tiles, usage strip, worker squares, activity feed, filters, history, wall mode and theme.
+// Fleet overview: summary tiles, usage strip, worker squares, activity feed, filters, history, and wall mode.
 const fleetStore = {
   get(k, d) { try { const v = localStorage.getItem("fsa-" + k); return v === null ? d : v; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem("fsa-" + k, v); } catch (e) {} },
 };
 const fleet = {
   filter: fleetStore.get("filter", "all"), sort: fleetStore.get("sort", "stage"), text: "",
-  feed: fleetStore.get("feed", "1") === "1", theme: fleetStore.get("theme", "system"), tpm: [],
+  feed: fleetStore.get("feed", "1") === "1", tpm: [],
   tilesHidden: fleetStore.get("tiles", "1") === "0",
 };
 const FILTERS = [["all", "All"], ["running", "Running"], ["waiting", "Waiting"], ["stale", "Stale"], ["blowouts", "Blowouts"]];
 const SORTS = [["stage", "Stage order"], ["updated", "Last update"], ["cost", "Cost"], ["context", "Context fill"]];
 const MODELS = [["opus", "Opus"], ["sonnet", "Sonnet"], ["haiku", "Haiku"], ["fable", "Fable"], ["gpt", "Codex"], ["grok", "Grok"]];
 
-function applyTheme(theme) {
-  fleet.theme = theme;
-  fleetStore.set("theme", theme);
-  if (theme === "system") delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = theme;
-  syncNav();
-}
-
 function syncNav() {
   const set = (el, on) => el && el.setAttribute("aria-pressed", String(on));
-  document.querySelectorAll("[data-ftheme]").forEach(b => set(b, b.dataset.ftheme === fleet.theme));
   set(document.getElementById("ffeed"), fleet.feed);
   const wall = document.getElementById("fwall");
   if (wall) wall.setAttribute("aria-checked", String(document.documentElement.classList.contains("wall")));
@@ -31,14 +22,12 @@ function syncNav() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest && e.target.closest("header [data-ftheme], #ffeed, #fwall, #ftiles");
+  const t = e.target.closest && e.target.closest("#ffeed, #fwall, #ftiles");
   if (!t) return;
-  if (t.dataset.ftheme) applyTheme(t.dataset.ftheme);
-  else if (t.id === "ftiles") { fleet.tilesHidden = !fleet.tilesHidden; fleetStore.set("tiles", fleet.tilesHidden ? "0" : "1"); render(); }
+  if (t.id === "ftiles") { fleet.tilesHidden = !fleet.tilesHidden; fleetStore.set("tiles", fleet.tilesHidden ? "0" : "1"); render(); }
   else if (t.id === "ffeed") { fleet.feed = !fleet.feed; fleetStore.set("feed", fleet.feed ? "1" : "0"); syncNav(); render(); }
   else setWall(!document.documentElement.classList.contains("wall"));
 });
-applyTheme(fleet.theme);
 if (fleetStore.get("wall", "0") === "1") document.documentElement.classList.add("wall");
 
 const fmtTokens = n => !n ? "0" : n >= 1e9 ? (n / 1e9).toFixed(2) + "B" : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e8 ? 0 : 1) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(n);

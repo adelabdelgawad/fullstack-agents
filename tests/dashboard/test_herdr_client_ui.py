@@ -112,5 +112,12 @@ class RemovedChromeTests(unittest.TestCase):
         self.assertIn("/api/herdr/client", source)
 
 
+    def test_herdr_client_has_red_attach_button_using_the_file_endpoint(self):
+        source = HTML.read_text()
+        self.assertIn("data-herdr-client-attach", source)
+        self.assertIn(".herdr-client-attach { color: var(--herdr-red)", source)
+        self.assertIn('uploadFiles(files, "/api/herdr/file?")', source)
+        self.assertIn("wireFileDrop(host, attach)", source)
+
 if __name__ == "__main__":
     unittest.main()
