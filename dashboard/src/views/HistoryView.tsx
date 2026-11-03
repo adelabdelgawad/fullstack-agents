@@ -1,9 +1,8 @@
-import { Layout } from "../components/Layout";
 import type { HistoryEntry } from "../lib/types";
 import { STATE_TEXT } from "../lib/cards";
 import { ago, fmtCost, fmtTokens, modelFamily, modelShort } from "../lib/format";
 import { openCard, setFleet, setView, store, useStore } from "../store";
-import { FleetTiles } from "./agents/FleetTiles";
+import { FleetTiles, SummaryToggle } from "./agents/FleetTiles";
 
 function openSession(sid: string): void {
   const c = store.get().state?.cards.find((x) => x.sessions.some((s) => s.id === sid));
@@ -43,7 +42,7 @@ export function HistoryView() {
     (h) => !text || `${h.name} ${h.branch} ${h.model}`.toLowerCase().includes(text.toLowerCase()),
   );
   return (
-    <Layout>
+    <>
       <FleetTiles />
       <div className="fleet-toolbar">
         <input
@@ -55,6 +54,7 @@ export function HistoryView() {
           onChange={(e) => setFleet({ text: e.target.value })}
         />
         <span className="fcount">{`${rows.length} sessions, last 48 h`}</span>
+        <SummaryToggle />
       </div>
       <div className="history">
         <table>
@@ -82,6 +82,6 @@ export function HistoryView() {
           </tbody>
         </table>
       </div>
-    </Layout>
+    </>
   );
 }

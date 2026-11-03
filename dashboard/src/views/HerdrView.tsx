@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { Layout } from "../components/Layout";
 import { loadHerdr, useStore } from "../store";
 import { closeHerdrClient, mountHerdrClient } from "../terminal/herdrClient";
 
@@ -53,23 +52,12 @@ export function HerdrView() {
     return closeHerdrClient;
   }, [herdrData?.running]);
 
-  if (!herdrData)
-    return (
-      <Layout>
-        <div className="hint">Loading Herdr…</div>
-      </Layout>
-    );
+  if (!herdrData) return <div className="hint">Loading Herdr…</div>;
   if (!herdrData.running)
     return (
-      <Layout>
-        <div className="empty" style={{ padding: "24px 32px" }}>
-          herdr is not running on this server
-        </div>
-      </Layout>
+      <div className="empty" style={{ padding: "24px 32px" }}>
+        herdr is not running on this server
+      </div>
     );
-  return (
-    <Layout>
-      <HerdrClient rootRef={rootRef} />
-    </Layout>
-  );
+  return <HerdrClient rootRef={rootRef} />;
 }

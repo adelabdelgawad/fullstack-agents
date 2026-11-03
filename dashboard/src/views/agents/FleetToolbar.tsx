@@ -1,4 +1,5 @@
 import { setFleet, useStore } from "../../store";
+import { SummaryToggle } from "./FleetTiles";
 
 const FILTERS = [
   ["all", "All"],
@@ -49,6 +50,7 @@ export function FleetToolbar({ shown, total }: { shown: number; total: number })
         onChange={(event) => setFleet({ text: event.target.value })}
       />
       <span className="fcount">{shown === total ? `${total} orchestrators` : `${shown} of ${total} shown`}</span>
+      <SummaryToggle />
     </div>
   );
 }

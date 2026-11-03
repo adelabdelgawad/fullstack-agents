@@ -1,11 +1,10 @@
-import { Layout } from "../components/Layout";
 import { fleetCompare, fleetMatches } from "../lib/cards";
-import type { DashState } from "../lib/types";
 import { setFavOnly, setFleet, useStore } from "../store";
 import { openNewSession } from "../terminal/HerdrOverlay";
 import { Orchestrators } from "./agents/Orchestrators";
 
-function AgentsActions({ state }: { state: DashState | null }) {
+export function AgentsActions() {
+  const state = useStore((value) => value.state);
   const favouriteOnly = useStore((value) => value.favOnly);
   const feed = useStore((value) => value.fleet.feed);
   const favouriteCount = state
@@ -48,14 +47,10 @@ export function AgentsView() {
   const state = useStore((value) => value.state);
   const favouriteOnly = useStore((value) => value.favOnly);
   const fleet = useStore((value) => value.fleet);
-  if (!state) return <Layout actions={<AgentsActions state={state} />}>{null}</Layout>;
+  if (!state) return null;
   const pool = favouriteOnly ? state.cards.filter((card) => card.favourite) : state.cards;
   const cards = pool
     .filter((card) => fleetMatches(card, fleet))
     .sort((left, right) => fleetCompare(left, right, fleet));
-  return (
-    <Layout actions={<AgentsActions state={state} />}>
-      <Orchestrators cards={cards} total={pool.length} />
-    </Layout>
-  );
+  return <Orchestrators cards={cards} total={pool.length} />;
 }

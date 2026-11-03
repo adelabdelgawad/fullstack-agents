@@ -214,9 +214,9 @@ describe("fleet UI Python parity", () => {
     const state = dash();
     state.totals = { live: 2 };
     store.set({ state });
-    let html = render(<FleetTiles />).innerHTML;
+    let html = render(<Orchestrators cards={[]} total={0} />).innerHTML;
     expect(html).toContain('id="fleet-tiles"');
-    expect(host.querySelector("#fleet-tiles > #ftiles")).not.toBeNull();
+    expect(host.querySelector(".fleet-toolbar > #ftiles:last-child")).not.toBeNull();
     expect(html).toContain('aria-expanded="true" aria-controls="fleet-tiles"');
     expect(html).toContain("Hide summary");
     act(() => host.querySelector<HTMLButtonElement>("#ftiles")!.click());

@@ -3,7 +3,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Card, DashState } from "../../lib/types";
 import { store } from "../../store";
-import { FleetTiles } from "./FleetTiles";
 import { OrcCard, orcPlan } from "./OrcCard";
 import { Orchestrators } from "./Orchestrators";
 import { WorkerSquares } from "./Workers";
@@ -169,9 +168,9 @@ describe("agents view renderers", () => {
       },
     };
     store.set({ state });
-    const summary = render(<FleetTiles />);
+    const summary = render(<Orchestrators cards={[]} total={0} />);
     const html = summary.innerHTML;
-    expect(summary.querySelector("#fleet-tiles > #ftiles")).not.toBeNull();
+    expect(summary.querySelector(".fleet-toolbar > #ftiles:last-child")).not.toBeNull();
     expect(html).toContain('aria-expanded="true"');
     expect(html).toContain("Claude plan · team");
     expect(html).toContain("on credits · 59,210 left");

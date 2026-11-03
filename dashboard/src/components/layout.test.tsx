@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { App } from "../App";
 import type { Card, DashState } from "../lib/types";
 import { store, type View } from "../store";
-import { AgentsView } from "../views/AgentsView";
-import { HerdrView } from "../views/HerdrView";
-import { HistoryView } from "../views/HistoryView";
 
 function card(key: string, favourite = false): Card {
   return {
@@ -34,27 +32,22 @@ function dash(): DashState {
   };
 }
 
-const VIEWS = [
-  ["agents", AgentsView],
-  ["herdr", HerdrView],
-  ["history", HistoryView],
-] as const;
+const VIEWS: View[] = ["agents", "herdr", "history"];
 
 let root: Root;
-let host: HTMLDivElement;
+let host: HTMLElement;
 
-function render(view: View, ViewComponent: () => React.ReactNode): HTMLElement {
+function render(view: View): HTMLElement {
   act(() => {
     store.set({ view });
-    root.render(<ViewComponent />);
+    root.render(<App />);
   });
   return host;
 }
 
 describe("shared view layout", () => {
   beforeEach(() => {
-    host = document.createElement("div");
-    document.body.appendChild(host);
+    host = document.body;
     root = createRoot(host);
     localStorage.clear();
     store.set({
@@ -69,11 +62,12 @@ describe("shared view layout", () => {
 
   afterEach(() => {
     act(() => root.unmount());
-    host.remove();
+    host.replaceChildren();
+    vi.unstubAllGlobals();
   });
 
-  it.each(VIEWS)("renders the shared tabs and status on %s", (view, ViewComponent) => {
-    const result = render(view, ViewComponent);
+  it.each(VIEWS)("renders the shared tabs and status on %s", (view) => {
+    const result = render(view);
     const tabs = result.querySelectorAll('[role="tab"]');
     expect(Array.from(tabs, (tab) => tab.getAttribute("aria-label"))).toEqual(["Agents", "Herdr", "History"]);
     expect(result.querySelector(`#view-${view}`)?.getAttribute("aria-selected")).toBe("true");
@@ -82,11 +76,30 @@ describe("shared view layout", () => {
     expect(result.querySelector("#meta")).not.toBeNull();
   });
 
-  it.each(VIEWS)("only renders Agents actions on %s", (view, ViewComponent) => {
-    const result = render(view, ViewComponent);
+  it.each(VIEWS)("only renders Agents actions on %s", (view) => {
+    const result = render(view);
     const expected = view === "agents" ? 1 : 0;
     expect(result.querySelectorAll("#newsess")).toHaveLength(expected);
     expect(result.querySelectorAll("#favsw")).toHaveLength(expected);
     expect(result.querySelectorAll("#ffeed")).toHaveLength(expected);
+  });
+
+  it("keeps the layout mounted while switching views with an inline card open", () => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => ({ matches: true })),
+    );
+    const result = render("agents");
+    const header = result.querySelector("header");
+    const main = result.querySelector("main");
+
+    act(() => result.querySelector<HTMLButtonElement>('[data-orc="one"]')!.click());
+    expect(result.querySelector("#orc-detail > #panel")).not.toBeNull();
+    expect(() => act(() => result.querySelector<HTMLButtonElement>("#view-herdr")!.click())).not.toThrow();
+    expect(result.querySelector("header")).toBe(header);
+    expect(result.querySelector("main")).toBe(main);
+    expect(() => act(() => result.querySelector<HTMLButtonElement>("#view-history")!.click())).not.toThrow();
+    expect(result.querySelector("header")).toBe(header);
+    expect(result.querySelector("main")).toBe(main);
   });
 });

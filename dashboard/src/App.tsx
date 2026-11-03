@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import { CardContextMenu } from "./components/CardContextMenu";
+import { Layout } from "./components/Layout";
 import { isOutOpen, OutDialog } from "./components/OutDialog";
 import { Toasts } from "./components/Toasts";
 import { Panel } from "./panel/Panel";
 import { closeCtx, closePanel, load, setWall, store, useStore } from "./store";
 import { HerdrOverlay } from "./terminal/HerdrOverlay";
-import { AgentsView } from "./views/AgentsView";
+import { AgentsActions, AgentsView } from "./views/AgentsView";
 import { HerdrView } from "./views/HerdrView";
 import { HistoryView } from "./views/HistoryView";
 
@@ -58,7 +59,9 @@ export function App() {
   const View = view === "herdr" ? HerdrView : view === "history" ? HistoryView : AgentsView;
   return (
     <>
-      <View />
+      <Layout actions={view === "agents" ? <AgentsActions /> : undefined}>
+        <View />
+      </Layout>
       <Panel />
       <Toasts />
       <div className="wall-hint">wall mode · press w or Esc to exit</div>

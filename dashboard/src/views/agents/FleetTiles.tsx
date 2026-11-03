@@ -165,7 +165,7 @@ function Tile({
   );
 }
 
-function TileCards({ toggle }: { toggle: React.ReactNode }) {
+function TileCards() {
   const state = useStore((value) => value.state);
   const totals = (state?.totals || {}) as Record<string, number>;
   const plan = (state?.plan || {}) as Record<string, PlanData | SpendData>;
@@ -208,14 +208,13 @@ function TileCards({ toggle }: { toggle: React.ReactNode }) {
       >
         <Sparkline points={fleetTpm} />
       </Tile>
-      {toggle}
     </section>
   );
 }
 
-export function FleetTiles() {
+export function SummaryToggle() {
   const hidden = useStore((state) => state.fleet.tilesHidden);
-  const toggle = (
+  return (
     <button
       type="button"
       id="ftiles"
@@ -227,5 +226,9 @@ export function FleetTiles() {
       {hidden ? "▾ Show summary" : "▴ Hide summary"}
     </button>
   );
-  return <>{hidden ? <div className="fleet-summary-hidden">{toggle}</div> : <TileCards toggle={toggle} />}</>;
+}
+
+export function FleetTiles() {
+  const hidden = useStore((state) => state.fleet.tilesHidden);
+  return hidden ? null : <TileCards />;
 }
