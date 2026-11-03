@@ -10,7 +10,7 @@ style, API call, poll interval, localStorage key and keyboard shortcut stays as 
 |---|---|
 | Source | `dashboard/` at the repository root (outside the plugin, so `node_modules` never ships) |
 | Build | `npm run build` = `tsc -b && vite build`; output committed to `plugins/fullstack-agents/scripts/lib/dashboard-react/` as `index.html`, `app.js`, `app.css` (fixed names, no hashes) |
-| Serving | `fsa-dashboard` serves the React UI at `/next` (same token and cookie as `/`), assets at `/next/app.js` and `/next/app.css`; the old UI stays at `/` until the switch |
+| Serving | `fsa-dashboard` serves the React `index.html` at `/`, `/next` and `/next/` (one token and cookie), assets at `/next/app.js` and `/next/app.css`; `ui_stamp` is the newest mtime of those three files, so open pages reload after an update |
 | xterm | Loaded from the existing vendored globals `/static/xterm/*` (5.5.0); `@xterm/xterm@5.5.0` and addons are types-only devDependencies |
 | Fonts | Existing `/static/fonts/*` routes |
 | CSS | The `<style>` block of `dashboard.html` and `fleet.css` copied verbatim to `dashboard/src/styles/`; global class names, no CSS modules |
@@ -18,8 +18,8 @@ style, API call, poll interval, localStorage key and keyboard shortcut stays as 
 | String renderers | `ansiHtml`, `mdHtml`, `saidHtml`, `diffHtml` stay string producers rendered with `dangerouslySetInnerHTML` |
 | Imperative parts | xterm terminals, the herdr client, scroll keeping and focus restore live in refs and effects that mirror the current functions |
 | State | One external store (`useSyncExternalStore`) holding what the globals hold today (`state`, `herdrData`, `view`, `openKey`, `openRun`, `tab2`, `favOnly`, `fleet`, `git`, `out`, context menu, toasts) |
-| Tests | Pure logic ported to vitest next to its module; the Python tests keep guarding the old UI until the switch |
-| Rollout | Side by side at `/next`; switch `/` once the parity harness is green, then delete the old files and their source-regex tests |
+| Tests | `cd dashboard && npx vitest run`; every case of the retired Python UI tests has a vitest case of the same name (see "Source tests ported"); no release gate runs vitest, so run it before every dashboard commit |
+| Rollout | Done: side by side at `/next` until the parity harness was green for every state, then `/` switched and the old files, their Python tests and the harness were removed |
 
 ## File map and owners
 
@@ -54,38 +54,27 @@ params, returnFocus, opts)`, `openHerdrContextMenu(kind, item, x, y, anchor)`, `
 `paintCardTerminal` (2372-2423); U3 renders it inside `#card-terminal`. Unit-private state (git panel, output dialog,
 terminals) lives in the owning unit's files, not in `store.ts`.
 
-## Parity harness
+## Parity harness (retired)
 
-`dashboard/parity/` (Playwright, run by the lead) loads `/` and `/next` from one scratch dashboard with:
+`dashboard/parity/` replayed recorded API responses into `/` (old UI) and `/next` and compared the normalized DOM of
+`header`, `#main`, `#panel`, `#ctx` and `#out` per named state. Its last run before the switch was green for every
+state (U1 9, U2 34, U3 17, U4 11, U5 4, context menu 3). With the old UI gone it has nothing to compare and was deleted;
+`git show <switch commit>^:dashboard/parity/` restores it.
 
-- recorded API responses replayed through `page.route('/api/**')`;
-- a fixed clock (`page.clock.setFixedTime`) and identical seeded `fsa-*` localStorage;
-- a `herdr` wrapper first on `PATH` that runs `herdr --session fsatest`, so no scratch dashboard touches a live session.
+## Known divergence from the old UI
 
-For each named state (view, open card, panel tab, open menu or dialog, filter, wall mode) it compares the normalized
-`outerHTML` of `header`, `#main`, `#panel`, `#ctx` and `#out` (attributes sorted, whitespace-only text dropped). A unit
-is accepted when its states are DOM-equal and its tests pass.
+Switching view while the detail panel is open inline (inside `#orc-detail`): the old UI's history and Herdr renders
+replaced `#main` with the panel still inside it, so `#panel` was destroyed and every later panel action threw
+`Cannot read properties of null (reading 'classList')`. The React UI moves the panel back to `<body>` and closes it, as
+the old `closePanel()` intended.
 
-Normalization also compares `html` classes and `document.title`, rewrites `style` from `el.style.cssText`, sorts class
-tokens, drops the old UI's render caches (`data-h`, `data-sig`), and replaces the inside of `.terminal` and
-`.herdr-client` with `[opaque]` (xterm is checked by U4's own tests). `WebSocket` and `EventSource` are inert stubs.
+## Source tests ported
 
-| Step | Command (from `dashboard/`) |
+| Retired Python test | vitest file |
 |---|---|
-| Scratch server | `parity/serve.sh 18766` (127.0.0.1, herdr wrapper on `PATH` bound to session `fsatest`) |
-| Record fixtures | `PARITY_LIVE_TOKEN=<live dashboard token> node parity/run.mjs record --fixtures <scratch dir>`; drives `/` through every state, saves GET responses, takes `/api/herdr*` read-only from the live dashboard (`--live`, default `http://127.0.0.1:8766`) |
-| Compare | `node parity/run.mjs compare --fixtures <scratch dir> [--unit U2] [--state panel-git]`; exit 0 only when every root is equal and no harness error |
-| Self-check | `--right /` must be green; a red self-check means the harness, not the port, is wrong |
+| `tests/dashboard/test_information_ui.py` `InformationUiTests` | `dashboard/src/panel/info.test.tsx` |
+| `tests/dashboard/test_fleet_ui.py` | `dashboard/src/views/agents/fleet.test.tsx` (`scripts_share_no_top_level_names` dropped: ES modules share no globals) |
+| `tests/dashboard/test_terminal_scroll.py` | `dashboard/src/terminal/terminal.test.ts` |
+| `tests/dashboard/test_herdr_client_ui.py` | `dashboard/src/terminal/herdr.test.ts` |
 
-Fixtures hold real session data: keep them in a scratch directory, never in the repository. A request with no fixture is
-answered 404 and reported as a harness error; nothing passes through to a server. States are data in
-`parity/states.mjs` (`name`, owning `unit`, `seed`, `steps`, `roots`); a unit adds the states it needs.
-
-## Source tests to port
-
-| Python test (old UI) | React owner |
-|---|---|
-| `tests/dashboard/test_herdr_client_ui.py` | U4 (`terminal/osc52.test.ts`), U1 (`lib/clipboard.test.ts`) |
-| `tests/dashboard/test_terminal_scroll.py` | U4 |
-| `tests/dashboard/test_fleet_ui.py` | U1 / U2 |
-| `tests/dashboard/test_information_ui.py` | U3 |
+`SessionStateDashboardTests` in `tests/dashboard/test_information_ui.py` tests Python and stays.

@@ -323,14 +323,18 @@ class HerdrClientServerTests(unittest.TestCase):
             else:
                 self.assertEqual(headers["content-type"], "font/woff2", path)
 
-    def test_react_ui_served_at_next_with_cookie(self):
-        for path in ("/next", "/next/"):
+    def test_react_ui_served_at_root_and_next_with_cookie(self):
+        for path in ("/", "/next", "/next/"):
             _, _, status, headers = self.request(f"{path}?t=t", upgrade=False)
             self.assertEqual(status, 200, path)
             self.assertTrue(headers["content-type"].startswith("text/html"), path)
             self.assertIn("fsa_t=t", headers["set-cookie"], path)
         _, _, status, headers = self.request("/next/app.css?t=t", upgrade=False)
         self.assertEqual((status, headers["content-type"]), (200, "text/css"))
+
+    def test_ui_stamp_tracks_react_files(self):
+        expected = int(max((dash.REACT / name).stat().st_mtime for name in ("index.html", "app.js", "app.css")))
+        self.assertEqual(dash.ui_stamp(), expected)
 
 
 if __name__ == "__main__":

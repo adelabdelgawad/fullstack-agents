@@ -9,7 +9,9 @@
 | U3 | done | Detail panel: info, git, log, output dialog | depends U1 | claude | implementing u3 |  |  |
 | U4 | done | Terminals: card terminal, Herdr client, menus and modals | depends U1 | claude | implementing u4 |  |  |
 | U5 | done | History view | depends U1 |  |  |  |  |
-| U6 | pending | Parity green, switch / to React, remove old UI | depends U2-U5 |  |  |  |  |
+| U6 | done | Parity green, switch / to React, remove old UI | depends U2-U5 | codex | implementing u6 |  |  |
+| T1 | canceled | Port old-UI Python tests to vitest | gate for deleting the old UI tests (Codex) |  |  |  | U6 |
+| U7 | done | Port old-UI Python tests to vitest | succeeded: awaiting lead audit (run implement-20261103-145337-1081942) | codex | implementing u7-fix1 |  |  |
 <!-- fsa:tasks:end -->
 
 <!-- fsa:checkpoint:start -->
@@ -94,15 +96,15 @@
     "branch": "react-dashboard",
     "checkout": "/home/ashadmin/workspace/fullstack-agents-react",
     "detached": false,
-    "head": "51f05395732a879018561c5efbafe59f7d7a05b4",
+    "head": "337c58b5e92d154e9bdf75553f83df292dfdf785",
     "root": "/home/ashadmin/workspace/fullstack-agents-react",
     "schema": 1,
     "session_id": "ae076b4f-5b5f-47df-85db-36a04daecfd0",
     "task_id": "react-dashboard",
-    "written_at": "2026-11-03T14:47:34.099941Z"
+    "written_at": "2026-11-03T17:59:34.199492Z"
   },
   "next": {
-    "action": "old-UI baseline for panelcheck + confirm setView closes panel; ledger fsa-task check per unit, resolve B5, mark U2-U5 done; then U6. Details: /tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/8d8bd3bb-104c-4364-b1f4-97cc7b7cce79/scratchpad/handoff-next.md",
+    "action": "mark U6 done, commit, ff main",
     "owner": "lead"
   },
   "scope": {
@@ -256,6 +258,67 @@
 - 2026-11-03T14:49:43Z U3 done_gate accepted="BUILD, C1, R1, R2, R3"
 - 2026-11-03T14:49:43Z U4 done_gate accepted="BUILD, C1, R1, R2, R3"
 - 2026-11-03T14:49:43Z U5 done_gate accepted="BUILD, C1, R1"
+- 2026-11-03T14:53:10Z T1 add status="pending" parent="U6" title="Port old-UI Python tests to vitest"
+- 2026-11-03T14:53:32Z T1 status from="pending" to="canceled" reason="filed as a step by mistake; replaced by deliverable U7"
+- 2026-11-03T14:53:33Z U7 add status="pending" parent="" title="Port old-UI Python tests to vitest"
+- 2026-11-03T14:53:33Z U7 accept reason="" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/ae076b4f-5b5f-47df-85db-36a04daecfd0/scratchpad/briefs/t1.md"
+- 2026-11-03T14:53:37Z U7 status from="pending" to="in_progress" reason=""
+- 2026-11-03T14:54:45Z U2 check_start check="R3" run="d6f11fae21f63a703850a5c76cc167c0"
+- 2026-11-03T14:54:45Z U2 check_finish check="R3" run="d6f11fae21f63a703850a5c76cc167c0" result="pass" executor="attested" reason="own run: state succeeded, outside []"
+- 2026-11-03T14:54:46Z U3 check_start check="R3" run="5cb3722a4dcc3e071088321e4ed6a364"
+- 2026-11-03T14:54:46Z U3 check_finish check="R3" run="5cb3722a4dcc3e071088321e4ed6a364" result="pass" executor="attested" reason="own run: state succeeded, outside []"
+- 2026-11-03T14:54:46Z U4 check_start check="R3" run="ee1da6d14ea84caaefb9847bc45b91ab"
+- 2026-11-03T14:54:46Z U4 check_finish check="R3" run="ee1da6d14ea84caaefb9847bc45b91ab" result="pass" executor="attested" reason="own run: state succeeded, outside []"
+- 2026-11-03T14:55:03Z B6 block kind="worker" rows="U6"
+- 2026-11-03T14:56:26Z U6 accept reason="" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/ae076b4f-5b5f-47df-85db-36a04daecfd0/scratchpad/briefs/u6.md"
+- 2026-11-03T14:56:27Z U7 status from="in_progress" to="verifying" reason=""
+- 2026-11-03T14:56:33Z U6 accept reason="dropped 404 test that the reference grep would flag" invalidated="" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/ae076b4f-5b5f-47df-85db-36a04daecfd0/scratchpad/briefs/u6.md"
+- 2026-11-03T14:57:48Z U7 status from="verifying" to="in_progress" reason=""
+- 2026-11-03T14:57:57Z B6 resolve kind="worker" reason="U7 port run ended (repair 1 dispatched); parity6 U1-U5+ctx GREEN at 337c58b"
+- 2026-11-03T14:57:57Z U6 status from="blocked" to="pending" reason="blocker B6 resolved"
+- 2026-11-03T14:57:58Z U6 status from="pending" to="in_progress" reason=""
+- 2026-11-03T14:58:48Z U7 check_start check="BUILD" run="aa1cc22aacc9ef9b13950a957546410e"
+- 2026-11-03T14:59:06Z U7 check_finish check="BUILD" run="aa1cc22aacc9ef9b13950a957546410e" result="pass" executor="tool" reason=""
+- 2026-11-03T14:59:06Z U7 check_start check="C1" run="f9266f401994fabaa5046ac39a1ee9a9"
+- 2026-11-03T14:59:22Z U7 check_finish check="C1" run="f9266f401994fabaa5046ac39a1ee9a9" result="pass" executor="tool" reason=""
+- 2026-11-03T15:00:03Z U7 check_start check="R1" run="976fef2da5616b7966fc911083d3069b"
+- 2026-11-03T15:00:03Z U7 check_finish check="R1" run="976fef2da5616b7966fc911083d3069b" result="pass" executor="attested" reason="lead audit, see review-r2.md U7"
+- 2026-11-03T15:00:03Z U7 check_start check="R2" run="ef61dc56d779e5994b84921ae5c015e1"
+- 2026-11-03T15:00:03Z U7 check_finish check="R2" run="ef61dc56d779e5994b84921ae5c015e1" result="pass" executor="attested" reason="lead audit, see review-r2.md U7"
+- 2026-11-03T17:51:07Z U7 check_start check="BUILD" run="5d9da85106e491f8afae0cf6da945586"
+- 2026-11-03T17:51:16Z U7 check_finish check="BUILD" run="5d9da85106e491f8afae0cf6da945586" result="pass" executor="tool" reason=""
+- 2026-11-03T17:51:16Z U7 status from="in_progress" to="done" reason=""
+- 2026-11-03T17:51:16Z U7 done_gate accepted="BUILD, C1, R1, R2"
+- 2026-11-03T17:51:33Z U6 check_start check="R1" run="c080454c14e65aac5441f0e479da5b85"
+- 2026-11-03T17:51:33Z U6 check_finish check="R1" run="c080454c14e65aac5441f0e479da5b85" result="pass" executor="attested" reason="lead read fsa-dashboard diff: / /next /next/ serve React index with cookie; ui_stamp on React files"
+- 2026-11-03T17:51:38Z U6 check_start check="C2" run="600ef4df2ee56a533b056c7d1a93172a"
+- 2026-11-03T17:51:38Z U6 check_finish check="C2" run="600ef4df2ee56a533b056c7d1a93172a" result="inconclusive" executor="tool" reason=""
+- 2026-11-03T17:51:46Z U6 check_start check="C2" run="671c3dfc04b7d7ec0b77f5819eb8e9ed"
+- 2026-11-03T17:51:46Z U6 check_finish check="C2" run="671c3dfc04b7d7ec0b77f5819eb8e9ed" result="inconclusive" executor="attested" reason="grep rc=1: no reference to removed files; tool run inconclusive because expect 'none' yields empty output"
+- 2026-11-03T17:52:43Z B7 block kind="worker" rows="U6"
+- 2026-11-03T17:53:58Z U6 check_start check="BUILD" run="b18d25b67cfc2f5e92df40d1a099558b"
+- 2026-11-03T17:53:58Z U6 check_start check="C1" run="45d7ab812b7edb82bdfef58a44d6eea2"
+- 2026-11-03T17:54:21Z B7 withdraw kind="worker" reason="test-runner finished; results read by lead"
+- 2026-11-03T17:54:21Z U6 status from="blocked" to="in_progress" reason="blocker B7 withdrawn"
+- 2026-11-03T17:54:21Z U6 check_start check="BUILD" run="960d27a9fcafd5c225134e75e76e35ef"
+- 2026-11-03T17:54:22Z U6 check_start check="C1" run="fdbbbbbc2a0aa7b7d7b313aa30941b79"
+- 2026-11-03T17:54:43Z B8 block kind="external" rows="U6"
+- 2026-11-03T17:57:45Z U6 check_finish check="BUILD" run="960d27a9fcafd5c225134e75e76e35ef" result="pass" executor="attested" reason="test-runner: unittest discover -s tests/dashboard: Ran 432 OK (brief's -t . invalid; tests/ not a package)"
+- 2026-11-03T17:57:45Z U6 check_finish check="C1" run="fdbbbbbc2a0aa7b7d7b313aa30941b79" result="inconclusive" executor="attested" reason="Ran 432 tests OK; tests/codex 231 OK (u6-final-codex.log)"
+- 2026-11-03T17:57:45Z B8 resolve kind="external" reason="test run finished green"
+- 2026-11-03T17:57:45Z U6 status from="blocked" to="in_progress" reason="blocker B8 resolved"
+- 2026-11-03T17:58:05Z U6 check_start check="C2" run="a163f55f18d23a4f3bc665d151122201"
+- 2026-11-03T17:58:05Z U6 check_finish check="C2" run="a163f55f18d23a4f3bc665d151122201" result="pass" executor="attested" reason="grep rc=1, no references"
+- 2026-11-03T17:58:18Z U6 accept reason="brief's unittest command used invalid -t . and a non-multiline ^OK" invalidated="BUILD,C1" brief="/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/ae076b4f-5b5f-47df-85db-36a04daecfd0/scratchpad/briefs/u6-accept2.md"
+- 2026-11-03T17:58:26Z B9 block kind="external" rows="U6"
+- 2026-11-03T17:58:27Z U6 check_start check="BUILD" run="817d9b362f3ae55200923b6d9af5e217"
+- 2026-11-03T17:58:54Z U6 check_finish check="BUILD" run="817d9b362f3ae55200923b6d9af5e217" result="pass" executor="tool" reason=""
+- 2026-11-03T17:58:56Z U6 check_start check="C1" run="fbd89301cf4728bf002a9d343a409236"
+- 2026-11-03T17:59:27Z U6 check_finish check="C1" run="fbd89301cf4728bf002a9d343a409236" result="pass" executor="tool" reason=""
+- 2026-11-03T17:59:34Z B9 resolve kind="external" reason="checks ran green"
+- 2026-11-03T17:59:34Z U6 status from="blocked" to="in_progress" reason="blocker B9 resolved"
+- 2026-11-03T17:59:34Z U6 status from="in_progress" to="done" reason=""
+- 2026-11-03T17:59:34Z U6 done_gate accepted="BUILD, C1, C2, R1"
 <!-- fsa:log:end -->
 
 <!-- fsa:blockers:start -->
@@ -391,6 +454,88 @@
       "status": "resolved",
       "text": "Codex pass-2 size split (function >50 lines, literal >140 chars) running over 16 dashboard/src files",
       "why": "U2-U5 audit and hand check must run on the code that ships"
+    },
+    "B6": {
+      "created_at": "2026-11-03T14:55:03.525783Z",
+      "kind": "worker",
+      "next": "audit U7 diff + name mapping, read parity6 logs, then switch / in fsa-dashboard",
+      "resolution": {
+        "at": "2026-11-03T14:57:57.770111Z",
+        "by": "tool",
+        "evidence": "/home/ashadmin/.codex/fsa-runs/implement-20261103-145337-1081942.result.json: state=succeeded",
+        "reason": "U7 port run ended (repair 1 dispatched); parity6 U1-U5+ctx GREEN at 337c58b"
+      },
+      "resumes": {
+        "U6": "pending"
+      },
+      "rows": [
+        "U6"
+      ],
+      "status": "resolved",
+      "text": "Codex U7 vitest port run (bg bupw934nx) and Sonnet test-runner parity U3/U4/U5/ctx run in progress",
+      "why": "U6 deletes the old UI tests only after their vitest ports pass, and switches / only on a final green parity"
+    },
+    "B7": {
+      "created_at": "2026-11-03T17:52:43.375395Z",
+      "kind": "worker",
+      "next": "read logs, record BUILD/C1, rebuild Codex inventory, commit, land",
+      "resolution": {
+        "at": "2026-11-03T17:54:21.789965Z",
+        "by": "tool",
+        "evidence": "",
+        "reason": "test-runner finished; results read by lead"
+      },
+      "resumes": {
+        "U6": "in_progress"
+      },
+      "rows": [
+        "U6"
+      ],
+      "status": "withdrawn",
+      "text": "Sonnet test-runner is running the per-directory Python suites (logs/u6-py-*.log)",
+      "why": ""
+    },
+    "B8": {
+      "class": "other",
+      "created_at": "2026-11-03T17:54:43.272555Z",
+      "kind": "external",
+      "next": "finish BUILD/C1 with logs/u6-final-*.log, commit, ff main",
+      "resolution": {
+        "at": "2026-11-03T17:57:45.330542Z",
+        "by": "tool",
+        "evidence": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/ae076b4f-5b5f-47df-85db-36a04daecfd0/scratchpad/logs/u6-final-codex.log",
+        "reason": "test run finished green"
+      },
+      "resumes": {
+        "U6": "in_progress"
+      },
+      "rows": [
+        "U6"
+      ],
+      "status": "resolved",
+      "text": "final Python suites (dashboard, codex) running on the Sonnet test-runner for open BUILD/C1 runs",
+      "why": ""
+    },
+    "B9": {
+      "class": "other",
+      "created_at": "2026-11-03T17:58:26.362008Z",
+      "kind": "external",
+      "next": "mark U6 done, commit, ff main",
+      "resolution": {
+        "at": "2026-11-03T17:59:34.194638Z",
+        "by": "tool",
+        "evidence": "/home/ashadmin/.local/state/fullstack-agents/tasks/evidence/66bc761938bc58fb/U6-C1-20261103T175856Z.log",
+        "reason": "checks ran green"
+      },
+      "resumes": {
+        "U6": "in_progress"
+      },
+      "rows": [
+        "U6"
+      ],
+      "status": "resolved",
+      "text": "fsa-task check run BUILD and C1 (corrected unittest command) running on the Sonnet test-runner",
+      "why": ""
     }
   },
   "schema": 1
@@ -1064,24 +1209,24 @@
           "definition_digest": "b482a99d6073cf27a79777d4cb35a6d85dae471dcab89d37828c461b8cf24683",
           "evidence": [
             {
-              "path": "/home/ashadmin/.codex/fsa-runs/implement-20261103-142527-928952.result.json",
-              "sha256": "f35c672681c5654afef557c11edbaa990c1f2e50fdfd592924bff70b19f61679"
+              "path": "/home/ashadmin/.codex/fsa-runs/implement-20261103-140842-815991.result.json",
+              "sha256": "74c2196f02534c0bfb3c4212d00c20d2835c03f7389535746fa6213966787c8b"
             }
           ],
           "executor": "attested",
-          "finished_at": "2026-11-03T14:49:10.288148Z",
-          "reason": "runs touched only allowed paths plus lead ledger; store/types changes reported and audited in ada72cd",
+          "finished_at": "2026-11-03T14:54:45.889625Z",
+          "reason": "own run: state succeeded, outside []",
           "result": "pass",
-          "started_at": "2026-11-03T14:49:09.471586Z",
+          "started_at": "2026-11-03T14:54:45.760588Z",
           "state_after": {
             "digest": "718c6d0bfb93eb56759948c8bb39aa0f633fb407c30db3f121e39a37dfb50c23",
             "files": 26,
-            "head": "51f05395732a879018561c5efbafe59f7d7a05b4"
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
           },
           "state_before": {
             "digest": "718c6d0bfb93eb56759948c8bb39aa0f633fb407c30db3f121e39a37dfb50c23",
             "files": 26,
-            "head": "51f05395732a879018561c5efbafe59f7d7a05b4"
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
           }
         }
       },
@@ -1304,24 +1449,24 @@
           "definition_digest": "e38643223f80b7a4a034172ace034ec902c9ddbc4ee235de4451ae4ce92cc4fb",
           "evidence": [
             {
-              "path": "/home/ashadmin/.codex/fsa-runs/implement-20261103-142527-928952.result.json",
-              "sha256": "f35c672681c5654afef557c11edbaa990c1f2e50fdfd592924bff70b19f61679"
+              "path": "/home/ashadmin/.codex/fsa-runs/implement-20261103-140844-816401.result.json",
+              "sha256": "41ac09e9acc8ed6bf16daa97bee6c3e69d0eef5aa35a8f6c811aace88c6efab5"
             }
           ],
           "executor": "attested",
-          "finished_at": "2026-11-03T14:49:15.079247Z",
-          "reason": "only allowed paths plus lead ledger",
+          "finished_at": "2026-11-03T14:54:46.155607Z",
+          "reason": "own run: state succeeded, outside []",
           "result": "pass",
-          "started_at": "2026-11-03T14:49:14.297856Z",
+          "started_at": "2026-11-03T14:54:46.004743Z",
           "state_after": {
             "digest": "b245372c7143bb1e7372342c9a3bf235d9f81b0b86175d5364f96215d4520b09",
             "files": 25,
-            "head": "51f05395732a879018561c5efbafe59f7d7a05b4"
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
           },
           "state_before": {
             "digest": "b245372c7143bb1e7372342c9a3bf235d9f81b0b86175d5364f96215d4520b09",
             "files": 25,
-            "head": "51f05395732a879018561c5efbafe59f7d7a05b4"
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
           }
         }
       },
@@ -1543,24 +1688,24 @@
           "definition_digest": "8261c1b8bfe2abaebda50aef061f66b4f9466a91724842891b7b7091dd22efcb",
           "evidence": [
             {
-              "path": "/home/ashadmin/.codex/fsa-runs/implement-20261103-142527-928952.result.json",
-              "sha256": "f35c672681c5654afef557c11edbaa990c1f2e50fdfd592924bff70b19f61679"
+              "path": "/home/ashadmin/.codex/fsa-runs/implement-20261103-140846-816946.result.json",
+              "sha256": "c0bd8a74bb6ae5605f21fbb3ae234ecfca7e37de15cf9cc4e6752f75e6bd596e"
             }
           ],
           "executor": "attested",
-          "finished_at": "2026-11-03T14:49:19.489651Z",
-          "reason": "only allowed paths plus lead ledger",
+          "finished_at": "2026-11-03T14:54:46.419264Z",
+          "reason": "own run: state succeeded, outside []",
           "result": "pass",
-          "started_at": "2026-11-03T14:49:18.723737Z",
+          "started_at": "2026-11-03T14:54:46.281660Z",
           "state_after": {
             "digest": "d2436990858f9ec8cc63b1d7a4e1b31f2f4ca3233c68809085963e781035d558",
             "files": 30,
-            "head": "51f05395732a879018561c5efbafe59f7d7a05b4"
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
           },
           "state_before": {
             "digest": "d2436990858f9ec8cc63b1d7a4e1b31f2f4ca3233c68809085963e781035d558",
             "files": 30,
-            "head": "51f05395732a879018561c5efbafe59f7d7a05b4"
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
           }
         }
       },
@@ -1752,9 +1897,427 @@
         "rationale": "one view file; FleetTiles and store are fixed-contract imports"
       },
       "spec_at": "2026-11-03T13:52:25.680160Z"
+    },
+    "U6": {
+      "automated_waiver": null,
+      "checks": {
+        "BUILD": {
+          "command": "python3 -m unittest discover -s tests/dashboard 2>&1 | tail -3",
+          "cwd": ".",
+          "definition_digest": "2b7bd7597a590590a52082f1211b2796319b53215c20bd830fb2d215eafd23e1",
+          "expect": {
+            "none": "compile/lint success is silent"
+          },
+          "method": "command"
+        },
+        "C1": {
+          "command": "python3 -m unittest discover -s tests/dashboard",
+          "cwd": ".",
+          "definition_digest": "9dfe94f94b83df45ff497d03dd5393b3d037e9eb000dfcbc3e922740fad45427",
+          "expect": {
+            "patterns": [
+              "(?m)^OK$"
+            ],
+            "reject": []
+          },
+          "method": "command"
+        },
+        "C2": {
+          "command": "! grep -rn -E 'dashboard\\.html|fleet\\.js|fleet\\.css|orchestrators\\.js' plugins/fullstack-agents/scripts tests --exclude-dir=__pycache__",
+          "cwd": ".",
+          "definition_digest": "4a6cae851b5a6a5b758512e715ecc06c69975d616d216690cb17b17fb11f4370",
+          "expect": {
+            "patterns": [
+              "none"
+            ],
+            "reject": []
+          },
+          "method": "command"
+        },
+        "R1": {
+          "definition_digest": "a54ea8d228b74a174aea058201232e118ba99c231412b0e57f8be134c894381a",
+          "method": "review"
+        }
+      },
+      "completed": {
+        "at": "2026-11-03T17:59:34.269923Z",
+        "with": {
+          "BUILD": "pass",
+          "C1": "pass",
+          "C2": "pass",
+          "R1": "pass"
+        }
+      },
+      "criteria": [
+        {
+          "checks": [
+            "C1"
+          ],
+          "id": "1",
+          "text": "Dashboard Python tests pass"
+        },
+        {
+          "checks": [
+            "C2"
+          ],
+          "id": "2",
+          "text": "No reference to the removed files remains"
+        },
+        {
+          "checks": [
+            "R1"
+          ],
+          "id": "3",
+          "text": "Root, /next and /next/ serve the React index with the cookie; ui_stamp tracks the React files"
+        },
+        {
+          "checks": [
+            "BUILD"
+          ],
+          "id": "BUILD",
+          "text": "BUILD passes"
+        }
+      ],
+      "kind": "code",
+      "results": {
+        "BUILD": {
+          "definition_digest": "2b7bd7597a590590a52082f1211b2796319b53215c20bd830fb2d215eafd23e1",
+          "evidence": [
+            {
+              "path": "/home/ashadmin/.local/state/fullstack-agents/tasks/evidence/66bc761938bc58fb/U6-BUILD-20261103T175827Z.log",
+              "sha256": "0148ecdb6abbcc4e439b0e4c60714eef5dc28efadc2296c357f7643f021168e8"
+            }
+          ],
+          "executor": "tool",
+          "exit": 0,
+          "finished_at": "2026-11-03T17:58:54.155295Z",
+          "reason": null,
+          "result": "pass",
+          "started_at": "2026-11-03T17:58:27.425163Z",
+          "state_after": {
+            "digest": "efbebd4a01d3a1c1b7bc73f9d9b9cc2d1b7ea62326eb935850efcf732de49fc8",
+            "files": 73,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          },
+          "state_before": {
+            "digest": "efbebd4a01d3a1c1b7bc73f9d9b9cc2d1b7ea62326eb935850efcf732de49fc8",
+            "files": 73,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          }
+        },
+        "C1": {
+          "definition_digest": "9dfe94f94b83df45ff497d03dd5393b3d037e9eb000dfcbc3e922740fad45427",
+          "evidence": [
+            {
+              "path": "/home/ashadmin/.local/state/fullstack-agents/tasks/evidence/66bc761938bc58fb/U6-C1-20261103T175856Z.log",
+              "sha256": "a4553aec2dbcadba11fb1e79b67d66c511f04a087ab9a69d9fb964ca08813faf"
+            }
+          ],
+          "executor": "tool",
+          "exit": 0,
+          "finished_at": "2026-11-03T17:59:27.153934Z",
+          "reason": null,
+          "result": "pass",
+          "started_at": "2026-11-03T17:58:56.127946Z",
+          "state_after": {
+            "digest": "efbebd4a01d3a1c1b7bc73f9d9b9cc2d1b7ea62326eb935850efcf732de49fc8",
+            "files": 73,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          },
+          "state_before": {
+            "digest": "efbebd4a01d3a1c1b7bc73f9d9b9cc2d1b7ea62326eb935850efcf732de49fc8",
+            "files": 73,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          }
+        },
+        "C2": {
+          "definition_digest": "4a6cae851b5a6a5b758512e715ecc06c69975d616d216690cb17b17fb11f4370",
+          "evidence": [
+            {
+              "path": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/ae076b4f-5b5f-47df-85db-36a04daecfd0/scratchpad/logs/u6-c2-final.log",
+              "sha256": "ab50d3f717b0f85dfa557b946e1057ea81c2bad8eab2a0fd1bad840a95763be7"
+            }
+          ],
+          "executor": "attested",
+          "finished_at": "2026-11-03T17:58:05.193107Z",
+          "reason": "grep rc=1, no references",
+          "result": "pass",
+          "started_at": "2026-11-03T17:58:05.091351Z",
+          "state_after": {
+            "digest": "efbebd4a01d3a1c1b7bc73f9d9b9cc2d1b7ea62326eb935850efcf732de49fc8",
+            "files": 73,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          },
+          "state_before": {
+            "digest": "efbebd4a01d3a1c1b7bc73f9d9b9cc2d1b7ea62326eb935850efcf732de49fc8",
+            "files": 73,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          }
+        },
+        "R1": {
+          "definition_digest": "a54ea8d228b74a174aea058201232e118ba99c231412b0e57f8be134c894381a",
+          "evidence": [
+            {
+              "path": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/ae076b4f-5b5f-47df-85db-36a04daecfd0/scratchpad/review-r2.md",
+              "sha256": "e13651f19ec903dc64be8d64401912467d40273653d1168d15c3002a7d0338c3"
+            }
+          ],
+          "executor": "attested",
+          "finished_at": "2026-11-03T17:51:33.404737Z",
+          "reason": "lead read fsa-dashboard diff: / /next /next/ serve React index with cookie; ui_stamp on React files",
+          "result": "pass",
+          "started_at": "2026-11-03T17:51:33.323239Z",
+          "state_after": {
+            "digest": "efbebd4a01d3a1c1b7bc73f9d9b9cc2d1b7ea62326eb935850efcf732de49fc8",
+            "files": 73,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          },
+          "state_before": {
+            "digest": "efbebd4a01d3a1c1b7bc73f9d9b9cc2d1b7ea62326eb935850efcf732de49fc8",
+            "files": 73,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          }
+        }
+      },
+      "scope": {
+        "dependencies": [
+          "dashboard/src/",
+          "plugins/fullstack-agents/scripts/lib/dashboard-react/"
+        ],
+        "dependencies_none": null,
+        "env": [],
+        "inputs": [],
+        "paths": [
+          "dashboard/package.json",
+          "dashboard/parity/normalize.js",
+          "dashboard/parity/run.mjs",
+          "dashboard/parity/serve.sh",
+          "dashboard/parity/states.mjs",
+          "plugins/fullstack-agents/scripts/fsa-dashboard",
+          "plugins/fullstack-agents/scripts/lib/dashboard.html",
+          "plugins/fullstack-agents/scripts/lib/fleet.css",
+          "plugins/fullstack-agents/scripts/lib/fleet.js",
+          "plugins/fullstack-agents/scripts/lib/orchestrators.js",
+          "tests/dashboard/test_fleet_ui.py",
+          "tests/dashboard/test_herdr_client_ui.py",
+          "tests/dashboard/test_herdr_web.py",
+          "tests/dashboard/test_herdr_web.py, tests/dashboard/test_information_ui.py",
+          "tests/dashboard/test_information_ui.py",
+          "tests/dashboard/test_terminal_scroll.py"
+        ],
+        "rationale": "the switch removes the old UI's files, routes and tests; the React dist is already committed"
+      },
+      "spec_at": "2026-11-03T17:58:18.607047Z"
+    },
+    "U7": {
+      "automated_waiver": null,
+      "checks": {
+        "BUILD": {
+          "command": "cd dashboard && npx tsc -p . --noEmit && npx vitest run && npx prettier --check src",
+          "cwd": ".",
+          "definition_digest": "ce18bfe155b9fbc0af2f2e93b51db4e406e67814b859ff0c26ae7d244af1db3d",
+          "expect": {
+            "none": "compile/lint success is silent"
+          },
+          "method": "command"
+        },
+        "C1": {
+          "command": "npx tsc -p . --noEmit && npx vitest run && npx prettier --check src",
+          "cwd": "dashboard",
+          "definition_digest": "4ed20012cd9f299a9926c49f2ce776e4a89b53bf3b35246bbe4299cba89faffc",
+          "expect": {
+            "patterns": [
+              "Tests +[0-9]+ passed"
+            ],
+            "reject": []
+          },
+          "method": "command"
+        },
+        "R1": {
+          "definition_digest": "162a20cbaf58b9c9ed8d62d48e07d8fa2c316a4f65a09442bf4789f825877b8f",
+          "method": "inspection"
+        },
+        "R2": {
+          "definition_digest": "63687a3006c883f0efa86fd4fdbe2453ce6203ba6684f36d610de5fb6709ef38",
+          "method": "review"
+        }
+      },
+      "completed": {
+        "at": "2026-11-03T17:51:16.807562Z",
+        "with": {
+          "BUILD": "pass",
+          "C1": "pass",
+          "R1": "pass",
+          "R2": "pass"
+        }
+      },
+      "criteria": [
+        {
+          "checks": [
+            "C1"
+          ],
+          "id": "1",
+          "text": "Type-check, tests and format pass"
+        },
+        {
+          "checks": [
+            "R1"
+          ],
+          "id": "2",
+          "text": "Every listed Python case has an `it` with its name"
+        },
+        {
+          "checks": [
+            "R2"
+          ],
+          "id": "3",
+          "text": "Rules 1-3 hold; no skipped case without an open_risks entry"
+        },
+        {
+          "checks": [
+            "BUILD"
+          ],
+          "id": "BUILD",
+          "text": "BUILD passes"
+        }
+      ],
+      "kind": "code",
+      "results": {
+        "BUILD": {
+          "definition_digest": "ce18bfe155b9fbc0af2f2e93b51db4e406e67814b859ff0c26ae7d244af1db3d",
+          "evidence": [
+            {
+              "path": "/home/ashadmin/.local/state/fullstack-agents/tasks/evidence/66bc761938bc58fb/U7-BUILD-20261103T175107Z.log",
+              "sha256": "7b810647726c610364d228d81f02fe720979577d4d5ab5e59b5cadd6c1a9d214"
+            }
+          ],
+          "executor": "tool",
+          "exit": 0,
+          "finished_at": "2026-11-03T17:51:16.737235Z",
+          "reason": null,
+          "result": "pass",
+          "started_at": "2026-11-03T17:51:07.219899Z",
+          "state_after": {
+            "digest": "86a2259915ec5c61d23d82495742b35742c4a92dabfd5683d7a53cc7e4bbce8e",
+            "files": 59,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          },
+          "state_before": {
+            "digest": "86a2259915ec5c61d23d82495742b35742c4a92dabfd5683d7a53cc7e4bbce8e",
+            "files": 59,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          }
+        },
+        "C1": {
+          "definition_digest": "4ed20012cd9f299a9926c49f2ce776e4a89b53bf3b35246bbe4299cba89faffc",
+          "evidence": [
+            {
+              "path": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/ae076b4f-5b5f-47df-85db-36a04daecfd0/scratchpad/logs/u7-C1.log",
+              "sha256": "6e7d8cd88e3186036fbb4de0d871cee5618eb28dedf2ee54466e89214f8bc567"
+            }
+          ],
+          "executor": "tool",
+          "exit": 0,
+          "finished_at": "2026-11-03T14:59:22.159934Z",
+          "reason": null,
+          "result": "pass",
+          "started_at": "2026-11-03T14:59:06.186930Z",
+          "state_after": {
+            "digest": "86a2259915ec5c61d23d82495742b35742c4a92dabfd5683d7a53cc7e4bbce8e",
+            "files": 59,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          },
+          "state_before": {
+            "digest": "86a2259915ec5c61d23d82495742b35742c4a92dabfd5683d7a53cc7e4bbce8e",
+            "files": 59,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          }
+        },
+        "R1": {
+          "definition_digest": "162a20cbaf58b9c9ed8d62d48e07d8fa2c316a4f65a09442bf4789f825877b8f",
+          "evidence": [
+            {
+              "path": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/ae076b4f-5b5f-47df-85db-36a04daecfd0/scratchpad/review-r2.md",
+              "sha256": "3f5e6e4be3d204f4d63eb2daba0f0258e72ee1ddf05c63c0d8e9d6ea95bc861b"
+            }
+          ],
+          "executor": "attested",
+          "finished_at": "2026-11-03T15:00:03.327691Z",
+          "reason": "lead audit, see review-r2.md U7",
+          "result": "pass",
+          "started_at": "2026-11-03T15:00:03.149902Z",
+          "state_after": {
+            "digest": "86a2259915ec5c61d23d82495742b35742c4a92dabfd5683d7a53cc7e4bbce8e",
+            "files": 59,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          },
+          "state_before": {
+            "digest": "86a2259915ec5c61d23d82495742b35742c4a92dabfd5683d7a53cc7e4bbce8e",
+            "files": 59,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          }
+        },
+        "R2": {
+          "definition_digest": "63687a3006c883f0efa86fd4fdbe2453ce6203ba6684f36d610de5fb6709ef38",
+          "evidence": [
+            {
+              "path": "/tmp/claude-1001/-home-ashadmin-workspace-fullstack-agents/ae076b4f-5b5f-47df-85db-36a04daecfd0/scratchpad/review-r2.md",
+              "sha256": "3f5e6e4be3d204f4d63eb2daba0f0258e72ee1ddf05c63c0d8e9d6ea95bc861b"
+            }
+          ],
+          "executor": "attested",
+          "finished_at": "2026-11-03T15:00:03.538757Z",
+          "reason": "lead audit, see review-r2.md U7",
+          "result": "pass",
+          "started_at": "2026-11-03T15:00:03.444412Z",
+          "state_after": {
+            "digest": "86a2259915ec5c61d23d82495742b35742c4a92dabfd5683d7a53cc7e4bbce8e",
+            "files": 59,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          },
+          "state_before": {
+            "digest": "86a2259915ec5c61d23d82495742b35742c4a92dabfd5683d7a53cc7e4bbce8e",
+            "files": 59,
+            "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+          }
+        }
+      },
+      "scope": {
+        "dependencies": [
+          "dashboard/src/",
+          "tests/dashboard/test_information_ui.py",
+          "tests/dashboard/test_fleet_ui.py",
+          "tests/dashboard/test_terminal_scroll.py",
+          "tests/dashboard/test_herdr_client_ui.py"
+        ],
+        "dependencies_none": null,
+        "env": [],
+        "inputs": [],
+        "paths": [
+          "dashboard/src/panel/info.test.tsx",
+          "dashboard/src/terminal/herdr.test.ts",
+          "dashboard/src/terminal/terminal.test.ts",
+          "dashboard/src/views/agents/fleet.test.tsx",
+          "none (new vitest files only)"
+        ],
+        "rationale": "the tests exercise the React modules exactly as the Python tests exercised the old renderers"
+      },
+      "spec_at": "2026-11-03T14:53:33.081769Z"
     }
   },
   "runs": {
+    "45d7ab812b7edb82bdfef58a44d6eea2": {
+      "check": "C1",
+      "definition_digest": "388191ee76d1c2ad1e0fd26d2e9045804d49dde55631220b7cf4f78d2729468f",
+      "deliverable": "U6",
+      "open": true,
+      "started_at": "2026-11-03T17:53:58.640388Z",
+      "state_before": {
+        "digest": "efbebd4a01d3a1c1b7bc73f9d9b9cc2d1b7ea62326eb935850efcf732de49fc8",
+        "files": 73,
+        "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
+      }
+    },
     "796077d7ea281261b008a6de3f756d6c": {
       "check": "R2",
       "definition_digest": "fa1d1d41710eaa10a41571329587e2a06e3e497fc635a5105c40310717eaa7ad",
@@ -1801,6 +2364,18 @@
         "digest": "718c6d0bfb93eb56759948c8bb39aa0f633fb407c30db3f121e39a37dfb50c23",
         "files": 26,
         "head": "51f05395732a879018561c5efbafe59f7d7a05b4"
+      }
+    },
+    "b18d25b67cfc2f5e92df40d1a099558b": {
+      "check": "BUILD",
+      "definition_digest": "3fc1034f1480c34205baa7299d934a06678d8b0dfa6cdc4dc3a1838a067593ee",
+      "deliverable": "U6",
+      "open": true,
+      "started_at": "2026-11-03T17:53:58.505801Z",
+      "state_before": {
+        "digest": "efbebd4a01d3a1c1b7bc73f9d9b9cc2d1b7ea62326eb935850efcf732de49fc8",
+        "files": 73,
+        "head": "337c58b5e92d154e9bdf75553f83df292dfdf785"
       }
     }
   },
