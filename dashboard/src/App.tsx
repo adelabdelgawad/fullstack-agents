@@ -42,11 +42,11 @@ function useAppEffects(view: string, wall: boolean): void {
   useEffect(() => {
     load();
     const id = setInterval(load, 4000);
-    document.addEventListener("keydown", onEscape, true);
+    document.addEventListener("keydown", onEscape);
     document.addEventListener("keydown", onWallKey);
     return () => {
       clearInterval(id);
-      document.removeEventListener("keydown", onEscape, true);
+      document.removeEventListener("keydown", onEscape);
       document.removeEventListener("keydown", onWallKey);
     };
   }, []);
