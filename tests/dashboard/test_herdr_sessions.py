@@ -111,6 +111,27 @@ class HerdrSessionTests(unittest.TestCase):
                 self.assertEqual(state["waiting"][0]["need"], "Confirm policy")
                 self.assertEqual(state["session_panes"]["claude-lead"], "x9:p1")
 
+    def test_card_title_follows_the_herdr_tab_name(self):
+        for label, title in (("Noise reduction", "Noise reduction"), ("5", "transcript title")):
+            with self.subTest(label=label):
+                snap = snapshot(("x9:p1", "claude", "idle", self.home))
+                snap["panes"][0].update(tab_label=label, agent_session={"agent": "claude", "kind": "id", "value": "lead"})
+                session = dash.pane_session({**snap["panes"][0], "tab_label": ""}, str(self.home), time.time())
+                session.update(id="lead", name="transcript title", named=True)
+                with mock.patch.object(dash, "collect_sessions", return_value=[session]), \
+                        mock.patch.object(dash, "collect_codex_sessions", return_value=[]), \
+                        mock.patch.object(dash, "fresh_sessions", return_value=[]), \
+                        mock.patch.object(dash, "collect_runs", return_value=[]), \
+                        mock.patch.object(dash, "judge_turns"):
+                    card = self.build(snap)["cards"][0]
+                self.assertEqual((card["title"], card["now"][0]["name"]), (title, title))
+
+    def test_snapshot_carries_each_pane_tab_label(self):
+        raw = {"result": {"snapshot": {"workspaces": [], "tabs": [{"tab_id": "w1:t1", "label": "Noise reduction"}],
+                                       "panes": [{"pane_id": "w1:p1", "tab_id": "w1:t1"}, {"pane_id": "w1:p2", "tab_id": "gone"}]}}}
+        panes = dash.normalize_herdr_snapshot(raw)["panes"]
+        self.assertEqual([p["tab_label"] for p in panes], ["Noise reduction", ""])
+
     def test_claude_dispatched_by_another_agent_is_not_its_own_session(self):
         base = Path(self.scratch.name) / "claude"
         (base / "sessions").mkdir(parents=True)

@@ -129,6 +129,7 @@ def run_herdr(*args, timeout=5):
 
 def normalize_herdr_snapshot(raw):
     snap = raw["result"]["snapshot"]
+    tab_labels = {x.get("tab_id"): x.get("label") or "" for x in snap.get("tabs", [])}
     return {
         "running": True,
         "workspaces": [{k: x.get(k) for k in ("workspace_id", "label")} for x in snap.get("workspaces", [])],
@@ -137,7 +138,7 @@ def normalize_herdr_snapshot(raw):
             "pane_id": x.get("pane_id"), "tab_id": x.get("tab_id"), "workspace_id": x.get("workspace_id"),
             "title": x.get("terminal_title_stripped") or "", "status": x.get("agent_status") or "unknown",
             "cwd": x.get("cwd") or "", "agent": x.get("agent") or "",
-            "agent_session": x.get("agent_session"),
+            "agent_session": x.get("agent_session"), "tab_label": tab_labels.get(x.get("tab_id"), ""),
         } for x in snap.get("panes", [])],
         "focused_pane_id": snap.get("focused_pane_id"),
         "agent_kinds": list(HERDR_AGENT_KINDS),
@@ -2088,6 +2089,12 @@ def pane_since(pane, now):
     return seen[1]
 
 
+def herdr_name(pane):
+    # Digit-only labels are herdr's positional defaults, not a name the user gave the tab.
+    label = str(pane.get("tab_label") or "").strip()
+    return "" if label.isdigit() else label
+
+
 def pane_session(pane, root, now):
     """A card session for an agent pane herdr reports but whose harness keeps no transcript we read."""
     cwd, agent = pane.get("cwd") or "", pane.get("agent") or "agent"
@@ -2095,7 +2102,8 @@ def pane_session(pane, root, now):
     top = str(repo_top(cwd) or root)
     return {
         "id": f"herdr-{pane['pane_id']}", "engine": agent, "pane": pane["pane_id"],
-        "name": pane.get("title") or f"{agent} {Path(cwd).name}", "named": bool(pane.get("title")), "title": "",
+        "name": herdr_name(pane) or pane.get("title") or f"{agent} {Path(cwd).name}",
+        "named": bool(herdr_name(pane) or pane.get("title")), "title": "",
         "cwd": cwd, "branch": "", "worktree": top if top != root else "", "state": state, "updated": pane_since(pane, now),
         "turn_at": 0, "agents": [], "idle": 0, "snippet": "", "briefs": [], "chips": [], "ask": "",
         "need": f"{agent} is waiting in herdr pane {pane['pane_id']}" if state == "waiting" else "",
@@ -2261,6 +2269,8 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
                 by_session[sid] = s
             s = by_session[sid]
             s["pane"] = pane["pane_id"]
+            if herdr_name(pane):
+                s["name"], s["named"] = herdr_name(pane), True
             if s.get("engine", "claude") != "codex":
                 continue
             if pane.get("status") == "working":

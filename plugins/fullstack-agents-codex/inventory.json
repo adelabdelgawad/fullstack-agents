@@ -77,7 +77,7 @@
     }
   ],
   "source_hashes": {
-    ".claude-plugin/plugin.json": "79e911434db85d38a18e14be7a7e0e0cfe974da8d6b6af96d53544084bf8f925",
+    ".claude-plugin/plugin.json": "2b73509fd013176c357ddac0b7ed7178c61bb3edd5c7f57567b2228ff0594aca",
     "README.md": "5639994370612ab75293889c3e945d2336fc3c2acfe7df63218e3d85df9e85d9",
     "agents/lead/bounded-extractor.md": "610bd8956a5df0204e6b8257dea773cfe30d0416407e58554c39a7f4593c1f56",
     "agents/lead/diff-reviewer.md": "bcb36eb58b8eafd1e34521b1abd7632528a6ea5b3da08185d8100359a7699b58",
@@ -134,7 +134,7 @@
     "scripts/codex-result.schema.json": "31546c15e65da0d17fe14f8602ef03882b2a9582698bb9d52782617e7902655c",
     "scripts/codex-task.sh": "64c5de21f1d0da55eaed238f803f294446472fe10cf6e5430c7cc4ad8ad43e7e",
     "scripts/fsa-classify": "5ba9c9f9c0755bb60a5f2c1d84b76e72fb817ea7b630d66447dad7dde8da4f6e",
-    "scripts/fsa-dashboard": "5513d5736976177bfdf8cec3a16a2a432dbbb1faae7534903458c44554662334",
+    "scripts/fsa-dashboard": "d48ab5a80a4fc9c3d649fdec6ce544b7be54e9e0e5e7cc31f77fb7cb3307bec7",
     "scripts/fsa-host-status": "7e68d0c2870d99cec882c870b7d50203e376d3386c1cad520bb67d9228b7b71a",
     "scripts/fsa-hygiene": "bde304d3a8f27f16312a02d6333af57c0f511b5a5fe63796adf231fdb94640e7",
     "scripts/fsa-release": "24fdd722e70dde13aab7a0c48f3cafad1a3a7d745387f75c7bda4bfb8193a048",
