@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import tempfile
@@ -29,7 +30,8 @@ class AutoHandoffTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
         self.path = self.dir / "s.jsonl"
-        self.hook = {"session_id": "s1", "transcript_path": str(self.path)}
+        self.hook = {"session_id": "s1", "transcript_path": str(self.path), "tool_use_id": "t1",
+                     "tool_input": {"plan": "# HANDOFF RESUME\n\nNext step.\n"}}
         self.env = {"HERDR_PANE_ID": "w1:p1"}
         usage._CACHE.clear()
 
@@ -40,13 +42,35 @@ class AutoHandoffTests(unittest.TestCase):
         write_lines(self.path, [assistant("m1", read=read)])
         return context_handoff.notice(self.hook, self.dir)
 
-    def test_arms_once_per_cycle_after_the_notice(self):
+    def test_arms_once_per_handover_call_after_the_notice(self):
         self.assertIsNone(auto_handoff.armed(self.hook, self.dir, self.env))
         self.assertIsNotNone(self.warn())
         self.assertEqual(auto_handoff.armed(self.hook, self.dir, self.env), "w1:p1")
+        self.assertIsNone(auto_handoff.armed(self.hook, self.dir, self.env))
         write_lines(self.path, [assistant("m2", read=220_000)])
         self.assertIsNone(context_handoff.notice(self.hook, self.dir))
-        self.assertIsNone(auto_handoff.armed(self.hook, self.dir, self.env))
+        self.assertEqual(auto_handoff.armed({**self.hook, "tool_use_id": "t2"}, self.dir, self.env), "w1:p1")
+
+    def test_other_plans_do_not_arm(self):
+        self.warn()
+        other = {**self.hook, "tool_input": {"plan": "# Refactor the parser\n\n# HANDOFF RESUME\n"}}
+        self.assertIsNone(auto_handoff.armed(other, self.dir, self.env))
+        self.assertEqual(auto_handoff.armed(self.hook, self.dir, self.env), "w1:p1")
+
+    def test_an_empty_plan_input_reads_this_sessions_plan_file(self):
+        plans = self.dir / "plans"
+        plans.mkdir()
+        (plans / "mine.md").write_text("\n# HANDOFF RESUME\n")
+        (plans / "other.md").write_text("# Refactor the parser\n")
+        hook = {**self.hook, "tool_input": {}}
+        env = {**self.env, "CLAUDE_CONFIG_DIR": str(self.dir)}
+        self.warn()
+        with open(self.path, "a") as stream:
+            stream.write('{"type":"user","slug":"other"}\n{"type":"user","slug":"mine"}\n')
+        self.assertEqual(auto_handoff.armed(hook, self.dir, env), "w1:p1")
+        with open(self.path, "a") as stream:
+            stream.write('{"type":"user","slug":"other"}\n')
+        self.assertIsNone(auto_handoff.armed({**hook, "tool_use_id": "t2"}, self.dir, env))
 
     def test_arms_after_the_notice_when_the_context_shrank_without_compaction(self):
         self.assertIsNotNone(self.warn(read=266_000))
@@ -66,34 +90,28 @@ class AutoHandoffTests(unittest.TestCase):
         self.assertIsNotNone(self.warn(read=60_000))
         self.assertIsNone(auto_handoff.armed(self.hook, self.dir, self.env))
 
-    def watch(self, plan_first_line, card=True):
+    def watch(self, card=True):
         fake = self.dir / "herdr"
         fake.write_text(FAKE_HERDR)
         fake.chmod(0o755)
-        plan = self.dir / "plan.md"
-        plan.write_text(f"{plan_first_line}\n\nNext step.\n")
         if card:
-            (self.dir / "card").write_text(f"❯ 1. Yes, clear context (9% used) and bypass permissions\n"
-                                           f" ctrl+g to edit in Vim · {plan}\n")
+            (self.dir / "card").write_text("❯ 1. Yes, clear context (9% used) and bypass permissions\n")
         with mock.patch.object(auto_handoff.time, "sleep"):
-            result = auto_handoff.watch("w1:p1", self.dir / "log", {"HERDR_BIN_PATH": str(fake)}, wait_ms=10)
+            result = auto_handoff.watch("w1:p1", self.dir / "log", {"HERDR_BIN_PATH": str(fake)}, "s1", wait_ms=10)
         calls = (self.dir / "calls").read_bytes().decode()
         return result, calls
 
-    def test_presses_enter_only_on_a_handover_plan(self):
-        result, calls = self.watch("# HANDOFF RESUME")
+    def test_presses_enter_on_the_card(self):
+        result, calls = self.watch()
         self.assertEqual(result, "approved")
         self.assertIn("pane send-text w1:p1 \r", calls)
 
-    def test_other_plans_and_missing_cards_are_left_alone(self):
-        result, calls = self.watch("# Refactor the parser")
-        self.assertEqual(result, "not-a-handover-plan")
-        self.assertNotIn("send-text", calls)
-        (self.dir / "card").unlink()
-        (self.dir / "calls").unlink()
-        result, calls = self.watch("# HANDOFF RESUME", card=False)
+    def test_a_missing_card_is_left_alone_and_logged_with_the_screen(self):
+        result, calls = self.watch(card=False)
         self.assertEqual(result, "no-card")
         self.assertNotIn("send-text", calls)
+        entry = json.loads((self.dir / "log").read_text().splitlines()[-1])
+        self.assertEqual((entry["session"], entry["screen"]), ("s1", ["idle"]))
 
 
 if __name__ == "__main__":
