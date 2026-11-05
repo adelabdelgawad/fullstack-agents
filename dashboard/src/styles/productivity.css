@@ -448,7 +448,7 @@ button.retro-control[aria-pressed="true"] {
 /* Usage-console treatment from the supplied reference, in the existing summary strip. */
 .retro-workspace .fleet-tiles {
   gap: 6px;
-  grid-template-columns: repeat(8, minmax(0, 150px));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   border: 0;
   background: transparent;
   overflow: visible;
