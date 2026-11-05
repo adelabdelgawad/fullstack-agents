@@ -1,3 +1,4 @@
+import { RetroCard, RetroInput } from "../components/RetroControls";
 import type { HistoryEntry } from "../lib/types";
 import { STATE_TEXT } from "../lib/cards";
 import { ago, fmtCost, fmtTokens, modelFamily, modelShort } from "../lib/format";
@@ -18,7 +19,12 @@ function HistoryRow({ h }: { h: HistoryEntry }) {
       data-hsid={h.id}
       tabIndex={0}
       onClick={() => openSession(h.id)}
-      onKeyDown={(e) => e.key === "Enter" && openSession(h.id)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openSession(h.id);
+        }
+      }}
     >
       <td>{h.name}</td>
       <td>
@@ -45,7 +51,7 @@ export function HistoryView() {
     <>
       <FleetTiles />
       <div className="fleet-toolbar">
-        <input
+        <RetroInput
           id="ftext"
           type="search"
           placeholder="Filter sessions"
@@ -56,32 +62,34 @@ export function HistoryView() {
         <span className="fcount">{`${rows.length} sessions, last 48 h`}</span>
         <SummaryToggle />
       </div>
-      <div className="history">
-        <table>
-          <thead>
-            <tr>
-              <th>Session</th>
-              <th>Model</th>
-              <th>State</th>
-              <th>Branch</th>
-              <th>Tokens</th>
-              <th>Est. cost</th>
-              <th>Context</th>
-              <th>Compactions</th>
-              <th>Updated</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length ? (
-              rows.map((h) => <HistoryRow key={h.id} h={h} />)
-            ) : (
+      <RetroCard className="history-surface">
+        <div className="history">
+          <table>
+            <thead>
               <tr>
-                <td colSpan={9}>No sessions.</td>
+                <th>Session</th>
+                <th>Model</th>
+                <th>State</th>
+                <th>Branch</th>
+                <th>Tokens</th>
+                <th>Est. cost</th>
+                <th>Context</th>
+                <th>Compactions</th>
+                <th>Updated</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rows.length ? (
+                rows.map((h) => <HistoryRow key={h.id} h={h} />)
+              ) : (
+                <tr>
+                  <td colSpan={9}>No sessions.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </RetroCard>
     </>
   );
 }

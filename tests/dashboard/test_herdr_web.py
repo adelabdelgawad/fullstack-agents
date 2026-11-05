@@ -324,7 +324,8 @@ class HerdrClientServerTests(unittest.TestCase):
                 self.assertEqual(headers["content-type"], "font/woff2", path)
 
     def test_react_ui_served_at_root_and_next_with_cookie(self):
-        for path in ("/", "/next", "/next/"):
+        for path in ("/", "/next", "/next/", "/next/agents", "/next/herdr", "/next/history",
+                     "/next/agents/", "/next/herdr/", "/next/history/"):
             _, _, status, headers = self.request(f"{path}?t=t", upgrade=False)
             self.assertEqual(status, 200, path)
             self.assertTrue(headers["content-type"].startswith("text/html"), path)

@@ -66,10 +66,12 @@ export interface StoreState {
 type Patch = Partial<StoreState> | ((s: StoreState) => Partial<StoreState>);
 type Listener = () => void;
 
-const initialView = ((): View => {
-  const v = ls.get("view", "agents");
-  return v === "herdr" || v === "history" ? v : "agents";
-})();
+export function viewFromPath(path: string): View {
+  const name = path.replace(/\/$/, "").split("/").pop();
+  return name === "herdr" || name === "history" ? name : "agents";
+}
+
+const initialView = viewFromPath(window.location.pathname);
 
 let current: StoreState = {
   state: null,
@@ -149,8 +151,11 @@ export function closePanel(): void {
   document.documentElement.classList.remove("lock", "split");
 }
 
-export function setView(next: string): void {
+export function setView(next: string, navigate = true): void {
   const view: View = next === "herdr" || next === "history" ? next : "agents";
+  if (navigate && window.location.pathname !== `/next/${view}`) {
+    window.history.pushState(null, "", `/next/${view}`);
+  }
   ls.set("view", view);
   closePanel();
   store.set({ view });

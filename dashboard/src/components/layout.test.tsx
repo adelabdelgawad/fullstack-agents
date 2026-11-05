@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import type { Card, DashState } from "../lib/types";
-import { store, type View } from "../store";
+import { store, viewFromPath, type View } from "../store";
 
 function card(key: string, favourite = false): Card {
   return {
@@ -46,6 +46,28 @@ function render(view: View): HTMLElement {
 }
 
 describe("shared view layout", () => {
+  it("uses page URLs and follows browser navigation", () => {
+    const result = render("agents");
+    for (const view of VIEWS) {
+      const link = result.querySelector<HTMLAnchorElement>(`#view-${view}`)!;
+      expect(link.getAttribute("href")).toBe(`/next/${view}`);
+      act(() => link.click());
+      expect(window.location.pathname).toBe(`/next/${view}`);
+      expect(store.get().view).toBe(view);
+    }
+    act(() => {
+      window.history.replaceState(null, "", "/next/herdr");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(store.get().view).toBe("herdr");
+    expect(result.querySelector("#view-herdr")?.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it.each(VIEWS)("recognizes direct %s links", (view) => {
+    expect(viewFromPath(`/next/${view}`)).toBe(view);
+    expect(viewFromPath(`/next/${view}/`)).toBe(view);
+  });
+
   beforeEach(() => {
     host = document.body;
     root = createRoot(host);

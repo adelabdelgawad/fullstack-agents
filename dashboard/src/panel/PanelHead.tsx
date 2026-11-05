@@ -1,3 +1,4 @@
+import { RetroButton } from "../components/RetroControls";
 import { gitBadge, STAGE_LABEL, worktreesOf } from "../lib/cards";
 import type { Card, DashState } from "../lib/types";
 import { openCard } from "../store";
@@ -11,7 +12,7 @@ export function PanelHead({ card, state }: { card: Card; state: DashState }) {
         {worktrees.map((item) => {
           const count = gitBadge(item);
           return (
-            <button
+            <RetroButton
               className="wt"
               data-wt={item.key}
               aria-current={item.key === card.key}
@@ -22,7 +23,7 @@ export function PanelHead({ card, state }: { card: Card; state: DashState }) {
               <span className="wt-name">{item.tree?.branch || item.key.split("/").pop()}</span>
               {count ? <span className="chip">{count} uncommitted</span> : null}
               <span className="chip">{STAGE_LABEL(item)}</span>
-            </button>
+            </RetroButton>
           );
         })}
       </div>

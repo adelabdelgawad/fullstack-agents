@@ -115,7 +115,23 @@ describe("agents view renderers", () => {
     store.set({ state: dash(cards), openKey: "b" });
     const html = render(<Orchestrators cards={cards} total={2} />).innerHTML;
     expect(html).toContain("0 running · 1 waiting · 0 stale");
-    expect(html).toContain('class="orc-row sel st-idle" data-orc="b"');
+    expect(host.querySelector('[data-orc="b"]')?.getAttribute("aria-current")).toBe("true");
+  });
+
+  it("keeps RetroUI navigation selectable when collapsed and remembers expansion", () => {
+    const cards = [card({ key: "a", title: "Agent A" })];
+    store.set({ state: dash(cards), openKey: null });
+    render(<Orchestrators cards={cards} total={1} />);
+    expect(host.querySelector(".orc-side .retro-surface")).not.toBeNull();
+    const toggle = host.querySelector<HTMLButtonElement>("#orc-collapse")!;
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    act(() => toggle.click());
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(localStorage.getItem("fsa-orc-collapsed")).toBe("0");
+    act(() => host.querySelector<HTMLButtonElement>('[data-orc="a"]')!.click());
+    expect(store.get().openKey).toBe("a");
+    act(() => host.querySelector<HTMLButtonElement>('[data-orc=""]')!.click());
+    expect(store.get().openKey).toBeNull();
   });
 
   it("colours worker squares and marks failures", () => {
@@ -172,7 +188,7 @@ describe("agents view renderers", () => {
     const html = summary.innerHTML;
     expect(summary.querySelector(".fleet-toolbar > #ftiles:last-child")).not.toBeNull();
     expect(html).toContain('aria-expanded="true"');
-    expect(html).toContain("Claude plan · team");
+    expect(html).toContain("Claude team");
     expect(html).toContain("on credits · 59,210 left");
     expect(html).toContain("19.5M");
     expect(html).toContain("$13.12");

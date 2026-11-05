@@ -1,3 +1,4 @@
+import { retroCardHtml } from "../components/retroMarkup";
 import { esc } from "../lib/format";
 import type { Card, Run } from "../lib/types";
 
@@ -17,16 +18,18 @@ export const infoOpen = new Map<string, Map<string, boolean>>();
 export const infoShown = (c: Card, key: string, open: boolean): boolean => infoOpen.get(c.key)?.get(key) ?? open;
 
 export function infoDisclosure(c: Card, key: string, title: string, body: string): string {
-  return (
+  return retroCardHtml(
     `<details class="info-card" data-info-section="${esc(key)}"${infoShown(c, key, false) ? " open" : ""}>` +
-    `<summary>${esc(title)}</summary>${body}</details>`
+      `<summary>${esc(title)}</summary>${body}</details>`,
+    "info-frame info-disclosure",
   );
 }
 
 export function infoSection(c: Card, key: string, title: string, body: string, extra = "", open = false): string {
-  return (
+  return retroCardHtml(
     `<details class="info-card info-top ${esc(key)}" data-info-section="${esc(key)}"` +
-    `${infoShown(c, key, open) ? " open" : ""}><summary><h4>${esc(title)}</h4>${extra}</summary>${body}</details>`
+      `${infoShown(c, key, open) ? " open" : ""}><summary><h4>${esc(title)}</h4>${extra}</summary>${body}</details>`,
+    `info-frame info-top ${key}`,
   );
 }
 

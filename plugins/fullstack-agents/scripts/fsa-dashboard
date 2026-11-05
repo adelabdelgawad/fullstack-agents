@@ -2821,7 +2821,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         q = urllib.parse.parse_qs(url.query)
         if not self.authorised(q):
             return self.send(403, b"forbidden: open the URL printed by 'fsa-dashboard start'", "text/plain")
-        if url.path in ("/", "/next", "/next/"):
+        if url.path.rstrip("/") in ("", "/next", "/next/agents", "/next/herdr", "/next/history"):
             cookie = f"fsa_t={self.server.token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000"
             return self.send(200, (REACT / "index.html").read_bytes(), "text/html; charset=utf-8", {"Set-Cookie": cookie})
         if url.path == "/api/state":

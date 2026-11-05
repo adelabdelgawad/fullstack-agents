@@ -132,7 +132,7 @@ describe("fleet UI Python parity", () => {
     store.set({ state: dash(cards), openKey: "b" });
     const html = render(<Orchestrators cards={cards} total={2} />).innerHTML;
     expect(html).toContain("0 running · 1 waiting · 0 stale");
-    expect(html).toContain('class="orc-row sel st-idle" data-orc="b"');
+    expect(host.querySelector('[data-orc="b"]')?.getAttribute("aria-current")).toBe("true");
   });
 
   it("squares_colour_by_model_and_mark_failures", () => {
@@ -172,7 +172,7 @@ describe("fleet UI Python parity", () => {
     expect(html).toContain("ft plan bad");
     expect(html).toContain("<b>14%</b>");
     expect(html).toContain("<b>92%</b>");
-    expect(html).toContain("Claude plan · team");
+    expect(html).toContain("Claude team");
     html = renderPlan({ claude: { error: "no Claude login found" } });
     expect(html).toContain("no Claude login");
     html = renderPlan({
@@ -186,6 +186,19 @@ describe("fleet UI Python parity", () => {
     expect(html).toContain("on credits · 59,210 left");
     html = renderPlan({ claude: { plan: "team", windows: [{ name: "5 h", pct: null, resets_at: "" }] } });
     expect(html).toContain("<b>—</b>");
+  });
+
+  it("shows the remaining Codex balance on the first line", () => {
+    renderPlan({
+      codex: {
+        plan: "plus",
+        windows: [{ name: "week", pct: 80, resets_at: "" }],
+        credits: { balance: 59210, unlimited: false },
+      },
+    });
+    const balance = host.querySelector(".ft.plan .usage-frame > .ft-l .credit-balance");
+    expect(balance?.textContent).toBe("59k left");
+    expect(balance?.getAttribute("aria-label")).toBe("Remaining credits: 59,210");
   });
 
   it("grok_tile_shows_spend_without_percentages", () => {
@@ -207,7 +220,7 @@ describe("fleet UI Python parity", () => {
     expect(html).toContain("19.5M");
     expect(html).toContain("$13.12");
     expect(html).toContain('href="https://grok.com" target="_blank" rel="noopener noreferrer"');
-    expect(html).not.toContain("%");
+    expect(grokTile?.textContent).not.toContain("%");
   });
 
   it("summary_cards_collapse_behind_a_toggle_at_the_strip_end", () => {

@@ -1,3 +1,4 @@
+import { RetroCard } from "../../components/RetroControls";
 import { ago, fmtCost, fmtTokens } from "../../lib/format";
 import { setFleet, useStore } from "../../store";
 import { fleetTpm } from "./tpm";
@@ -62,29 +63,61 @@ function PlanTile({ label, plan }: { label: string; plan?: PlanData }) {
   if (!plan?.windows)
     return (
       <div className="ft">
-        <div className="ft-l">{label}</div>
-        <div className="ft-v">—</div>
-        <div className="ft-s">{plan?.error || "no data"}</div>
+        <RetroCard className="usage-frame">
+          <div className="ft-l">{label}</div>
+          <div className="ft-v">—</div>
+          <div className="ft-s">{plan?.error || "no data"}</div>
+        </RetroCard>
       </div>
     );
   const worst = Math.max(0, ...plan.windows.map((window) => window.pct ?? 0));
   const cls = worst >= 90 ? "bad" : worst >= 75 ? "warn" : "";
+  const detail = [
+    plan.plan,
+    plan.stale,
+    ...plan.windows.map(
+      (window) =>
+        `${window.name}: ${window.pct == null ? "reset" : `${window.pct}% used`}${window.resets_at ? `; resets ${window.resets_at}` : ""}`,
+    ),
+    plan.credits
+      ? `Credits: ${plan.credits.unlimited ? "unlimited" : Math.round(plan.credits.balance).toLocaleString()} left${worst >= 100 ? " (in use)" : ""}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
-    <div className={`ft plan ${cls}`} title={plan.stale || undefined}>
-      <div className="ft-l">
-        {label}
-        {plan.plan ? ` · ${plan.plan}` : ""}
-        {plan.stale && (
-          <>
-            {" "}
-            <span className="stale">· stale</span>
-          </>
-        )}
-      </div>
-      {plan.windows.map((window) => (
-        <PlanRow key={window.name} label={label} window={window} />
-      ))}
-      <Credits plan={plan} />
+    <div className={`ft plan ${cls}`} title={detail} tabIndex={0} aria-label={`${label}: ${detail}`}>
+      <RetroCard className="usage-frame">
+        <div className={`ft-l${label === "Codex plan" && plan.credits ? " balance-line" : ""}`}>
+          {label === "Codex plan" && plan.credits ? (
+            <>
+              <span>Codex{plan.plan ? ` ${plan.plan}` : ""}</span>
+              <strong
+                className="credit-balance"
+                title={detail}
+                aria-label={`Remaining credits: ${plan.credits.unlimited ? "unlimited" : Math.round(plan.credits.balance).toLocaleString()}`}
+              >
+                {plan.credits.unlimited ? "∞" : fmtTokens(plan.credits.balance)} left
+              </strong>
+            </>
+          ) : (
+            <>
+              {label.replace(/ plan$/, "")}
+              {plan.plan ? ` ${plan.plan}` : ""}
+            </>
+          )}
+          {plan.stale && (
+            <>
+              {" "}
+              <span className="stale">· stale</span>
+            </>
+          )}
+        </div>
+        {plan.windows.slice(0, 2).map((window) => (
+          <PlanRow key={window.name} label={label} window={window} />
+        ))}
+        <Credits plan={plan} />
+      </RetroCard>
     </div>
   );
 }
@@ -112,32 +145,30 @@ function SpendTile({ plan }: { plan?: SpendData }) {
   if (!plan?.spend)
     return (
       <div className="ft">
-        <div className="ft-l">Grok</div>
-        <div className="ft-v">—</div>
-        <div className="ft-s">{plan?.error || "no data"}</div>
+        <RetroCard className="usage-frame">
+          <div className="ft-l">Grok</div>
+          <div className="ft-v">—</div>
+          <div className="ft-s">{plan?.error || "no data"}</div>
+        </RetroCard>
       </div>
     );
   return (
     <div className="ft plan" title="xAI reports no plan limits to opencode; cost is opencode's API-equivalent estimate">
-      <div className="ft-l">Grok · {plan.plan}</div>
-      {plan.spend.map((row) => (
-        <div className="plan-row spend" key={row.name}>
-          <span>{row.name}</span>
-          <b>{fmtTokens(row.tokens)}</b>
-          <em>{fmtCost(row.cost)}</em>
+      <RetroCard className="usage-frame">
+        <div className="ft-l">
+          <a href="https://grok.com" target="_blank" rel="noopener noreferrer" title="Weekly plan limits on grok.com">
+            Grok · {plan.plan}
+          </a>
         </div>
-      ))}
-      <div className="plan-credits">
-        last used {ago(plan.last_at || 0)} ago ·{" "}
-        <a
-          href="https://grok.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          title="The weekly SuperGrok limit is shown only on grok.com"
-        >
-          weekly limit on grok.com ↗
-        </a>
-      </div>
+        {plan.spend.slice(0, 2).map((row) => (
+          <div className="plan-row spend" key={row.name}>
+            <span>{row.name}</span>
+            <b>{fmtTokens(row.tokens)}</b>
+            <em>{fmtCost(row.cost)}</em>
+          </div>
+        ))}
+        <div className="plan-credits">last used {ago(plan.last_at || 0)} ago</div>
+      </RetroCard>
     </div>
   );
 }
@@ -157,10 +188,12 @@ function Tile({
 }) {
   return (
     <div className={`ft ${cls}`}>
-      <div className="ft-l">{label}</div>
-      <div className="ft-v">{value}</div>
-      {sub && <div className="ft-s">{sub}</div>}
-      {children}
+      <RetroCard className="usage-frame">
+        <div className="ft-l">{label}</div>
+        <div className="ft-v">{value}</div>
+        {sub && <div className="ft-s">{sub}</div>}
+        {children}
+      </RetroCard>
     </div>
   );
 }

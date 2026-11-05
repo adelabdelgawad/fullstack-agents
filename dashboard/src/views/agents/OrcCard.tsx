@@ -1,3 +1,4 @@
+import { RetroCard } from "../../components/RetroControls";
 import {
   activeStep,
   FLAG_TEXT,
@@ -370,11 +371,13 @@ export function OrcCard({ card }: { card: Card }) {
       onClick={open}
       onKeyDown={keyDown}
     >
-      <OrcHead card={card} state={state} lead={lead} />
-      <OrcIdentity card={card} lead={lead} />
-      <OrcProgress plan={plan} />
-      <OrcNow card={card} />
-      <OrcFooter card={card} state={state} flag={flag} workers={workers} />
+      <RetroCard>
+        <OrcHead card={card} state={state} lead={lead} />
+        <OrcIdentity card={card} lead={lead} />
+        <OrcProgress plan={plan} />
+        <OrcNow card={card} />
+        <OrcFooter card={card} state={state} flag={flag} workers={workers} />
+      </RetroCard>
     </article>
   );
 }

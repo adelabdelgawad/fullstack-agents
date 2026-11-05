@@ -1,3 +1,4 @@
+import { RetroButton, RetroInput } from "../../components/RetroControls";
 import { setFleet, useStore } from "../../store";
 import { SummaryToggle } from "./FleetTiles";
 
@@ -21,14 +22,14 @@ export function FleetToolbar({ shown, total }: { shown: number; total: number })
     <div className="fleet-toolbar">
       <div className="fseg" role="group">
         {FILTERS.map(([key, label]) => (
-          <button
+          <RetroButton
             key={key}
             data-ffilter={key}
             aria-pressed={fleet.filter === key}
             onClick={() => setFleet({ filter: key })}
           >
             {label}
-          </button>
+          </RetroButton>
         ))}
       </div>
       <label>
@@ -41,7 +42,7 @@ export function FleetToolbar({ shown, total }: { shown: number; total: number })
           ))}
         </select>
       </label>
-      <input
+      <RetroInput
         id="ftext"
         type="search"
         placeholder="Filter by name, branch or model"

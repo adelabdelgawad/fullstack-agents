@@ -1,3 +1,4 @@
+import { retroCardHtml } from "../components/retroMarkup";
 import { esc } from "../lib/format";
 import type { Card } from "../lib/types";
 import { infoSection } from "./panelLib";
@@ -96,15 +97,16 @@ export function taskProgressHtml(c: Card, compact = false): string {
             `${t.steps?.total ? ` · steps ${t.steps.completed}/${t.steps.total}` : ""}` +
             `${unrecorded ? ` · ${unrecorded} without evidence` : ""}`
           : `${t.completed}/${t.total} tasks done`;
-      return (
+      return retroCardHtml(
         `<section class="task-overview ${compact ? "compact" : "session-task-overview"}" aria-label="Task progress">` +
-        `<div class="task-progress-title"><b>${esc(title)}</b><span>${percent}%</span></div>` +
-        `<progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress>` +
-        `<div class="s">${esc(counts)}</div>` +
-        `${compact && active.length ? `<div class="s task-current">${esc(`${active[0].id}: ${active[0].title}`)}` : ""}` +
-        `${compact && active.length > 1 ? ` · +${active.length - 1} active` : ""}` +
-        `${compact && active.length ? "</div>" : ""}` +
-        `${timeline}${t.format === "v2" ? sessionStateHtml(t.session_state) : ""}</section>`
+          `<div class="task-progress-title"><b>${esc(title)}</b><span>${percent}%</span></div>` +
+          `<progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress>` +
+          `<div class="s">${esc(counts)}</div>` +
+          `${compact && active.length ? `<div class="s task-current">${esc(`${active[0].id}: ${active[0].title}`)}` : ""}` +
+          `${compact && active.length > 1 ? ` · +${active.length - 1} active` : ""}` +
+          `${compact && active.length ? "</div>" : ""}` +
+          `${timeline}${t.format === "v2" ? sessionStateHtml(t.session_state) : ""}</section>`,
+        "task-progress-frame",
       );
     })
     .join("");
@@ -166,14 +168,15 @@ export function taskListHtml(c: Card): string {
       );
       const source = `/api/doc?sid=${encodeURIComponent(s.id)}&path=${encodeURIComponent(t.file)}`,
         percent = t.total ? Math.round((t.completed / t.total) * 100) : 0;
-      return (
+      return retroCardHtml(
         `<article class="tracked-plan"><div class="tp-head"><div class="tp-title"><b>${esc(t.title)}</b>` +
-        `<a class="tp-file" href="${esc(source)}" target="_blank" rel="noopener">${esc(t.relative_file)}</a></div>` +
-        `<div class="tp-done"><b>${esc(t.completed)}/${esc(t.total)} done</b><span>${percent}%</span></div></div>` +
-        `${t.format === "v2" ? sessionStateHtml(t.session_state) : ""}\n      ` +
-        `<progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress>` +
-        `<div class="task-counts">${tiles}</div><ul class="tracked-tasks" tabindex="0" aria-label="Tasks; scroll for more">` +
-        `${sorted.map((item) => taskRow(t, item)).join("")}</ul></article>`
+          `<a class="tp-file" href="${esc(source)}" target="_blank" rel="noopener">${esc(t.relative_file)}</a></div>` +
+          `<div class="tp-done"><b>${esc(t.completed)}/${esc(t.total)} done</b><span>${percent}%</span></div></div>` +
+          `${t.format === "v2" ? sessionStateHtml(t.session_state) : ""}\n      ` +
+          `<progress max="${esc(Math.max(t.total, 1))}" value="${esc(t.completed)}" aria-label="Completed tasks"></progress>` +
+          `<div class="task-counts">${tiles}</div><ul class="tracked-tasks" tabindex="0" aria-label="Tasks; scroll for more">` +
+          `${sorted.map((item) => taskRow(t, item)).join("")}</ul></article>`,
+        "tracked-plan-frame",
       );
     })
     .join("");

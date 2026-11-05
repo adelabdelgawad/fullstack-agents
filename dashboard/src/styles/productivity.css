@@ -1,0 +1,672 @@
+/* Preserve the original dashboard organization; apply only the RetroUI presentation. */
+.retro-workspace,
+.retro-header,
+.retro-panel {
+  --bg: #0b0f17;
+  --panel: #141b27;
+  --card: #141b27;
+  --card-hover: #1c2838;
+  --ink: #e5e9f0;
+  --muted: #a6b0c2;
+  --faint: #8b98ae;
+  --line: #354155;
+  --blue: #80b5ff;
+  --active: #80b5ff;
+  --blue-bg: #192c43;
+  --green: #75d99a;
+  --green-bg: #183224;
+  --amber: #f2c46d;
+  --amber-bg: #332913;
+  --red: #ff9191;
+  --red-bg: #361e27;
+  --chip: #253248;
+  color: var(--ink);
+  background: var(--bg);
+  color-scheme: dark;
+}
+.retro-header {
+  background: var(--panel);
+}
+.retro-workspace {
+  min-height: calc(100vh - 49px);
+}
+html.agents-page .retro-workspace {
+  min-height: 0;
+}
+.retro-workspace *,
+.retro-workspace *::before,
+.retro-workspace *::after {
+  animation: none !important;
+  transition: none !important;
+}
+button.retro-control,
+div.retro-input {
+  font:
+    12px/1.4 system-ui,
+    sans-serif;
+  margin: 0;
+  padding: 4px 8px;
+  min-height: 28px;
+  border-width: 3px;
+  border-image-width: 2;
+  border-image-outset: 1;
+  border-radius: 0;
+  box-shadow: 1px 1px 0 var(--line);
+}
+button.retro-control {
+  cursor: pointer;
+}
+button.retro-control:active {
+  transform: none;
+  box-shadow: none;
+}
+button.retro-control:hover {
+  background: var(--blue-bg);
+}
+button.retro-control[aria-pressed="true"] {
+  background: var(--blue-bg);
+  color: var(--blue);
+}
+.retro-control:focus-visible,
+.retro-input:focus-within,
+.retro-workspace [tabindex]:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+.retro-workspace .retro-input {
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: 0;
+}
+.retro-workspace .retro-input input {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 5px 8px;
+  box-shadow: none;
+}
+.retro-workspace .fseg {
+  gap: 4px;
+  border: 0;
+  overflow: visible;
+}
+.retro-workspace .fleet-toolbar {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.retro-workspace .fleet-tiles,
+.retro-workspace select,
+.retro-workspace .ft-toggle {
+  border-radius: 0;
+}
+.retro-workspace .card.orc {
+  padding: 0;
+  border: 0;
+  overflow: visible;
+  background: transparent;
+}
+.retro-workspace .retro-surface {
+  margin: 0;
+  padding: 10px;
+  border-width: 4px;
+  min-width: 0;
+  font: inherit;
+  box-shadow: 2px 2px 0 var(--line);
+}
+.retro-workspace .card.orc > .retro-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+}
+.retro-workspace .card.orc > .retro-surface > * {
+  min-width: 0;
+}
+.retro-workspace .orc-metrics {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.retro-workspace .history-surface {
+  margin: 18px 32px;
+  padding: 0;
+}
+.retro-workspace .history {
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+}
+.retro-workspace .history tr:focus-visible td {
+  background: var(--blue-bg);
+}
+.retro-workspace .feed .fbody {
+  min-width: 0;
+}
+.retro-workspace .legend {
+  background: var(--panel);
+}
+@media (max-width: 640px) {
+  .retro-workspace .history-surface {
+    margin: 12px 16px;
+  }
+  .retro-workspace .fseg {
+    flex-wrap: wrap;
+  }
+}
+
+/* RetroUI sidebar surfaces retain the original 200px / 44px navigation slots. */
+.retro-workspace .orc-side {
+  padding: 8px 8px 16px;
+  border-right: 0;
+}
+.retro-workspace .orc-side .orc-nav-surface {
+  padding: 6px;
+}
+.retro-workspace .orc-side-head {
+  padding: 4px 0 10px;
+  gap: 5px;
+  color: var(--ink);
+}
+.retro-workspace .orc-side .orc-collapse {
+  padding: 2px 5px;
+  min-height: 26px;
+  margin-left: auto;
+}
+.retro-workspace .orc-side .orc-row {
+  display: flex;
+  width: 100%;
+  padding: 7px 5px;
+  margin: 0 0 8px;
+  gap: 5px;
+  border-radius: 0;
+  font-size: 11px;
+}
+.retro-workspace .orc-side .orc-row:last-child {
+  margin-bottom: 0;
+}
+.retro-workspace .orc-side .orc-row[aria-current="true"] {
+  background: var(--blue-bg);
+  color: var(--blue);
+  box-shadow: 2px 2px 0 var(--blue);
+}
+.retro-workspace .orc-side .orc-row .dot {
+  border-radius: 0;
+}
+.retro-workspace .orc-side.collapsed {
+  padding: 8px 4px;
+}
+.retro-workspace .orc-side.collapsed .orc-nav-surface {
+  padding: 3px 1px;
+}
+.retro-workspace .orc-side.collapsed .orc-collapse {
+  margin: 0;
+  padding: 2px 3px;
+}
+.retro-workspace .orc-side.collapsed .orc-row {
+  justify-content: center;
+  padding: 7px 0;
+}
+.retro-workspace .orc-side.collapsed .orc-all {
+  display: none;
+}
+
+/* Detail tabs keep their existing content and column layout in dark RetroUI surfaces. */
+.retro-panel .ptop {
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--panel);
+}
+.retro-panel .ptabs {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.retro-panel button.retro-control[aria-selected="true"] {
+  color: var(--blue);
+  background: var(--blue-bg);
+}
+.retro-panel button.retro-control:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.retro-panel .tab2::after {
+  display: none;
+}
+.retro-panel .retro-surface {
+  margin: 8px;
+  padding: 12px;
+  border-width: 4px;
+  font: inherit;
+  min-width: 0;
+  box-shadow: 2px 2px 0 #080c12;
+}
+.retro-panel .info-surface {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.retro-panel #info {
+  padding: 0;
+  overflow: visible;
+}
+.retro-panel :is(.info-card, .session-overview, .info-run, .so-tile) {
+  border-radius: 0;
+  box-shadow: none;
+  border-color: #52627b;
+}
+.retro-panel .info-card > summary {
+  background: var(--panel);
+}
+.retro-panel .info-card > summary::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--blue);
+}
+.retro-panel .info-card > summary:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.retro-panel #info button {
+  border: 1px solid #65758e;
+  border-radius: 0;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 2px 2px 0 #080c12;
+}
+.retro-panel .gitview {
+  gap: 8px;
+  padding: 8px;
+}
+.retro-panel .gcol {
+  border: 0;
+}
+.retro-panel .git-surface {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+.retro-panel .gh {
+  flex-wrap: wrap;
+  padding: 8px;
+  background: var(--panel);
+}
+.retro-panel .gb {
+  min-height: 0;
+  overflow: auto;
+}
+.retro-panel .gitview button.retro-control {
+  max-width: 100%;
+  text-align: left;
+}
+.retro-panel .gitview :is(.gi, .gf, .grp) {
+  width: calc(100% - 8px);
+  margin: 4px;
+}
+.retro-panel .gitview .gf {
+  display: flex;
+  flex-wrap: wrap;
+}
+.retro-panel .gitview :is(.gi, .gf).on {
+  background: var(--blue-bg);
+  color: var(--ink);
+}
+.retro-panel .gitview .rail {
+  padding: 6px 0;
+  width: 100%;
+}
+.retro-panel :is(.info-surface, .gitview, .ptop) *,
+.retro-panel :is(.info-surface, .gitview, .ptop) *::before,
+.retro-panel :is(.info-surface, .gitview, .ptop) *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Inner sub-tab cards use the same pixel frames as the outer React cards. */
+.retro-panel .info-surface {
+  border: 0;
+  box-shadow: none;
+  background: var(--bg);
+  padding: 6px;
+}
+.retro-panel .info-grid {
+  gap: 18px;
+}
+.retro-panel .info-frame {
+  margin: 0;
+  padding: 12px;
+}
+.retro-panel .info-frame > .info-card {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.retro-panel .info-frame > .info-card > summary {
+  margin: 0;
+  padding: 2px 0;
+  min-height: 26px;
+}
+.retro-panel .info-frame > .info-card[open] > summary {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.retro-panel .info-frame > .info-card > summary::before {
+  background: var(--green);
+}
+.retro-panel .info-disclosure {
+  margin-top: 12px;
+}
+.retro-panel .overview-frame {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 14px;
+}
+.retro-panel .session-overview {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.retro-panel .so-head {
+  padding: 0 0 12px;
+  font-family: var(--mono);
+}
+.retro-panel .so-head .so-ico {
+  border-radius: 0;
+  color: var(--green);
+}
+.retro-panel .so-tiles {
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+}
+.retro-panel .so-tile {
+  margin: 0;
+  padding: 10px;
+  background: #0c141b;
+}
+.retro-panel .so-l {
+  font: 11px/1.4 var(--mono);
+  color: #b3c1cc;
+  letter-spacing: 0.4px;
+}
+.retro-panel .so-v {
+  font: 600 20px/1.4 var(--mono);
+  color: #9fe779;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.retro-panel .so-tile.live .so-v {
+  color: #65dcc7;
+}
+.retro-panel .so-tile.bad .so-v {
+  color: #ffc55b;
+}
+.retro-panel .so-tile.time .so-v {
+  font-size: 12px;
+  white-space: normal;
+}
+.retro-panel .so-bar {
+  height: 14px;
+  padding: 2px;
+  border: 1px solid #496047;
+  border-radius: 0;
+  background: #18242a;
+}
+.retro-panel .so-bar > span {
+  height: 100%;
+  border-radius: 0;
+  background: repeating-linear-gradient(90deg, #9fe779 0 7px, transparent 7px 10px);
+}
+.retro-panel .info-frame :is(.live-shell, .info-run, .tracked-plan, .task-overview, .task-counts > div) {
+  border-radius: 0;
+  border: 2px solid #52627b;
+  box-shadow: 3px 3px 0 #080c12;
+  background: #0c141b;
+}
+.retro-panel .info-frame :is(.pill, .chip, .badge) {
+  border-radius: 0;
+}
+.retro-panel .ptabs {
+  border: 0;
+  border-radius: 0;
+  padding: 2px;
+}
+.retro-panel .ptabs button {
+  border-width: 4px;
+  min-height: 32px;
+}
+
+/* Usage-console treatment from the supplied reference, in the existing summary strip. */
+.retro-workspace .fleet-tiles {
+  gap: 6px;
+  grid-template-columns: repeat(8, minmax(0, 150px));
+  border: 0;
+  background: transparent;
+  overflow: visible;
+  max-height: none;
+}
+.retro-workspace .ft {
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.retro-workspace .usage-frame {
+  padding: 5px 6px;
+  height: 100%;
+  background: #0c141b;
+}
+.retro-workspace .ft-l {
+  color: #b3c1cc;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+.retro-workspace .ft-v {
+  color: #9fe779;
+  font-size: 18px;
+  margin: 2px 0;
+}
+.retro-workspace .ft.plan .ft-l {
+  color: #65dcc7;
+  font-weight: 650;
+  margin-bottom: 3px;
+}
+.retro-workspace .ft.warn .ft-v,
+.retro-workspace .ft.bad .ft-v {
+  color: #ffc55b;
+}
+.retro-workspace .plan-row {
+  grid-template-columns: 24px minmax(12px, 1fr) 28px auto;
+  gap: 3px;
+  margin-top: 3px;
+}
+.retro-workspace .plan-row em {
+  grid-column: auto;
+  font-size: 9px;
+  text-align: right;
+  color: var(--muted);
+}
+.retro-workspace .plan-row b {
+  color: #9fe779;
+}
+.retro-workspace .plan-row:has(.ctx-warn) b,
+.retro-workspace .plan-row:has(.ctx-bad) b {
+  color: #ffc55b;
+}
+.retro-workspace .plan-row .orc-bar {
+  height: 10px;
+  border-radius: 0;
+  border: 1px solid #496047;
+  padding: 1px;
+  background: #18242a;
+}
+.retro-workspace .plan-row .orc-bar > span {
+  height: 100%;
+  border-radius: 0;
+  background: repeating-linear-gradient(90deg, #9fe779 0 5px, transparent 5px 7px);
+}
+.retro-workspace .plan-row :is(.ctx-warn, .ctx-bad) > span {
+  background: repeating-linear-gradient(90deg, #ffc55b 0 5px, transparent 5px 7px);
+}
+.retro-workspace .plan-row.spend {
+  grid-template-columns: 35px 1fr auto;
+}
+.retro-workspace .plan-row.spend em {
+  grid-column: auto;
+  color: #65dcc7;
+}
+.retro-workspace .plan-credits {
+  white-space: normal;
+  line-height: 1.2;
+  margin-top: 3px;
+}
+@media (max-width: 1100px) {
+  .retro-workspace .fleet-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .retro-workspace .fleet-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.retro-panel .task-progress-frame {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.retro-panel .task-progress-frame > .task-overview,
+.retro-panel .tracked-plan-frame > .tracked-plan {
+  border: 0;
+  box-shadow: none;
+  margin: 0;
+  padding: 0;
+}
+.retro-panel .tracked-plan-frame {
+  margin: 12px 0;
+}
+.retro-panel .info-frame .live-shell {
+  margin: 6px;
+  border-width: 4px;
+  background: #0c141b;
+}
+.retro-panel .task-progress-frame progress,
+.retro-panel .tracked-plan-frame progress {
+  border-radius: 0;
+  height: 14px;
+  background: #18242a;
+}
+.retro-panel progress::-webkit-progress-bar {
+  background: #18242a;
+  border-radius: 0;
+}
+.retro-panel progress::-webkit-progress-value {
+  background: repeating-linear-gradient(90deg, #9fe779 0 7px, transparent 7px 10px);
+  border-radius: 0;
+}
+.retro-panel progress::-moz-progress-bar {
+  background: repeating-linear-gradient(90deg, #9fe779 0 7px, transparent 7px 10px);
+  border-radius: 0;
+}
+/* Legacy border shorthands reset border-image slicing; restore RetroUI's pixel geometry. */
+.retro-surface,
+button.retro-control,
+div.retro-input {
+  border-image-slice: 3;
+  border-image-width: 2;
+  border-image-repeat: stretch;
+  border-image-outset: 1;
+}
+.retro-panel .so-tile .so-v {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 18px;
+}
+.retro-panel .so-tile.time .so-v {
+  font-size: 12px;
+}
+
+/* Summary cards have exactly three compact rows; extended plan detail stays accessible. */
+.retro-workspace .usage-frame {
+  box-sizing: border-box;
+  height: 64px;
+  padding: 4px 6px;
+  display: grid;
+  grid-template-rows: 14px 18px 14px;
+  align-content: start;
+  gap: 0;
+}
+.retro-workspace .usage-frame > .ft-l,
+.retro-workspace .usage-frame > .ft-s {
+  margin: 0;
+  line-height: 14px;
+}
+.retro-workspace .usage-frame > .ft-v {
+  margin: 0;
+  line-height: 18px;
+}
+.retro-workspace .usage-frame > .plan-row {
+  margin: 0;
+  align-self: center;
+  min-width: 0;
+}
+.retro-workspace .usage-frame > svg {
+  display: none;
+}
+.retro-workspace .usage-frame > .plan-credits {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.retro-workspace .usage-frame .ft-l a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.retro-workspace .usage-frame .balance-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  overflow: hidden;
+}
+.retro-workspace .credit-balance {
+  color: #9fe779;
+  font: 600 10px/14px var(--mono);
+  white-space: nowrap;
+}
+.retro-workspace .balance-line .stale {
+  display: none;
+}
+
+/* Allow long attention flags to wrap without displacing the response action. */
+.retro-workspace .orc-actions {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.retro-workspace .orc-state {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.retro-workspace .orc-respond {
+  flex-shrink: 0;
+}
+.viewtab {
+  text-decoration: none;
+}

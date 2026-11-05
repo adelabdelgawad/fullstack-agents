@@ -1,3 +1,4 @@
+import { retroCardHtml } from "../components/retroMarkup";
 import { cardAgents, STATE_TEXT } from "../lib/cards";
 import { ago, esc } from "../lib/format";
 import { toolLine } from "../lib/markup";
@@ -91,12 +92,13 @@ const countBadges = (pairs: any[][]) =>
     .join("");
 
 function liveCard(x: any): string {
-  return (
-    `<div class="live-shell${x.running ? " running" : ""}"><div class="ls-head">` +
-    `<b class="ls-title" title="${esc(x.title)}">${esc(x.title)}</b>${statePill(x.state)}` +
-    `${x.time ? `<span class="ls-time">${esc(x.time)}</span>` : ""}</div><div class="ls-sub">${x.sub}</div>` +
-    `${x.badges ? `<div class="ls-badges">${x.badges}</div>` : ""}${x.details}` +
-    `<div class="ls-actions">${x.actions}${dismissButton(x.dismissItem)}</div></div>`
+  return retroCardHtml(
+    `<div class="ls-head">` +
+      `<b class="ls-title" title="${esc(x.title)}">${esc(x.title)}</b>${statePill(x.state)}` +
+      `${x.time ? `<span class="ls-time">${esc(x.time)}</span>` : ""}</div><div class="ls-sub">${x.sub}</div>` +
+      `${x.badges ? `<div class="ls-badges">${x.badges}</div>` : ""}${x.details}` +
+      `<div class="ls-actions">${x.actions}${dismissButton(x.dismissItem)}</div>`,
+    `live-shell${x.running ? " running" : ""}`,
   );
 }
 

@@ -1,3 +1,5 @@
+import { retroCardHtml } from "../components/retroMarkup";
+import { RetroCard } from "../components/RetroControls";
 import { useEffect, useRef, useState } from "react";
 import { cardAgents, FLAG_TEXT, STATE_TEXT } from "../lib/cards";
 import { ago, esc, fmtCost, fmtTokens, modelFamily, modelShort } from "../lib/format";
@@ -249,35 +251,39 @@ function overviewHtml(
   activity: any,
 ): string {
   const tile = (label: string, value: any, cls = "", extra = "") =>
-      `<div class="so-tile ${cls}"><div class="so-l">${esc(label)}</div><div class="so-v">${esc(value)}</div>${extra}</div>`,
+      retroCardHtml(
+        `<div class="so-l">${esc(label)}</div><div class="so-v">${esc(value)}</div>${extra}`,
+        `so-tile ${cls}`,
+      ),
     usage: any = c.usage,
     context = usage ? `${Math.round(usage.fill * 100)}%${usage.compactions ? ` · ${usage.compactions}×` : ""}` : "—";
   const tones: Record<string, string> = { working: "live", blocked: "bad", done: "done" };
-  return (
+  return retroCardHtml(
     `<section class="session-overview" aria-label="Session overview"><div class="so-head">` +
-    `<span class="so-ico" aria-hidden="true"></span><b>Session health</b>` +
-    `<span class="pill ${tones[status] || ""}">${esc(status)}</span><span class="so-right">` +
-    `${need ? `<span class="pill bad">${need} need${need === 1 ? "s" : ""} you</span>` : ""}` +
-    `<span class="pill">${esc(phase)}</span></span></div><div class="so-tiles">${tile("Phase", phase)}` +
-    `${tile(
-      "Tasks done",
-      all ? `${done}/${all}` : "—",
-      "",
-      all
-        ? `<div class="so-bar" aria-hidden="true"><span style="width:${Math.round((done / all) * 100)}%"></span></div>`
-        : "",
-    )}` +
-    `${tile("Running now", liveTotal(liveSets(c)), "live")}${tile("Needs you", need, need ? "bad" : "")}` +
-    `${tile(
-      "Context",
-      context,
-      usage?.blowout ? "bad" : "",
-      usage
-        ? `<div class="so-bar" aria-hidden="true"><span style="width:${Math.round(usage.fill * 100)}%"></span></div>`
-        : "",
-    )}` +
-    `${tile("Est. cost", fmtCost(usage?.cost))}${tile("Tokens / min", fmtTokens(usage?.tpm))}` +
-    `${tile("Latest activity", stamp(activity.updated || c.updated), "time")}</div></section>`
+      `<span class="so-ico" aria-hidden="true"></span><b>Session health</b>` +
+      `<span class="pill ${tones[status] || ""}">${esc(status)}</span><span class="so-right">` +
+      `${need ? `<span class="pill bad">${need} need${need === 1 ? "s" : ""} you</span>` : ""}` +
+      `<span class="pill">${esc(phase)}</span></span></div><div class="so-tiles">${tile("Phase", phase)}` +
+      `${tile(
+        "Tasks done",
+        all ? `${done}/${all}` : "—",
+        "",
+        all
+          ? `<div class="so-bar" aria-hidden="true"><span style="width:${Math.round((done / all) * 100)}%"></span></div>`
+          : "",
+      )}` +
+      `${tile("Running now", liveTotal(liveSets(c)), "live")}${tile("Needs you", need, need ? "bad" : "")}` +
+      `${tile(
+        "Context",
+        context,
+        usage?.blowout ? "bad" : "",
+        usage
+          ? `<div class="so-bar" aria-hidden="true"><span style="width:${Math.round(usage.fill * 100)}%"></span></div>`
+          : "",
+      )}` +
+      `${tile("Est. cost", fmtCost(usage?.cost))}${tile("Tokens / min", fmtTokens(usage?.tpm))}` +
+      `${tile("Latest activity", stamp(activity.updated || c.updated), "time")}</div></section>`,
+    "overview-frame",
   );
 }
 
@@ -517,5 +523,9 @@ export function InfoTab({ card, state, openRun }: { card: Card; state: DashState
   useEffect(() => paintInfo(root.current, card, state, openRun), [card, state, openRun, tick]);
   useEffect(() => syncLog(card, openRun), [card, openRun]);
   useEffect(() => listenForToggles(root.current, card.key), [card.key]);
-  return <div id="info" ref={root} onClick={(event) => clickInfo(event, card, state, root.current)}></div>;
+  return (
+    <RetroCard className="info-surface">
+      <div id="info" ref={root} onClick={(event) => clickInfo(event, card, state, root.current)}></div>
+    </RetroCard>
+  );
 }

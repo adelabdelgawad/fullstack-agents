@@ -1,3 +1,4 @@
+import { RetroButton, RetroCard } from "../../components/RetroControls";
 import { useEffect, useState } from "react";
 import { isRunning, isStale, needsHuman } from "../../lib/cards";
 import { modelFamily, modelShort } from "../../lib/format";
@@ -33,8 +34,9 @@ function SidebarRow({ card }: { card: Card }) {
     usage = card.usage || {};
   const sub = `${plan ? `${plan.done}/${plan.total} plan` : "no plan"}${workers.total ? ` · ${workers.done}/${workers.total} workers` : ""}`;
   return (
-    <button
+    <RetroButton
       className={`orc-row${openKey === card.key ? " sel" : ""} st-${status.key}`}
+      aria-label={card.title}
       data-orc={card.key}
       aria-current={openKey === card.key}
       title={`${card.title} — ${status.label} — ${sub}`}
@@ -48,7 +50,7 @@ function SidebarRow({ card }: { card: Card }) {
         </span>
       )}
       {usage.compactions ? <span className="cbadge">{usage.compactions}×</span> : null}
-    </button>
+    </RetroButton>
   );
 }
 
@@ -65,33 +67,36 @@ function Sidebar({ cards }: { cards: Card[] }) {
   };
   return (
     <nav className={`orc-side${collapsed ? " collapsed" : ""}`} aria-label="Orchestrators">
-      <div className="orc-side-head">
-        <span>Orchestrators</span>
-        <span className="fcount">{cards.length}</span>
-        <button
-          className="tbtn orc-collapse"
-          id="orc-collapse"
-          aria-label={`${collapsed ? "Expand" : "Collapse"} orchestrator list`}
-          onClick={toggle}
+      <RetroCard className="orc-nav-surface">
+        <div className="orc-side-head">
+          <span>Orchestrators</span>
+          <span className="fcount">{cards.length}</span>
+          <RetroButton
+            className="tbtn orc-collapse"
+            id="orc-collapse"
+            aria-label={`${collapsed ? "Expand" : "Collapse"} orchestrator list`}
+            aria-expanded={!collapsed}
+            onClick={toggle}
+          >
+            {collapsed ? "›" : "‹"}
+          </RetroButton>
+        </div>
+        <RetroButton
+          className={`orc-row orc-all${openKey ? "" : " sel"}`}
+          data-orc=""
+          aria-current={!openKey}
+          title={`${count("running")} running · ${count("waiting")} waiting · ${count("stale")} stale`}
+          onClick={closePanel}
         >
-          {collapsed ? "›" : "‹"}
-        </button>
-      </div>
-      <button
-        className={`orc-row orc-all${openKey ? "" : " sel"}`}
-        data-orc=""
-        aria-current={!openKey}
-        title={`${count("running")} running · ${count("waiting")} waiting · ${count("stale")} stale`}
-        onClick={closePanel}
-      >
-        <b>All orchestrators</b>
-        <span className="orc-row-sub">
-          {count("running")} running · {count("waiting")} waiting · {count("stale")} stale
-        </span>
-      </button>
-      {cards.map((card) => (
-        <SidebarRow card={card} key={card.key} />
-      ))}
+          <b>All orchestrators</b>
+          <span className="orc-row-sub">
+            {count("running")} running · {count("waiting")} waiting · {count("stale")} stale
+          </span>
+        </RetroButton>
+        {cards.map((card) => (
+          <SidebarRow card={card} key={card.key} />
+        ))}
+      </RetroCard>
     </nav>
   );
 }

@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { esc } from "../lib/format";
 import type { DashState } from "../lib/types";
-import { setView, setWall, useStore } from "../store";
+import { setView, setWall, useStore, viewFromPath } from "../store";
 import type { View } from "../store";
 
 const VIEWS: Array<[View, string]> = [
@@ -31,7 +31,8 @@ function ViewTabs({ view, state }: { view: View; state: DashState | null }) {
   return (
     <div className="viewtabs" role="tablist" aria-label="Dashboard view">
       {VIEWS.map(([tab, label]) => (
-        <button
+        <a
+          href={`/next/${tab}`}
           key={tab}
           className="viewtab"
           id={`view-${tab}`}
@@ -39,12 +40,16 @@ function ViewTabs({ view, state }: { view: View; state: DashState | null }) {
           data-view={tab}
           aria-selected={view === tab}
           aria-label={label}
-          onClick={() => setView(tab)}
+          onClick={(event) => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            setView(tab);
+          }}
         >
           <ViewIcon view={tab} />
           <span>{label}</span>
           {count(tab) !== null && <span className="viewtab-count">{count(tab)}</span>}
-        </button>
+        </a>
       ))}
     </div>
   );
@@ -62,9 +67,17 @@ export function Layout({ actions, children }: { actions?: ReactNode; children: R
   const wall = useStore((state) => state.wall);
   const state = useStore((storeState) => storeState.state);
   const offline = useStore((storeState) => storeState.offline);
+  useEffect(() => {
+    if (["/", "/next", "/next/"].includes(window.location.pathname)) {
+      window.history.replaceState(null, "", `/next/${view}${window.location.search}${window.location.hash}`);
+    }
+    const onPopState = () => setView(viewFromPath(window.location.pathname), false);
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
   return (
     <>
-      <header>
+      <header className={view === "herdr" ? undefined : "retro-header"}>
         <ViewTabs view={view} state={state} />
         <div className="hright">
           {actions}
@@ -87,7 +100,9 @@ export function Layout({ actions, children }: { actions?: ReactNode; children: R
           />
         </div>
       </header>
-      <main id="main">{children}</main>
+      <main id="main" className={view === "herdr" ? undefined : "retro-workspace"}>
+        {children}
+      </main>
     </>
   );
 }

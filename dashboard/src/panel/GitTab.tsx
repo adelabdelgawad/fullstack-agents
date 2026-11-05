@@ -1,3 +1,4 @@
+import { RetroButton, RetroCard } from "../components/RetroControls";
 import { useEffect, useState } from "react";
 import { ago } from "../lib/format";
 import type { Card } from "../lib/types";
@@ -84,22 +85,24 @@ function GitChanges({ card, paint }: { card: Card; paint: Paint }) {
     commits = git.items?.commits || [];
   return (
     <section className={`gcol g1${git.hide1 ? " hid" : ""}`} id="g1">
-      {git.hide1 ? (
-        <button
-          className="rail"
-          data-show="1"
-          title="Show changes"
-          aria-label="Show changes"
-          onClick={() => {
-            git.hide1 = false;
-            paint();
-          }}
-        >
-          »
-        </button>
-      ) : (
-        <GitChangesBody card={card} paint={paint} unc={unc} commits={commits} />
-      )}
+      <RetroCard className="git-surface">
+        {git.hide1 ? (
+          <RetroButton
+            className="rail"
+            data-show="1"
+            title="Show changes"
+            aria-label="Show changes"
+            onClick={() => {
+              git.hide1 = false;
+              paint();
+            }}
+          >
+            »
+          </RetroButton>
+        ) : (
+          <GitChangesBody card={card} paint={paint} unc={unc} commits={commits} />
+        )}
+      </RetroCard>
     </section>
   );
 }
@@ -119,7 +122,7 @@ function GitChangesBody({
     <>
       <div className="gh">
         <span className="gt">Changes</span>
-        <button
+        <RetroButton
           className="action-button"
           data-hide="1"
           title="Hide changes"
@@ -129,7 +132,7 @@ function GitChangesBody({
           }}
         >
           Hide «
-        </button>
+        </RetroButton>
       </div>
       <GitChangesList card={card} paint={paint} unc={unc} commits={commits} />
     </>
@@ -149,7 +152,7 @@ function GitChangesList({
 }) {
   return (
     <div className="gb">
-      <button
+      <RetroButton
         className="grp"
         data-g="unc"
         onClick={() => {
@@ -158,9 +161,9 @@ function GitChangesList({
         }}
       >
         {git.open.unc ? "▾" : "▸"} Uncommitted changes <span className="badge">{unc}</span>
-      </button>
+      </RetroButton>
       {git.open.unc ? <Uncommitted card={card} paint={paint} count={unc} /> : null}
-      <button
+      <RetroButton
         className="grp"
         data-g="com"
         onClick={() => {
@@ -170,7 +173,7 @@ function GitChangesList({
       >
         {git.open.com ? "▾" : "▸"} {git.items?.recent ? "This task's commits" : "Commits ahead of main"}{" "}
         <span className="badge">{commits.length}</span>
-      </button>
+      </RetroButton>
       {git.open.com ? <Commits card={card} paint={paint} commits={commits} /> : null}
     </div>
   );
@@ -179,7 +182,7 @@ function GitChangesList({
 function Uncommitted({ card, paint, count }: { card: Card; paint: Paint; count: number }) {
   if (!count) return <div className="hint">Working tree is clean.</div>;
   return (
-    <button
+    <RetroButton
       className={`gi${git.item === "WORKTREE" ? " on" : ""}`}
       data-ref="WORKTREE"
       onClick={() => pickItem(card, "WORKTREE", paint)}
@@ -191,7 +194,7 @@ function Uncommitted({ card, paint, count }: { card: Card; paint: Paint; count: 
           ? ` · ${git.items.own} from this task, ${count - git.items.own} other`
           : ""}
       </span>
-    </button>
+    </RetroButton>
   );
 }
 
@@ -200,7 +203,7 @@ function Commits({ card, paint, commits }: { card: Card; paint: Paint; commits: 
   if (!commits.length)
     return <div className="hint">{git.items.recent ? "No commits from this task." : "No commits."}</div>;
   return commits.map((commit) => (
-    <button
+    <RetroButton
       className={`gi${git.item === commit.sha ? " on" : ""}`}
       data-ref={commit.sha}
       onClick={() => pickItem(card, commit.sha, paint)}
@@ -209,14 +212,14 @@ function Commits({ card, paint, commits }: { card: Card; paint: Paint; commits: 
       <span className="sha">{commit.sha}</span>
       {commit.subject}
       <span className="sub">{ago(commit.at)} ago</span>
-    </button>
+    </RetroButton>
   ));
 }
 
 function fileRow(card: Card, file: GitFile, paint: Paint) {
   const index = file.path.lastIndexOf("/");
   return (
-    <button
+    <RetroButton
       className={`gf${git.file === file.path ? " on" : ""}`}
       data-file={file.path}
       onClick={() => pickFile(card, file.path, paint)}
@@ -225,7 +228,7 @@ function fileRow(card: Card, file: GitFile, paint: Paint) {
       <span className={`st st-${stc(file.status)}`}>{file.status}</span>
       <span className="fn">{file.path.slice(index + 1)}</span>
       <span className="fd">{index < 0 ? "" : file.path.slice(0, index)}</span>
-    </button>
+    </RetroButton>
   );
 }
 
@@ -235,22 +238,24 @@ function GitFiles({ card, paint }: { card: Card; paint: Paint }) {
     rest = scoped ? git.files?.filter((file) => !file.own) : [];
   return (
     <section className={`gcol g2${git.hide2 ? " hid" : ""}`} id="g2">
-      {git.hide2 ? (
-        <button
-          className="rail"
-          data-show="2"
-          title="Show files"
-          aria-label="Show files"
-          onClick={() => {
-            git.hide2 = false;
-            paint();
-          }}
-        >
-          »
-        </button>
-      ) : (
-        <GitFilesBody card={card} paint={paint} mine={mine} rest={rest} />
-      )}
+      <RetroCard className="git-surface">
+        {git.hide2 ? (
+          <RetroButton
+            className="rail"
+            data-show="2"
+            title="Show files"
+            aria-label="Show files"
+            onClick={() => {
+              git.hide2 = false;
+              paint();
+            }}
+          >
+            »
+          </RetroButton>
+        ) : (
+          <GitFilesBody card={card} paint={paint} mine={mine} rest={rest} />
+        )}
+      </RetroCard>
     </section>
   );
 }
@@ -271,7 +276,7 @@ function GitFilesBody({
     <>
       <div className="gh">
         <span className="gt">Files</span>
-        <button
+        <RetroButton
           className="action-button"
           data-hide="2"
           title="Hide files"
@@ -281,7 +286,7 @@ function GitFilesBody({
           }}
         >
           Hide «
-        </button>
+        </RetroButton>
       </div>
       <GitFileList mine={mine} rest={rest} rows={rows} paint={paint} />
     </>
@@ -322,7 +327,7 @@ function GitFileList({
       {mine?.length ? rows(mine) : <div className="hint">No uncommitted files from this task.</div>}
       {rest?.length ? (
         <>
-          <button
+          <RetroButton
             className="grp"
             data-g="other"
             onClick={() => {
@@ -331,7 +336,7 @@ function GitFileList({
             }}
           >
             {git.open.other ? "▾" : "▸"} Not from this task <span className="badge">{rest.length}</span>
-          </button>
+          </RetroButton>
           {git.open.other ? rows(rest) : null}
         </>
       ) : null}
@@ -342,16 +347,18 @@ function GitFileList({
 function GitDiff() {
   return (
     <section className="gcol g3" id="g3">
-      <div className="gh">
-        <span className="gt">{git.file || "Changes"}</span>
-      </div>
-      <div className="gb">
-        {git.file ? (
-          <pre className="diff" dangerouslySetInnerHTML={{ __html: diffHtml(git.diff) }}></pre>
-        ) : (
-          <div className="hint">Pick a file to see its changes.</div>
-        )}
-      </div>
+      <RetroCard className="git-surface">
+        <div className="gh">
+          <span className="gt">{git.file || "Changes"}</span>
+        </div>
+        <div className="gb">
+          {git.file ? (
+            <pre className="diff" dangerouslySetInnerHTML={{ __html: diffHtml(git.diff) }}></pre>
+          ) : (
+            <div className="hint">Pick a file to see its changes.</div>
+          )}
+        </div>
+      </RetroCard>
     </section>
   );
 }

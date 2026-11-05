@@ -1,0 +1,95 @@
+/* Button and Input styles from pixel-retroui 2.1.0.
+ * Component rules only: exclude the bundled global Tailwind reset.
+ * BSD 3-Clause License
+ *
+ * Copyright (c) 2024, Dakshi Goel
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of retroui nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+.Button-module__pixelButton___8EYeN {
+  background-color: var(--button-custom-bg, var(--bg-button, #f0f0f0));
+  border-color: var(--button-custom-border, var(--border-button, #000));
+  border-image-outset: 2;
+  border-image-repeat: stretch;
+  border-image-slice: 3;
+  border-image-width: 2;
+  border-style: solid;
+  border-width: 5px;
+  box-shadow:
+    2px 2px 0 2px var(--button-custom-shadow, var(--shadow-button, #000)),
+    -2px -2px 0 2px var(--button-custom-bg, var(--bg-button, #f0f0f0));
+  color: var(--button-custom-text, var(--text-button, #000));
+  display: inline-block;
+  font-family: Minecraft, sans-serif;
+  margin: 0.5rem 0.75rem;
+  padding: 0.5rem;
+  position: relative;
+}
+.Button-module__pixelButton___8EYeN:active {
+  box-shadow:
+    2px 2px 0 2px var(--button-custom-bg, var(--bg-button, #f0f0f0)),
+    -2px -2px 0 2px var(--button-custom-bg, var(--bg-button, #f0f0f0));
+  transform: translateY(2px);
+}
+.Input-module__pixelContainer___q-uvd {
+  background-color: var(--input-custom-bg, var(--bg-input, #fff));
+  border-color: var(--input-custom-border, var(--border-input, #000));
+  border-image-outset: 2;
+  border-image-repeat: stretch;
+  border-image-slice: 3;
+  border-image-width: 2;
+  border-style: solid;
+  border-width: 5px;
+  box-shadow:
+    2px 2px 0 2px var(--input-custom-bg, var(--bg-input, #fff)),
+    -2px -2px 0 2px var(--input-custom-bg, var(--bg-input, #fff));
+  color: var(--input-custom-text, var(--text-input, #000));
+  display: inline-block;
+  font-size: 16px;
+  position: relative;
+}
+.Input-module__pixelInput___iCtVe {
+  background-color: transparent;
+  color: inherit;
+  padding: 0.25rem 0.5rem;
+}
+.Input-module__pixelInput___iCtVe:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+.Input-module__pixelInputIconButton___RE0AJ {
+  margin-right: 0.25rem;
+  padding: 0.25rem;
+}
+.Input-module__pixelInputIconButton___RE0AJ:active {
+  top: 2px;
+}
+
+/* RetroUI Card component */
+.Card-module__pixelCard___RY5ZX {
+  background-color: var(--card-custom-bg, var(--bg-card, #fff));
+  border-color: var(--card-custom-border, var(--border-card, #000));
+  border-image-outset: 2;
+  border-image-repeat: stretch;
+  border-image-slice: 3;
+  border-image-width: 2;
+  border-style: solid;
+  border-width: 5px;
+  box-shadow:
+    2px 2px 0 2px var(--card-custom-shadow, var(--shadow-card, #000)),
+    -2px -2px 0 2px var(--card-custom-bg, var(--bg-card, #fff));
+  color: var(--card-custom-text, var(--text-card, #000));
+  font-family: Minecraft, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  margin: 0.5rem;
+  padding: 1px;
+}

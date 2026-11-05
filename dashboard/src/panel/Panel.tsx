@@ -1,3 +1,4 @@
+import { RetroButton } from "../components/RetroControls";
 import { useEffect, useRef } from "react";
 import { gitBadge } from "../lib/cards";
 import type { Card, DashState } from "../lib/types";
@@ -16,7 +17,7 @@ export function openRunLog(cardKey: string, runId: string): void {
 function PanelTabs({ tab, card }: { tab: string; card: Card }) {
   return (
     <div className="ptabs" id="ptabs" role="tablist">
-      <button
+      <RetroButton
         className="tab2"
         role="tab"
         data-t="info"
@@ -24,8 +25,8 @@ function PanelTabs({ tab, card }: { tab: string; card: Card }) {
         onClick={() => store.set({ tab2: "info" })}
       >
         Information
-      </button>
-      <button
+      </RetroButton>
+      <RetroButton
         className="tab2"
         role="tab"
         data-t="git"
@@ -40,8 +41,8 @@ function PanelTabs({ tab, card }: { tab: string; card: Card }) {
             <span className="badge">{gitBadge(card)}</span>
           </>
         ) : null}
-      </button>
-      <button
+      </RetroButton>
+      <RetroButton
         className="tab2"
         role="tab"
         data-t="terminal"
@@ -49,7 +50,7 @@ function PanelTabs({ tab, card }: { tab: string; card: Card }) {
         onClick={() => store.set({ tab2: "terminal" })}
       >
         Terminal
-      </button>
+      </RetroButton>
     </div>
   );
 }
@@ -69,9 +70,9 @@ function PanelContent({
     <>
       <div className="ptop">
         <PanelTabs tab={tab} card={card} />
-        <button className="action-button close" id="close" onClick={closePanel}>
+        <RetroButton className="action-button close" id="close" onClick={closePanel}>
           Close
-        </button>
+        </RetroButton>
       </div>
       <PanelHead card={card} state={state} />
       <div className="pbody" id="pbody">
@@ -116,7 +117,7 @@ export function Panel() {
   }, []);
   const open = !!card && !!state;
   return (
-    <aside id="panel" aria-label="Details" className={open ? "open" : ""}>
+    <aside id="panel" aria-label="Details" className={`retro-panel${open ? " open" : ""}`}>
       {open ? <PanelContent card={card} state={state} openRun={openRun} tab={tab} /> : null}
     </aside>
   );

@@ -1,3 +1,4 @@
+import { RetroButton } from "../components/RetroControls";
 import { fleetCompare, fleetMatches } from "../lib/cards";
 import { setFavOnly, setFleet, useStore } from "../store";
 import { openNewSession } from "../terminal/HerdrOverlay";
@@ -12,15 +13,15 @@ export function AgentsActions() {
     : "Favourites only";
   return (
     <>
-      <button
+      <RetroButton
         className="newsess"
         id="newsess"
         title="Open a new herdr tab and start Claude, Codex or Grok in it"
         onClick={(event) => openNewSession(event.currentTarget)}
       >
         + New session
-      </button>
-      <button
+      </RetroButton>
+      <RetroButton
         className="favsw"
         id="favsw"
         role="switch"
@@ -29,8 +30,8 @@ export function AgentsActions() {
       >
         <span className="track" aria-hidden="true"></span>
         {favouriteCount}
-      </button>
-      <button
+      </RetroButton>
+      <RetroButton
         className="tbtn"
         id="ffeed"
         aria-pressed={feed}
@@ -38,7 +39,7 @@ export function AgentsActions() {
         onClick={() => setFleet({ feed: !feed })}
       >
         Activity
-      </button>
+      </RetroButton>
     </>
   );
 }

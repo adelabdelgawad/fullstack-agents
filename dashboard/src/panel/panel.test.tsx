@@ -87,6 +87,25 @@ describe("information panel", () => {
     expect(html).toContain("Use &lt;REST&gt;?");
   });
 
+  it("keeps nested disclosure state and escaped text inside RetroUI cards", () => {
+    const card = fixture();
+    card.title = '<img src=x onerror="alert(1)">';
+    infoOpen.set(
+      card.key,
+      new Map([
+        ["summary", true],
+        ["result", false],
+      ]),
+    );
+    const root = document.createElement("div");
+    root.innerHTML = infoHtml(card, state(card), null);
+    expect(root.querySelector(".info-frame > details[data-info-section='summary']")?.hasAttribute("open")).toBe(true);
+    expect(root.querySelector("details[data-info-section='result']")?.hasAttribute("open")).toBe(false);
+    expect(root.querySelector("img")).toBeNull();
+    expect(root.textContent).toContain(card.title);
+    expect(root.querySelectorAll(".overview-frame .so-tile")).toHaveLength(8);
+  });
+
   it("restores disclosures per card", () => {
     const card = fixture();
     infoOpen.set(
