@@ -127,6 +127,22 @@ def _check_within_root(root, relpath):
     if resolved != root and not resolved.is_relative_to(root):
         raise ValueError(f"scope path escapes the repository: {relpath}")
 
+def _execution_root(root, scope):
+    if "worktree" not in scope:
+        return root
+    raw = _nonempty_str(scope["worktree"], "scope.worktree")
+    candidate = (root / raw).resolve()
+    registered = {Path(field[9:]).resolve() for field in
+                  _git(["worktree", "list", "--porcelain", "-z"], root).split("\0")
+                  if field.startswith("worktree ")}
+    if candidate not in registered or not candidate.is_dir():
+        raise ValueError("scope.worktree must name a registered Git worktree of the ledger repository")
+    common = _git(["rev-parse", "--path-format=absolute", "--git-common-dir"], root).strip()
+    target_common = _git(["rev-parse", "--path-format=absolute", "--git-common-dir"], candidate).strip()
+    if Path(common).resolve() != Path(target_common).resolve():
+        raise ValueError("scope.worktree must name a registered Git worktree of the ledger repository")
+    return candidate
+
 def _scoped_files(root, paths):
     if not paths:
         return []
@@ -143,7 +159,9 @@ def _baseline_code_state(root, ref):
 
 def deliverable_state(root, spec, ledger_path=None):
     scope = spec["scope"]
-    ledger_rel = str(ledger_path.resolve().relative_to(root)) if ledger_path is not None else None
+    root = _execution_root(root, scope)
+    ledger_rel = (str(ledger_path.resolve().relative_to(root))
+                  if ledger_path is not None and ledger_path.resolve().is_relative_to(root) else None)
     paths = sorted(set(scope["paths"]) | set(scope.get("dependencies", [])))
     tracked = [path for path in _scoped_files(root, paths) if path != ledger_rel]
     entries, count, total_bytes = [], 0, 0
@@ -209,9 +227,10 @@ def _validate_expect(value, check_id):
 def _validate_scope(value, kind, root):
     if not isinstance(value, dict):
         raise ValueError("scope must be an object")
-    allowed = {"paths", "dependencies", "dependencies_none", "inputs", "env", "rationale"}
+    allowed = {"paths", "dependencies", "dependencies_none", "inputs", "env", "rationale", "worktree"}
     if not set(value).issubset(allowed):
         raise ValueError(f"Unknown scope keys: {sorted(set(value) - allowed)}")
+    execution_root = _execution_root(root, value)
     rationale = _nonempty_str(value.get("rationale", ""), "scope.rationale")
     paths = _str_list(value.get("paths", []), "scope.paths")
     if not paths:
@@ -226,8 +245,8 @@ def _validate_scope(value, kind, root):
     inputs = _str_list(value.get("inputs", []), "scope.inputs")
     env = _str_list(value.get("env", []), "scope.env")
     for path in paths + dependencies + inputs:
-        _check_within_root(root, path)
-    return {"paths": paths, "dependencies": dependencies, "dependencies_none": dependencies_none,
+        _check_within_root(execution_root, path)
+    return {**({"worktree": str(execution_root)} if "worktree" in value else {}), "paths": paths, "dependencies": dependencies, "dependencies_none": dependencies_none,
             "inputs": inputs, "env": env, "rationale": rationale}
 
 def _validate_checks(value):
@@ -432,7 +451,7 @@ def _apply_finish(root, path, block, items, deliverable_id, check_id, run_id, ru
     check = spec["checks"][check_id]
     if run["definition_digest"] != check["definition_digest"]:
         raise ValueError("check definition changed since start; finish refused")
-    evidence = _validate_evidence_paths(check["method"], spec["scope"], root, evidence_paths)
+    evidence = _validate_evidence_paths(check["method"], spec["scope"], _execution_root(root, spec["scope"]), evidence_paths)
     if check["method"] == "command":
         for info in evidence:
             _assert_fresh(info, run["started_at"])
@@ -509,6 +528,7 @@ def _default_log_path(root, path, deliverable_id, check_id):
 
 def _validate_log_path(root, spec, log_path):
     scope = spec["scope"]
+    root = _execution_root(root, scope)
     scoped_abs = {(root / item).resolve() for item in set(scope["paths"]) | set(scope.get("dependencies", [])) | set(scope.get("inputs", []))}
     probe = log_path.resolve() if log_path.exists() else log_path.parent.resolve() / log_path.name
     if _is_inside_scope(probe, scoped_abs):
@@ -559,7 +579,7 @@ def cmd_check_run(args, root, path):
         block["runs"][run_id] = run
         logs = [task_rules.log_line(args.id, "check_start", check=args.check, run=run_id)]
         _write(path, text, items, start, end, block, logs)
-        cwd, command = _resolve_cwd(root, check.get("cwd", ".")), check["command"]
+        cwd, command = _resolve_cwd(_execution_root(root, spec["scope"]), check.get("cwd", ".")), check["command"]
     timeout = args.timeout or DEFAULT_TIMEOUT
     exit_code, timed_out = _execute(command, cwd, log_path, timeout)
     raw_result, reason = _map_exit(exit_code, timed_out)
@@ -603,7 +623,7 @@ def cmd_check_attribute(args, root, path):
         missing = [signature for signature in baseline["signatures"] if signature not in _read_log_text(result["evidence"])]
         if missing:
             raise ValueError(f"result log is missing baseline signatures: {missing}")
-        if not _is_ancestor(root, baseline["ref"]):
+        if not _is_ancestor(_execution_root(root, spec["scope"]), baseline["ref"]):
             raise ValueError("baseline ref is not an ancestor of HEAD")
         if not args.reason:
             raise ValueError("attribute requires --reason")
@@ -624,7 +644,9 @@ def cmd_baseline(args, root, path):
         if version != "v2":
             raise ValueError("Completion evidence requires a v2 ledger")
         block = load_block(text)
-        if not _is_ancestor(root, args.ref):
+        baseline_root = _execution_root(root, {"worktree": args.worktree} if args.worktree else {})
+        baseline_ref = _git(["rev-parse", "--verify", args.ref + "^{commit}"], baseline_root).strip()
+        if not _is_ancestor(baseline_root, baseline_ref):
             raise ValueError("baseline ref must be an ancestor of HEAD")
         log_path = Path(args.log).expanduser()
         log_path = log_path if log_path.is_absolute() else root / log_path
@@ -635,10 +657,10 @@ def cmd_baseline(args, root, path):
         if missing:
             raise ValueError(f"Baseline log is missing signatures: {missing}")
         block["baselines"][args.id] = {
-            "command": args.baseline_command, "ref": args.ref, "log": str(log_path.resolve()),
+            "command": args.baseline_command, "ref": baseline_ref, "log": str(log_path.resolve()),
             "log_sha256": hashlib.sha256(log_bytes).hexdigest(), "signatures": list(args.signature),
-            "state": _baseline_code_state(root, args.ref), "reason": args.reason, "recorded_at": _now()}
-        logs = [task_rules.log_line(args.id, "baseline", command=args.baseline_command, ref=args.ref,
+            "state": _baseline_code_state(baseline_root, baseline_ref), "reason": args.reason, "recorded_at": _now()}
+        logs = [task_rules.log_line(args.id, "baseline", command=args.baseline_command, ref=baseline_ref,
                                      reason=args.reason)]
         _write(path, text, items, start, end, block, logs)
     return {"file": str(path)}

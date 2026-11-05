@@ -118,6 +118,76 @@ class TaskEvidenceTests(unittest.TestCase):
     def done(self, deliverable_id, fails=False):
         return self.call("set", "--id", deliverable_id, "--status", "done", fails=fails)
 
+    def linked_worktree(self):
+        worktree = Path(self.scratch.name) / "linked"
+        git(["worktree", "add", "-qb", "feature", str(worktree)], self.root)
+        return worktree
+
+    def test_linked_worktree_checks_and_completion_use_worktree_files(self):
+        worktree = self.linked_worktree()
+        (worktree / "src/app.py").write_text("print('worktree-only')\n")
+        spec = self.basic_spec(scope={"worktree": str(worktree)})
+        spec["checks"]["C1"].update(command="python3 src/app.py", expect={"patterns": ["worktree-only"]})
+        self.accept("D1", spec)
+        self.assertEqual(self.run_check("D1", "C1")["result"], "pass")
+        self.assertTrue(self.verify("D1")["ok"])
+        self.done("D1")
+        self.assertEqual(tasks.load_tasks("ev-session", str(self.root))["completed"], 1)
+        (worktree / "src/app.py").write_text("print('changed')\n")
+        self.assertFalse(self.verify("D1")["ok"])
+
+    def test_worktree_cannot_be_an_unrelated_repository_or_subdirectory(self):
+        other = Path(self.scratch.name) / "other"
+        git(["clone", "-q", str(self.root), str(other)], self.root)
+        for candidate in (other, self.root / "src"):
+            self.assertIn("registered Git worktree", self.accept(
+                "D1", self.basic_spec(scope={"worktree": str(candidate)}), fails=True))
+
+    def test_worktree_scope_still_rejects_escaping_paths(self):
+        worktree = self.linked_worktree()
+        self.assertIn("escapes", self.accept("D1", self.basic_spec(
+            scope={"worktree": str(worktree), "paths": ["../repo/src"]}), fails=True))
+
+    def test_worktree_check_cannot_run_or_write_log_outside_declared_boundaries(self):
+        worktree = self.linked_worktree()
+        spec = self.basic_spec(scope={"worktree": str(worktree)})
+        spec["checks"]["C1"]["cwd"] = str(self.root)
+        self.accept("D1", spec)
+        self.assertIn("cwd must remain", self.run_check("D1", "C1", fails=True))
+        self.assertIn("outside the declared scope", self.call("check", "run", "--id", "D1", "--check", "C1",
+                      "--log", str(worktree / "src/check.log"), fails=True))
+
+    def test_document_evidence_is_resolved_in_worktree(self):
+        worktree = self.linked_worktree()
+        spec = self.basic_spec(kind="docs", scope={"worktree": str(worktree), "paths": ["README.md"]},
+                               checks={"C1": {"method": "document"}})
+        self.accept("D1", spec)
+        run = self.start("D1", "C1")["run"]
+        self.finish("D1", "C1", run, "pass", ["README.md"])
+        result = task_evidence.load_block(self.path.read_text())["deliverables"]["D1"]["results"]["C1"]
+        self.assertEqual(result["evidence"][0]["path"], str(worktree / "README.md"))
+        self.assertTrue(self.verify("D1")["ok"])
+
+    def test_worktree_baseline_can_reference_its_unmerged_commit(self):
+        worktree = self.linked_worktree()
+        (worktree / "src/app.py").write_text("print('branch baseline')\n")
+        git(["commit", "-qam", "branch baseline"], worktree)
+        commit = git(["rev-parse", "HEAD"], worktree)
+        log = Path(self.scratch.name) / "baseline.log"
+        log.write_text("known failure\n")
+        self.call("baseline", "--id", "B1", "--command", "false", "--ref", "HEAD",
+                  "--worktree", str(worktree), "--log", str(log), "--signature", "known failure",
+                  "--reason", "failure predates this change")
+        block = task_evidence.load_block(self.path.read_text())
+        self.assertEqual(block["baselines"]["B1"]["ref"], commit)
+
+    def test_removed_worktree_invalidates_evidence(self):
+        worktree = self.linked_worktree()
+        self.accept("D1", self.basic_spec(scope={"worktree": str(worktree)}))
+        self.run_check("D1", "C1")
+        git(["worktree", "remove", str(worktree)], self.root)
+        self.assertFalse(self.verify("D1")["ok"])
+
     # -- spec validation -------------------------------------------------
 
     def test_accept_requires_at_least_one_criterion_check_and_command_for_code(self):

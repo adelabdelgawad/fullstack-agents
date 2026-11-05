@@ -121,6 +121,14 @@ was recorded under the check's current definition, saw no scoped change between 
 files unchanged, and matches the scope's current content. `fsa-task verify --id S4` prints the same report without
 writing. A later non-pass result on a `done` deliverable reopens it, with the reason logged, in the same row.
 
+**Linked worktrees.** If the ledger stays in the main checkout but implementation runs in a linked worktree,
+set `scope.worktree` to that checkout's absolute path in the evidence spec. It must be a registered Git worktree
+of the ledger repository. Keep `scope.paths`, dependencies, inputs, and check `cwd` relative to that worktree.
+Checks and fingerprints use its files; ledger ownership and registration remain unchanged. Do not use `../`
+to escape the ledger root or wait for a merge just to record valid worktree evidence. Removing the worktree or
+changing its scoped files invalidates verification; changing `scope.worktree` requires fresh evidence.
+For a baseline on an unmerged worktree commit, pass `baseline --worktree /absolute/checkout --ref <commit-sha>`.
+
 **Changing the spec.** Any change to criteria, checks, scope or waivers after a result exists needs `--reason`; it
 invalidates exactly the results whose check definition changed, and the log names them. Never edit a spec to get a
 deliverable through the gate without saying so to the user.
@@ -277,6 +285,10 @@ wording:
   cap), it shows the user "released without progress" with the open rows; nothing is marked complete.
 - `block`, `resolve` and `withdraw` refresh an existing checkpoint's blockers (and next action) in the same write; the
   deliverable stays open with its failing checks.
+- On worker return, resolve its worker blocker using the actual result JSON before auditing the result.
+  Updating a row's note does not resolve a blocker. Clear the activity lease when execution ends, then record
+  `in_progress` or `verifying` as appropriate; mark done only after the evidence gate passes. If a separate
+  external blocker remains, the row correctly stays blocked until that blocker is also resolved.
 - `team-board phase complete` is refused while the ledger has open work; a push declares `review`, never `complete`.
 
 **Continuing.** In the same session nothing is needed: the next prompt receives a one-line status (state, blockers,

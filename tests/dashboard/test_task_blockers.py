@@ -187,6 +187,22 @@ class TaskBlockersTests(unittest.TestCase):
         self.assertEqual(result["resumed"], ["S3"])
         self.assertEqual(self.call("show", "--json")["items"][0]["status"], "pending")
 
+    def test_worker_return_clears_wait_without_claiming_deliverable_done(self):
+        self.init("S1|in_progress|Worktree implementation|")
+        self.call("block", "--id", "W1", "--rows", "S1", "--kind", "worker", "--text", "run-1")
+        self.call("block", "--id", "E1", "--rows", "S1", "--kind", "external", "--class", "other",
+                  "--text", "worktree evidence unavailable")
+        result_file = self.write("result.json", json.dumps({"state": "completed"}))
+        self.call("resolve", "--id", "W1", "--evidence", result_file)
+        state = self.call("show", "--json")
+        self.assertEqual(state["session_state"]["workers"], [])
+        self.assertEqual(state["items"][0]["status"], "blocked")
+        evidence = self.write("verified.txt", "Worktree evidence check passed")
+        self.call("resolve", "--id", "E1", "--evidence", evidence, "--reason", "worktree check passed")
+        state = self.call("show", "--json")
+        self.assertEqual(state["items"][0]["status"], "in_progress")
+        self.assertEqual(state["completed"], 0)
+
     # -- capacity ---------------------------------------------------------
 
     def test_capacity_resolution_rules(self):

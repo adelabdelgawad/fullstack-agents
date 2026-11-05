@@ -40,6 +40,7 @@ def add_arguments(command, sub):
         # dest renamed: the top-level dispatch already uses args.command for the subcommand name itself.
         sub.add_argument("--command", dest="baseline_command", required=True)
         sub.add_argument("--ref", required=True)
+        sub.add_argument("--worktree", help="Registered linked checkout whose HEAD contains the baseline")
         sub.add_argument("--log", required=True)
         sub.add_argument("--signature", action="append", default=[], required=True)
         sub.add_argument("--reason", required=True)
