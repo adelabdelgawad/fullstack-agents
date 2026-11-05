@@ -35,6 +35,9 @@ full path is everything below, including the ledger and team-board lifecycle.
    browser time for latency. Establish causes from source/reproduction.
 2. Plan first in Claude: at most 40 lines; outcome, files/sites, acceptance,
    minimum tests/commands, deploy class (bare-metal: the services to reload), risks.
+   A full-path plan with a migration, wire-contract or ownership change, or several units,
+   is saved and given one `diff-reviewer` `LENS: plan` pass (plan plus cited files) before
+   dispatch; its findings are hypotheses you verify, as in the audit.
 3. Implement: direct edits only within the project budget and outside risk paths.
    Re-editing an opened path is free. Live worker paths belong to that run until
    it finishes. Vendored forks, migrations and ownership/lifecycle code always
