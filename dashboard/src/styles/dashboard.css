@@ -550,13 +550,22 @@ main {
   font-size: 12px;
 }
 .doc {
+  display: flex;
+  align-items: center;
   line-height: 26px;
   white-space: nowrap;
+}
+.doc > b,
+.doc .s {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .doc .s {
   margin-left: 4px;
+}
+.doc .copy-ico {
+  flex: none;
 }
 .copy-ico {
   vertical-align: middle;

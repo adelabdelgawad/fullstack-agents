@@ -1,26 +1,30 @@
-export async function writeClipboard(text: string): Promise<boolean> {
-  if (navigator.clipboard && window.isSecureContext) {
-    await navigator.clipboard.writeText(text);
-    return true;
-  }
-  const ta = Object.assign(document.createElement("textarea"), { value: text });
-  ta.style.cssText = "position:fixed;opacity:0;top:0";
-  document.body.appendChild(ta);
+function execCopy(text: string): boolean {
+  const host = document.fullscreenElement ?? document.querySelector("dialog[open]") ?? document.body;
+  const ta = Object.assign(document.createElement("textarea"), { value: text, readOnly: true });
+  ta.style.cssText = "position:fixed;opacity:0;top:0;left:0";
+  host.appendChild(ta);
+  ta.focus({ preventScroll: true });
   ta.select();
-  const ok = document.execCommand("copy");
-  ta.remove();
-  return ok;
+  ta.setSelectionRange(0, text.length);
+  try {
+    return document.execCommand("copy");
+  } finally {
+    ta.remove();
+  }
 }
 
-export function copyText(text: string): Promise<void> {
-  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
-  const ta = document.createElement("textarea");
-  ta.value = text;
-  ta.style.position = "fixed";
-  ta.style.opacity = "0";
-  (document.querySelector("dialog[open]") || document.body).appendChild(ta);
-  ta.select();
-  const ok = document.execCommand("copy");
-  ta.remove();
-  return ok ? Promise.resolve() : Promise.reject(new Error("copy failed"));
+export async function writeClipboard(text: string): Promise<boolean> {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return execCopy(text);
+    }
+  }
+  return execCopy(text);
+}
+
+export async function copyText(text: string): Promise<void> {
+  if (!(await writeClipboard(text))) throw new Error("copy failed");
 }

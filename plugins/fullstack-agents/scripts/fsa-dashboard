@@ -80,7 +80,7 @@ PASTED_RE = re.compile(r"</?pasted_content[^>]*>")
 CONTROL_COMMANDS = {"/clear", "/compact", "/model", "/resume", "/exit", "/rename", "/config", "/status", "/cost", "/context",
                     "/help", "/login", "/logout", "/memory", "/permissions", "/plugin", "/mcp", "/hooks", "/theme", "/usage"}
 SAID_MAX = 20000
-MD_PATH_RE = re.compile(r"(?<![\w/.:~-])((?:~|\.{1,2})?/?[\w.-]+(?:/[\w.-]+)*\.md)(?![\w/])")
+FILE_PATH_RE = re.compile(r"(?<![\w/.:~-])((?:~|\.{1,2})?/?[\w.-]+(?:/[\w.-]+)*\.(?:log|sql|text|txt|md))(?![\w/])")
 DOCS_MAX = 30
 DOC_BYTES = 2_000_000
 PHASES = ("investigate", "plan", "implement", "audit", "review", "complete")
@@ -1404,7 +1404,7 @@ def repo_top(cwd):
 def message_docs(text, cwd):
     out, seen, top = [], set(), repo_top(cwd)
     bases = list(dict.fromkeys(b for b in (Path(cwd) if cwd else None, top) if b))
-    for shown in dict.fromkeys(MD_PATH_RE.findall(text)):
+    for shown in dict.fromkeys(FILE_PATH_RE.findall(text)):
         raw = Path(shown).expanduser()
         dirs = bases + ([Path(d["path"]).parent for d in out] if "/" not in shown else [])
         for cand in [raw] if raw.is_absolute() else [b / raw for b in dict.fromkeys(dirs)]:
