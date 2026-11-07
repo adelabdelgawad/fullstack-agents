@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Herdr Web Prototype</title>
+<style>
+@font-face { font-family: "JetBrains Mono Web"; src: url(/vendor/jbm/JetBrainsMono-Regular.woff2) format("woff2"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "JetBrains Mono Web"; src: url(/vendor/jbm/JetBrainsMono-Bold.woff2) format("woff2"); font-weight: 700; font-style: normal; }
+@font-face { font-family: "JetBrains Mono Web"; src: url(/vendor/jbm/JetBrainsMono-Italic.woff2) format("woff2"); font-weight: 400; font-style: italic; }
+@font-face { font-family: "JetBrains Mono Web"; src: url(/vendor/jbm/JetBrainsMono-BoldItalic.woff2) format("woff2"); font-weight: 700; font-style: italic; }
+:root { --bg: #282c34; --bar: #21252b; --text: #abb2bf; --dim: #5c6370; --accent: #61afef; --ok: #98c379; --bad: #e06c75; }
+html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font: 12px/1.4 ui-monospace, "JetBrains Mono", Menlo, monospace; }
+body { display: flex; flex-direction: column; }
+header { flex: none; display: flex; align-items: center; gap: 2ch; padding: 4px 1ch; background: var(--bar); }
+header label { color: var(--dim); }
+header select, header button { background: transparent; color: var(--text); border: 1px solid var(--dim); padding: 1px 1ch; font: inherit; cursor: pointer; }
+header button:hover, header select:hover { border-color: var(--accent); }
+#status { margin-left: auto; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#status.ok { color: var(--ok); } #status.bad { color: var(--bad); }
+#term { flex: 1; min-height: 0; padding: 4px; }
+#term .xterm { height: 100%; }
+</style>
+</head>
+<body>
+<header>
+  <label>renderer <select id="renderer"><option value="ghostty">ghostty-web 0.4.0</option><option value="xterm">xterm.js 5.5.0</option><option value="webgl">xterm.js 5.5.0 + WebGL</option></select></label>
+  <button id="lock" title="Fullscreen with Keyboard Lock (Chromium): Ctrl+W, Ctrl+T and Ctrl+N reach herdr">key lock</button>
+  <button id="reconnect" hidden>reconnect</button>
+  <span id="status">starting…</span>
+</header>
+<div id="term"></div>
+<script type="module">
+const params = new URLSearchParams(location.search);
+const renderer = ["xterm", "webgl"].includes(params.get("r")) ? params.get("r") : "ghostty";
+const statusEl = document.getElementById("status"), host = document.getElementById("term");
+const encoder = new TextEncoder();
+let term, fit, ws, size = "", statusTimer;
+
+const status = (text, kind = "") => { statusEl.textContent = text; statusEl.className = kind; };
+const flash = text => { const prev = statusEl.textContent; status(text, "ok"); clearTimeout(statusTimer); statusTimer = setTimeout(() => status(prev), 1500); };
+
+document.getElementById("renderer").value = renderer;
+document.getElementById("renderer").onchange = event => { params.set("r", event.target.value); location.search = params; };
+document.getElementById("lock").onclick = async () => {
+  try {
+    await document.documentElement.requestFullscreen();
+    if (!navigator.keyboard?.lock) return flash("fullscreen only: this browser has no Keyboard Lock");
+    await navigator.keyboard.lock();
+    flash("keyboard locked: hold Esc to leave");
+  } catch (error) { status(`key lock failed: ${error.message}`, "bad"); }
+};
+document.getElementById("reconnect").onclick = () => connect();
+
+const loadScript = src => new Promise((resolve, reject) => {
+  const el = Object.assign(document.createElement("script"), {src, onload: resolve, onerror: () => reject(new Error(`failed to load ${src}`))});
+  document.head.append(el);
+});
+
+async function createTerminal() {
+  const ghosttyLook = params.get("look") === "ghostty";
+  if (ghosttyLook) await Promise.all([400, 700].flatMap(w => ["normal", "italic"].map(st => document.fonts.load(`${st} ${w} 13px "JetBrains Mono Web"`))));
+  const options = {fontSize: Number(params.get("fs")) || 13, letterSpacing: Number(params.get("ls")) || 0, fontFamily: ghosttyLook ? '"JetBrains Mono Web", monospace' : getComputedStyle(document.body).fontFamily, cursorBlink: true, scrollback: 5000,
+    theme: {background: "#282c34", foreground: ghosttyLook ? "#ffffff" : "#abb2bf", cursor: "#61afef", selectionBackground: "#3e4451",
+      black: "#282c34", red: "#e06c75", green: "#98c379", yellow: "#e5c07b", blue: "#61afef", magenta: "#c678dd", cyan: "#56b6c2", white: "#abb2bf",
+      brightBlack: "#5c6370", brightRed: "#e06c75", brightGreen: "#98c379", brightYellow: "#e5c07b", brightBlue: "#61afef", brightMagenta: "#c678dd", brightCyan: "#56b6c2", brightWhite: "#ffffff"}};
+  if (renderer !== "ghostty") {
+    document.head.append(Object.assign(document.createElement("link"), {rel: "stylesheet", href: "/vendor/xterm/xterm.css"}));
+    await loadScript("/vendor/xterm/xterm.js");
+    await loadScript("/vendor/xterm/addon-fit.js");
+    if (renderer === "webgl") await loadScript("/vendor/xterm/addon-webgl.js");
+    return {term: new window.Terminal(options), fit: new window.FitAddon.FitAddon()};
+  }
+  const ghostty = await import("/vendor/ghostty-web/ghostty-web.js");
+  await ghostty.init();
+  return {term: new ghostty.Terminal(options), fit: new ghostty.FitAddon()};
+}
+
+async function copyText(text, source) {
+  if (!text) return;
+  try {
+    if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text);
+    else {
+      const area = Object.assign(document.createElement("textarea"), {value: text});
+      document.body.append(area); area.select();
+      const ok = document.execCommand("copy");
+      area.remove();
+      if (!ok) throw new Error("execCommand refused");
+    }
+    flash(`copied ${text.length} chars (${source})`);
+  } catch (error) { status(`copy failed (${source}): ${error.message}`, "bad"); }
+  term.focus();
+}
+
+// Streaming OSC 52 scanner (ESC ] 52 ; <sel> ; <base64> BEL|ST): herdr copies its own selections this way.
+const OSC52 = [0x1b, 0x5d, 0x35, 0x32, 0x3b];
+let oscMatch = 0, oscBytes = null;
+function finishOsc52(bytes) {
+  const text = new TextDecoder("latin1").decode(Uint8Array.from(bytes)), payload = text.slice(text.indexOf(";") + 1);
+  if (!payload || payload === "?") return;
+  try { copyText(new TextDecoder().decode(Uint8Array.from(atob(payload), c => c.charCodeAt(0))), "herdr OSC 52"); }
+  catch (error) { status(`bad OSC 52 payload: ${error.message}`, "bad"); }
+}
+function scanOsc52(chunk) {
+  for (const b of chunk) {
+    if (oscBytes) {
+      if (b === 0x07) { finishOsc52(oscBytes); oscBytes = null; }
+      else if (b === 0x5c && oscBytes.at(-1) === 0x1b) { finishOsc52(oscBytes.slice(0, -1)); oscBytes = null; }
+      else if (oscBytes.length < (4 << 20)) oscBytes.push(b);
+      else oscBytes = null;
+      continue;
+    }
+    oscMatch = b === OSC52[oscMatch] ? oscMatch + 1 : (b === 0x1b ? 1 : 0);
+    if (oscMatch === OSC52.length) { oscBytes = []; oscMatch = 0; }
+  }
+}
+
+const send = data => { if (ws?.readyState === WebSocket.OPEN) ws.send(data); };
+const sizeText = () => `${term.cols}×${term.rows}`;
+
+function fitAndReport() {
+  fit.fit();
+  const next = `${term.cols}x${term.rows}`;
+  if (next === size) return;
+  size = next;
+  send(JSON.stringify({type: "resize", cols: term.cols, rows: term.rows}));
+}
+
+function connect() {
+  document.getElementById("reconnect").hidden = true;
+  const query = new URLSearchParams({cols: term.cols, rows: term.rows});
+  if (params.get("session")) query.set("session", params.get("session"));
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?${query}`);
+  ws.binaryType = "arraybuffer";
+  status(`connecting · ${renderer} · ${sizeText()}`);
+  ws.onopen = () => { size = `${term.cols}x${term.rows}`; status(`live · ${renderer} · ${sizeText()}`, "ok"); term.focus(); };
+  ws.onmessage = event => {
+    if (typeof event.data === "string") return;
+    const bytes = new Uint8Array(event.data);
+    const p = window.__probe?.pending; if (p && !p.tMsg) { p.tMsg = performance.now(); p.bytes = bytes.length; }
+    scanOsc52(bytes);
+    term.write(bytes);
+  };
+  ws.onclose = event => {
+    status(`disconnected${event.reason ? `: ${event.reason}` : ""} (code ${event.code})`, "bad");
+    document.getElementById("reconnect").hidden = false;
+  };
+}
+
+try {
+  ({term, fit} = await createTerminal());
+  term.loadAddon(fit);
+  term.open(host); window.term = term;
+  if (renderer === "webgl") term.loadAddon(new window.WebglAddon.WebglAddon());
+  fit.fit();
+  window.__probe = {pending: null, samples: []};
+  term.onData(() => { if (!window.__probe.pending) window.__probe.pending = {t0: performance.now()}; });
+  term.onRender(() => { const p = window.__probe.pending; if (p?.tMsg) { const t = performance.now(); requestAnimationFrame(() => { window.__probe.samples.push({net: p.tMsg - p.t0, render: t - p.tMsg, paint: performance.now() - p.t0, bytes: p.bytes}); }); window.__probe.pending = null; } });
+  term.onData(data => send(encoder.encode(data)));
+  term.onBinary?.(data => send(Uint8Array.from(data, c => c.charCodeAt(0) & 255)));
+  host.addEventListener("mouseup", () => setTimeout(() => { if (term.hasSelection()) copyText(term.getSelection(), `${renderer} selection`); }));
+  new ResizeObserver(() => fitAndReport()).observe(host);
+  connect();
+} catch (error) {
+  status(`renderer failed: ${error.message}`, "bad");
+}
+</script>
+</body>
+</html>
