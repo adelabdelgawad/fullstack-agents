@@ -7,6 +7,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import usage
 
+EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
+
 
 def _load(path):
     try:
@@ -38,8 +40,23 @@ def notice(hook, state_dir):
     at = usage.handoff_at(usage.window_of(st["model"], st["context"]), st["compact_min"])
     due = st["context"] >= at and saved.get("warned") != st["compactions"]
     st["warned"] = st["compactions"] if due else saved.get("warned")
+    plan_adopt = None if due else _plan_due(hook, saved, st)
+    if plan_adopt:
+        st["plan_warned"] = st["compactions"]
     _save(state_file, {**saved, **st})
+    if plan_adopt:
+        return usage.plan_handoff_line(st["context"], plan_adopt)
     return usage.handoff_line(st["context"], at, _adopt(sid)) if due else None
+
+
+def _plan_due(hook, saved, st):
+    """The adopt command when a full-path task's first edit lands on a large context, once per cycle, else None."""
+    at = usage.plan_handoff_at()
+    if hook.get("tool_name") not in EDIT_TOOLS or at <= 0 or st["context"] < at:
+        return None
+    if st["compactions"] in (saved.get("plan_warned"), saved.get("warned")):
+        return None
+    return _adopt(hook["session_id"])
 
 
 def _adopt(sid):

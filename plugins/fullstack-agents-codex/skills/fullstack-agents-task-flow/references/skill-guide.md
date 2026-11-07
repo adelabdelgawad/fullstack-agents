@@ -312,6 +312,10 @@ the whole log. Deny agent reads of dependency, build and archive directories.
 Batch test execution at the integration boundary — one run per workspace, never per edit or per
 task. Write the cases as you go; run them once.
 
+Execution after a large investigation re-reads all of it on every call. On a full-path task the `context-handoff` hook
+gives `PLAN-HANDOFF:` on the first edit once context passes 100k; hand over then, with the fixed plan in the resume
+plan, unless the user still has to approve that plan.
+
 ## Reporting the phase
 
 The dashboard shows the user where each task stands, and only the lead knows four of its phases.

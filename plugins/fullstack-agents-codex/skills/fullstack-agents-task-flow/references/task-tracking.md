@@ -246,7 +246,7 @@ Unknown keys are rejected. The tool adds the identity (checkout, branch, HEAD, s
 - a batch dispatched, or its result accepted or rejected after audit;
 - a verification outcome concluded from its log;
 - a blocker appears or clears;
-- `HANDOFF:` appears (from `fsa-usage` or the `context-handoff` hook);
+- `HANDOFF:` or `PLAN-HANDOFF:` appears (from `fsa-usage` or the `context-handoff` hook);
 - before a manual `/compact` or `/clear`.
 
 Reading files, grepping and worker progress are not triggers. An unchanged checkpoint is not rewritten.
@@ -298,7 +298,8 @@ or no checkpoint, owner free or stale; newest first, with a count of any more an
 binds automatically. When the user asks to continue a task and exactly one candidate matches, bind it with the command
 the list shows (`--takeover` only for a stale owner, on that instruction); when several match, ask which. A generic new
 request starts fresh. Do not recommend `/clear` or a new session for context size or cost; write the checkpoint instead.
-The one exception is the `HANDOFF:` handover: the lead writes the checkpoint and asks the user to approve a short resume
+The one exception is the `HANDOFF:` or `PLAN-HANDOFF:` handover (the latter at the plan boundary of a full-path task, never
+over a plan the user still has to approve): the lead writes the checkpoint and asks the user to approve a short resume
 plan that names the adopt command; approving it with a cleared context is the user's request to continue. Where the
 plugin approves it automatically (the `auto-handoff` hook in a herdr pane), the user's standing request is that approval.
 

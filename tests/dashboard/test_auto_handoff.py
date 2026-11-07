@@ -90,6 +90,29 @@ class AutoHandoffTests(unittest.TestCase):
         self.assertIsNotNone(self.warn(read=60_000))
         self.assertIsNone(auto_handoff.armed(self.hook, self.dir, self.env))
 
+    def plan_edit(self, read=120_000, tool="Edit", mid="m1"):
+        write_lines(self.path, [assistant(mid, read=read)])
+        with mock.patch.object(context_handoff, "_adopt", lambda sid: "fsa-task adopt X" if sid else None):
+            return context_handoff.notice({**self.hook, "tool_name": tool}, self.dir)
+
+    def test_first_edit_on_a_large_context_gives_one_plan_handoff_that_arms(self):
+        self.assertIsNone(self.plan_edit(tool="Bash"))
+        line = self.plan_edit(mid="m2")
+        self.assertTrue(line.startswith("PLAN-HANDOFF:"))
+        self.assertIn("fsa-task adopt X", line)
+        self.assertIsNone(self.plan_edit(mid="m3"))
+        self.assertEqual(auto_handoff.armed(self.hook, self.dir, self.env), "w1:p1")
+
+    def test_no_plan_handoff_without_a_ledger_on_a_small_context_or_when_disabled(self):
+        self.assertIsNone(self.plan_edit(read=60_000))
+        with mock.patch.object(context_handoff, "_adopt", lambda sid: None):
+            write_lines(self.path, [assistant("m2", read=120_000)])
+            self.assertIsNone(context_handoff.notice({**self.hook, "tool_name": "Edit"}, self.dir))
+        os.environ["FSA_PLAN_HANDOFF_TOKENS"] = "0"
+        self.addCleanup(os.environ.pop, "FSA_PLAN_HANDOFF_TOKENS")
+        self.assertIsNone(self.plan_edit(mid="m3"))
+        self.assertIsNone(auto_handoff.armed(self.hook, self.dir, self.env))
+
     def watch(self, card=True):
         fake = self.dir / "herdr"
         fake.write_text(FAKE_HERDR)

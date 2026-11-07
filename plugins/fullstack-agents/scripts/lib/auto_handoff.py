@@ -52,7 +52,8 @@ def armed(hook, state_dir, env):
         return None
     path = context_handoff.state_path(state_dir, sid)
     st = context_handoff._load(path)
-    if "model" not in st or st.get("warned") != st.get("compactions") or (call and st.get("auto_call") == call):
+    noticed = st.get("compactions") in (st.get("warned"), st.get("plan_warned"))
+    if "model" not in st or not noticed or (call and st.get("auto_call") == call):
         return None
     usage = context_handoff.usage
     if usage.handoff_at(usage.window_of(st["model"], st["context"]), st["compact_min"]) < MIN_THRESHOLD:

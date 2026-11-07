@@ -186,7 +186,10 @@ paths of the checkpoint and authoritative files, and first the `fsa-task adopt` 
 it on the user's standing request (`FSA_AUTO_HANDOFF=off` disables it); elsewhere the user picks it. If the plan is kept in context or declined,
 continue without the adopt command; automatic compaction summarises the conversation, so reread the ledger, checkpoint and authoritative files when
 needed. A session that opens with `Implement the following plan:` carrying such a handover plan has the user's approval to
-continue: run its adopt command first. Outside this handover, never advise `/clear` or a fresh session because of a
+continue: run its adopt command first. `PLAN-HANDOFF:` (the same hook, on the first edit of a full-path task with a bound
+ledger once context passes 100k, `FSA_PLAN_HANDOFF_TOKENS`) asks for the same handover at the plan boundary, because
+execution does not need the investigation history; do it unless the user still has to approve the plan, and put the fixed
+plan in the resume plan. Outside these handovers, never advise `/clear` or a fresh session because of a
 context percentage or an unmeasured cost claim. When an implementer's capacity is
 exhausted, record a capacity blocker (`fsa-task block --kind external --class capacity`), continue any independent
 authorised work, and keep the deliverable open with its failing checks; an engine switch is an offer, not a demand. The final

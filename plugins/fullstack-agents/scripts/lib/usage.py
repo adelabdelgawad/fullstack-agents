@@ -15,6 +15,7 @@ BLOWOUT_FILL = 0.9
 WARN_FILL = 0.8
 HANDOFF_FILL = 0.85
 HANDOFF_TOKENS = 200_000
+PLAN_HANDOFF_TOKENS = 100_000
 PERSIST = ("ino", "offset", "model", "context", "window", "compactions", "compact_pre", "compact_min")
 DEFAULT_PRICES = {
     "claude-fable-5-1": {"input": 10.0, "output": 50.0, "cache_read": 0.25, "window": 1_000_000},
@@ -243,6 +244,23 @@ def _agent_label(meta):
 def _sum_costs(values):
     known = [v for v in values if v is not None]
     return sum(known) if known else None
+
+
+def plan_handoff_at():
+    """Context size from which a full-path task hands over once its plan is fixed; 0 disables it."""
+    try:
+        return int(os.environ.get("FSA_PLAN_HANDOFF_TOKENS") or PLAN_HANDOFF_TOKENS)
+    except ValueError:
+        return PLAN_HANDOFF_TOKENS
+
+
+def plan_handoff_line(context, adopt):
+    return (f"PLAN-HANDOFF: the plan is fixed and execution has started at {context:,} tokens of context. Execution does "
+            "not need the investigation history. At the next safe point (no background agent, shell or worker run still "
+            "going: a clear stops them), unless the user still has to approve the plan, "
+            "hand over exactly as for HANDOFF: write the checkpoint (`fsa-task checkpoint`), then EnterPlanMode and "
+            "ExitPlanMode with a resume plan whose first line is `# HANDOFF RESUME` (goal, the fixed plan, what is done, "
+            f"the next step, absolute paths of the checkpoint and authoritative files). The plan's first step is `{adopt}`.")
 
 
 def handoff_line(context, at, adopt=None):
