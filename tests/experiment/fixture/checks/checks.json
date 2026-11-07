@@ -1,0 +1,8 @@
+{
+ "overlay": "overlay",
+ "acceptance": [{"id": "AC1", "command": "python3 -m unittest tests_eval.test_acceptance", "timeout": 60}],
+ "regression": [
+  {"id": "R1", "command": "python3 -m unittest tests.test_pricing", "timeout": 60},
+  {"id": "R2", "command": "python3 -m unittest tests.test_known_red", "timeout": 60}
+ ]
+}
