@@ -260,6 +260,17 @@ class TaskBlockersTests(unittest.TestCase):
         with patch.object(plan_usage, "codex_plan", return_value={"windows": [{"name": "5 h", "pct": 100.0, "resets_at": past}]}):
             self.assertIn("unknown", self.call_fail("resolve", "--id", "E1", "--reason", "observed"))
 
+    def test_full_codex_window_with_credits_left_is_available(self):
+        self.init("S1|pending|Row|")
+        self.call("block", "--id", "E1", "--rows", "S1", "--kind", "external", "--class", "capacity",
+                   "--engine", "codex", "--text", "Codex window full")
+        full = {"windows": [{"name": "5 h", "pct": 100.0, "resets_at": None}]}
+        with patch.object(plan_usage, "codex_plan", return_value=full):
+            self.assertIn("100%", self.call_fail("resolve", "--id", "E1"))
+        with patch.object(plan_usage, "codex_plan", return_value={**full, "credits": {"balance": 45281.0, "unlimited": False}}):
+            result = self.call("resolve", "--id", "E1")
+        self.assertEqual(result["resumed"], ["S1"])
+
     # -- row dependency -----------------------------------------------------
 
     def test_row_dependency_auto_resolves_when_target_done(self):

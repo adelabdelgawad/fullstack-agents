@@ -300,6 +300,11 @@ def _reset_passed(resets_at, now):
     return parsed.tzinfo is not None and parsed.timestamp() < now
 
 
+def _has_credits(data):
+    credits = data.get("credits") or {}
+    return bool(credits.get("unlimited")) or (credits.get("balance") or 0) > 0
+
+
 def _capacity_status(engine):
     try:
         import plan_usage
@@ -321,7 +326,7 @@ def _capacity_status(engine):
     if not pcts:
         return "unknown", None
     tightest = max(pcts)
-    return ("available" if tightest < 100 else "full"), tightest
+    return ("available" if tightest < 100 or _has_credits(data) else "full"), tightest
 
 
 def _resolve_capacity(args, entry, root):

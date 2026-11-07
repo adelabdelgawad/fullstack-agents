@@ -190,8 +190,9 @@ continue: run its adopt command first. `PLAN-HANDOFF:` (the same hook, on the fi
 ledger once context passes 100k, `FSA_PLAN_HANDOFF_TOKENS`) asks for the same handover at the plan boundary, because
 execution does not need the investigation history; do it unless the user still has to approve the plan, and put the fixed
 plan in the resume plan. Outside these handovers, never advise `/clear` or a fresh session because of a
-context percentage or an unmeasured cost claim. When an implementer's capacity is
-exhausted, record a capacity blocker (`fsa-task block --kind external --class capacity`), continue any independent
+context percentage or an unmeasured cost claim. A plan window at 100% with credits left is
+not exhausted capacity: the credits are already paid for, so dispatch to that engine as usual and
+never call it out of capacity. When an implementer's capacity is exhausted, record a capacity blocker (`fsa-task block --kind external --class capacity`), continue any independent
 authorised work, and keep the deliverable open with its failing checks; an engine switch is an offer, not a demand. The final
 report of an implementation names the estimated cost from `fsa-usage` (lead plus subagents), marked
 as an estimate. When `fsa-usage` shows a plan window at 90% or more, say so before starting large
