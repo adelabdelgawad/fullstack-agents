@@ -97,6 +97,7 @@ body > header h1 {
   min-width: 0;
   height: 40px;
   overflow-x: auto;
+  overflow-y: hidden;
 }
 .viewtab {
   position: relative;
@@ -1457,6 +1458,9 @@ aside .gcol pre.diff {
   padding: 0;
   border: 0;
   background: #282c34;
+}
+.herdr-client[hidden] {
+  display: none;
 }
 html.herdr-page .herdr-client {
   height: 100%;

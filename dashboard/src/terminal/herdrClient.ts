@@ -4,6 +4,8 @@ import type { WebglAddon } from "@xterm/addon-webgl";
 import { copySelection } from "./copy";
 import { filesFromPaste, LIVE_UPLOAD_MAX_BYTES, uploadFiles, uploadingText, wireFileDrop } from "./files";
 import { createOsc52Scanner } from "./osc52";
+import { wireTouchScroll } from "./touchScroll";
+import { wireCtrlBackspaceWordErase } from "./wordErase";
 
 declare global {
   interface Window {
@@ -23,6 +25,7 @@ interface HerdrClientState {
   size?: string;
   scanOsc52?: (bytes: Uint8Array) => void;
   setStatus?: (text: string) => void;
+  touchScroll?: { dispose(): void };
 }
 
 let herdrClient: HerdrClientState | null = null;
@@ -42,6 +45,7 @@ export function closeHerdrClient(): void {
   if (!herdrClient) return;
   herdrClient.ws?.close();
   herdrClient.resizeObserver?.disconnect();
+  herdrClient.touchScroll?.dispose();
   herdrClient.term?.dispose();
   herdrClient = null;
 }
@@ -131,6 +135,16 @@ function wireFullscreen(client: HerdrClientState): void {
 function connectHerdrClient(client: HerdrClientState): void {
   const term = client.term;
   if (!term) return;
+  const sidebar = client.root.querySelector<HTMLButtonElement>("[data-herdr-client-sidebar]");
+  if (sidebar) {
+    sidebar.disabled = true;
+    sidebar.onclick = () => {
+      if (client.ws?.readyState !== WebSocket.OPEN) return;
+      // Herdr's native prefix+b binding resizes the sidebar and terminal together.
+      client.ws.send(new TextEncoder().encode("\u0002b"));
+      if (!matchMedia("(pointer: coarse)").matches) term.focus();
+    };
+  }
   client.root.querySelector<HTMLElement>("[data-herdr-client-reconnect]")!.hidden = true;
   client.size = `${term.cols}x${term.rows}`;
   client.setStatus?.(`connecting · ${client.renderer} · ${term.cols}×${term.rows}`);
@@ -140,7 +154,10 @@ function connectHerdrClient(client: HerdrClientState): void {
   );
   ws.binaryType = "arraybuffer";
   client.ws = ws;
-  ws.onopen = () => client.setStatus?.(liveStatus(client));
+  ws.onopen = () => {
+    client.setStatus?.(liveStatus(client));
+    if (sidebar) sidebar.disabled = false;
+  };
   ws.onmessage = (event) => {
     if (typeof event.data === "string") return;
     const bytes = new Uint8Array(event.data as ArrayBuffer);
@@ -148,6 +165,7 @@ function connectHerdrClient(client: HerdrClientState): void {
     term.write(bytes);
   };
   ws.onclose = (event) => {
+    if (sidebar) sidebar.disabled = true;
     client.setStatus?.(`disconnected${event.reason ? `: ${event.reason}` : ""} (code ${event.code})`);
     client.root.querySelector<HTMLElement>("[data-herdr-client-reconnect]")!.hidden = false;
   };
@@ -185,6 +203,8 @@ function createHerdrTerminal(client: HerdrClientState, host: HTMLElement): { ter
   const fit = new FitAddonCtor();
   term.loadAddon(fit);
   term.open(host);
+  client.touchScroll = wireTouchScroll(host);
+  wireCtrlBackspaceWordErase(term);
   client.term = term;
   client.fit = fit;
   client.renderer = "dom";
@@ -225,6 +245,7 @@ function wireHerdrTerminal(
   wireAttach(client);
   client.root.querySelector<HTMLElement>("[data-herdr-client-reconnect]")!.onclick = () => connectHerdrClient(client);
   client.resizeObserver = new ResizeObserver(() => {
+    if (!host.clientWidth) return;
     fit.fit();
     const next = `${term.cols}x${term.rows}`;
     if (next === client.size) return;
@@ -257,6 +278,12 @@ export async function mountHerdrClient(root: HTMLElement): Promise<void> {
   const { term, fit } = createHerdrTerminal(client, host);
   loadHerdrRenderer(client, term, fit);
   wireHerdrTerminal(client, host, status, term, fit);
+}
+
+export function showHerdrClient(root: HTMLElement): void {
+  if (herdrClient?.root !== root) return void mountHerdrClient(root);
+  herdrClient.fit?.fit();
+  if (!matchMedia("(pointer: coarse)").matches) herdrClient.term?.focus();
 }
 
 export function remountHerdrClient(): void {

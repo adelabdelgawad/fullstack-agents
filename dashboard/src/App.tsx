@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { CardContextMenu } from "./components/CardContextMenu";
 import { Layout } from "./components/Layout";
 import { isOutOpen, OutDialog } from "./components/OutDialog";
@@ -32,7 +32,7 @@ function onWallKey(e: KeyboardEvent): void {
 }
 
 function useAppEffects(view: string, wall: boolean): void {
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.classList.toggle("agents-page", view === "agents");
     document.documentElement.classList.toggle("herdr-page", view === "herdr");
   }, [view]);
@@ -56,11 +56,12 @@ export function App() {
   const view = useStore((s) => s.view);
   const wall = useStore((s) => s.wall);
   useAppEffects(view, wall);
-  const View = view === "herdr" ? HerdrView : view === "history" ? HistoryView : AgentsView;
+  const View = view === "history" ? HistoryView : AgentsView;
   return (
     <>
       <Layout actions={view === "agents" ? <AgentsActions /> : undefined}>
-        <View />
+        {view !== "herdr" && <View />}
+        <HerdrView active={view === "herdr"} />
       </Layout>
       <Panel />
       <Toasts />

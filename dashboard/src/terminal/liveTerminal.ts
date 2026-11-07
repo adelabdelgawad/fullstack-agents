@@ -2,6 +2,8 @@ import type { IDisposable, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { LIVE_UPLOAD_MAX_BYTES, filesFromPaste, uploadFiles, uploadingText, wireFileDrop } from "./files";
 import { copySelection } from "./copy";
+import { wireTouchScroll } from "./touchScroll";
+import { wireCtrlBackspaceWordErase } from "./wordErase";
 import {
   applyPendingTerminalText,
   pollTerminal,
@@ -299,8 +301,10 @@ function startLiveTerminal(current: TerminalState, restoreFocus = false): void {
   current.fit = new window.FitAddon.FitAddon();
   current.term.loadAddon(current.fit);
   current.term.open(host);
+  wireCtrlBackspaceWordErase(current.term);
   current.fit.fit();
   current.liveDisposables = [
+    wireTouchScroll(host),
     current.term.onData((data) => queueTerminalInput(current, new TextEncoder().encode(data))),
     current.term.onBinary((data) =>
       queueTerminalInput(

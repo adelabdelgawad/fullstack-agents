@@ -508,7 +508,6 @@ function useLifecycle(): void {
       view = next;
       closeHerdrOverlay(false);
       stopTerminal();
-      if (next !== "herdr") closeHerdrClient();
     });
     const hide = () => {
       stopTerminal();
