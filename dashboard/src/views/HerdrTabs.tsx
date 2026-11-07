@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import type { HerdrState } from "../lib/types";
-import { herdrAction } from "../terminal/HerdrOverlay";
+import { setHerdrTabTintChips } from "../terminal/herdrTabTint";
 
 export interface HerdrTabChip {
   id: string;
@@ -36,25 +37,6 @@ export function herdrTabChips(data: HerdrState): HerdrTabChip[] {
 }
 
 export function HerdrTabs({ data }: { data: HerdrState }) {
-  const chips = herdrTabChips(data);
-  if (!chips.length) return null;
-  return (
-    <nav className="herdr-staterow" aria-label="Herdr tabs">
-      {chips.map((chip) => (
-        <button
-          key={chip.id}
-          type="button"
-          className={`herdr-chip is-${chip.status}`}
-          aria-current={chip.focused ? "page" : undefined}
-          title={`${chip.label} · ${chip.status}`}
-          onClick={() => void herdrAction("tab.focus", { tab_id: chip.id })}
-        >
-          <span className="herdr-chip-dot" aria-hidden="true">
-            ●
-          </span>
-          {chip.label}
-        </button>
-      ))}
-    </nav>
-  );
+  useEffect(() => setHerdrTabTintChips(herdrTabChips(data)), [data]);
+  return null;
 }

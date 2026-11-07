@@ -5,6 +5,7 @@ import { copySelection } from "./copy";
 import { filesFromPaste, LIVE_UPLOAD_MAX_BYTES, uploadFiles, uploadingText, wireFileDrop } from "./files";
 import { createOsc52Scanner } from "./osc52";
 import { wireTouchScroll } from "./touchScroll";
+import { wireHerdrTabTint } from "./herdrTabTint";
 import { wireCtrlBackspaceWordErase } from "./wordErase";
 
 declare global {
@@ -26,6 +27,7 @@ interface HerdrClientState {
   scanOsc52?: (bytes: Uint8Array) => void;
   setStatus?: (text: string) => void;
   touchScroll?: { dispose(): void };
+  tabTint?: { dispose(): void };
 }
 
 let herdrClient: HerdrClientState | null = null;
@@ -46,6 +48,7 @@ export function closeHerdrClient(): void {
   herdrClient.ws?.close();
   herdrClient.resizeObserver?.disconnect();
   herdrClient.touchScroll?.dispose();
+  herdrClient.tabTint?.dispose();
   herdrClient.term?.dispose();
   herdrClient = null;
 }
@@ -205,6 +208,7 @@ function createHerdrTerminal(client: HerdrClientState, host: HTMLElement): { ter
   term.open(host);
   client.touchScroll = wireTouchScroll(host);
   wireCtrlBackspaceWordErase(term);
+  client.tabTint = wireHerdrTabTint(term, host);
   client.term = term;
   client.fit = fit;
   client.renderer = "dom";
