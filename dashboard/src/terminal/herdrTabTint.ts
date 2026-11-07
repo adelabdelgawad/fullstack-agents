@@ -34,6 +34,7 @@ export function tabTintSpans(row: string, chips: TabTintChip[]): TabTintSpan[] {
 
 let chips: TabTintChip[] = [];
 let redraw: (() => void) | null = null;
+let focusBg: string | null = null;
 
 export function setHerdrTabTintChips(next: TabTintChip[]): void {
   chips = next;
@@ -86,6 +87,27 @@ function cellMarks(term: Terminal, span: TabTintSpan, cell: { w: number; h: numb
   return marks;
 }
 
+export function focusedByBackground(backgrounds: (string | null)[]): number {
+  const odd = backgrounds.map((bg, i) => (bg && backgrounds.filter((other) => other === bg).length === 1 ? i : -1));
+  const found = odd.filter((i) => i >= 0);
+  return backgrounds.length > 1 && found.length === 1 ? found[0] : -1;
+}
+
+function focusFromRow(term: Terminal, spans: TabTintSpan[]): TabTintSpan[] {
+  const line = term.buffer.active.getLine(0);
+  const backgrounds = spans.map((span) => {
+    const data = line?.getCell(span.start);
+    return data ? cellBackground(term, data) : null;
+  });
+  let focused = focusedByBackground(backgrounds);
+  if (focused < 0 && focusBg && backgrounds.filter((bg) => bg === focusBg).length === 1)
+    focused = backgrounds.indexOf(focusBg);
+  if (focused < 0 && !focusBg) focused = spans.findIndex((span) => span.focused);
+  if (focused < 0) return spans;
+  focusBg = backgrounds[focused] ?? focusBg;
+  return spans.map((span, i) => ({ ...span, focused: i === focused }));
+}
+
 function paint(term: Terminal, host: HTMLElement, layer: HTMLElement): void {
   const screen = term.element?.querySelector<HTMLElement>(".xterm-screen");
   const row = term.buffer.active.getLine(0)?.translateToString(false) ?? "";
@@ -95,7 +117,7 @@ function paint(term: Terminal, host: HTMLElement, layer: HTMLElement): void {
   const cell = { w: box.width / term.cols, h: box.height / term.rows };
   layer.style.left = `${box.left - origin.left}px`;
   layer.style.top = `${box.top - origin.top}px`;
-  const spans = tabTintSpans(row, chips).filter((span) => span.status !== "unknown");
+  const spans = focusFromRow(term, tabTintSpans(row, chips)).filter((span) => span.status !== "unknown");
   layer.replaceChildren(...spans.flatMap((span) => cellMarks(term, span, cell)));
 }
 
