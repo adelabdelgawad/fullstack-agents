@@ -1517,6 +1517,54 @@ html .herdr-client.herdr-fill {
   border-color: var(--herdr-red);
   font-weight: 700;
 }
+.herdr-staterow {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 4px 0;
+  background: var(--herdr-panel-bg);
+  border-bottom: 1px solid var(--herdr-surface1);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.herdr-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.6ch;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 3px 1.2ch;
+  background: transparent;
+  color: var(--herdr-state);
+  font: inherit;
+  cursor: pointer;
+}
+.herdr-chip:hover {
+  background: var(--herdr-surface0);
+}
+.herdr-chip[aria-current="page"] {
+  background: var(--herdr-surface1);
+  border-bottom-color: var(--herdr-state);
+  font-weight: 700;
+}
+.herdr-chip.is-working {
+  --herdr-state: var(--herdr-yellow);
+}
+.herdr-chip.is-blocked {
+  --herdr-state: var(--herdr-red);
+}
+.herdr-chip.is-done {
+  --herdr-state: var(--herdr-teal);
+}
+.herdr-chip.is-idle {
+  --herdr-state: var(--herdr-green);
+}
+.herdr-chip.is-unknown {
+  --herdr-state: var(--herdr-overlay0);
+}
 .herdr-client-host {
   position: relative;
   flex: 1;

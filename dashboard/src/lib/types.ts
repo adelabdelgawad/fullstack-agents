@@ -146,5 +146,7 @@ export interface HerdrState {
   tabs: HerdrTab[];
   panes: HerdrPane[];
   focused_pane_id: string | null;
+  focused_tab_id?: string | null;
+  focused_workspace_id?: string | null;
   [key: string]: unknown;
 }

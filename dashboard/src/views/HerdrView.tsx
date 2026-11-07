@@ -1,10 +1,21 @@
 import { useEffect, useRef } from "react";
 import { loadHerdr, useStore } from "../store";
+import type { HerdrState } from "../lib/types";
 import { closeHerdrClient, showHerdrClient } from "../terminal/herdrClient";
+import { HerdrTabs } from "./HerdrTabs";
 
-function HerdrClient({ rootRef, hidden }: { rootRef: React.RefObject<HTMLDivElement>; hidden: boolean }) {
+function HerdrClient({
+  rootRef,
+  hidden,
+  data,
+}: {
+  rootRef: React.RefObject<HTMLDivElement>;
+  hidden: boolean;
+  data: HerdrState;
+}) {
   return (
     <div className="herdr-client" ref={rootRef} hidden={hidden}>
+      <HerdrTabs data={data} />
       <div className="herdr-client-host">
         <div className="terminal-drop" aria-hidden="true">
           <span>+</span>
@@ -70,5 +81,5 @@ export function HerdrView({ active }: { active: boolean }) {
         herdr is not running on this server
       </div>
     ) : null;
-  return <HerdrClient rootRef={rootRef} hidden={!active} />;
+  return <HerdrClient rootRef={rootRef} hidden={!active} data={herdrData} />;
 }

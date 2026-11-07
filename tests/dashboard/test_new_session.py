@@ -21,6 +21,19 @@ def create(**extra):
 
 
 class NewSessionTests(unittest.TestCase):
+    def test_tab_focus_needs_a_known_tab(self):
+        snap = {**SNAPSHOT, "tabs": [{"tab_id": "w1:t1"}]}
+        self.assertEqual((["tab", "focus", "w1:t1"], 5),
+                         dash.herdr_action_args({"action": "tab.focus", "tab_id": "w1:t1"}, snap))
+        with self.assertRaises(LookupError):
+            dash.herdr_action_args({"action": "tab.focus", "tab_id": "w1:t9"}, snap)
+
+    def test_snapshot_names_the_focused_tab_and_workspace(self):
+        raw = {"result": {"snapshot": {"workspaces": [], "tabs": [], "panes": [],
+                                       "focused_tab_id": "w1:t2", "focused_workspace_id": "w1"}}}
+        got = dash.normalize_herdr_snapshot(raw)
+        self.assertEqual((got["focused_tab_id"], got["focused_workspace_id"]), ("w1:t2", "w1"))
+
     def test_engine_is_optional_and_validated(self):
         self.assertEqual("tab", create()[0][0])
         for engine in ("claude", "codex", "grok"):

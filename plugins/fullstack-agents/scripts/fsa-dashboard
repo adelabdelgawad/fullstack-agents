@@ -141,6 +141,8 @@ def normalize_herdr_snapshot(raw):
             "agent_session": x.get("agent_session"), "tab_label": tab_labels.get(x.get("tab_id"), ""),
         } for x in snap.get("panes", [])],
         "focused_pane_id": snap.get("focused_pane_id"),
+        "focused_tab_id": snap.get("focused_tab_id"),
+        "focused_workspace_id": snap.get("focused_workspace_id"),
         "agent_kinds": list(HERDR_AGENT_KINDS),
     }
 
@@ -349,6 +351,7 @@ def herdr_action_args(body, snapshot):
         "session.create": ({"workspace_id", "name"}, {"engine"}),
         "tab.rename": ({"tab_id", "label"}, set()),
         "tab.close": ({"tab_id"}, set()),
+        "tab.focus": ({"tab_id"}, set()),
         "pane.rename": ({"pane_id", "label"}, set()),
         "pane.clear_name": ({"pane_id"}, set()),
         "pane.split": ({"pane_id", "direction"}, set()),
@@ -412,6 +415,8 @@ def herdr_action_args(body, snapshot):
         tab = checked_id("tab_id")
         if action == "tab.rename":
             return ["tab", "rename", tab, herdr_label(body["label"])], 5
+        if action == "tab.focus":
+            return ["tab", "focus", tab], 5
         return ["tab", "close", tab], 5
     if action == "server.reload_config":
         return ["server", "reload-config"], 5
