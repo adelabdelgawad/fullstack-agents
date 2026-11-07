@@ -1525,12 +1525,14 @@ html .herdr-client.herdr-fill {
 .herdr-state-tint {
   position: absolute;
   top: 0;
-  box-sizing: border-box;
-  background: color-mix(in srgb, var(--herdr-state) 30%, transparent);
-  border-bottom: 2px solid var(--herdr-state);
+  overflow: hidden;
+  text-align: center;
+  white-space: pre;
+  color: var(--herdr-state);
 }
 .herdr-state-tint.is-focused {
-  background: color-mix(in srgb, var(--herdr-state) 45%, transparent);
+  background: var(--herdr-state);
+  color: var(--herdr-panel-bg);
 }
 .herdr-state-tint.is-working {
   --herdr-state: var(--herdr-yellow);
@@ -1543,9 +1545,6 @@ html .herdr-client.herdr-fill {
 }
 .herdr-state-tint.is-idle {
   --herdr-state: var(--herdr-green);
-}
-.herdr-state-tint.is-unknown {
-  --herdr-state: transparent;
 }
 .herdr-client-host {
   position: relative;

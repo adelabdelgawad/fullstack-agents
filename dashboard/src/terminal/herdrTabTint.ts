@@ -1,4 +1,4 @@
-import type { Terminal } from "@xterm/xterm";
+import type { IBufferCell, Terminal } from "@xterm/xterm";
 
 export interface TabTintChip {
   label: string;
@@ -40,6 +40,52 @@ export function setHerdrTabTintChips(next: TabTintChip[]): void {
   redraw?.();
 }
 
+function cellBackground(term: Terminal, cell: IBufferCell): string | null {
+  if (cell.isBgRGB()) return `#${cell.getBgColor().toString(16).padStart(6, "0")}`;
+  return cell.isBgDefault() ? (term.options.theme?.background ?? null) : null;
+}
+
+function highlightRange(term: Terminal, span: TabTintSpan): [number, number] {
+  const line = term.buffer.active.getLine(0);
+  const first = line?.getCell(span.start);
+  const background = first && !first.isBgDefault() ? cellBackground(term, first) : null;
+  if (!span.focused || !line || !background) return [span.start, span.end];
+  const same = (x: number) => {
+    const data = x >= 0 && x < term.cols ? line.getCell(x) : undefined;
+    return Boolean(data && cellBackground(term, data) === background);
+  };
+  let [start, end] = [span.start, span.end];
+  while (span.start - start < 4 && same(start - 1)) start--;
+  while (end - span.end < 4 && same(end)) end++;
+  return [start, end];
+}
+
+function cellMarks(term: Terminal, span: TabTintSpan, cell: { w: number; h: number }): HTMLElement[] {
+  const line = term.buffer.active.getLine(0);
+  const marks: HTMLElement[] = [];
+  const [start, end] = highlightRange(term, span);
+  for (let x = start; x < end && line; x++) {
+    const data = line.getCell(x);
+    const background = data && data.getWidth() ? cellBackground(term, data) : null;
+    if (!data || !background) continue;
+    const mark = document.createElement("span");
+    mark.className = `herdr-state-tint is-${span.status}${span.focused ? " is-focused" : ""}`;
+    mark.textContent = data.getChars();
+    Object.assign(mark.style, {
+      left: `${x * cell.w}px`,
+      width: `${data.getWidth() * cell.w}px`,
+      height: `${cell.h}px`,
+      lineHeight: `${cell.h}px`,
+      background: span.focused ? "" : background,
+      fontFamily: term.options.fontFamily ?? "monospace",
+      fontSize: `${term.options.fontSize ?? 14}px`,
+      fontWeight: data.isBold() ? "700" : "400",
+    });
+    marks.push(mark);
+  }
+  return marks;
+}
+
 function paint(term: Terminal, host: HTMLElement, layer: HTMLElement): void {
   const screen = term.element?.querySelector<HTMLElement>(".xterm-screen");
   const row = term.buffer.active.getLine(0)?.translateToString(false) ?? "";
@@ -49,16 +95,8 @@ function paint(term: Terminal, host: HTMLElement, layer: HTMLElement): void {
   const cell = { w: box.width / term.cols, h: box.height / term.rows };
   layer.style.left = `${box.left - origin.left}px`;
   layer.style.top = `${box.top - origin.top}px`;
-  layer.replaceChildren(
-    ...tabTintSpans(row, chips).map((span) => {
-      const mark = document.createElement("span");
-      mark.className = `herdr-state-tint is-${span.status}${span.focused ? " is-focused" : ""}`;
-      mark.style.left = `${span.start * cell.w}px`;
-      mark.style.width = `${(span.end - span.start) * cell.w}px`;
-      mark.style.height = `${cell.h}px`;
-      return mark;
-    }),
-  );
+  const spans = tabTintSpans(row, chips).filter((span) => span.status !== "unknown");
+  layer.replaceChildren(...spans.flatMap((span) => cellMarks(term, span, cell)));
 }
 
 export function wireHerdrTabTint(term: Terminal, host: HTMLElement): { dispose(): void } {
