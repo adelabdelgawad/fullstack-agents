@@ -1,0 +1,167 @@
+{
+  "arm": "rung0+map",
+  "extractor": "a7b5e120ebd1",
+  "tree": "579c1d9065bc7fdbc1b93ab7e58fec5d1871f59e",
+  "budget": 40,
+  "results": [
+    {
+      "id": "T1",
+      "rows": 0,
+      "joined": false,
+      "truncated": false,
+      "must_sites": 13,
+      "site_recall": 0.385,
+      "file_recall": 0.5,
+      "missed": [
+        "src/backend/apps/pbx-admin-api/src/routes/call_groups.rs:119-139",
+        "src/backend/apps/pbx-admin-api/src/routes/call_groups.rs:141-168",
+        "src/backend/apps/pbx-admin-api/src/routes/paging_groups.rs:92-110",
+        "src/backend/apps/pbx-admin-api/src/routes/paging_groups.rs:112-137",
+        "src/backend/apps/pbx-admin-api/src/router.rs:943-943",
+        "src/backend/apps/pbx-admin-api/src/router.rs:944-944",
+        "src/backend/apps/pbx-admin-api/src/router.rs:1152-1152",
+        "src/backend/apps/pbx-admin-api/src/router.rs:1153-1153"
+      ],
+      "hits": 5,
+      "hit_files": 3,
+      "file_precision": 1.0,
+      "map_only": null
+    },
+    {
+      "id": "T2",
+      "rows": 40,
+      "joined": true,
+      "truncated": true,
+      "must_sites": 22,
+      "site_recall": 0.636,
+      "file_recall": 0.818,
+      "missed": [
+        "src/backend/crates/pbx-persistence/src/repos/rustpbx_call_group_repo.rs:83-90",
+        "src/backend/crates/pbx-application/src/call_groups_service.rs:115-130",
+        "src/frontend/features/call-groups/call-group-form-sheet.tsx:43-55",
+        "src/frontend/features/call-groups/call-group-form-sheet.tsx:211-222",
+        "src/frontend/features/call-groups/call-group-form-sheet.tsx:227-240",
+        "src/frontend/features/call-groups/call-group-form-sheet.tsx:395-395",
+        "src/frontend/locales/en/callGroups.json:80-80",
+        "src/frontend/locales/ar/callGroups.json:80-80"
+      ],
+      "hits": 1133,
+      "hit_files": 190,
+      "file_precision": 0.068,
+      "map_only": {
+        "must_sites": 22,
+        "site_recall": 0.182,
+        "file_recall": 0.364,
+        "missed": [
+          "src/backend/crates/pbx-persistence/src/repos/rustpbx_call_group_repo.rs:13-27",
+          "src/backend/crates/pbx-persistence/src/repos/rustpbx_call_group_repo.rs:83-90",
+          "src/backend/crates/pbx-application/src/call_groups_service.rs:115-130",
+          "src/backend/crates/pbx-application/src/call_groups_service.rs:290-357",
+          "src/backend/crates/pbx-application/src/call_groups_service.rs:359-470",
+          "src/backend/crates/pbx-dtos/src/call_group.rs:44-63",
+          "src/backend/crates/pbx-dtos/src/call_group.rs:65-80",
+          "src/backend/crates/pbx-dtos/src/call_group.rs:124-137",
+          "src/backend/crates/pbx-dtos/src/call_group.rs:139-152",
+          "docs/api/openapi.yaml:5784-5810",
+          "src/frontend/lib/api/call-groups.ts:23-36",
+          "src/frontend/features/call-groups/call-group-form-sheet.tsx:43-55",
+          "src/frontend/features/call-groups/call-group-form-sheet.tsx:211-222",
+          "src/frontend/features/call-groups/call-group-form-sheet.tsx:227-240",
+          "src/frontend/features/call-groups/call-group-form-sheet.tsx:395-395",
+          "src/frontend/locales/en/callGroups.json:80-80",
+          "src/frontend/locales/ar/callGroups.json:80-80",
+          "services/rustpbx/src/models/call_group.rs:35-50"
+        ],
+        "hits": 44,
+        "hit_files": 16,
+        "file_precision": 0.312
+      }
+    },
+    {
+      "id": "T3",
+      "rows": 18,
+      "joined": true,
+      "truncated": false,
+      "must_sites": 13,
+      "site_recall": 0.462,
+      "file_recall": 0.6,
+      "missed": [
+        "src/backend/apps/pbx-admin-api/src/routes/call_records.rs:249-264",
+        "src/backend/apps/pbx-admin-api/src/routes/call_records.rs:383-400",
+        "src/backend/apps/pbx-admin-api/src/router.rs:1249-1251",
+        "src/backend/apps/pbx-admin-api/src/router.rs:1253-1255",
+        "src/backend/apps/pbx-admin-api/src/routes/outbound/batch_leads.rs:990-1007",
+        "src/backend/apps/pbx-admin-api/src/routes/outbound/workspace.rs:231-252",
+        "services/rustpbx/src/config.rs:297-304"
+      ],
+      "hits": 29,
+      "hit_files": 22,
+      "file_precision": 0.409,
+      "map_only": {
+        "must_sites": 13,
+        "site_recall": 0.462,
+        "file_recall": 0.6,
+        "missed": [
+          "src/backend/apps/pbx-admin-api/src/routes/call_records.rs:249-264",
+          "src/backend/apps/pbx-admin-api/src/routes/call_records.rs:383-400",
+          "src/backend/apps/pbx-admin-api/src/router.rs:1249-1251",
+          "src/backend/apps/pbx-admin-api/src/router.rs:1253-1255",
+          "src/backend/apps/pbx-admin-api/src/routes/outbound/batch_leads.rs:990-1007",
+          "src/backend/apps/pbx-admin-api/src/routes/outbound/workspace.rs:231-252",
+          "services/rustpbx/src/config.rs:297-304"
+        ],
+        "hits": 9,
+        "hit_files": 9,
+        "file_precision": 1.0
+      }
+    },
+    {
+      "id": "T4",
+      "rows": 0,
+      "joined": false,
+      "truncated": false,
+      "must_sites": 8,
+      "site_recall": 1.0,
+      "file_recall": 1.0,
+      "missed": [],
+      "hits": 8,
+      "hit_files": 4,
+      "file_precision": 1.0,
+      "map_only": null
+    }
+  ],
+  "timings": {
+    "cold": [
+      6.223,
+      {
+        "scanned": 12976,
+        "rehashed": 0,
+        "reused": 0,
+        "dropped": 0,
+        "rebuilt": true
+      }
+    ],
+    "noop": 0.374,
+    "one_edit": [
+      0.55,
+      {
+        "scanned": 1,
+        "rehashed": 0,
+        "reused": 12975,
+        "dropped": 0,
+        "rebuilt": false
+      }
+    ],
+    "branch_switch": [
+      0.443,
+      {
+        "scanned": 320,
+        "rehashed": 1,
+        "reused": 12655,
+        "dropped": 20,
+        "rebuilt": false
+      }
+    ],
+    "store_bytes": 4186827
+  }
+}

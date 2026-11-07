@@ -1,0 +1,666 @@
+{
+  "corpus": {
+    "repo": "keep-connect",
+    "revision": "b93cac20e",
+    "tree": "579c1d9065bc7fdbc1b93ab7e58fec5d1871f59e",
+    "files": 14471,
+    "export": "git -C keep-connect archive b93cac20e | tar -x; git init; git add -f .; git commit"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "class": "navigation",
+      "prompt": "Where is dialed_number_exists defined, who calls it, and which HTTP endpoints reach it?",
+      "seeds": [
+        "dialed_number_exists"
+      ],
+      "key": [
+        {
+          "path": "src/backend/crates/pbx-persistence/src/repos/rustpbx_call_group_repo.rs",
+          "level": "must",
+          "why": "definition",
+          "lines": [
+            374,
+            374
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/src/call_groups_service.rs",
+          "level": "must",
+          "why": "caller in CallGroupsService::create (:290)",
+          "lines": [
+            290,
+            298
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/src/call_groups_service.rs",
+          "level": "must",
+          "why": "caller in CallGroupsService::update (:359)",
+          "lines": [
+            359,
+            397
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/src/paging_group_service.rs",
+          "level": "must",
+          "why": "caller in PagingGroupService::create (:186)",
+          "lines": [
+            186,
+            197
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/src/paging_group_service.rs",
+          "level": "must",
+          "why": "caller in PagingGroupService::update (:246)",
+          "lines": [
+            246,
+            274
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/routes/call_groups.rs",
+          "level": "must",
+          "why": "handler create -> service create",
+          "lines": [
+            119,
+            139
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/routes/call_groups.rs",
+          "level": "must",
+          "why": "handler update -> service update",
+          "lines": [
+            141,
+            168
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/routes/paging_groups.rs",
+          "level": "must",
+          "why": "handler create -> service create",
+          "lines": [
+            92,
+            110
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/routes/paging_groups.rs",
+          "level": "must",
+          "why": "handler update -> service update",
+          "lines": [
+            112,
+            137
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/router.rs",
+          "level": "must",
+          "why": "POST /api/v1/call-groups",
+          "lines": [
+            943,
+            943
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/router.rs",
+          "level": "must",
+          "why": "PATCH /api/v1/call-groups/{id}",
+          "lines": [
+            944,
+            944
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/router.rs",
+          "level": "must",
+          "why": "POST /api/v1/paging-groups",
+          "lines": [
+            1152,
+            1152
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/router.rs",
+          "level": "must",
+          "why": "PATCH /api/v1/paging-groups/{id}",
+          "lines": [
+            1153,
+            1153
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/router.rs",
+          "level": "should",
+          "why": ".nest(\"/api/v1\") prefix",
+          "lines": [
+            67,
+            67
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T2",
+      "class": "cross-layer feature",
+      "prompt": "Add an optional integer max_wait_secs to call groups: editable in the call-group form, stored in the database, returned by the API and honoured by the engine.",
+      "seeds": [
+        "call_group",
+        "call-group",
+        "CallGroup"
+      ],
+      "key": [
+        {
+          "path": "src/backend/migrations/20260612000000_pbx_initial_schema.sql",
+          "level": "must",
+          "why": "rustpbx_call_groups table; a new migration alters it",
+          "lines": [
+            514,
+            530
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-persistence/src/repos/rustpbx_call_group_repo.rs",
+          "level": "must",
+          "why": "CallGroupRow",
+          "lines": [
+            13,
+            27
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-persistence/src/repos/rustpbx_call_group_repo.rs",
+          "level": "must",
+          "why": "SELECT column list",
+          "lines": [
+            83,
+            90
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-persistence/src/repos/rustpbx_call_group_repo.rs",
+          "level": "must",
+          "why": "INSERT",
+          "lines": [
+            164,
+            185
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-persistence/src/repos/rustpbx_call_group_repo.rs",
+          "level": "must",
+          "why": "UPDATE",
+          "lines": [
+            198,
+            233
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/src/call_groups_service.rs",
+          "level": "must",
+          "why": "range validation",
+          "lines": [
+            115,
+            130
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/src/call_groups_service.rs",
+          "level": "must",
+          "why": "create",
+          "lines": [
+            290,
+            357
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/src/call_groups_service.rs",
+          "level": "must",
+          "why": "update",
+          "lines": [
+            359,
+            470
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-dtos/src/call_group.rs",
+          "level": "must",
+          "why": "CallGroupDto",
+          "lines": [
+            44,
+            63
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-dtos/src/call_group.rs",
+          "level": "must",
+          "why": "CallGroupDetailDto",
+          "lines": [
+            65,
+            80
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-dtos/src/call_group.rs",
+          "level": "must",
+          "why": "CallGroupCreateRequest",
+          "lines": [
+            124,
+            137
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-dtos/src/call_group.rs",
+          "level": "must",
+          "why": "CallGroupUpdateRequest",
+          "lines": [
+            139,
+            152
+          ]
+        },
+        {
+          "path": "docs/api/openapi.yaml",
+          "level": "must",
+          "why": "CallGroupDto schema; source of generate:api",
+          "lines": [
+            5784,
+            5810
+          ]
+        },
+        {
+          "path": "src/frontend/lib/api/call-groups.ts",
+          "level": "must",
+          "why": "toListDto copies fields",
+          "lines": [
+            23,
+            36
+          ]
+        },
+        {
+          "path": "src/frontend/features/call-groups/call-group-form-sheet.tsx",
+          "level": "must",
+          "why": "zod schema",
+          "lines": [
+            43,
+            55
+          ]
+        },
+        {
+          "path": "src/frontend/features/call-groups/call-group-form-sheet.tsx",
+          "level": "must",
+          "why": "create body",
+          "lines": [
+            211,
+            222
+          ]
+        },
+        {
+          "path": "src/frontend/features/call-groups/call-group-form-sheet.tsx",
+          "level": "must",
+          "why": "update body",
+          "lines": [
+            227,
+            240
+          ]
+        },
+        {
+          "path": "src/frontend/features/call-groups/call-group-form-sheet.tsx",
+          "level": "must",
+          "why": "form input row",
+          "lines": [
+            395,
+            395
+          ]
+        },
+        {
+          "path": "src/frontend/locales/en/callGroups.json",
+          "level": "must",
+          "why": "form label string",
+          "lines": [
+            80,
+            80
+          ]
+        },
+        {
+          "path": "src/frontend/locales/ar/callGroups.json",
+          "level": "must",
+          "why": "form label string",
+          "lines": [
+            80,
+            80
+          ]
+        },
+        {
+          "path": "src/frontend/features/call-groups/call-group-form-sheet.tsx",
+          "level": "should",
+          "why": "form defaults",
+          "lines": [
+            101,
+            101
+          ]
+        },
+        {
+          "path": "src/frontend/features/call-groups/call-group-form-sheet.tsx",
+          "level": "should",
+          "why": "edit hydration",
+          "lines": [
+            185,
+            185
+          ]
+        },
+        {
+          "path": "services/rustpbx/src/change_feed/snapshot.rs",
+          "level": "must",
+          "why": "engine SELECT on rustpbx_call_groups",
+          "lines": [
+            490,
+            525
+          ]
+        },
+        {
+          "path": "services/rustpbx/src/models/call_group.rs",
+          "level": "must",
+          "why": "engine CallGroup model",
+          "lines": [
+            35,
+            50
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/tests/faceted_counts_complex_pbx.rs",
+          "level": "should",
+          "why": "raw INSERT fixture",
+          "lines": [
+            16,
+            16
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/src/call_groups_service.rs",
+          "level": "should",
+          "why": "unit tests",
+          "lines": [
+            630,
+            630
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/routes/call_groups.rs",
+          "level": "should",
+          "why": "pass-through handler",
+          "lines": [
+            119,
+            139
+          ]
+        },
+        {
+          "path": "src/frontend/features/call-groups/columns.tsx",
+          "level": "should",
+          "why": "list column for the sibling field",
+          "lines": [
+            145,
+            145
+          ]
+        },
+        {
+          "path": "src/frontend/lib/api/generated/schema.d.ts",
+          "level": "should",
+          "generated": true,
+          "why": "regenerated from openapi.yaml",
+          "lines": [
+            19244,
+            19244
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T3",
+      "class": "indirect dependency (env key <-> readers; D5: keep-connect env::var chosen over autodialer-pro Celery)",
+      "prompt": "After recordings storage moved, the call-record recording stream returns 404. Find every reader of RUSTPBX_RECORDINGS_DIR, the routes that depend on it, and the engine setting it must match.",
+      "seeds": [
+        "RUSTPBX_RECORDINGS_DIR"
+      ],
+      "key": [
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/routes/call_records.rs",
+          "level": "must",
+          "why": "reader in stream_call_record (:266)",
+          "lines": [
+            300,
+            300
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/routes/call_records.rs",
+          "level": "must",
+          "why": "stream_recording -> stream_call_record",
+          "lines": [
+            249,
+            264
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/routes/call_records.rs",
+          "level": "must",
+          "why": "download_recording -> stream_recording",
+          "lines": [
+            383,
+            400
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/router.rs",
+          "level": "must",
+          "why": "GET /api/v1/call-records/{id}/recording/stream",
+          "lines": [
+            1249,
+            1251
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/router.rs",
+          "level": "must",
+          "why": "GET /api/v1/call-records/{id}/recording/download",
+          "lines": [
+            1253,
+            1255
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/routes/outbound/batch_leads.rs",
+          "level": "must",
+          "why": "stream_lead_history_recording -> stream_call_record",
+          "lines": [
+            990,
+            1007
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/routes/outbound/workspace.rs",
+          "level": "must",
+          "why": "stream_workspace_lead_history_recording -> stream_call_record",
+          "lines": [
+            231,
+            252
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/state.rs",
+          "level": "must",
+          "why": "AppState.recordings_dir reader",
+          "lines": [
+            740,
+            760
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-workers/src/main.rs",
+          "level": "must",
+          "why": "workers reader",
+          "lines": [
+            783,
+            783
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/src/storage_provider_service.rs",
+          "level": "must",
+          "why": "resolve_root reader",
+          "lines": [
+            360,
+            360
+          ]
+        },
+        {
+          "path": "src/backend/crates/platform-media/src/provider.rs",
+          "level": "must",
+          "why": "provider_for reader",
+          "lines": [
+            316,
+            316
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/src/studio_asr_selector.rs",
+          "level": "must",
+          "why": "spawn_elected reader",
+          "lines": [
+            689,
+            689
+          ]
+        },
+        {
+          "path": "services/rustpbx/src/config.rs",
+          "level": "must",
+          "why": "engine recorder_path the env must match",
+          "lines": [
+            297,
+            304
+          ]
+        },
+        {
+          "path": "src/backend/apps/pbx-admin-api/src/routes/studio/internal.rs",
+          "level": "should",
+          "why": "consumer of state.recordings_dir",
+          "lines": [
+            341,
+            341
+          ]
+        },
+        {
+          "path": "env.dev.example",
+          "level": "should",
+          "why": "dev value",
+          "lines": [
+            58,
+            58
+          ]
+        },
+        {
+          "path": "src/backend/env.example",
+          "level": "should",
+          "why": "backend example",
+          "lines": [
+            197,
+            197
+          ]
+        },
+        {
+          "path": "deploy/systemd/examples/pbx-admin-api.env.example",
+          "level": "should",
+          "why": "systemd example",
+          "lines": [
+            49,
+            49
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T4",
+      "class": "control (rg should win)",
+      "prompt": "Rename the validation code ring_timeout_secs_out_of_range to ring_timeout_out_of_range everywhere.",
+      "seeds": [
+        "ring_timeout_secs_out_of_range"
+      ],
+      "key": [
+        {
+          "path": "src/backend/crates/pbx-application/src/call_groups_service.rs",
+          "level": "must",
+          "why": "emit",
+          "lines": [
+            126,
+            126
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/src/call_groups_service.rs",
+          "level": "must",
+          "why": "test",
+          "lines": [
+            913,
+            913
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/src/call_groups_service.rs",
+          "level": "must",
+          "why": "test",
+          "lines": [
+            929,
+            929
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/src/ivr_menu_service.rs",
+          "level": "must",
+          "why": "emit",
+          "lines": [
+            125,
+            125
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/src/ivr_menu_service.rs",
+          "level": "must",
+          "why": "test",
+          "lines": [
+            1009,
+            1009
+          ]
+        },
+        {
+          "path": "src/backend/crates/pbx-application/src/ivr_menu_service.rs",
+          "level": "must",
+          "why": "test",
+          "lines": [
+            1019,
+            1019
+          ]
+        },
+        {
+          "path": "src/frontend/features/call-groups/call-group-form-sheet.tsx",
+          "level": "must",
+          "why": "error-code map",
+          "lines": [
+            88,
+            88
+          ]
+        },
+        {
+          "path": "src/frontend/features/ivr-menus/ivr-menu-form-sheet.tsx",
+          "level": "must",
+          "why": "error-code map",
+          "lines": [
+            86,
+            86
+          ]
+        }
+      ]
+    }
+  ]
+}

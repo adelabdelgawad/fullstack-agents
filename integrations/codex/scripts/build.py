@@ -229,6 +229,8 @@ def render(output):
     shutil.copy2(SOURCE / "scripts/lib/stop_guard.py", output / "scripts/stop_guard.py")
     shutil.copy2(SOURCE / "scripts/lib/claude_cli.py", output / "scripts/claude_cli.py")
     shutil.copy2(SOURCE / "scripts/lib/team_conf.py", output / "scripts/team_conf.py")
+    shutil.copy2(SOURCE / "scripts/lib/code_map.py", output / "scripts/code_map.py")
+    shutil.copy2(SOURCE / "scripts/lib/code_map_joins.py", output / "scripts/code_map_joins.py")
     shutil.copytree(SOURCE / "policies", output / "policies")
     for path in sorted((ADAPTER / "schemas").glob("*.json")):
         write(output / "schemas" / path.name, path.read_text())

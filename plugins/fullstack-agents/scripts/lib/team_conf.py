@@ -72,6 +72,7 @@ SCHEMA = {
     "gated_extensions": _list,
     "carve_outs": _list,
     "scan_gate": _onoff,
+    "code_map": _onoff,
     "policy_profile": _slug,
     "monitor_model": _nonempty,
     "deploy_regex": _nonempty,

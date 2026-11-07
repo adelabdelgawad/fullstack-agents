@@ -11,7 +11,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO / "integrations/codex/scripts"
 sys.path.insert(0, str(SCRIPTS))
-from build import render  # noqa: E402
+from build import render
 
 BASELINE = "5e78c14"
 SUBSTANTIVE = {"prompt": "Please investigate the slow backend request and fix it", "session_id": "s-roles"}
@@ -24,7 +24,7 @@ def hook(script, mode, payload, role=None, home=None, cwd=None):
     if home:
         env.update(HOME=str(home), CODEX_HOME=str(home / ".codex"))
     return subprocess.run([sys.executable, str(script), mode], input=json.dumps(payload), capture_output=True,
-                          text=True, env=env, cwd=str(cwd) if cwd else None)
+                          text=True, env=env, cwd=str(cwd) if cwd else None, check=False)
 
 
 class CodexRoleHookTests(unittest.TestCase):
@@ -128,6 +128,16 @@ class CodexRoleHookTests(unittest.TestCase):
         text = json.loads(start.stdout)["hookSpecificOutput"]["additionalContext"]
         self.assertIn("Policy profile engineering-conventions", text)
         self.assertIn("Repro before hypothesis", text)
+
+    def test_the_rendered_bundle_ships_a_runnable_code_map(self):
+        bundle = Path(self.tmp.name) / "bundle"
+        render(bundle)
+        repo = self.init_repo("code_map=on\n")
+        env = {**os.environ, "XDG_CACHE_HOME": str(Path(self.tmp.name) / "cache")}
+        run = subprocess.run([sys.executable, str(bundle / "scripts/code_map.py"), "--cwd", str(repo), "--seed", "items"],
+                             capture_output=True, text=True, env=env, stdin=subprocess.DEVNULL, check=False)
+        self.assertEqual(run.returncode, 3, run.stderr)
+        self.assertIn("FALLBACK: no joined row", run.stderr)
 
 
 if __name__ == "__main__":
