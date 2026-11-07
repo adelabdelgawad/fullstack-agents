@@ -11,10 +11,17 @@ export interface TabTintSpan extends TabTintChip {
   end: number;
 }
 
+const COLOURED = new Set(["working", "blocked", "done"]);
 const WORD = /[\p{L}\p{N}_-]/u;
 
 function isBoundary(row: string, index: number): boolean {
   return index < 0 || index >= row.length || !WORD.test(row[index]);
+}
+
+function findLabel(row: string, label: string, from = 0): number {
+  let at = row.indexOf(label, from);
+  while (at >= 0 && !(isBoundary(row, at - 1) && isBoundary(row, at + label.length))) at = row.indexOf(label, at + 1);
+  return at;
 }
 
 export function tabTintSpans(row: string, chips: TabTintChip[]): TabTintSpan[] {
@@ -22,9 +29,7 @@ export function tabTintSpans(row: string, chips: TabTintChip[]): TabTintSpan[] {
   let from = 0;
   for (const chip of chips) {
     if (!chip.label) continue;
-    let at = row.indexOf(chip.label, from);
-    while (at >= 0 && !(isBoundary(row, at - 1) && isBoundary(row, at + chip.label.length)))
-      at = row.indexOf(chip.label, at + 1);
+    const at = findLabel(row, chip.label, from);
     if (at < 0) continue;
     spans.push({ ...chip, start: at, end: at + chip.label.length });
     from = at + chip.label.length;
@@ -46,6 +51,33 @@ function cellBackground(term: Terminal, cell: IBufferCell): string | null {
   return cell.isBgDefault() ? (term.options.theme?.background ?? null) : null;
 }
 
+export type SidebarColour = string | null | undefined;
+
+function neutralColours(host: HTMLElement): Set<string> {
+  const style = getComputedStyle(host);
+  const names = ["--herdr-text", "--herdr-overlay0", "--herdr-overlay1"];
+  return new Set(["#ffffff", ...names.map((name) => style.getPropertyValue(name).trim().toLowerCase())]);
+}
+
+function sidebarColour(term: Terminal, label: string, neutral: Set<string>): SidebarColour {
+  const buffer = term.buffer.active;
+  for (let y = 1; y < term.rows; y++) {
+    const line = buffer.getLine(y);
+    const at = line ? findLabel(line.translateToString(false), label) : -1;
+    if (!line || at < 0 || at > term.cols / 2) continue;
+    const data = line.getCell(at);
+    if (!data) continue;
+    const colour = data.isFgRGB() ? `#${data.getFgColor().toString(16).padStart(6, "0")}` : null;
+    return colour && !neutral.has(colour) ? colour : null;
+  }
+  return undefined;
+}
+
+export function tintColour(sidebar: SidebarColour, status: string): string | null {
+  if (sidebar !== undefined) return sidebar;
+  return COLOURED.has(status) ? `var(--herdr-${status === "working" ? "yellow" : status === "blocked" ? "red" : "teal"})` : null;
+}
+
 function highlightRange(term: Terminal, span: TabTintSpan): [number, number] {
   const line = term.buffer.active.getLine(0);
   const first = line?.getCell(span.start);
@@ -61,7 +93,7 @@ function highlightRange(term: Terminal, span: TabTintSpan): [number, number] {
   return [start, end];
 }
 
-function cellMarks(term: Terminal, span: TabTintSpan, cell: { w: number; h: number }): HTMLElement[] {
+function cellMarks(term: Terminal, span: TabTintSpan, colour: string, cell: { w: number; h: number }): HTMLElement[] {
   const line = term.buffer.active.getLine(0);
   const marks: HTMLElement[] = [];
   const [start, end] = highlightRange(term, span);
@@ -70,7 +102,8 @@ function cellMarks(term: Terminal, span: TabTintSpan, cell: { w: number; h: numb
     const background = data && data.getWidth() ? cellBackground(term, data) : null;
     if (!data || !background) continue;
     const mark = document.createElement("span");
-    mark.className = `herdr-state-tint is-${span.status}${span.focused ? " is-focused" : ""}`;
+    mark.className = `herdr-state-tint${span.focused ? " is-focused" : ""}`;
+    mark.style.setProperty("--herdr-state", colour);
     mark.textContent = data.getChars();
     Object.assign(mark.style, {
       left: `${x * cell.w}px`,
@@ -117,8 +150,12 @@ function paint(term: Terminal, host: HTMLElement, layer: HTMLElement): void {
   const cell = { w: box.width / term.cols, h: box.height / term.rows };
   layer.style.left = `${box.left - origin.left}px`;
   layer.style.top = `${box.top - origin.top}px`;
-  const spans = focusFromRow(term, tabTintSpans(row, chips)).filter((span) => span.status !== "unknown");
-  layer.replaceChildren(...spans.flatMap((span) => cellMarks(term, span, cell)));
+  const neutral = neutralColours(host);
+  const marks = focusFromRow(term, tabTintSpans(row, chips)).flatMap((span) => {
+    const colour = tintColour(sidebarColour(term, span.label, neutral), span.status);
+    return colour ? cellMarks(term, span, colour, cell) : [];
+  });
+  layer.replaceChildren(...marks);
 }
 
 export function wireHerdrTabTint(term: Terminal, host: HTMLElement): { dispose(): void } {
@@ -136,9 +173,7 @@ export function wireHerdrTabTint(term: Terminal, host: HTMLElement): { dispose()
     });
   };
   redraw = draw;
-  const onRender = term.onRender(({ start }) => {
-    if (start === 0) draw();
-  });
+  const onRender = term.onRender(draw);
   const onResize = term.onResize(draw);
   draw();
   return {

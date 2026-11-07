@@ -1534,18 +1534,6 @@ html .herdr-client.herdr-fill {
   background: var(--herdr-state);
   color: var(--herdr-panel-bg);
 }
-.herdr-state-tint.is-working {
-  --herdr-state: var(--herdr-yellow);
-}
-.herdr-state-tint.is-blocked {
-  --herdr-state: var(--herdr-red);
-}
-.herdr-state-tint.is-done {
-  --herdr-state: var(--herdr-teal);
-}
-.herdr-state-tint.is-idle {
-  --herdr-state: var(--herdr-green);
-}
 .herdr-client-host {
   position: relative;
   flex: 1;

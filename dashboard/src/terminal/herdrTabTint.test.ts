@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { focusedByBackground, tabTintSpans } from "./herdrTabTint";
+import { focusedByBackground, tabTintSpans, tintColour } from "./herdrTabTint";
 
 const chip = (label: string, status = "working", focused = false) => ({ label, status, focused });
 
@@ -23,5 +23,12 @@ describe("herdr tab tint spans", () => {
     expect(focusedByBackground(["#282c34", "#282c34"])).toBe(-1);
     expect(focusedByBackground(["#61afef"])).toBe(-1);
     expect(focusedByBackground(["#1", "#2", "#3"])).toBe(-1);
+  });
+
+  it("copies the sidebar label colour, and uses the state table only when the sidebar has no label", () => {
+    expect(tintColour("#e5c07b", "idle")).toBe("#e5c07b");
+    expect(tintColour(null, "working")).toBeNull();
+    expect(tintColour(undefined, "working")).toBe("var(--herdr-yellow)");
+    expect(tintColour(undefined, "idle")).toBeNull();
   });
 });
