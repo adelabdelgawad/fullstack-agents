@@ -15,6 +15,7 @@ MIN_THRESHOLD = 100_000
 CARD = r"❯ 1\. Yes, clear context"
 SLUG = re.compile(r'"slug":"([A-Za-z0-9_-]+)"')
 TAIL_BYTES = 262_144
+TAIL = ("--source", "recent", "--lines", "40")  # pane reads search the buffer tail, never the scrolled viewport
 
 
 def _slug(transcript):
@@ -71,7 +72,7 @@ def _herdr(env, *args, timeout=10):
 
 
 def _screen(pane, env):
-    return _herdr(env, "pane", "read", pane, "--source", "visible").stdout
+    return _herdr(env, "pane", "read", pane, *TAIL).stdout
 
 
 def _press(pane, env, tries=3):
@@ -88,7 +89,7 @@ def _press(pane, env, tries=3):
 def watch(pane, log, env, sid="", wait_ms=120_000):
     """Wait for the approval card of an already-checked handover plan, press Enter, record the outcome."""
     result = "no-card"
-    if _herdr(env, "pane", "wait-output", pane, "--regex", CARD, "--source", "visible",
+    if _herdr(env, "pane", "wait-output", pane, "--regex", CARD, *TAIL,
               "--timeout", str(wait_ms), timeout=wait_ms / 1000 + 10).returncode == 0:
         result = "approved" if _press(pane, env) else "card-still-open"
     entry = {"at": time.time(), "pane": pane, "session": sid, "result": result}

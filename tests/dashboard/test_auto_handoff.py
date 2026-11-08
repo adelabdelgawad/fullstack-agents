@@ -128,6 +128,9 @@ class AutoHandoffTests(unittest.TestCase):
         result, calls = self.watch()
         self.assertEqual(result, "approved")
         self.assertIn("pane send-text w1:p1 \r", calls)
+        self.assertNotIn("--source visible", calls)
+        self.assertIn("pane wait-output w1:p1 --regex", calls)
+        self.assertIn("--source recent --lines 40", calls)
 
     def test_a_missing_card_is_left_alone_and_logged_with_the_screen(self):
         result, calls = self.watch(card=False)
