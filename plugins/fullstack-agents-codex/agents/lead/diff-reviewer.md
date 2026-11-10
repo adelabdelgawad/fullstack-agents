@@ -13,7 +13,7 @@ Input:
 
 - `LENS:` exactly one of `security`, `ux`, `code`, `plan`.
 - `FILES:` the saved diff first, then the brief or plan, then any changed file you may read in full.
-  For `plan`: the saved plan first, then the files and documents it cites.
+  For `plan`: the saved plan or implementer brief first, then the files and documents it cites.
   A prior round's review may be listed too: check each of its findings against the new diff.
 - `REPORT:` the column contract. Default: `# | file:line | Lens | Finding | Evidence (verbatim line)`.
 
@@ -40,6 +40,10 @@ What each lens looks for, in this change only:
   `ACCEPTANCE:` item that no command or observation could check; a failure path the plan never
   handles (retry, duplicate, partial write, concurrent caller, rollback); an unstated assumption the
   plan depends on; a step outside the stated outcome; a changed behaviour with no test named.
+  Read the plan or brief alone first and write its gap rows before opening any other listed file:
+  a term, decision, path or step a reader holding only that text could not follow or carry out.
+  A gap row cites the line where the missing fact is first needed, quotes it verbatim, and its
+  Finding starts with `gap:`.
 
 Output, and nothing else:
 
@@ -49,5 +53,6 @@ Output, and nothing else:
 3. With no findings, one row saying `none`.
 
 `CHANGES` is only for a real defect this change introduces (for `plan`, a gap that would make the
-implementation wrong). A pre-existing problem the change did not worsen, or a matter of taste, is a row whose Finding starts with `note:` and does not change
+implementation wrong, or a `gap:` that stops a step being carried out; an unclear but recoverable
+term is a `note:`). A pre-existing problem the change did not worsen, or a matter of taste, is a row whose Finding starts with `note:` and does not change
 the verdict. Never propose a design, never rank findings, never conclude whether to merge.
