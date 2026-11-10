@@ -5,7 +5,7 @@
 | `fullstack-agent` | Session lead: intake, plan, delegation, audit and the conclusion |
 | `bounded-extractor` | Mechanical extraction from a known file list into a `file:line` table |
 | `test-runner` | Runs the exact test and build commands it is given and saves full logs |
-| `diff-reviewer` | Independent review of a saved diff through one lens (security, ux or code) |
+| `diff-reviewer` | Independent review of a saved diff or plan through one lens (security, ux, code or plan) |
 | `web-researcher` | Public web sources only; returns a table of facts with source URLs |
 
 The four review agents below back the `/review` command.
