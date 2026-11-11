@@ -182,7 +182,7 @@ plugin's `scripts/fsa-usage` before large delegated work and once for the final 
 checkpoint (`fsa-task checkpoint`, task-tracking reference) and hand over through plan mode: `EnterPlanMode`, then
 `ExitPlanMode` with a short resume plan whose first line is `# HANDOFF RESUME` (goal, what is done, the next step, absolute
 paths of the checkpoint and authoritative files, and first the `fsa-task adopt` command the notice names), approved with
-"Yes, clear context" (Claude Code setting `showClearContextOnPlanAccept`). In a herdr pane the `auto-handoff` hook selects
+"Yes, clear context" (Claude Code setting `showClearContextOnPlanAccept`). In a herdr or tmux pane the `auto-handoff` hook selects
 it on the user's standing request (`FSA_AUTO_HANDOFF=off` disables it); elsewhere the user picks it. If the plan is kept in context or declined,
 continue without the adopt command; automatic compaction summarises the conversation, so reread the ledger, checkpoint and authoritative files when
 needed. A session that opens with `Implement the following plan:` carrying such a handover plan has the user's approval to

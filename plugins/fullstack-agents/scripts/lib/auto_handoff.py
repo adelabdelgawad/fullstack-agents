@@ -1,4 +1,4 @@
-"""PreToolUse(ExitPlanMode) hook: in a herdr pane, presses "Yes, clear context" on the lead's HANDOFF RESUME plan."""
+"""PreToolUse(ExitPlanMode) hook: in a herdr or tmux pane, presses "Yes, clear context" on the lead's HANDOFF RESUME plan."""
 import json
 import os
 import re
@@ -47,8 +47,8 @@ def is_handover(plan):
 
 
 def armed(hook, state_dir, env):
-    """The herdr pane to approve in, or None; each handover ExitPlanMode call arms once."""
-    pane = env.get("HERDR_PANE_ID")
+    """The herdr or tmux pane to approve in, or None; each handover ExitPlanMode call arms once."""
+    pane = env.get("HERDR_PANE_ID") or env.get("TMUX_PANE")
     sid, call = hook.get("session_id"), hook.get("tool_use_id")
     if not pane or not sid or hook.get("agent_id") or env.get("FSA_AUTO_HANDOFF", "on") == "off":
         return None
@@ -72,8 +72,26 @@ def _herdr(env, *args, timeout=10):
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
 
 
+def _is_tmux(pane):
+    return pane.startswith("%")
+
+
+def _tmux(env, *args, timeout=10):
+    cmd = [env.get("FSA_TMUX_BIN") or "tmux", *args]
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+
+
 def _screen(pane, env):
+    if _is_tmux(pane):
+        return _tmux(env, "capture-pane", "-p", "-J", "-t", pane, "-S", "-40").stdout
     return _herdr(env, "pane", "read", pane, *TAIL).stdout
+
+
+def _send_enter(pane, env):
+    if _is_tmux(pane):
+        _tmux(env, "send-keys", "-t", pane, "Enter")
+    else:
+        _herdr(env, "pane", "send-text", pane, "\r")
 
 
 def _press(pane, env, tries=3):
@@ -82,7 +100,7 @@ def _press(pane, env, tries=3):
         time.sleep(2)
         if not re.search(CARD, _screen(pane, env)):
             return True
-        _herdr(env, "pane", "send-text", pane, "\r")
+        _send_enter(pane, env)
     time.sleep(3)
     return not re.search(CARD, _screen(pane, env))
 
@@ -101,6 +119,9 @@ def _json(proc):
 
 
 def _live(pane, env):
+    if _is_tmux(pane):
+        proc = _tmux(env, "display-message", "-p", "-t", pane, "#{pane_id}")
+        return proc.returncode == 0 and proc.stdout.strip() == pane
     proc = _herdr(env, "pane", "get", pane)
     return proc.returncode == 0 and "error" not in _json(proc)
 
@@ -125,7 +146,17 @@ def find_pane(mark, env, wait_ms, step=2):
     return None, "pane-gone"
 
 
+def _wait_card(pane, env, wait_ms, step=1):
+    for _ in range(max(1, wait_ms // (step * 1000))):
+        if re.search(CARD, _screen(pane, env)):
+            return True
+        time.sleep(step)
+    return False
+
+
 def _approve(pane, env, wait_ms):
+    if _is_tmux(pane):
+        return ("approved" if _press(pane, env) else "card-still-open") if _wait_card(pane, env, wait_ms) else "no-card"
     if _herdr(env, "pane", "wait-output", pane, "--regex", CARD, *TAIL,
               "--timeout", str(wait_ms), timeout=wait_ms / 1000 + 10).returncode != 0:
         return "no-card"
@@ -135,7 +166,7 @@ def _approve(pane, env, wait_ms):
 def watch(pane, log, env, sid="", wait_ms=120_000, mark=""):
     """Wait for the approval card of an already-checked handover plan, press Enter, record the outcome."""
     entry, result = {"at": time.time(), "pane": pane, "session": sid}, "pane-gone"
-    if not _live(pane, env):
+    if not _live(pane, env) and not _is_tmux(pane):
         found, result = find_pane(mark, env, wait_ms)
         entry["resolved"] = found
         pane = found or pane

@@ -36,6 +36,16 @@ case "$2" in
 esac
 """
 
+FAKE_TMUX = """#!/usr/bin/env bash
+d="$(dirname "$0")"
+echo "$*" >> "$d/calls"
+case "$1" in
+  display-message) echo "%0" ;;
+  capture-pane) if [ -f "$d/card" ] && [ ! -f "$d/pressed" ]; then cat "$d/card"; else echo "idle"; fi ;;
+  send-keys) touch "$d/pressed" ;;
+esac
+"""
+
 
 class AutoHandoffTests(unittest.TestCase):
     def setUp(self):
@@ -143,6 +153,32 @@ class AutoHandoffTests(unittest.TestCase):
         self.assertNotIn("--source visible", calls)
         self.assertIn("pane wait-output w1:p1 --regex", calls)
         self.assertIn("--source recent --lines 40", calls)
+
+    def test_arms_in_a_tmux_pane(self):
+        self.env = {"TMUX_PANE": "%0"}
+        self.assertTrue(self.warn())
+        self.assertEqual(auto_handoff.armed(self.hook, self.dir, self.env), "%0")
+
+    def test_presses_enter_on_the_card_in_tmux(self):
+        fake = self.dir / "tmux"
+        fake.write_text(FAKE_TMUX)
+        fake.chmod(0o755)
+        (self.dir / "card").write_text("❯ 1. Yes, clear context (9% used) and bypass permissions\n")
+        with mock.patch.object(auto_handoff.time, "sleep"):
+            result = auto_handoff.watch("%0", self.dir / "log", {"FSA_TMUX_BIN": str(fake)}, "s1", wait_ms=10)
+        calls = (self.dir / "calls").read_bytes().decode()
+        self.assertEqual(result, "approved")
+        self.assertIn("send-keys -t %0 Enter", calls)
+        self.assertIn("capture-pane -p -J -t %0 -S -40", calls)
+
+    def test_a_missing_card_in_tmux_is_left_alone(self):
+        fake = self.dir / "tmux"
+        fake.write_text(FAKE_TMUX)
+        fake.chmod(0o755)
+        with mock.patch.object(auto_handoff.time, "sleep"):
+            result = auto_handoff.watch("%0", self.dir / "log", {"FSA_TMUX_BIN": str(fake)}, "s1", wait_ms=10)
+        self.assertEqual(result, "no-card")
+        self.assertNotIn("send-keys", (self.dir / "calls").read_text())
 
     def test_a_missing_card_is_left_alone_and_logged_with_the_screen(self):
         result, calls = self.watch(card=False)
