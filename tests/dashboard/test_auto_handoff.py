@@ -24,6 +24,18 @@ case "$2" in
 esac
 """
 
+STALE_HERDR = """#!/usr/bin/env bash
+d="$(dirname "$0")"
+echo "$*" >> "$d/calls"
+case "$2" in
+  get) if [ "$3" = "w1:p1" ]; then echo '{"error":{"code":"pane_not_found"}}' >&2; exit 1; else echo '{"result":{}}'; fi ;;
+  list) echo '{"result":{"panes":[{"pane_id":"w1:p2","agent":"claude"},{"pane_id":"w1:p3","agent":"claude"},{"pane_id":"w1:p4"}]}}' ;;
+  wait-output) [ -f "$d/card-$3" ] ;;
+  read) if [ -f "$d/card-$3" ] && [ ! -f "$d/pressed-$3" ]; then cat "$d/card-$3"; else echo "idle"; fi ;;
+  send-text) touch "$d/pressed-$3" ;;
+esac
+"""
+
 
 class AutoHandoffTests(unittest.TestCase):
     def setUp(self):
@@ -138,6 +150,39 @@ class AutoHandoffTests(unittest.TestCase):
         self.assertNotIn("send-text", calls)
         entry = json.loads((self.dir / "log").read_text().splitlines()[-1])
         self.assertEqual((entry["session"], entry["screen"]), ("s1", ["idle"]))
+
+    def stale(self, cards):
+        fake = self.dir / "herdr"
+        fake.write_text(STALE_HERDR)
+        fake.chmod(0o755)
+        for pane, text in cards.items():
+            (self.dir / f"card-{pane}").write_text(text + "\n❯ 1. Yes, clear context (9% used)\n")
+        with mock.patch.object(auto_handoff.time, "sleep"):
+            result = auto_handoff.watch("w1:p1", self.dir / "log", {"HERDR_BIN_PATH": str(fake)}, "s1",
+                                        wait_ms=4000, mark="fsa-task adopt --from s1-uuid")
+        return result, (self.dir / "calls").read_bytes().decode()
+
+    def test_a_stale_pane_id_presses_only_the_pane_showing_this_plan(self):
+        result, calls = self.stale({"w1:p2": "fsa-task adopt --from other", "w1:p3": "fsa-task adopt --from s1-uuid",
+                                    "w1:p4": "fsa-task adopt --from s1-uuid"})
+        self.assertEqual(result, "approved")
+        self.assertIn("pane send-text w1:p3 \r", calls)
+        self.assertNotIn("send-text w1:p2", calls)
+        self.assertNotIn("send-text w1:p4", calls)
+        self.assertEqual(json.loads((self.dir / "log").read_text())["resolved"], "w1:p3")
+
+    def test_a_stale_pane_id_never_presses_when_the_plan_is_ambiguous_or_absent(self):
+        same = "fsa-task adopt --from s1-uuid"
+        self.assertEqual(self.stale({"w1:p2": same, "w1:p3": same})[0], "ambiguous")
+        for pane in ("w1:p2", "w1:p3"):
+            (self.dir / f"card-{pane}").unlink()
+        result, calls = self.stale({"w1:p2": "fsa-task adopt --from other"})
+        self.assertEqual(result, "pane-gone")
+        self.assertNotIn("send-text", calls)
+
+    def test_the_mark_is_the_last_long_plan_line_as_rendered(self):
+        plan = "# HANDOFF RESUME\n\n1. Run `fsa-task adopt --from abc-123` first\n**Gates:** no real calls, ever, on any path\nok\n"
+        self.assertEqual(auto_handoff.needle(plan), "Gates: no real calls, ever, on any path")
 
 
 if __name__ == "__main__":

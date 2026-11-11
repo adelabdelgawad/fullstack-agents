@@ -16,6 +16,7 @@ CARD = r"❯ 1\. Yes, clear context"
 SLUG = re.compile(r'"slug":"([A-Za-z0-9_-]+)"')
 TAIL_BYTES = 262_144
 TAIL = ("--source", "recent", "--lines", "40")  # pane reads search the buffer tail, never the scrolled viewport
+WIDE = ("--source", "recent-unwrapped", "--lines", "400")
 
 
 def _slug(transcript):
@@ -86,13 +87,60 @@ def _press(pane, env, tries=3):
     return not re.search(CARD, _screen(pane, env))
 
 
-def watch(pane, log, env, sid="", wait_ms=120_000):
-    """Wait for the approval card of an already-checked handover plan, press Enter, record the outcome."""
-    result = "no-card"
+def needle(plan):
+    """The plan's last long line, rendered just above the card, marks this session's plan on screen."""
+    line = next((line for line in reversed(plan.splitlines()[1:]) if len(line.strip()) >= 24), "")
+    return " ".join(re.sub(r"[*`]", "", line).split())[:40]
+
+
+def _json(proc):
+    try:
+        return json.loads(proc.stdout or "{}")
+    except ValueError:
+        return {}
+
+
+def _live(pane, env):
+    proc = _herdr(env, "pane", "get", pane)
+    return proc.returncode == 0 and "error" not in _json(proc)
+
+
+def _shows(pane, mark, env):
+    text = " ".join(_herdr(env, "pane", "read", pane, *WIDE).stdout.split())
+    return bool(re.search(CARD, text)) and mark in text
+
+
+def find_pane(mark, env, wait_ms, step=2):
+    """The one claude pane showing the card beside this plan's mark; a daemon session's own pane id goes stale."""
+    if not mark:
+        return None, "pane-gone"
+    for _ in range(max(1, wait_ms // (step * 1000))):
+        panes = (_json(_herdr(env, "pane", "list")).get("result") or {}).get("panes") or []
+        hits = [p["pane_id"] for p in panes if p.get("agent") == "claude" and _shows(p.get("pane_id", ""), mark, env)]
+        if len(hits) > 1:
+            return None, "ambiguous"
+        if hits:
+            return hits[0], "found"
+        time.sleep(step)
+    return None, "pane-gone"
+
+
+def _approve(pane, env, wait_ms):
     if _herdr(env, "pane", "wait-output", pane, "--regex", CARD, *TAIL,
-              "--timeout", str(wait_ms), timeout=wait_ms / 1000 + 10).returncode == 0:
-        result = "approved" if _press(pane, env) else "card-still-open"
-    entry = {"at": time.time(), "pane": pane, "session": sid, "result": result}
+              "--timeout", str(wait_ms), timeout=wait_ms / 1000 + 10).returncode != 0:
+        return "no-card"
+    return "approved" if _press(pane, env) else "card-still-open"
+
+
+def watch(pane, log, env, sid="", wait_ms=120_000, mark=""):
+    """Wait for the approval card of an already-checked handover plan, press Enter, record the outcome."""
+    entry, result = {"at": time.time(), "pane": pane, "session": sid}, "pane-gone"
+    if not _live(pane, env):
+        found, result = find_pane(mark, env, wait_ms)
+        entry["resolved"] = found
+        pane = found or pane
+    result = _approve(pane, env, wait_ms) if _live(pane, env) else result
+    entry["result"] = result
     if result != "approved":
         entry["screen"] = _screen(pane, env).rstrip().splitlines()[-8:]
     with open(log, "a") as stream:
@@ -102,7 +150,8 @@ def watch(pane, log, env, sid="", wait_ms=120_000):
 
 def main():
     if len(sys.argv) > 3 and sys.argv[1] == "watch":
-        watch(sys.argv[2], sys.argv[3], os.environ, sys.argv[4] if len(sys.argv) > 4 else "")
+        extra = sys.argv[4:] + ["", ""]
+        watch(sys.argv[2], sys.argv[3], os.environ, extra[0], mark=extra[1])
         return
     try:
         hook = json.load(sys.stdin)
@@ -112,7 +161,7 @@ def main():
     pane = armed(hook, state_dir, os.environ)
     if pane:
         subprocess.Popen([sys.executable, "-I", __file__, "watch", pane, str(Path(state_dir) / "auto-handoff.log"),
-                          hook.get("session_id", "")],
+                          hook.get("session_id", ""), needle(plan_text(hook, os.environ))],
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          start_new_session=True)
 
