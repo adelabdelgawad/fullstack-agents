@@ -13,6 +13,8 @@ goes only where it is needed.
 
 There is also a version for Codex: see [Codex setup](docs/codex.md).
 
+![The dashboard: every AI session as a live card, with cost, context use and who is waiting on you](docs/images/dashboard-agents.png)
+
 ## The rules
 
 1. **One lead is responsible.** The lead finds the cause, makes the plan, checks the work and gives
@@ -86,6 +88,26 @@ hands the task to a fresh conversation with nothing lost.
 - **Never mid-job**: it waits until no helper or test is still running.
 - **Your instructions carry over**: a "do not deploy" stays in force in the new conversation.
 - **Survives restarts**: after a restart or a shortened conversation, the task list comes back.
+
+## The dashboard
+
+Type `/dashboard` to open one page that shows every AI session on your machine.
+
+- **One card per session**: what it is doing, its stage, its cost, how full its memory is, and a
+  clear **Respond** button when it waits on you.
+- **Top strip**: sessions running, sessions waiting on you, helpers at work, and how much of each
+  plan (Claude, Codex, Grok) is used.
+- **Live activity feed**: every start, finish and question, newest first.
+
+### Best with Herdr
+
+[Herdr](https://github.com/ogulcancelik/herdr) runs many AI sessions side by side in one terminal.
+The dashboard is built for it: open any card and the **Terminal** tab shows that session's real,
+live terminal in the browser. You can read it, type into it and answer it from the same page — no
+switching windows. The **Herdr** tab opens your whole Herdr workspace in the browser, so you can
+watch and drive every session from any machine on your network.
+
+![A card opened on its Terminal tab: the session's live Herdr terminal inside the dashboard](docs/images/dashboard-herdr-terminal.png)
 
 ## A task list you can see
 
