@@ -1,135 +1,162 @@
 # Fullstack Agents
 
-A Claude Code plugin that brings intelligent, pattern-aware code generation to polyglot fullstack projects — **Python (FastAPI) and Rust (Axum) microservices behind one Next.js frontend**. Instead of static templates, it reads your codebase, asks the right questions, and generates code that fits—first time. And instead of trusting the model to follow the rules, it enforces them with hooks.
-
-## Installation
+A Claude Code plugin that makes the AI work like a careful senior engineer: **one lead takes
+responsibility for every task and follows a fixed workflow**. It is built for web apps with Python
+(FastAPI) or Rust (Axum) backends and a Next.js frontend. The rules are not just advice — **the
+plugin blocks the AI when it tries to skip a step**. And it is **cheap to run**: expensive thinking
+goes only where it is needed.
 
 ```bash
 /plugin marketplace add https://github.com/adelabdelgawad/fullstack-agents
 /plugin install fullstack-agents
 ```
 
-### Standalone Codex edition
+There is also a version for Codex: see [Codex setup](docs/codex.md).
 
-Codex leads investigation, planning, implementation and validation; Opus provides
-only bounded, read-only audits and returns issues with repair scope. Install this edition separately:
+## The rules
 
-```bash
-codex plugin marketplace add adelabdelgawad/fullstack-agents
-codex plugin add fullstack-agents-codex@fullstack-agents-codex
-```
+1. **One lead is responsible.** The lead finds the cause, makes the plan, checks the work and gives
+   the answer. It can hand out work, but never the thinking or the final decision.
+2. **Helpers give facts, not answers.** The lead checks every claim against the real code before it
+   acts. Test results count only after the lead reads them itself.
+3. **Cheapest tool first.** A plain search comes before any AI. Helpers are asked for facts, never
+   for opinions.
+4. **Know-how before code.** For each request, the plugin picks the right guides. The AI cannot
+   edit code until it has read them. Python, Rust and frontend rules never mix.
+5. **Plan, build, check.** Small changes the lead makes itself. Bigger ones go to a helper with a
+   strict written job. The lead reviews the whole change once, after the tests pass. If a fix fails
+   twice, it stops and reports.
+6. **Your project's rules win.** Each project can set its own rules, and they always come first.
+7. **Safe with other sessions.** Several AI sessions can share one project without stepping on
+   each other. If you say "do not deploy", nothing deploys until you say so.
 
-For a project-local installation with native roles, use
-`bash install-codex.sh /path/to/project` instead. See [Codex setup and flow](docs/codex.md).
-The Claude integration retains its
-existing runtime configuration. Both editions use [progressive skill loading](docs/token-efficiency.md)
-to keep examples and detailed procedures out of context until needed.
+## The workflow
 
-## What You Get
+| Path | When | What happens |
+|------|------|--------------|
+| **Short** | Questions, research, small safe fixes | Read the right guide, fix, check, review the change |
+| **Full** | Bigger work, risky files, database changes, releases | Written plan (reviewed when risky), task list, helpers working in parallel, full test run, one final review |
 
-- **A session lead** that plans, delegates, audits and concludes, with extractor, test-runner, diff-reviewer, web-researcher and four review agents
-- **2 slash commands**: `/review` and `/dashboard`; everything else is asked in plain language and routed to skills
-- **Host dashboard** (`/dashboard`): agent cards with live pane terminals, and a Herdr tab that runs a full `herdr` client in the browser (xterm.js over one WebSocket, WebGL when the GPU allows, JetBrains Mono at Ghostty's cell size)
-- **33 skill domains** covering FastAPI, Rust/Axum, Next.js, clean architecture + DDD in both backend languages, TanStack Table, Celery, Docker, WebSocket, framework migration (frontend + backend), debugging discipline, prompt refinement, panel reasoning, and more
-- **Hard enforcement hooks** — the routing gate is re-armed on every prompt, code-file edits are blocked until the right skills were consulted, and every change is validated with real tooling (ruff, rustfmt, clippy, tsc) before the session can end
-- **Language-lane separation** — Rust and Python skills never cross; lane detection routes per file/service, and idiom transplants are forbidden
-- **Wire-contract parity** — Rust and FastAPI services speak the same dialect (camelCase JSON, limit/skip pagination, shared auth), interchangeable behind the same frontend
-- **Project constitutions** (spec-kit compatible) — versioned, per-project principles files that scanning loads, gates check, and whose machine-readable limits override hook thresholds
-- **Senior-engineer discipline** — search-before-implement, duplication prevention, and complexity limits enforced on all implementation work
-- **Delegated implementation** — the lead splits large work into bounded briefs for an implementer and audits every diff
+## Helpers
 
-## Quick Start
-
-Ask in plain language in a FastAPI, Rust or Next.js project:
+The lead hands out **work, never the thinking**. Each helper gets a narrow job and returns a short
+list of facts. The lead checks those facts before it uses them.
 
 ```text
-add a soft-delete flag to the product entity and hide deleted rows in the products table
-the campaigns page takes 4 s to open, find out why
+Lead (strongest model) ── finds the cause · plans · reviews · decides
+ │
+ ├─ fact finder    (smallest model)  reads given files    → short list of facts
+ ├─ web researcher (mid model)       public docs only     → facts with links
+ ├─ test runner    (mid model)       runs the tests       → full results saved for the lead
+ ├─ reviewer       (mid model)       security · UX · code · plan → list of problems
+ └─ implementer    (mid model, or Codex / Grok on request)
+                                     strict job, allowed files only → the code change
+ │
+ └─► Lead checks every fact, reads the change and the test results, then decides
+```
+
+- **A clear job**: each implementer gets the goal, the plan, the exact files it may touch, and the
+  checks that prove it is done.
+- **A fence**: the implementer cannot change files outside its list. The lead does not touch those
+  files while the implementer works.
+- **In parallel**: jobs that touch different files run at the same time.
+- **No blind trust**: "finished" is not "accepted". The lead reviews every change. After two failed
+  fixes it stops and reports.
+- **Code review on demand**: `/review` runs four review agents — quality, patterns, performance and
+  security.
+- **Watch live**: say "use herdr" to see each helper work in its own window.
+
+More: [Agents](docs/agents.md).
+
+## Long tasks do not lose their way
+
+AI conversations get slow and forgetful when they grow too long. Before that happens, the plugin
+hands the task to a fresh conversation with nothing lost.
+
+```text
+ conversation gets too long  ──►  lead saves progress     ──►  short hand-over note
+                                  (task list + evidence)       goal · done · next step
+                                                                        │
+ fresh conversation loads the note  ◄──  you approve (or it is approved for you)
+ → same task list, same checks, continues where it stopped
+```
+
+- **At the right moment**: after a big investigation, it can hand over as soon as the plan is
+  ready, so the building starts with a clean slate.
+- **Never mid-job**: it waits until no helper or test is still running.
+- **Your instructions carry over**: a "do not deploy" stays in force in the new conversation.
+- **Survives restarts**: after a restart or a shortened conversation, the task list comes back.
+
+## A task list you can see
+
+Bigger tasks keep a written task list, one line per piece of work. It shows on the dashboard, it
+moves to the new conversation at a hand-over, and **the AI cannot just stop while items are still
+open** — it must finish them or say what it is waiting for.
+
+## It saves money
+
+Every step re-reads the whole conversation, so the plugin keeps the conversation small and gives
+each job to the cheapest model that can do it.
+
+| How | Result |
+|-----|--------|
+| **Guides load in small pieces** | Only a short summary loads first; details load when needed. The ten largest guides load **83% less text** at the start |
+| **The right model for each job** | The strongest model only thinks and decides; fact finding, tests, reviews and coding go to cheaper models |
+| **Search before AI** | Plain search tools answer what they can; helpers return short lists, not whole files |
+| **Short path by default** | Small jobs skip the paperwork |
+| **Only what matters** | Long files and test logs stay on disk; only the important lines enter the conversation |
+| **Fresh start before overload** | Long tasks move to a clean conversation instead of an overloaded one |
+
+More: [Token efficiency](docs/token-efficiency.md).
+
+## The rules are enforced
+
+| The plugin stops the AI from... |
+|---------------------------------|
+| Editing code before it read the right guides |
+| Changing more files by hand than the project allows, or touching off-limit files |
+| Editing files a helper is still working on |
+| Reading huge files whole, or sending a helper out without a clear list of files and questions |
+| Leaving style errors behind (Python and Rust code is checked after every edit) |
+| Stopping while the task list still has open items |
+| Deploying after you said "do not deploy", or while another session is deploying |
+| Running out of room in a long conversation without saving its progress |
+
+## Safe for teams
+
+- A **shared board** shows which session works on what. Sessions take turns for releases, restarts
+  and database changes, and a deploy is blocked while another session is deploying.
+- Each session works on **its own copy of the code**, or follows the project's own branch rules.
+- A project can write down its **main principles** in one short file (a "constitution"); the plugin
+  checks work against it.
+
+## Try it
+
+Open a project and ask in plain words:
+
+```text
+add a "deleted" flag to products and hide deleted products from the list
+the campaigns page takes 4 seconds to open, find out why
 /review security src/api/
 ```
 
-## How It Works
+`/dashboard` opens a live view of every AI session and helper on your machine.
 
-The prompt router names the skills for each request; the session lead loads them, plans, edits or
-delegates, runs the checks and audits the diff. Edits to `.py`/`.rs`/`.ts` files are blocked until
-the codebase scan and a lane-relevant skill have been invoked, and a PostToolUse hook lints every
-edited Python file with `ruff` (auto-formatting Rust with `rustfmt`) before you continue.
+## What it knows
 
-## Supported Stack
+| Area | Tools |
+|------|-------|
+| Python | FastAPI, SQLAlchemy, Pydantic, Celery |
+| Rust | Axum, SQLx, Tokio |
+| Frontend | Next.js, React, TanStack Table, Tailwind |
+| Servers | Docker, PostgreSQL, Redis, Nginx |
 
-| Layer | Technologies |
-|-------|-------------|
-| Backend (Python) | FastAPI, SQLAlchemy 2.0, Pydantic, Celery, APScheduler |
-| Backend (Rust) | Axum 0.8, SQLx, Tokio, thiserror, Argon2/JWT |
-| Frontend | Next.js 15+, React 19, TanStack Table, SWR, Tailwind |
-| Infrastructure | Docker, Docker Compose, PostgreSQL, Redis, Nginx |
+Plus debugging, moving an app to a new framework, safe changes to live data and browser call audio —
+33 guides in all: [full list](docs/skills.md).
 
-## Skill Domains
+## More
 
-**Python lane**
-- **FastAPI** — the simplified pattern: model, schema, CRUD helpers, router
-- **Python Clean Architecture** — DDD for new microservices: pure domain, ports as Protocols, use-case-owned transactions, four-stage errors
-- **Celery** — background task patterns with retry and monitoring
-- **Tasks Management** — APScheduler jobs with database persistence
+[Getting started](docs/getting-started.md) · [Agents](docs/agents.md) · [Commands](docs/commands.md) ·
+[Skills](docs/skills.md) · [Token efficiency](docs/token-efficiency.md)
 
-**Rust lane**
-- **Rust Clean Architecture** — workspace-per-layer (domain/application/infrastructure/shared + apps/api/worker), ports & adapters, parse-don't-validate value objects
-- **Rust Axum API** — Axum 0.8 handlers, extractors, middleware, JWT auth, WebSocket
-- **Rust SQLx** — compile-time-verified queries, migrations, offline cache, SQLSTATE mapping
-- **Rust Correctness** — ownership, lifetimes, async Send/Sync hazards, panic-vs-Result
-- **Rust Testing** — layer-mapped pyramid with fakes, `#[sqlx::test]`, tower oneshot
-- **Rust Quality Gates** — fmt/clippy-deny/audit/no-allow verification chain
-- **Rust ↔ Next.js Contract** — wire parity with FastAPI so backends are interchangeable
-
-**Frontend lane**
-- **Next.js** — pages, server components, server actions, SSR strategy
-- **Data Table** — TanStack Table with filtering, sorting, bulk actions, CRUD
-- **Fetch Architecture** — client/server fetch utilities and API-route-only pattern
-
-**Migration lane**
-- **Frontend Transformation** — 1:1 framework migration of an existing frontend (e.g. React → Next.js) — no redesign, full inventory + verification
-- **Backend Migration from Frontend** — reverse-engineer backend behavior from the UI, then reproduce it in the target lane with behavioral equivalence
-
-**Cross-cutting**
-- **Senior Engineer** — architecture, modularity, and duplication prevention on all work
-- **Constitution** — per-project normative principles (spec-kit compatible)
-- **Codebase Scanning** — constitution + style profile detection before generation
-- **Docker** — service configuration and infrastructure composition
-- **WebSocket** — connection manager, rooms, and message protocol patterns
-- **Batch Error Resolution** — fix all errors first, verify once
-- **Debug** — root-cause-first discipline: reproduce → investigate → fix → verify
-
-## Enforcement (not just guidance)
-
-| Hook | When | What it enforces |
-|------|------|------------------|
-| `session-start` | Session start | Detects your stack + constitution, injects the compact doctrine (`hooks/session-doctrine.md`) and a capped team-board summary |
-| `session-policy` | Session start | Injects the project's policy profile (`policy_profile` in `.claude/fsa-team.conf`) as its own block. Claude Code caps each hook's context at 10,000 characters and shows the model only a 2,000-character preview of anything longer, so every block goes through `scripts/lib/hook_context.py`: at most 9,000 characters, and longer text is written to a file the model is told to read |
-| `prompt-polish` | Qualifying prompts | Asks for a refined spec only for an open-scope action request (25+ words without paths or acceptance criteria, or open wording such as "the attached", "clean up"); never for questions, research, continuations or prompts that are already a structured spec (`scripts/lib/route.py`) |
-| `prompt-scan` | Every prompt | Routes by intent and lane to the skills to invoke. `scripts/lib/route.py` classifies by clause: only the clauses that ask for something count (Goal/Requirements sections, or the short instruction after a pasted report); negated clauses ("do not deploy") are reported as prohibitions, never as the intent; `question` and `research` intents route without task-flow. Keyword rules classify first; only when they match nothing and the prompt has at least `FSA_ROUTER_MIN_WORDS` (6) words does the Haiku classifier (`scripts/fsa-classify prompt`, about 5 s) pick from the real skill list. `FSA_ROUTER=haiku` always uses Haiku, `FSA_ROUTER=regex` never does; re-arms the 5-step gate for stack work |
-| `reply-classify` | Every finished reply (async) | Haiku decides whether the reply waits on the user (approval, decision, answer, action) and runs `team-board wait`; `FSA_WAIT_CLASSIFIER=off` disables it. Decisions are logged to `<config dir>/fullstack-agents/classifier.jsonl` |
-| `context-handoff` | After every tool call | Injects `HANDOFF:` once per compaction cycle when the lead's context reaches 200k tokens (`FSA_HANDOFF_TOKENS`) or 85% of the smallest size the session was compacted at, so the lead writes the checkpoint and hands over through a plan approval the user can accept with "Yes, clear context" (needs the Claude Code setting `showClearContextOnPlanAccept: true`) before automatic compaction; reads only new transcript bytes, skips subagents and implementer runs; `FSA_CONTEXT_HANDOFF=off` disables it |
-| `auto-handoff` | Before `ExitPlanMode` | In a herdr pane, after `HANDOFF:` fired this cycle at a threshold of at least 100k tokens, waits for the plan-approval card and selects "Yes, clear context" when the plan file's first line is `# HANDOFF RESUME`, so the session hands over with no click; logs each outcome to `auto-handoff.log` in the state directory; `FSA_AUTO_HANDOFF=off` disables it |
-| `deploy-hold` | Every prompt, before Bash, before `ExitPlanMode` | A user's "no deploy" ("do not deploy", "keep it undeployed", "deploy later") sets a hold for that session; while it is set, Bash commands matching the project's `deploy_regex` are blocked and every prompt reminds the lead. Only a later prompt telling it to deploy lifts it; `FSA_TEAM_GATE_OFF` does not. A handover plan must carry `DEPLOY HOLD: active`, which re-arms the hold in the new session |
-| `layout-hint` | Every prompt | A slash command typed with the Arabic keyboard layout (`ظؤخحغ` = `/copy`) is stopped with the command it meant; other text passes through |
-| `skill-gate` | Before code edits and brief writes | Blocks until every skill the touched paths map to (`scripts/fsa-skill-map`) was invoked; a brief must also cite the project documents bound in `.claude/fsa-skill-docs` |
-| `pre-edit-gate` | Before code edits | Blocks until codebase-scanning + a lane-relevant skill were invoked |
-| `post-edit-validate` | After code edits | ruff on Python, rustfmt on Rust (`FSA_SKIP_RUSTFMT=1` opts out) |
-
-## Philosophy
-
-> **Compounding Engineering**: each unit of work should make the next unit easier.
-
-This plugin embodies that by detecting your patterns, building on existing work instead of replacing it, enforcing the rules with the harness rather than hoping the model remembers them, and suggesting what to do next after every generation.
-
-## Links
-
-- [Agents Reference](docs/agents.md)
-- [Commands Reference](docs/commands.md)
-- [Skills Reference](docs/skills.md)
-- [Getting Started](docs/getting-started.md)
-- **Author**: [Adel Abdelgawad](https://github.com/adelabdelgawad)
-
-## License
-
-MIT
+Author: [Adel Abdelgawad](https://github.com/adelabdelgawad) · License: MIT
