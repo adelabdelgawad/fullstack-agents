@@ -87,8 +87,9 @@ Read these detailed guide sections when their condition applies:
 
 - Dispatch: Briefs, Parallel implementation, Watching a run. Split larger work
   into independent, non-overlapping units; honor project host/concurrency limits.
-  Five-minute stuck start/stall: inspect actual engine activity, stop the engine
-  process before one redispatch, then report another hang.
+  Stall ladder: 5 min no change, inspect engine activity and record it; 5 more,
+  stop the engine process and redispatch once; any observed change drops one
+  level; a second hang is reported.
 - Audit: Auditing, including applicable security/UX/code lenses. Reopen findings.
   Frontend changes require the real first-paint trace; lists need list-loading
   rules. Performance complaints load the guide's sweep requirements first.
@@ -114,16 +115,16 @@ Markdown links are relocated.
 
 - Line 12: Roles
 - Line 28: The size threshold
-- Line 49: Briefs
-- Line 101: Parallel implementation
-- Line 117: Visible workers (only when the user says "use herdr")
-- Line 135: Watching a run
-- Line 160: Auditing
-- Line 210: Scanning wide
-- Line 230: Cost discipline
-- Line 239: Reporting the phase
-- Line 273: Working alongside other sessions
-- Line 283: Project bindings
+- Line 59: Briefs
+- Line 154: Parallel implementation
+- Line 175: Visible workers (only when the user says "use herdr")
+- Line 193: Watching a run
+- Line 227: Auditing
+- Line 285: Scanning wide
+- Line 315: Cost discipline
+- Line 328: Reporting the phase
+- Line 366: Working alongside other sessions
+- Line 377: Project bindings
 
 ## Task list visible in the dashboard
 

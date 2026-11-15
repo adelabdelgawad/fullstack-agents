@@ -301,7 +301,7 @@ request starts fresh. Do not recommend `/clear` or a new session for context siz
 The one exception is the `HANDOFF:` or `PLAN-HANDOFF:` handover (the latter at the plan boundary of a full-path task, never
 over a plan the user still has to approve): the lead writes the checkpoint and asks the user to approve a short resume
 plan that names the adopt command; approving it with a cleared context is the user's request to continue. Where the
-plugin approves it automatically (the `auto-handoff` hook in a herdr pane), the user's standing request is that approval.
+plugin approves it automatically (the `auto-handoff` hook in a herdr or tmux pane), the user's standing request is that approval.
 
 ## After compaction, `/clear`, resume or a fork
 

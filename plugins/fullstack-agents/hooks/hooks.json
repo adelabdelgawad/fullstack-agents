@@ -55,6 +55,12 @@
           },
           {
             "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd\" peer-inbox",
+            "async": false,
+            "timeout": 10
+          },
+          {
+            "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd\" auto-phase prompt",
             "async": true
           },
@@ -179,6 +185,12 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd\" context-handoff",
+            "async": false,
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd\" peer-inbox",
             "async": false,
             "timeout": 10
           }

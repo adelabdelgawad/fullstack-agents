@@ -106,7 +106,7 @@ fi
 if [ -n "$PYTHON_BIN" ] && ! cc_hint=$("$PYTHON_BIN" -I "${PLUGIN_ROOT}/scripts/lib/claude_cli.py" 2>&1 >/dev/null); then
     essential="${essential}${nl}${nl}**Claude launcher missing:** ${cc_hint} Tell the user this before any audit, classifier or Claude worker run."
 fi
-essential="${essential}${nl}${nl}**Plugin scripts:** \`${PLUGIN_ROOT}/scripts\` — \`codex-task.sh\` (Codex dispatch, \`--herdr\` for a visible pane) \`herdr-watch.sh\` (live view of a background worker's transcript) and \`team-board\` (shared claims, locks and notes for the sessions on this repository). The policy profile, when the project sets one, arrives as a separate context block."
+essential="${essential}${nl}${nl}**Plugin scripts:** \`${PLUGIN_ROOT}/scripts\` — \`codex-task.sh\` (Codex dispatch, \`--herdr\` for a visible pane) \`herdr-watch.sh\` (live view of a background worker's transcript) and \`team-board\` (shared claims, locks, notes and addressed messages for the sessions on this repository). The policy profile, when the project sets one, arrives as a separate context block."
 
 # The board is informational and comes last, capped, so it can never push the essential text out of the hook limit.
 session_context="$essential"

@@ -201,11 +201,20 @@ outcomes, not only completion:
 - **Stall** — work started, then nothing changed for 5 minutes.
 - **Finished** — `<run>.result.json` exists (v2 runs; `.last.txt` for v1).
 
-On a stuck start or a stall, stop the run by its **engine process** (the child whose working
+A stuck start or a stall climbs a ladder, one level per quiet interval:
+
+1. **5 minutes with no change** — inspect the engine's actual activity (its process, session record,
+   changed files) and record what you saw in the ledger row.
+2. **5 more minutes with no change** — stop the run and re-dispatch it once.
+3. **The re-dispatched run hangs too** — report it; never retry a second time.
+
+Any observed change (a new file, a growing session record, a live engine step) drops the run one level.
+
+Stop the run by its **engine process** (the child whose working
 directory is the worktree), not only the wrapper script: a surviving child can wake later and
 overwrite files a re-dispatched run wrote. Sending SIGTERM to `codex-task.sh` does this for the runner's process group and every
-process carrying `FSA_RUN_ID`, and records `cancelled` with the touched paths. Re-dispatch once; if it hangs again, report it to the
-user instead of retrying silently, and tell any peer session waiting on the result.
+process carrying `FSA_RUN_ID`, and records `cancelled` with the touched paths. A second hang goes to the user, not a silent retry; tell any peer session
+waiting on the result (`team-board send --to <session> --act inform`).
 
 A run ends in one recorded state in `<run>.result.json`: `succeeded`, `engine_failed`, `invalid_output`, `scope_violation`,
 `no_changes` or `cancelled`. `succeeded` means the engine finished with a valid, in-scope result; it is never acceptance. With

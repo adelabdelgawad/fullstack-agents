@@ -23,8 +23,14 @@ applied migration, and a cache cleaned under a running build. Everything else ru
    context prints the path) keeps claims, locks and a short event log per repository, shared by
    every worktree. Every entry expires. Notes replace negotiation: a session reads the board
    instead of asking.
-4. **Messages are for incidents only.** Production damage, a broken default branch, or a lock
-   that has outlived its owner. A message's first line states the whole point.
+4. **Messages are addressed and short.** `team-board send` reaches one session (id, unique id
+   prefix or claim name) or `all`, with a speech act: `request` (asks for an action), `inform`
+   (a fact the peer needs) or `done` (a request is finished). Replies carry `--reply-to <id>`; a
+   chain stops at hop 6, after which the question goes to the user. Send only what changes the
+   peer's work: a collision on shared paths, a lock that has outlived its owner, a finished
+   request. Production damage or a broken default branch also goes to your user. Unread messages
+   arrive as context after a tool call or on the next prompt (`FSA_PEER_INBOX=off` disables
+   that); `team-board inbox` reads them by hand.
 
 ```bash
 TB=<plugin scripts>/team-board          # session id comes from CLAUDE_CODE_SESSION_ID
@@ -34,6 +40,9 @@ $TB lock deploy --name <name> --reason "<sha, migrations>"   # exit 3: a peer ho
 $TB note --name <name> "deployed <sha>; image <id>; migrations <v>"
 $TB phase <investigate|plan|implement|audit|review> [--worktree <path>] [--note "<one line>"]
 $TB unlock deploy ; $TB release
+$TB send --to <session|name|all> --act request|inform|done "<one line>"   # prints the message id
+$TB send --reply-to <id> --act done "<one line>"                          # --to defaults to its sender
+$TB inbox                               # unread messages; advances this session's cursor
 ```
 
 ## Bare-metal development
