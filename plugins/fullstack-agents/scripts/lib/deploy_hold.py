@@ -1,4 +1,5 @@
-"""Deploy hold: a user's "no deploy" blocks the project's deploy commands for that session until the user says deploy."""
+"""Deploy hold: a user's "no deploy" is a candidate the lead turns into a `fsa-task control set --kind deploy_hold`
+record (or lifts); this module only detects candidates and enforces active holds."""
 import json
 import os
 import re
@@ -7,11 +8,13 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import request_inbox
+import task_controls
+
 MARKER = "DEPLOY HOLD: active"
 LIFT_MAX_CHARS = 400
 PLAN_FRESH_S = 300
-NOT_FROM_USER = ("Another Claude session sent a message", "<teammate-message", "<task-notification",
-                 "[SYSTEM NOTIFICATION")
 NEGATION = re.compile(r"\b(no|not|never|without|avoid|skip|hold)\b|n'?t\b", re.IGNORECASE)
 LATER = re.compile(r"deploy\w*\s+(?:it\s+|them\s+|this\s+)?(?:later|tomorrow)\b", re.IGNORECASE)
 UNDEPLOYED = re.compile(r"\bun-?deploy", re.IGNORECASE)
@@ -21,18 +24,23 @@ INTERJECTION = re.compile(r"^\s*(no|nope|ok|okay|yes|yeah)\s*,\s*", re.IGNORECAS
 SENTENCE = re.compile(r"[^.!?;\n]+[.!?;\n]?")
 
 
-def classify(prompt):
-    """'hold', 'lift' or None for one user prompt."""
-    positive = False
+def _classify_detail(prompt):
+    """('hold'|'lift'|None, matching sentence or None) for one user prompt."""
+    positive = None
     for raw in SENTENCE.findall(prompt):
         sentence = INTERJECTION.sub("", raw.strip())
         idx = sentence.lower().find("deploy")
         if idx < 0 or sentence.endswith("?") or QUESTION_START.match(sentence):
             continue
         if UNDEPLOYED.search(sentence) or LATER.search(sentence) or NEGATION.search(sentence[:idx]):
-            return "hold"
-        positive = True
-    return "lift" if positive and len(prompt) <= LIFT_MAX_CHARS else None
+            return "hold", sentence
+        positive = sentence
+    return ("lift", positive) if positive and len(prompt) <= LIFT_MAX_CHARS else (None, None)
+
+
+def classify(prompt):
+    """'hold', 'lift' or None for one user prompt."""
+    return _classify_detail(prompt)[0]
 
 
 def hold_dir():
@@ -51,36 +59,66 @@ def read_hold(sid):
         return None
 
 
-def set_hold(sid, quote):
+def set_hold(sid, quote, control_id=None):
     hold_dir().mkdir(parents=True, exist_ok=True)
-    hold_path(sid).write_text(json.dumps({"quote": quote[:160], "at": time.strftime("%Y-%m-%d %H:%M")}))
+    data = {"quote": quote[:160], "at": time.strftime("%Y-%m-%d %H:%M")}
+    if control_id:
+        data["control_id"] = control_id
+    hold_path(sid).write_text(json.dumps(data))
 
 
 def _context(event, text):
     return json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}})
 
 
+COORDINATION_ERRORS = (OSError, ValueError, KeyError, TypeError, RuntimeError)
+
+
+def _hold_message(control):
+    return (f'[fullstack-agents] Deploy hold {control["id"]} ({control["scope"]["level"]}): the user said '
+            f'"{control["quote"]}". Deploy commands are blocked until the user tells you to deploy; do not plan, '
+            f'offer or ask about a deploy, and a cross-host brief says deploy: no. A handover plan carries the '
+            f'line `{MARKER}`.')
+
+
+def _legacy_hold_message(held):
+    return (f'[fullstack-agents] Deploy hold: the user said "{held["quote"]}" ({held["at"]}). Deploy commands are '
+            f'blocked until the user tells you to deploy; do not plan, offer or ask about a deploy, and a '
+            f'cross-host brief says deploy: no. A handover plan carries the line `{MARKER}`.')
+
+
+def _lift_hint(control, rid, quote):
+    return (f'[fullstack-agents] To lift deploy hold {control["id"]}: `fsa-task control lift --id {control["id"]} '
+            f'--request {rid} --quote "{quote}"`.')
+
+
 def on_prompt(hook):
-    sid, prompt = hook.get("session_id"), (hook.get("prompt") or "").strip()
+    """Only detects a `deploy_hold` candidate from this prompt and reports any already-active hold; the lead
+    alone turns a candidate into a hold (`fsa-task control set`) or lifts one (`fsa-task control lift`). Any
+    coordination-log error is reported once on stderr and falls back to the legacy per-session hold file."""
+    sid, prompt, cwd = hook.get("session_id"), (hook.get("prompt") or "").strip(), hook.get("cwd")
     if not sid or not prompt:
         return None
-    verdict = classify(prompt)
-    if verdict == "lift" and any(m in prompt for m in NOT_FROM_USER):
-        verdict = None
-    if prompt.startswith("Implement the following plan:") and MARKER in prompt:
-        verdict = "hold"
-    if verdict == "hold":
-        set_hold(sid, prompt.splitlines()[0] if MARKER in prompt else prompt)
-    elif verdict == "lift" and read_hold(sid):
-        hold_path(sid).unlink(missing_ok=True)
-        return _context("UserPromptSubmit", "[fullstack-agents] Deploy hold lifted by this prompt.")
+    rid, verdict, sentence, control = None, None, None, None
+    if cwd:
+        try:
+            rid = request_inbox.capture(hook)
+            verdict, sentence = _classify_detail(task_controls.strip_quoted(prompt))
+            if rid is not None:
+                is_marker_plan = prompt.startswith("Implement the following plan:") and MARKER in prompt
+                if verdict == "hold" or is_marker_plan:
+                    task_controls.record_candidate(cwd, sid, rid, "deploy_hold",
+                                                    prompt.splitlines()[0] if is_marker_plan else (sentence or prompt))
+            control = task_controls.active_deploy_hold(cwd, sid)
+        except COORDINATION_ERRORS as error:
+            print(f"deploy_hold: coordination log unavailable: {error}", file=sys.stderr)
+    if control is not None:
+        message = _hold_message(control)
+        if verdict == "lift" and rid is not None and sentence and len(" ".join(sentence.split())) >= 8:
+            message += "\n" + _lift_hint(control, rid, sentence)
+        return _context("UserPromptSubmit", message)
     held = read_hold(sid)
-    if not held:
-        return None
-    return _context("UserPromptSubmit", f'[fullstack-agents] Deploy hold: the user said "{held["quote"]}" '
-                    f'({held["at"]}). Deploy commands are blocked until the user tells you to deploy; do not plan, '
-                    f'offer or ask about a deploy, and a cross-host brief says deploy: no. A handover plan carries '
-                    f'the line `{MARKER}`.')
+    return _context("UserPromptSubmit", _legacy_hold_message(held)) if held else None
 
 
 def deploy_regex(cwd):
@@ -97,15 +135,40 @@ def deploy_regex(cwd):
     return None
 
 
-def on_bash(hook):
-    sid = hook.get("session_id")
+def _block_reason(cwd, sid):
+    """An active control, an unresolved candidate (fail-closed, project-wide) or a legacy hold, in that order."""
+    control = task_controls.active_deploy_hold(cwd, sid) if cwd else None
+    if control is not None:
+        return (f'[fullstack-agents] BLOCKED: deploy hold {control["id"]} ({control["scope"]["level"]}). The user '
+                f'said "{control["quote"]}". Only the user lifts it (`fsa-task control lift`). Tell the user the '
+                f'deploy is on hold; do not retry it or deploy another way.')
+    candidate = task_controls.unresolved_project_candidate(cwd, "deploy_hold") if cwd else None
+    if candidate is not None:
+        return (f'[fullstack-agents] BLOCKED: a possible deploy hold ({candidate["request"]}: '
+                f'"{candidate["sentence"]}") has not been classified. Resolve it with `fsa-task control set '
+                f'--kind deploy_hold ...` or `fsa-task control dismiss --request {candidate["request"]} --kind '
+                f'deploy_hold --reason ...` before deploying.')
     held = read_hold(sid) if sid else None
+    if held:
+        return (f'[fullstack-agents] BLOCKED: deploy hold. The user said "{held["quote"]}" ({held["at"]}). Only '
+                f'the user lifts it. Tell the user the deploy is on hold; do not retry it or deploy another way.')
+    return None
+
+
+def on_bash(hook):
+    """The deploy pattern is tested first: a non-matching command does no coordination-log work at all. For a
+    matching command, any storage/lock/parse error blocks rather than letting the deploy through (fail closed)."""
     command = (hook.get("tool_input") or {}).get("command", "")
-    pattern = deploy_regex(hook.get("cwd")) if held and command else None
+    if not command:
+        return None
+    pattern = deploy_regex(hook.get("cwd"))
     if not pattern or not re.search(pattern, command):
         return None
-    return (f'[fullstack-agents] BLOCKED: deploy hold. The user said "{held["quote"]}" ({held["at"]}). Only the '
-            f'user lifts it. Tell the user the deploy is on hold; do not retry it or deploy another way.')
+    try:
+        return _block_reason(hook.get("cwd"), hook.get("session_id"))
+    except COORDINATION_ERRORS as error:
+        return (f"[fullstack-agents] BLOCKED: deploy hold state could not be read ({error}); refusing to deploy "
+                f"until this is resolved.")
 
 
 def latest_plan(now):
@@ -115,8 +178,11 @@ def latest_plan(now):
 
 
 def on_plan(hook):
-    sid = hook.get("session_id")
-    if not sid or not read_hold(sid):
+    sid, cwd = hook.get("session_id"), hook.get("cwd")
+    if not sid:
+        return None
+    active = task_controls.active_deploy_hold(cwd, sid) if cwd else None
+    if active is None and not read_hold(sid):
         return None
     plan = (hook.get("tool_input") or {}).get("plan")
     if plan is None:

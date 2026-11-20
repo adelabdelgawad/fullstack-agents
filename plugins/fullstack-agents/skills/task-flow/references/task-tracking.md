@@ -338,3 +338,25 @@ The Codex bundle has no SessionEnd or compaction-recovery hook. In Codex:
 - Without a `CLAUDE_PID` ancestor, the owner identity is the **parent process of the `tasks.py` invocation**, usually the shell Codex starts for that one command. That shell exits when the command ends, so a Codex-owned ledger reads `stale` within seconds **while the Codex session may still be active**. In Codex, `stale` does not mean the owner has ended. It still needs the user's direction for `--takeover`, so nothing is lost silently.
 - The owning Codex thread keeps writing by its session id.
 - After context loss, run `python3 scripts/tasks.py recover --cwd <session cwd>`. To continue another session's task, use `adopt`, as described above.
+
+## Requests, controls and revisions (coordination log)
+
+The plugin saves every genuine user message as a request (`R<n>`) in a per-project log before any ledger row exists, and the
+stop guard holds the turn while one is unclassified. Classifying is the lead's job; the tool only records it.
+
+- `fsa-task request list --root <root>` shows open requests. Classify each:
+  `fsa-task request classify --root <root> --id R3 --as supplementary|queued|correction|status|pause|cancel|approval|answer|other|ambiguous [--rows A,B] [--note "..."]`.
+  A supplementary or queued request never replaces the current objective. `ambiguous` keeps it open: report the uncertainty to
+  the user instead of guessing. Link it to rows with `request link`, close it with `request done` (`--dropped --reason` when it
+  will not be done).
+- A pause, an approval or a deploy hold is a control with a scope. Hooks only flag candidates; you record the control from the
+  user's own words: `fsa-task control set --root <root> --kind deploy_hold|pause|approval --scope project|task|rows [--rows A,B] --request R4 --quote "<words from that request>"`.
+  Use `project` only when the user asked for everything; otherwise `task` or `rows`. A candidate that is not a control:
+  `control dismiss --request R4 --kind <kind> --reason "..."`. Only the user's words lift or narrow one:
+  `control lift --id C2 --request R9 --quote "..."`, `control narrow ...`. Never lift or broaden on your own reading.
+  An unresolved deploy-hold candidate blocks deploy commands for the whole project until you set or dismiss it.
+- A correction or cancellation of dispatched work: `fsa-task revise --root <root> --file <ledger> --rows X --request R5 --kind correction|cancel`.
+  It lists live runs for the row; stop one with `codex-task.sh stop <run-id>`, keep its changes, and put `REVISION: <n>` in the
+  corrected brief. A run that ends `STATUS=STALE_REVISION` must be reconciled (`revise --reconciled <run-id> --note`) before
+  dependent work.
+- After a handover no prompt hook fires: read the SessionStart "Active controls" line and treat it as binding.

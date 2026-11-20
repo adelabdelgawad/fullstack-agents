@@ -1,6 +1,7 @@
 # Dispatcher hooks: a brief's `TASK: <ledger.md>#<ROW-ID>` row follows the run; tracker failures only warn on stderr.
 fsa_task_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fsa_task_root=""; fsa_task_file=""; fsa_task_id=""; fsa_task_renewed=0; fsa_task_format=""; fsa_task_status=""
+fsa_task_revision=""; fsa_task_canon_id=""
 
 fsa_task_cli() {
   local out
@@ -12,7 +13,7 @@ fsa_task_cli() {
 # fsa_task_row_init <brief> <root>: reads the TASK: line; no line leaves fsa_task_id empty and every hook a no-op.
 fsa_task_row_init() {
   local spec path dir
-  fsa_task_root=""; fsa_task_file=""; fsa_task_id=""
+  fsa_task_root=""; fsa_task_file=""; fsa_task_id=""; fsa_task_revision=""; fsa_task_canon_id=""
   spec=$(sed -nE 's/^TASK:[[:space:]]*//p' "$1" | head -1 | sed -E 's/[[:space:]]+$//')
   [ -n "$spec" ] || return 0
   path=${spec%#*}; fsa_task_id=${spec##*#}
@@ -28,7 +29,20 @@ fsa_task_row_init() {
     *) fsa_task_root=$2 ;;
   esac
   fsa_task_file=$path
+  fsa_task_revision=$(sed -nE 's/^REVISION:[[:space:]]*//p' "$1" | head -1 | sed -E 's/[[:space:]]+$//')
   return 0
+}
+
+# fsa_task_row_fence <root>: refuses a stale or cancelled dispatch before any run file exists; never fails open
+# on a coordination log storage error. Sets fsa_task_canon_id for the later meta write and finish-time check.
+fsa_task_row_fence() {
+  [ -n "$fsa_task_id" ] || return 0
+  local abs
+  case "$fsa_task_file" in /*) abs=$fsa_task_file ;; *) abs=$fsa_task_root/$fsa_task_file ;; esac
+  fsa_task_canon_id=$(python3 -I "$fsa_task_lib/task_revisions.py" task-id --root "$1" --task "$abs" 2>/dev/null) || true
+  [ -n "$fsa_task_canon_id" ] || return 0
+  python3 -I "$fsa_task_lib/task_revisions.py" check --root "$1" --task-id "$fsa_task_canon_id" --row "$fsa_task_id" \
+    --revision "$fsa_task_revision"
 }
 
 # fsa_task_row_relpath <root>: the ledger path relative to the run root, empty when it lies outside it.
@@ -80,6 +94,7 @@ fsa_task_row_renew() {
 # fsa_task_row_finish <state> <run-id>
 fsa_task_row_finish() {
   [ -n "$fsa_task_id" ] || return 0
+  [ "$1" = stale_revision ] && return 0
   if [ "$1" = succeeded ]; then
     local status=in_progress
     [ "$fsa_task_format" = v2 ] && status=verifying

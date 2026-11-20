@@ -10,9 +10,10 @@ from pathlib import Path
 import re
 import tempfile
 
+import coordination_log
+
 MAX_PROMPTS = 30
 MAX_BYTES = 8192
-SKIP_MARKERS = ("<task-notification>", "SYSTEM NOTIFICATION")
 SID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,199}\Z")
 
 
@@ -56,7 +57,7 @@ def record(session_id, prompt):
     """Append a genuine prompt, bounded to the last MAX_PROMPTS entries; a non-prompt is skipped silently."""
     if not isinstance(prompt, str) or not prompt.strip():
         return
-    if any(marker in prompt for marker in SKIP_MARKERS):
+    if coordination_log.is_notification(prompt):
         return
     encoded = prompt.encode("utf-8")
     text = prompt if len(encoded) <= MAX_BYTES else encoded[:MAX_BYTES].decode("utf-8", "ignore")

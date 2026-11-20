@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from task_tracking import SID, _atomic, _file, _load_binding, _lock, _read, _root, _state_dir, load_tasks
 import task_candidates
 import task_checkpoint
+import task_controls
 import task_ownership
 import task_recovery
 import task_rules
@@ -307,26 +308,44 @@ def _unbound_notice(session_id, cwd):
     return None if _bound_ledger(session_id) is not None else _candidates_notice(cwd)
 
 
+def _join(*parts):
+    parts = [part for part in parts if part]
+    return "\n\n".join(parts) if parts else None
+
+
+def _controls_notice(session_id, cwd):
+    """Active controls with scope and quote: no prompt hook fires after a handover, so SessionStart is the only
+    carrier that tells a new session about a hold or pause the previous one recorded."""
+    if not isinstance(cwd, str) or not cwd:
+        return None
+    try:
+        task_controls.mirror_deploy_hold(cwd, session_id)
+        return task_controls.session_start_line(cwd, session_id)
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError) as error:
+        print(f"task_lifecycle: control coordination failed: {error}", file=sys.stderr)
+        return None
+
+
 def _session_start(payload):
     session_id = payload.get("session_id")
     source = payload.get("source") or "startup"
+    cwd = payload.get("cwd")
     _prune_parked()
     parked = _own_parked_record()
     if not isinstance(session_id, str) or not SID.fullmatch(session_id):
         return None
+    controls = _controls_notice(session_id, cwd)
     if source == "fork":
-        return _offer(parked, payload.get("cwd"), source)
+        return _join(_offer(parked, cwd, source), controls)
     if source == "clear":
-        parts = [_offer(parked, payload.get("cwd"), source), _unbound_notice(session_id, payload.get("cwd"))]
-        parts = [part for part in parts if part]
-        return "\n\n".join(parts) if parts else None
+        return _join(_offer(parked, cwd, source), _unbound_notice(session_id, cwd), controls)
     if source == "compact":
-        return _compact(session_id)
+        return _join(_compact(session_id), controls)
     if source == "resume":
-        return _resume(session_id)
+        return _join(_resume(session_id), controls)
     if source == "startup":
-        return _unbound_notice(session_id, payload.get("cwd"))
-    return None
+        return _join(_unbound_notice(session_id, cwd), controls)
+    return controls
 
 
 def main(argv=None):

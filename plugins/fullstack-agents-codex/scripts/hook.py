@@ -144,7 +144,7 @@ def main():
                 context("SessionStart", f"Fullstack Agents bundle root: {BUNDLE}\n\n" + (BUNDLE / "AGENTS.md").read_text() + launcher + profile)
         elif mode == "prompt":
             prompt = payload.get("prompt", "")
-            guard().record_prompt(payload.get("session_id"), prompt)
+            guard().record_prompt(payload)
             if any(marker in prompt for marker in ("SYSTEM NOTIFICATION - NOT USER INPUT", "<task-notification>")):
                 return 0
             if len(prompt.split()) < 6:

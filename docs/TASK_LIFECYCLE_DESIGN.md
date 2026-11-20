@@ -984,3 +984,74 @@ Approved: Sonnet for this release candidate's remaining code units; reduced L3 (
 
 Units: U1 blockers + session state (first); then in parallel U2 consumers (stop guard, phase complete, push, Codex
 phase), U3 continuity + recovery, U4 brief→evidence + check timeout, U5 dashboard; lead writes the instruction docs.
+
+## 15. Coordination log: requests, scoped controls, worker revisions (implemented 2026-11-20, release 3.86.0)
+
+Status: **implemented** for §15.1–15.4; §15.5 (result outbox) and the cross-handover scenario test are **not implemented**.
+
+### 15.1 Host limits this design works inside (Claude Code 2.1.32x)
+
+| Fact | Evidence | Consequence |
+|---|---|---|
+| A handover plan accepted with "clear context" arrives with `origin.kind = "auto-continuation"`; no UserPromptSubmit hook fires for it; SessionStart(`clear`) does | observed: the new session had no prompt-history, stop-guard or deploy-hold state | state keyed by session id and written at UserPromptSubmit does not survive a handover; controls live in the project log and are reported at SessionStart |
+| Hook input carries `prompt_id` (docs); no timestamp, no origin field | documentation and the field name in the installed program; not captured from a live payload | used as the duplicate key when present, else same session + same text within 2 s |
+| UserPromptSubmit also fires for scheduled tasks, subagent reports and peer messages | documentation | marked notifications are skipped; unmarked ones are captured and the lead classifies them `other` |
+| Stop gets `last_assistant_message`; nothing proves the user saw a reply | documentation | no "received" state exists anywhere |
+| No hook can interrupt a running worker | documentation | a worker stops only through the dispatcher's TERM trap (`codex-task.sh stop`) |
+
+### 15.2 Storage
+
+`$FSA_TASKS_DIR/coordination/<key>.jsonl` (mode 0600), `<key>` = sha256 of the repository's main checkout (worktrees share it;
+a non-git directory uses its resolved path). One JSON event per line with `seq`, `at`, `session`, `type`. Appends happen under
+`flock` with `fsync`; a read-decide-append sequence holds the lock throughout. Nothing is rewritten or deleted; the reader skips
+and reports a torn line, and the writer starts a new line after one. State is derived by folding events.
+
+### 15.3 Request inbox (enforced)
+
+Every genuine prompt is appended as `request.received` (`R<n>`, full text up to 64 KiB, `host_id`) before any ledger row exists.
+Duplicate hook delivery is one request; the same text sent again is a new one. The stop guard holds the turn while a request of
+the session is `unclassified` (within `MAX_BLOCKS`). Classification is the lead's:
+`fsa-task request list|show|classify --id R3 --as supplementary|queued|correction|status|pause|cancel|approval|answer|other|ambiguous [--rows] [--note]|link|done [--dropped --reason]`.
+`ambiguous` stays listed as open and does not hold the turn. A capture failure never breaks the hook: one stderr line and a
+`capture_failed` marker file.
+
+### 15.4 Scoped controls and worker revisions (enforced)
+
+- Controls (`pause`, `approval`, `deploy_hold`) are `control.set` records with a scope (`project`, `task`, `rows`; a deploy hold
+  takes `project` or `task`), the originating quote, the request and a provenance. Hooks only append `control.candidate` (text
+  with fenced code, `>` lines and quoted spans removed; notifications yield none) and enforce. Only
+  `fsa-task control set|lift|narrow` change a control, and each is refused unless `--quote` occurs in the captured request
+  `--request R<n>`; `lift` and `narrow` refuse a request older than the control; `narrow` refuses anything not strictly inside
+  the current scope. `control dismiss --request --kind --reason` records that a candidate was not a control.
+- Deploy commands are blocked while an applicable hold is active, while a `deploy_hold` candidate of the project is unresolved,
+  or while the session's legacy `deploy-holds/<session>.json` exists; if the state cannot be read the command is blocked.
+- A task-level control also applies to a session of the project with no bound ledger (the interval after a handover).
+- Recovery of a hold whose original prompt is gone: `control set --kind deploy_hold --evidence <file> --quote "..."`
+  (`provenance.source = lead_recovery`, file hash recorded; `--scope-ambiguous` when the scope cannot be established).
+- Compatibility: legacy hold files and `stop-guard/<session>.json` stay readable and enforced; a legacy hold file is never
+  edited or deleted; `control set` and SessionStart write a mirror file (tagged `control_id`) so an older release keeps
+  enforcing; `control migrate` imports this project's legacy holds once, flagging `quote_unreliable` and `scope_ambiguous`.
+  Legacy `paused`/`approved` flags are not migrated (their quote was never stored); ledger checkpoint approvals are untouched.
+- Worker revisions: `fsa-task revise --rows X --request R<n> --kind correction|cancel` bumps a row's instruction revision and
+  lists its live runs with `codex-task.sh stop <run-id>`. A brief with `TASK:` for a revised row must carry the matching
+  `REVISION: <n>` or dispatch prints `STATUS=STALE_REVISION` and writes no run file; a cancelled row prints
+  `STATUS=ROW_CANCELLED`. A run that finishes below the row's revision ends `stale_revision`: changes kept, row not updated,
+  and its `result.json` is refused as worker-blocker evidence. `stop` signals only a dispatcher whose pid and start time match.
+
+Limits: no mid-run steering; briefs without `TASK:`, Agent-tool subagents and the lead's own edits or commits from a stale
+result are not fenced; the finish-time check treats an unreadable log as "not stale". Codex edition: its bundle
+carries the inbox, controls and revisions but not `deploy_hold.py` or `liveness.py`, so `control set|lift|migrate` for a deploy
+hold and the run listing of `revise` fail there with an import error (to be fixed with §15.5); pause and approval controls work.
+
+### 15.5 Not implemented yet
+
+Result outbox (a prepared report saved before sending, states `prepared|uncertain|emitted`, re-offered after a handover), the
+SessionStart summary of open requests and pending reports, the `capture_failed` acknowledgement, and the scenario test spanning
+a handover.
+
+### 15.6 Activation
+
+A running session keeps the release it started with. New release: export it, point the user-level marketplace at it, then
+`/reload-plugins` or a new session. After activation in a session that has a hold: record it as a control (§15.4 recovery or
+`control migrate`) and confirm with a harmless command matching `deploy_regex` (e.g. an `echo` of the pattern) that it is
+blocked. Rollback: point the marketplace back at the previous release; mirror and legacy files keep the hold enforced there.

@@ -20,6 +20,16 @@ def _read(path, mode="r"):
         return None
 
 
+def process_start(pid):
+    """The kernel's starttime (clock ticks since boot) for `pid`, or None when it is not running; a dispatcher_pid
+    whose starttime no longer matches the one recorded at dispatch is a reused pid, not the same process."""
+    stat = _read(PROC / str(pid) / "stat")
+    if stat is None:
+        return None
+    fields = stat.rsplit(")", 1)[-1].split()
+    return fields[19] if len(fields) > 19 else None
+
+
 def _processes():
     """(pid, ppid, cmdline, cwd, environ-or-None) for every visible process of this user."""
     uid, out = os.getuid(), []
@@ -191,7 +201,10 @@ def main(argv):
         code, message = release(argv[1], argv[2], "--confirm" in argv[3:])
         print(message)
         return code
-    print("usage: liveness.py state|pids|signal|release <runs-dir> <run-id> [SIG|--confirm]", file=sys.stderr)
+    if len(argv) >= 2 and argv[0] == "pid-start":
+        print(process_start(argv[1]) or "")
+        return 0
+    print("usage: liveness.py state|pids|signal|release|pid-start <runs-dir> <run-id> [SIG|--confirm]", file=sys.stderr)
     return 2
 
 

@@ -531,23 +531,24 @@ def _parser():
     recover = actions.add_parser("recover")
     recover.add_argument("--session", default=session_default)
     recover.add_argument("--cwd", required=True)
-    import task_evidence
-    import task_evidence_cli
-    import task_blockers
+    import task_evidence, task_evidence_cli, task_blockers, task_controls
+    import task_revisions
     evidence_commands = task_evidence.COMMANDS
     blocker_commands = task_blockers.COMMANDS
+    registrars = {"request": request_inbox.add_arguments, "control": task_controls.add_arguments,
+                  "revise": task_revisions.add_arguments}
     for command in ("init", "bind", "set", "add", "show", "release", "checkpoint", "adopt", "close", "upgrade",
-                     "downgrade", "request", *evidence_commands, *blocker_commands):
+                     "downgrade", "request", "control", "revise", *evidence_commands, *blocker_commands):
         sub = actions.add_parser(command)
         sub.add_argument("--root", required=True)
-        sub.add_argument("--file", required=command != "request")
+        sub.add_argument("--file", required=command not in ("request", "control", "revise"))
         sub.add_argument("--session", default=session_default)
         if command in evidence_commands:
             task_evidence_cli.add_arguments(command, sub)
         if command in blocker_commands:
             task_blockers.add_arguments(command, sub)
-        if command == "request":
-            request_inbox.add_arguments(command, sub)
+        if command in registrars:
+            registrars[command](command, sub)
         if command == "init":
             sub.add_argument("--title", default="Tasks")
             sub.add_argument("--format", choices=("v2", "legacy"), default="v2")
@@ -759,6 +760,12 @@ def _dispatch(args, root, path):
         commands[args.command] = lambda: task_blockers.dispatch(args, root, path)
     if args.command == "request":
         commands[args.command] = lambda: request_inbox.dispatch(args, root)
+    if args.command == "control":
+        import task_controls
+        commands[args.command] = lambda: task_controls.dispatch(args, root)
+    if args.command == "revise":
+        import task_revisions
+        commands[args.command] = lambda: task_revisions.dispatch(args, root)
     if args.command != "show":
         return commands[args.command]()
     record, state = task_ownership.current_owner(root, path)
@@ -783,7 +790,7 @@ def main(argv=None):
         root = _root(args.root)
         if args.command in ("init", "bind"):
             _binding_path(args.session)
-        path = None if args.command == "request" and not args.file else _file(root, args.file, existing=args.command != "init")
+        path = None if args.command in ("request", "control", "revise") and not args.file else _file(root, args.file, existing=args.command != "init")
         result = _cmd_init(args, root, path) if args.command == "init" else _dispatch(args, root, path)
         if result is None:
             return 0

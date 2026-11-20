@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import re
+import sys
 import tempfile
 import time
 
@@ -10,6 +11,7 @@ from task_tracking import SID, load_tasks
 import coordination_log
 import prompt_history
 import request_inbox
+import task_controls
 import task_rules
 
 
@@ -18,6 +20,7 @@ def _is_notification(text):
 
 
 MAX_BLOCKS = 3
+COORDINATION_ERRORS = (OSError, ValueError, KeyError, TypeError)
 PAUSE = re.compile(
     r"^\W*(stop|pause|halt|hold\s+on|cancel)\b"
     r"|\b(stop|pause|halt)\s+(the\s+)?(work|working|task|everything|all|now|here|there)\b"
@@ -41,13 +44,27 @@ PERMISSION = re.compile(r"\b(shall|should|can|may)\s+I\s+(start|begin|proceed|co
                         r"move on)\b|\bready\s+to\s+(start|begin|proceed|continue)\b", re.IGNORECASE)
 
 
-def _approves(text):
-    """True only when some sentence approves plainly and no sentence holds, negates or questions an approval."""
+def _approves_detail(text):
+    """(approves, matching sentence) - True only when some sentence approves plainly and no sentence holds,
+    negates or questions an approval."""
     sentences = [part.strip() for part in SENTENCE.split(text) if part.strip()]
     approving = [part for part in sentences if APPROVAL.search(part)]
-    if not approving or HOLD.search(text) or PAUSE.search(text):
-        return False
-    return not any(NOT_APPROVAL.search(part) for part in approving)
+    if not approving or HOLD.search(text) or PAUSE.search(text) or any(NOT_APPROVAL.search(part) for part in approving):
+        return False, None
+    return True, approving[0]
+
+
+def _approves(text):
+    return _approves_detail(text)[0]
+
+
+def _pause_sentence(text):
+    """The sentence that matched PAUSE, or the whole text when no single sentence does (e.g. spans punctuation)."""
+    for part in SENTENCE.split(text):
+        part = part.strip()
+        if part and PAUSE.search(part):
+            return part
+    return text
 # A closing line that asks the user to approve, decide or reply hands the turn over even without a '?'.
 # Anchored to an actual request: a line that merely mentions approval ("committed per your approval") is not one.
 ASK = re.compile(r"^\W*(please\s+)?(approve|confirm|choose|decide|let me know|tell me)\b"
@@ -81,17 +98,31 @@ def _save(path, state):
 
 
 def record_prompt(hook):
-    """Capture the request first, then let the latest genuine user prompt decide whether the user asked the
-    work to pause; also feeds `resolve --quote`."""
-    request_inbox.capture(hook)
-    session_id, prompt = hook.get("session_id"), hook.get("prompt")
+    """Capture the request, keep today's per-prompt pause/approval signal (the same-turn, same-session shortcut
+    a bare "stop"/"approved" prompt has always given), and additionally record pause/approval candidates from the
+    cleaned text. A durable `fsa-task control set --kind pause|approval` outranks this raw flag in `decide` once
+    one exists, so only then can a later unrelated prompt no longer erase it; without one, behaviour is unchanged."""
+    rid = request_inbox.capture(hook)
+    session_id, prompt, cwd = hook.get("session_id"), hook.get("prompt"), hook.get("cwd")
     path = _state_path(session_id)
     if path is None or not isinstance(prompt, str) or not prompt.strip():
         return
     if _is_notification(prompt):
         return
     text = prompt.strip()
-    _save(path, {"paused": bool(PAUSE.search(text)), "approved": _approves(text), "blocks": 0, "signature": None})
+    if rid is not None and isinstance(cwd, str) and cwd:
+        try:
+            cleaned = task_controls.strip_quoted(text)
+            if PAUSE.search(cleaned):
+                task_controls.record_candidate(cwd, session_id, rid, "pause", _pause_sentence(cleaned))
+            approves, sentence = _approves_detail(cleaned)
+            if approves:
+                task_controls.record_candidate(cwd, session_id, rid, "approval", sentence)
+        except COORDINATION_ERRORS as error:
+            print(f"stop_guard: control coordination failed: {error}", file=sys.stderr)
+    state = _load(path)
+    _save(path, {**state, "paused": bool(PAUSE.search(text)), "approved": _approves(text), "blocks": 0,
+                 "signature": None, "request_blocks": 0, "request_signature": None})
     prompt_history.record(session_id, text)
 
 
@@ -112,10 +143,12 @@ def _releases(message, engine, approved=False):
     return tail.rstrip("*_`) ").endswith("?") or bool(ASK.search(tail))
 
 
-def _legacy_continuation(ledger, message, engine, approved):
-    """Today's rule, unchanged for legacy ledgers and v2 ledgers whose blockers block is unreadable (§13.7)."""
+def _legacy_continuation(ledger, message, engine, approved, excluded_rows=()):
+    """Today's rule, unchanged for legacy ledgers and v2 ledgers whose blockers block is unreadable (§13.7).
+    `excluded_rows` are rows a rows-level pause control has removed from what holds the turn."""
     items = ledger.get("items") or []
-    open_items = [item for item in items if item.get("status") in task_rules.HOLDS_TURN]
+    open_items = [item for item in items
+                  if item.get("status") in task_rules.HOLDS_TURN and item["id"] not in excluded_rows]
     if not open_items or _releases(message, engine, approved):
         return None
     ids = ", ".join(f"{item['id']} ({item['status']})" for item in open_items[:8])
@@ -136,15 +169,19 @@ def _names_blocker(message, question):
     return bool(normalized) and normalized.lower() in " ".join(text.split()).lower()
 
 
-def _v2_continuation(ledger, message):
-    """§13.3/§13.4/§13.10: `executable` always holds the turn; `waiting_user` only names an unnamed question."""
+def _v2_continuation(ledger, message, excluded_rows=()):
+    """§13.3/§13.4/§13.10: `executable` always holds the turn; `waiting_user` only names an unnamed question.
+    `excluded_rows` are rows a rows-level pause control has removed from what holds the turn."""
     info = ledger["session_state"]
     state = info["state"]
     if state != "executable" and state != "waiting_user":
         return None
     if state == "executable":
+        rows = [row for row in info["executable"] if row not in excluded_rows]
+        if not rows:
+            return None
         by_id = {item["id"]: item["status"] for item in ledger.get("items") or []}
-        ids = ", ".join(f"{row} ({by_id.get(row, '?')})" for row in info["executable"][:8])
+        ids = ", ".join(f"{row} ({by_id.get(row, '?')})" for row in rows[:8])
         return (f"Open ledger tasks remain in {ledger.get('relative_file', 'the task ledger')}: {ids}. "
                 "Answering a question or reporting progress does not end the work: continue with the next step now. "
                 "End the turn only when the ledger is done, or after recording a blocker with `fsa-task block` "
@@ -174,6 +211,42 @@ def _request_hold(session_id, cwd, state, path):
     return f"classify {oldest} with `fsa-task request classify`"
 
 
+def _pause_candidate_hold(session_id, cwd, state, path):
+    """Hold the turn while this session's oldest pause candidate is unresolved, like an unclassified request."""
+    candidate = task_controls.unresolved_session_candidate(cwd, session_id, "pause")
+    if candidate is None:
+        if state.get("pause_blocks") or state.get("pause_signature"):
+            _save(path, {**state, "pause_blocks": 0, "pause_signature": None})
+        return None
+    no_progress = state.get("pause_signature") == candidate["request"]
+    blocks = state.get("pause_blocks", 0) if no_progress else 0
+    if blocks >= MAX_BLOCKS:
+        return None
+    _save(path, {**state, "pause_blocks": blocks + 1, "pause_signature": candidate["request"]})
+    return (f'classify the possible pause in {candidate["request"]} ("{candidate["sentence"][:80]}") with '
+            f'`fsa-task control set --kind pause` or `fsa-task control dismiss`')
+
+
+def _excluded_rows(controls):
+    return {row.split("#", 1)[-1] for control in controls if control["scope"]["level"] == "rows"
+            for row in control["scope"]["rows"]}
+
+
+def _pause_and_approval(session_id, cwd, state):
+    """(excluded_rows, approved): rows a rows-level pause or approval control removes from the turn, and whether
+    the whole ledger is approved; a project/task-level pause, or the legacy flag it still can't override, instead
+    returns (None, True) so the caller releases the turn. A rows-level approval approves only those rows, never
+    the whole ledger."""
+    pause_controls = task_controls.active_controls(cwd, session_id, kind="pause")
+    if any(control["scope"]["level"] in ("project", "task") for control in pause_controls) or state.get("paused"):
+        return None, True
+    approval_controls = task_controls.active_controls(cwd, session_id, kind="approval")
+    ledger_wide_approved = any(control["scope"]["level"] in ("project", "task") for control in approval_controls)
+    approved = ledger_wide_approved or (not approval_controls and bool(state.get("approved")))
+    excluded_rows = _excluded_rows(pause_controls) | _excluded_rows(approval_controls)
+    return excluded_rows, approved
+
+
 def decide(session_id, cwd, message, engine, stop_hook_active=False):
     """Return a block reason, a release report mapping, or None."""
     if os.environ.get("FSA_STOP_GUARD", "on") == "off":
@@ -185,13 +258,28 @@ def decide(session_id, cwd, message, engine, stop_hook_active=False):
     hold = _request_hold(session_id, cwd, state, path)
     if hold is not None:
         return hold
-    if state.get("paused"):
+    try:
+        hold = _pause_candidate_hold(session_id, cwd, state, path)
+    except COORDINATION_ERRORS as error:
+        print(f"stop_guard: control coordination failed: {error}", file=sys.stderr)
+        hold = None
+    if hold is not None:
+        return hold
+    state = _load(path)
+    try:
+        excluded_rows, approved = _pause_and_approval(session_id, cwd, state)
+    except COORDINATION_ERRORS as error:
+        print(f"stop_guard: control coordination failed: {error}", file=sys.stderr)
+        if state.get("paused"):
+            return None
+        excluded_rows, approved = set(), bool(state.get("approved"))
+    if excluded_rows is None:
         return None
     ledger = load_tasks(session_id, cwd)
     if ledger.get("format") == "v2" and "session_state" in ledger:
-        continuation = _v2_continuation(ledger, message)
+        continuation = _v2_continuation(ledger, message, excluded_rows)
     else:
-        continuation = _legacy_continuation(ledger, message, engine, bool(state.get("approved")))
+        continuation = _legacy_continuation(ledger, message, engine, approved, excluded_rows)
     if continuation is None:
         return None
     signature = f"{ledger.get('updated')}:{json.dumps(ledger.get('counts'), sort_keys=True)}"

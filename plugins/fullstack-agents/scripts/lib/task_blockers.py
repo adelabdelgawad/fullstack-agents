@@ -368,6 +368,10 @@ def _resolve_evidence(args, entry, root, session):
             raise ValueError(f"worker evidence must be a readable JSON file: {error}") from error
         if not isinstance(data, dict) or "state" not in data:
             raise ValueError("worker evidence must be a result.json with a state field")
+        import task_revisions
+        reason = task_revisions.refuse_worker_evidence(root, found, entry["rows"])
+        if reason:
+            raise ValueError(reason)
         return f"{args.evidence}: state={data['state']}"
     if entry.get("class") == "capacity":
         return _resolve_capacity(args, entry, root)

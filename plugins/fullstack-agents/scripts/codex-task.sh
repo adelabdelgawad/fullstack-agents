@@ -15,6 +15,38 @@ if [ "${1:-}" = "release" ]; then
   exit 2
 fi
 
+# `stop <run-id>`: TERM the recorded dispatcher (its own on_cancel trap does the rest) only when its pid and start
+# time still match this run; it never signals a pid it cannot tie to the run.
+if [ "${1:-}" = "stop" ]; then
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  . "$here/lib/runs-dir.sh"
+  rid=${2:-}
+  [ -n "$rid" ] || { echo "usage: codex-task.sh stop <run-id>" >&2; exit 2; }
+  root=${FSA_CODEX_ROOT:-$(git rev-parse --show-toplevel)}
+  runs=""
+  while IFS= read -r d; do
+    [ -f "$d/$rid.meta.json" ] && { runs=$d; break; }
+  done < <(fsa_runs_read_dirs "$root")
+  [ -n "$runs" ] || { echo "run $rid not found in the registry" >&2; exit 2; }
+  must_reconcile() {
+    local after pids
+    after=$(python3 -I "$here/lib/liveness.py" state "$runs" "$rid" 2>/dev/null || echo '{"state":"uncertain"}')
+    pids=$(python3 -I "$here/lib/liveness.py" pids "$runs" "$rid" 2>/dev/null | tr '\n' ' ')
+    echo "MUST RECONCILE: $(jq -r .state <<<"$after") pids=[$pids]"
+    exit 3
+  }
+  meta="$runs/$rid.meta.json"
+  pid=$(jq -r '.dispatcher_pid // empty' "$meta")
+  started=$(jq -r '.dispatcher_started // empty' "$meta")
+  now=""; [ -n "$pid" ] && now=$(python3 -I "$here/lib/liveness.py" pid-start "$pid" 2>/dev/null)
+  [ -n "$pid" ] && [ -n "$started" ] && [ "$now" = "$started" ] || must_reconcile
+  kill -TERM "$pid" 2>/dev/null || true
+  wait_s=$(( ${FSA_CANCEL_WAIT_S:-10} + 5 )); waited=0
+  while [ ! -f "$runs/$rid.result.json" ] && [ "$waited" -lt "$wait_s" ]; do sleep 1; waited=$((waited + 1)); done
+  [ -f "$runs/$rid.result.json" ] && { echo "STOPPED (state $(jq -r .state "$runs/$rid.result.json"))"; exit 0; }
+  must_reconcile
+fi
+
 # Run immutability: verify the plugin against its release manifest or the session pin, copy the dispatcher and its
 # helpers into the run's lib dir, and re-execute from that copy so later plugin edits cannot change this run.
 if [ -z "${FSA_DISPATCH_LIB:-}" ]; then
@@ -116,6 +148,14 @@ fi
 id="$mode-${dispatch_stamp:-$(date +%Y%m%d-%H%M%S)}-$$"
 last="$runs/$id.last.txt"; log="$runs/$id.log"
 
+# The revision fence runs before any run file is written (including $id.allow below), so a stale or cancelled
+# dispatch leaves no trace in the registry.
+. "$here/lib/task-row.sh"
+fsa_build_warn "$brief"
+fsa_task_row_init "$brief" "$root"
+task_rel=$(fsa_task_row_relpath "$root")
+fsa_task_row_fence "$root" || exit 2
+
 # An implement brief is the audit scope and the edit gate's allowlist, so both lines are mandatory.
 if [ "$mode" = "implement" ]; then
   plan_ref=$(sed -nE 's/^PLAN:[[:space:]]*//p' "$brief" | head -1)
@@ -130,10 +170,6 @@ if [ "$mode" = "implement" ]; then
   [ "$path_count" -le "$max_paths" ] || { echo "brief lists $path_count ALLOWED_PATHS, limit $max_paths: split it into sequential units (FSA_MAX_ALLOWED_PATHS overrides)" >&2; exit 2; }
   printf '%s\n' "$allow" > "$runs/$id.allow"
 fi
-. "$here/lib/task-row.sh"
-fsa_build_warn "$brief"
-fsa_task_row_init "$brief" "$root"
-task_rel=$(fsa_task_row_relpath "$root")
 
 # The implementer never loads Claude plugin skills, so an implement brief carries only the lane skills its paths need.
 skill_files() {
@@ -242,9 +278,17 @@ project_docs=""
 if [ -f "$root/AGENTS.md" ]; then project_docs=AGENTS.md; elif [ -f "$root/CLAUDE.md" ]; then project_docs=CLAUDE.md; fi
 [ -n "$project_docs" ] && [ "$(wc -c < "$root/$project_docs")" -gt 32768 ] &&
   echo "fullstack-agents: $project_docs exceeds Codex's 32768-byte project_doc_max_bytes; Codex truncates it" >&2
+dispatcher_started=$(python3 -I "$here/lib/liveness.py" pid-start $$ 2>/dev/null)
 jq -n --arg id "$id" --arg mode "$mode" --arg engine "$engine" --arg model "$model" --arg brief "$(realpath "$brief")" \
   --arg root "$root" --arg session "${CLAUDE_CODE_SESSION_ID:-${CLAUDE_SESSION_ID:-}}" --arg started "$(date -u +%FT%TZ)" \
-  '{id:$id,mode:$mode,engine:$engine,model:$model,brief:$brief,root:$root,session:$session,started:$started}' > "$runs/$id.meta.json" || true
+  --arg task_file "${fsa_task_canon_id:-}" --arg task_row "${fsa_task_id:-}" --arg instr "${fsa_task_revision:-}" \
+  --arg dpid "$$" --arg dstart "$dispatcher_started" \
+  '{id:$id,mode:$mode,engine:$engine,model:$model,brief:$brief,root:$root,session:$session,started:$started,
+    task_file: (if $task_file == "" then null else $task_file end),
+    task_row: (if $task_row == "" then null else $task_row end),
+    instruction_revision: ($instr | if . == "" then 0 else tonumber end),
+    dispatcher_pid: ($dpid | tonumber), dispatcher_started: (if $dstart == "" then null else $dstart end)}' \
+  > "$runs/$id.meta.json" || true
 prompt="$runs/$id.prompt.md"; runner="$runs/$id.runner.sh"
 { conventions_preamble; skills_preamble; cat "$brief"; result_contract; } > "$prompt"
 unit=$(basename "$brief" .md); unit=${unit%-r[0-9]*}
@@ -421,9 +465,20 @@ noop=0; [ "$mode" = "implement" ] && [ -z "$touched" ] && { noop=1; echo "STATUS
 [ "$codex_exit" -eq 0 ] && [ -s "$last" ] && [ "${summary_len:-0}" -lt 11500 ] && [ -z "${outside:-}" ] && [ "$noop" = 0 ] \
   && [ "$instructions_changed" = false ] && [ "$stash_used" = 0 ] && echo "STATUS=OK (audit the diff before trusting it)"
 
+# A row revised past this run's dispatched instruction is never applied to the ledger; the changes stay on disk.
+stale_revision=0
+if [ -n "${fsa_task_canon_id:-}" ]; then
+  current_rev=$(python3 -I "$here/lib/task_revisions.py" current --root "$root" --task-id "$fsa_task_canon_id" \
+    --row "$fsa_task_id" 2>/dev/null | jq -r '.revision // 0')
+  recorded_rev=${fsa_task_revision:-0}; [[ "$recorded_rev" =~ ^[0-9]+$ ]] || recorded_rev=0
+  [ "${current_rev:-0}" -gt "$recorded_rev" ] 2>/dev/null && stale_revision=1
+fi
+[ "$stale_revision" = 1 ] && echo "STATUS=STALE_REVISION (must reconcile: changes kept)"
+
 # Terminal state: the first that applies; `succeeded` means a valid in-scope result, never an accepted change.
 engine_exit=$(cat "$runs/$id.engine_exit" 2>/dev/null || echo "$codex_exit")
 details=()
+[ "$stale_revision" = 1 ] && details+=(stale_revision)
 [ "$cancelled" = 1 ] && details+=(cancelled)
 [ "$engine_exit" -ne 0 ] && details+=(engine_failed)
 { [ ! -s "$last" ] || [ "${summary_len:-0}" -ge 11500 ]; } && details+=(invalid_output)
