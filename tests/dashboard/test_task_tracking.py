@@ -238,6 +238,8 @@ class TaskTrackingTests(unittest.TestCase):
         bundle.mkdir()
         (bundle / "tasks.py").write_bytes((REPO / "integrations/codex/scripts/tasks.py").read_bytes())
         (bundle / "task_tracking.py").write_bytes(MODULE.read_bytes())
+        (bundle / "coordination_log.py").write_bytes((LIB / "coordination_log.py").read_bytes())
+        (bundle / "request_inbox.py").write_bytes((LIB / "request_inbox.py").read_bytes())
         (bundle / "task_format.py").write_bytes((LIB / "task_format.py").read_bytes())
         (bundle / "task_rules.py").write_bytes((LIB / "task_rules.py").read_bytes())
         (bundle / "task_evidence.py").write_bytes((LIB / "task_evidence.py").read_bytes())

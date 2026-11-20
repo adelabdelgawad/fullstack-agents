@@ -37,7 +37,7 @@ def main():
     except (ValueError, IndexError):
         return 0
     if mode == "prompt":
-        stop_guard.record_prompt(hook.get("session_id"), hook.get("prompt"))
+        stop_guard.record_prompt(hook)
         line = stop_guard.continuation_line(hook.get("session_id"), hook.get("cwd"))
         if line:
             print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": line}}))

@@ -7,8 +7,15 @@ import tempfile
 import time
 
 from task_tracking import SID, load_tasks
+import coordination_log
 import prompt_history
+import request_inbox
 import task_rules
+
+
+def _is_notification(text):
+    return coordination_log.is_notification(text)
+
 
 MAX_BLOCKS = 3
 PAUSE = re.compile(
@@ -73,12 +80,15 @@ def _save(path, state):
         pass
 
 
-def record_prompt(session_id, prompt):
-    """The latest genuine user prompt decides whether the user asked the work to pause; also feeds `resolve --quote`."""
+def record_prompt(hook):
+    """Capture the request first, then let the latest genuine user prompt decide whether the user asked the
+    work to pause; also feeds `resolve --quote`."""
+    request_inbox.capture(hook)
+    session_id, prompt = hook.get("session_id"), hook.get("prompt")
     path = _state_path(session_id)
     if path is None or not isinstance(prompt, str) or not prompt.strip():
         return
-    if "SYSTEM NOTIFICATION - NOT USER INPUT" in prompt or "<task-notification>" in prompt:
+    if _is_notification(prompt):
         return
     text = prompt.strip()
     _save(path, {"paused": bool(PAUSE.search(text)), "approved": _approves(text), "blocks": 0, "signature": None})
@@ -146,6 +156,24 @@ def _v2_continuation(ledger, message):
     return f"state {question['id']}: {question['text']} — blocks {', '.join(question['rows'])} because {question['why']}"
 
 
+def _request_hold(session_id, cwd, state, path):
+    """Hold the turn while this session's oldest request is unclassified, capped at MAX_BLOCKS like the ledger."""
+    try:
+        oldest = request_inbox.oldest_unclassified(cwd, session_id)
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if oldest is None:
+        if state.get("request_blocks") or state.get("request_signature"):
+            _save(path, {**state, "request_blocks": 0, "request_signature": None})
+        return None
+    no_progress = state.get("request_signature") == oldest
+    blocks = state.get("request_blocks", 0) if no_progress else 0
+    if blocks >= MAX_BLOCKS:
+        return None
+    _save(path, {**state, "request_blocks": blocks + 1, "request_signature": oldest})
+    return f"classify {oldest} with `fsa-task request classify`"
+
+
 def decide(session_id, cwd, message, engine, stop_hook_active=False):
     """Return a block reason, a release report mapping, or None."""
     if os.environ.get("FSA_STOP_GUARD", "on") == "off":
@@ -154,6 +182,9 @@ def decide(session_id, cwd, message, engine, stop_hook_active=False):
     if path is None or not cwd:
         return None
     state = _load(path)
+    hold = _request_hold(session_id, cwd, state, path)
+    if hold is not None:
+        return hold
     if state.get("paused"):
         return None
     ledger = load_tasks(session_id, cwd)

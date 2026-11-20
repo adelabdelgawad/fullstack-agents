@@ -222,6 +222,8 @@ def render(output):
     shutil.copy2(SOURCE / "scripts/lib/task_brief.py", output / "scripts/task_brief.py")
     shutil.copy2(SOURCE / "scripts/lib/task_blockers.py", output / "scripts/task_blockers.py")
     shutil.copy2(SOURCE / "scripts/lib/prompt_history.py", output / "scripts/prompt_history.py")
+    shutil.copy2(SOURCE / "scripts/lib/coordination_log.py", output / "scripts/coordination_log.py")
+    shutil.copy2(SOURCE / "scripts/lib/request_inbox.py", output / "scripts/request_inbox.py")
     shutil.copy2(SOURCE / "scripts/lib/task_rules.py", output / "scripts/task_rules.py")
     shutil.copy2(SOURCE / "scripts/lib/task_ownership.py", output / "scripts/task_ownership.py")
     shutil.copy2(SOURCE / "scripts/lib/task_checkpoint.py", output / "scripts/task_checkpoint.py")
