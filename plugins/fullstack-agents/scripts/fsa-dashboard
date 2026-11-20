@@ -2183,6 +2183,30 @@ def apply_session_state_need(session):
         session["state"], session["need"] = "waiting", need
 
 
+def worker_run_running(repo, run_id):
+    return liveness.run_state(repo.run_home(run_id), run_id).get("state") == "running"
+
+
+def apply_waiting_worker(t, repo):
+    """A row whose open blockers are all live worker runs reads as waiting_worker, not blocked (FSA2 cause b)."""
+    items, blockers = t.get("items") or [], t.get("blockers") or {}
+    if not items or not blockers:
+        return
+    moved = 0
+    for item in items:
+        if item["status"] != "blocked":
+            continue
+        open_for_row = [e for e in blockers.values() if item["id"] in e["rows"]]
+        if task_rules.waiting_worker_row(open_for_row, lambda rid: worker_run_running(repo, rid)):
+            item["display_status"] = "waiting_worker"
+            moved += 1
+    if moved:
+        counts = dict(t["counts"])
+        counts["blocked"] = max(0, counts.get("blocked", 0) - moved)
+        counts["in_progress"] = counts.get("in_progress", 0) + moved
+        t["counts"] = counts
+
+
 def _ledger_open(sessions):
     for s in sessions:
         t = s.get("task_tracking") or {}
@@ -2289,6 +2313,7 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
         sessions = list(by_session.values())
     for session in sessions:
         session["task_tracking"] = load_tasks(session["id"], session.get("cwd"))
+        apply_waiting_worker(session["task_tracking"], repo)
         apply_session_state_need(session)
     judge_turns(repo, sessions, now)
     favourites = load_json(repo.favourites) or {}

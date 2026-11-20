@@ -4,6 +4,7 @@ on compact, re-acquires ownership on resume, and notices a parked task on clear/
 from datetime import datetime, timedelta, timezone
 import hashlib
 import importlib.util
+from importlib.machinery import SourceFileLoader
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[2]
 PLUGIN = REPO / "plugins/fullstack-agents"
@@ -23,6 +25,9 @@ SPEC = importlib.util.spec_from_file_location("task_tracking", LIB / "task_track
 tasks = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(tasks)
 import task_checkpoint as checkpoint
+_dash_loader = SourceFileLoader("fsa_dashboard", str(PLUGIN / "scripts/fsa-dashboard"))
+dash = importlib.util.module_from_spec(importlib.util.spec_from_loader("fsa_dashboard", _dash_loader))
+_dash_loader.exec_module(dash)
 import task_ownership as ownership
 import task_lifecycle as lifecycle
 
@@ -584,6 +589,58 @@ class PruneTests(LifecycleTestCase):
         self.assertFalse(dead.exists())
         self.assertFalse(mismatched_start.exists())
         self.assertFalse(expired.exists())
+
+
+class WaitingWorkerTests(unittest.TestCase):
+    """FSA2 cause (b): a row whose open blockers are all live worker runs reads as waiting, not blocked."""
+
+    class FakeRepo:
+        def __init__(self, runs):
+            self.runs = runs
+
+        def run_home(self, run_id):
+            return self.runs
+
+    def test_waiting_worker_row_requires_every_blocker_be_a_running_worker(self):
+        running = lambda run_id: run_id == "r1"
+        self.assertTrue(dash.task_rules.waiting_worker_row([{"kind": "worker", "text": "r1"}], running))
+        self.assertFalse(dash.task_rules.waiting_worker_row([{"kind": "worker", "text": "r2"}], running))
+        self.assertFalse(dash.task_rules.waiting_worker_row(
+            [{"kind": "worker", "text": "r1"}, {"kind": "user", "text": ""}], running))
+        self.assertFalse(dash.task_rules.waiting_worker_row([], running))
+
+    def test_worker_run_running_asks_liveness_at_the_repo_run_home(self):
+        with mock.patch.object(dash.liveness, "run_state", return_value={"state": "running"}) as run_state:
+            self.assertTrue(dash.worker_run_running(self.FakeRepo("/runs"), "r1"))
+            run_state.assert_called_once_with("/runs", "r1")
+        with mock.patch.object(dash.liveness, "run_state", return_value={"state": "stopped"}):
+            self.assertFalse(dash.worker_run_running(self.FakeRepo("/runs"), "r1"))
+
+    def test_apply_waiting_worker_reclassifies_only_rows_with_a_live_worker_blocker(self):
+        t = {
+            "items": [
+                {"id": "S1", "status": "blocked"},
+                {"id": "S2", "status": "blocked"},
+                {"id": "S3", "status": "blocked"},
+                {"id": "S4", "status": "in_progress"},
+            ],
+            "blockers": {
+                "W1": {"kind": "worker", "text": "live-run", "rows": ["S1"], "status": "open"},
+                "W2": {"kind": "worker", "text": "dead-run", "rows": ["S2"], "status": "open"},
+                "Q1": {"kind": "user", "text": "", "rows": ["S3"], "status": "open"},
+            },
+            "counts": {"pending": 0, "in_progress": 1, "verifying": 0, "blocked": 3, "done": 0, "skipped": 0,
+                       "canceled": 0},
+        }
+        with mock.patch.object(dash.liveness, "run_state",
+                                side_effect=lambda runs, rid: {"state": "running" if rid == "live-run" else "stopped"}):
+            dash.apply_waiting_worker(t, self.FakeRepo("/runs"))
+        by_id = {item["id"]: item for item in t["items"]}
+        self.assertEqual(by_id["S1"].get("display_status"), "waiting_worker")
+        self.assertNotIn("display_status", by_id["S2"])
+        self.assertNotIn("display_status", by_id["S3"])
+        self.assertEqual(t["counts"]["blocked"], 2)
+        self.assertEqual(t["counts"]["in_progress"], 2)
 
 
 if __name__ == "__main__":

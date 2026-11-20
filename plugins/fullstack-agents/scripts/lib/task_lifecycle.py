@@ -11,12 +11,15 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from task_tracking import SID, _atomic, _file, _load_binding, _lock, _read, _root, _state_dir, load_tasks
+import coordination_log
+import request_inbox
 import task_candidates
 import task_checkpoint
 import task_controls
 import task_ownership
 import task_recovery
 import task_rules
+import result_outbox
 
 OPEN_STATUSES = task_rules.OPEN
 TITLE_CAP = 80
@@ -326,6 +329,44 @@ def _controls_notice(session_id, cwd):
         return None
 
 
+def _open_requests_part(cwd):
+    try:
+        open_requests = request_inbox.open_requests(cwd)
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError) as error:
+        print(f"task_lifecycle: request coordination failed: {error}", file=sys.stderr)
+        return None
+    if not open_requests:
+        return None
+    shown = [f'{r["id"]} {r["class"]} "{_cut_title(r["text"])}"' for r in open_requests[:5]]
+    more = f"; and {len(open_requests) - 5} more" if len(open_requests) > 5 else ""
+    return f"{len(open_requests)} open request(s): " + "; ".join(shown) + more
+
+
+def _reports_part(cwd):
+    try:
+        return result_outbox.session_start_line(cwd)
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError) as error:
+        print(f"task_lifecycle: report coordination failed: {error}", file=sys.stderr)
+        return None
+
+
+def _capture_failed_part(cwd):
+    try:
+        return "a request may be missing (capture failed)" if coordination_log.capture_failed(cwd) else None
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError) as error:
+        print(f"task_lifecycle: capture-failure check failed: {error}", file=sys.stderr)
+        return None
+
+
+def _coordination_notice(cwd):
+    """One line combining open requests, pending/uncertain reports and a capture-failure warning: no prompt hook
+    fires after a handover, so SessionStart is the only carrier that offers these again without rerunning work."""
+    if not isinstance(cwd, str) or not cwd:
+        return None
+    parts = [part for part in (_open_requests_part(cwd), _reports_part(cwd), _capture_failed_part(cwd)) if part]
+    return "Coordination: " + "; ".join(parts) if parts else None
+
+
 def _session_start(payload):
     session_id = payload.get("session_id")
     source = payload.get("source") or "startup"
@@ -334,7 +375,7 @@ def _session_start(payload):
     parked = _own_parked_record()
     if not isinstance(session_id, str) or not SID.fullmatch(session_id):
         return None
-    controls = _controls_notice(session_id, cwd)
+    controls = _join(_controls_notice(session_id, cwd), _coordination_notice(cwd))
     if source == "fork":
         return _join(_offer(parked, cwd, source), controls)
     if source == "clear":

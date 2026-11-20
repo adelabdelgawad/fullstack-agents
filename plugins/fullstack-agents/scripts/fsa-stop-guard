@@ -6,7 +6,49 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+import result_outbox
 import stop_guard
+
+
+def _is_genuine_prompt(entry):
+    """A `user` entry starts a new turn unless its content is a list made only of tool results."""
+    content = (entry.get("message") or {}).get("content")
+    if isinstance(content, list):
+        return not any(isinstance(part, dict) and part.get("type") == "tool_result" for part in content)
+    return True
+
+
+def _assistant_texts(transcript):
+    """Assistant reply texts of the current turn (transcript tail, best effort), oldest first."""
+    try:
+        with open(transcript, "rb") as stream:
+            stream.seek(max(0, os.path.getsize(transcript) - 400000))
+            lines = stream.read().decode("utf-8", "replace").splitlines()
+    except (OSError, TypeError):
+        return []
+    texts = []
+    for line in lines:
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("type") == "user" and not entry.get("isSidechain"):
+            if _is_genuine_prompt(entry):
+                texts = []
+            continue
+        if entry.get("type") != "assistant" or entry.get("isSidechain"):
+            continue
+        parts = [part.get("text", "") for part in (entry.get("message") or {}).get("content") or []
+                 if isinstance(part, dict) and part.get("type") == "text"]
+        if parts and parts[-1].strip():
+            texts.append(parts[-1])
+    return texts
+
+
+def _normalize(text):
+    return " ".join(text.split())
 
 
 def last_reply(transcript):
@@ -20,6 +62,8 @@ def last_reply(transcript):
         try:
             entry = json.loads(line)
         except ValueError:
+            continue
+        if not isinstance(entry, dict):
             continue
         if entry.get("type") != "assistant" or entry.get("isSidechain"):
             continue
@@ -42,7 +86,11 @@ def main():
         if line:
             print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": line}}))
     elif mode == "stop":
-        message = hook.get("last_assistant_message") or last_reply(hook.get("transcript_path"))
+        transcript = hook.get("transcript_path")
+        message = hook.get("last_assistant_message") or last_reply(transcript)
+        texts = _assistant_texts(transcript)
+        earlier = texts[:-1] if texts and _normalize(texts[-1]) == _normalize(message) else texts
+        result_outbox.record_emission(hook.get("cwd"), hook.get("session_id"), message, earlier)
         reason = stop_guard.decide(hook.get("session_id"), hook.get("cwd"), message, "claude",
                                    stop_hook_active=bool(hook.get("stop_hook_active")))
         if isinstance(reason, dict):

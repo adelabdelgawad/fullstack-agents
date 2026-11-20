@@ -400,10 +400,23 @@ fsa_event "$runs" "$id" running
 # Every engine process and its children inherit the run marker; the runner leads its own process group.
 export FSA_RUN_ID="$id" FSA_ROLE=implementer
 # Cancellation stops the runner's group and every marked process, then still records what the run changed.
-cancelled=0; runner_pid=""
+cancelled=0; runner_pid=""; row_renew_pid=""
 liveness() { python3 -I "$here/lib/liveness.py" "$1" "$runs" "$id" "${@:2}" 2>/dev/null; }
+# Headless runs have no herdr poll loop to renew the TASK: row's lease, so this tracks the runner instead.
+start_row_renew() {
+  [ -n "$fsa_task_id" ] || return 0
+  ( while kill -0 "$runner_pid" 2>/dev/null; do sleep "${FSA_TASK_ROW_RENEW_POLL_S:-5}"; fsa_task_row_renew "$engine" "$task_stem"; done ) &
+  row_renew_pid=$!
+}
+stop_row_renew() {
+  [ -n "$row_renew_pid" ] || return 0
+  kill "$row_renew_pid" 2>/dev/null
+  wait "$row_renew_pid" 2>/dev/null
+  row_renew_pid=""
+}
 on_cancel() {
   cancelled=1
+  stop_row_renew
   [ -n "$runner_pid" ] && kill -TERM -- "-$runner_pid" 2>/dev/null
   liveness signal TERM > /dev/null
   local waited=0
@@ -416,13 +429,16 @@ trap on_cancel INT TERM
 set +e
 if [ "$herdr_mode" = 1 ]; then
   run_in_herdr_pane
+  codex_exit=$?
 else
   setsid bash "$runner" > /dev/null &
   runner_pid=$!
   fsa_meta_merge "$runs" "$id" "{\"runner_pid\": $runner_pid, \"runner_pgid\": $runner_pid}"
+  start_row_renew
   wait "$runner_pid"
+  codex_exit=$?
+  stop_row_renew
 fi
-codex_exit=$?
 [ "$cancelled" = 1 ] && [ -n "$runner_pid" ] && { wait "$runner_pid" 2>/dev/null; codex_exit=130; }
 trap - INT TERM
 set -e

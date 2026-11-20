@@ -158,7 +158,7 @@ describe("information UI Python parity", () => {
       "1/3 done",
       "1/3 tasks done",
       'aria-label="Task stage timeline"',
-      "T02: Canvas — In progress",
+      "T02: Canvas\nIn progress",
       "0 actively executing · 1 in progress",
       'aria-label="In progress"',
       'aria-label="Pending"',

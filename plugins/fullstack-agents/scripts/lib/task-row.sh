@@ -80,15 +80,18 @@ fsa_task_row_dispatch() {
     fsa_task_id=""
     return 0
   fi
-  fsa_task_cli set --id "$fsa_task_id" --status in_progress --owner "$1" --activity "implementing $2" --active-for 300 > /dev/null || return 0
+  fsa_task_cli set --id "$fsa_task_id" --status in_progress --owner "$1" --activity "implementing $2" \
+    --active-for "${FSA_TASK_ROW_ACTIVE_FOR_S:-300}" > /dev/null || return 0
   fsa_task_renewed=$SECONDS
 }
 
-# fsa_task_row_renew <engine> <brief-stem>: called from a poll loop; renews at most every 240 s.
+# fsa_task_row_renew <engine> <brief-stem>: called from a poll loop; renews at most every FSA_TASK_ROW_RENEW_S
+# (default 240) s, so a herdr-pane or headless poll loop can call it every tick without over-writing the ledger.
 fsa_task_row_renew() {
-  [ -n "$fsa_task_id" ] && [ $((SECONDS - fsa_task_renewed)) -ge 240 ] || return 0
+  [ -n "$fsa_task_id" ] && [ $((SECONDS - fsa_task_renewed)) -ge "${FSA_TASK_ROW_RENEW_S:-240}" ] || return 0
   fsa_task_renewed=$SECONDS
-  fsa_task_cli set --id "$fsa_task_id" --status in_progress --owner "$1" --activity "implementing $2" --active-for 300 > /dev/null || true
+  fsa_task_cli set --id "$fsa_task_id" --status in_progress --owner "$1" --activity "implementing $2" \
+    --active-for "${FSA_TASK_ROW_ACTIVE_FOR_S:-300}" > /dev/null || true
 }
 
 # fsa_task_row_finish <state> <run-id>
@@ -100,6 +103,10 @@ fsa_task_row_finish() {
     [ "$fsa_task_format" = v2 ] && status=verifying
     fsa_task_cli set --id "$fsa_task_id" --status "$status" --owner lead --activity "" --active-for 0 \
       --note "$1: awaiting lead audit (run $2)" > /dev/null || true
+  elif [ "$fsa_task_format" = v2 ]; then
+    # A v2 ledger only reaches blocked through a blocker entry; name this run so the lead resolves it with its result.
+    fsa_task_cli set --id "$fsa_task_id" --owner lead --activity "" --active-for 0 > /dev/null || true
+    fsa_task_cli block --rows "$fsa_task_id" --kind worker --text "$2" --next "$1: see run $2" > /dev/null || true
   else
     fsa_task_cli set --id "$fsa_task_id" --status blocked --owner lead --activity "" --active-for 0 --note "$1: see run $2" > /dev/null || true
   fi

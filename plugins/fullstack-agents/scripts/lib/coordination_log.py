@@ -134,9 +134,21 @@ def append(cwd, session, type_, timeout=5, **fields):
         return append_locked(path, session, type_, **fields)
 
 
+def _capture_failed_path(cwd):
+    return _coordination_dir() / f"{_key(cwd)}.capture_failed"
+
+
 def mark_capture_failed(cwd):
     directory = _coordination_dir()
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-    path = directory / f"{_key(cwd)}.capture_failed"
+    path = _capture_failed_path(cwd)
     path.touch(exist_ok=True)
     os.chmod(path, 0o600)
+
+
+def capture_failed(cwd):
+    return _capture_failed_path(cwd).exists()
+
+
+def ack_capture_failed(cwd):
+    _capture_failed_path(cwd).unlink(missing_ok=True)

@@ -30,10 +30,12 @@ def _parse_at(value):
 
 
 def _duplicate(events, session, host_id, digest, now):
-    """Same session + host_id matches regardless of age; with no host_id, same text within DUP_WINDOW matches."""
+    """Same session + host_id + text matches regardless of age; with no host_id, same text within DUP_WINDOW
+    matches. The same host_id with different text is not a duplicate: it is a mid-turn message (see _mid_turn)."""
     received = [event for event in events if event.get("type") == "request.received" and event.get("session") == session]
     if host_id:
-        return next((event for event in reversed(received) if event.get("host_id") == host_id), None)
+        return next((event for event in reversed(received)
+                     if event.get("host_id") == host_id and event.get("text_sha256") == digest), None)
     for event in reversed(received):
         if event.get("host_id") or event.get("text_sha256") != digest:
             continue
@@ -41,6 +43,13 @@ def _duplicate(events, session, host_id, digest, now):
         if at is not None and now - at <= DUP_WINDOW:
             return event
     return None
+
+
+def _mid_turn(events, session, host_id):
+    """True when this host_id already delivered a request for this session: a message sent while that turn is
+    still running, carrying its running prompt_id and different text (see _duplicate)."""
+    return any(event.get("type") == "request.received" and event.get("session") == session
+               and event.get("host_id") == host_id for event in events)
 
 
 def _next_request_id(events):
@@ -82,8 +91,10 @@ def capture(hook):
                 coordination_log.append_locked(path, session, "request.duplicate_delivery", id=duplicate["id"])
                 return duplicate["id"]
             rid = _next_request_id(events)
-            coordination_log.append_locked(path, session, "request.received", id=rid, text=capped,
-                                            text_sha256=digest, host_id=host_id, origin=None)
+            fields = {"id": rid, "text": capped, "text_sha256": digest, "host_id": host_id, "origin": None}
+            if host_id is not None and _mid_turn(events, session, host_id):
+                fields["mid_turn"] = True
+            coordination_log.append_locked(path, session, "request.received", **fields)
             return rid
     except OSError as error:
         _mark_capture_failed(cwd, error)
@@ -115,6 +126,7 @@ def _fold(events):
             requests[rid] = {"id": rid, "seq": event.get("seq"), "session": event.get("session"),
                               "at": event.get("at"), "text": event.get("text", ""),
                               "text_sha256": event.get("text_sha256"), "host_id": event.get("host_id"),
+                              "mid_turn": bool(event.get("mid_turn")),
                               "class": "unclassified", "note": "", "rows": [], "linked_rows": [], "_done": None}
             continue
         entry = requests.get(rid)
@@ -143,6 +155,12 @@ def oldest_unclassified(cwd, session):
     return min(candidates, key=lambda entry: entry["seq"])["id"]
 
 
+def open_requests(cwd):
+    """Unclassified or ambiguous requests of the project, oldest first, regardless of session."""
+    requests = _fold(coordination_log.read(cwd)["events"]).values()
+    return sorted((r for r in requests if r["class"] in OPEN_CLASSES), key=lambda entry: entry["seq"])
+
+
 # ---------------------------------------------------------------- CLI
 
 
@@ -162,7 +180,9 @@ def _require(requests, rid):
         raise ValueError(f"Unknown request id: {rid}")
 
 
-def cmd_list(_args, root):
+def cmd_list(args, root):
+    if getattr(args, "ack_capture_failure", False):
+        coordination_log.ack_capture_failed(root)
     requests = _fold(coordination_log.read(root)["events"])
     ordered = sorted(requests.values(), key=lambda entry: entry["seq"])
     return {"requests": [{"id": r["id"], "class": r["class"], "execution": r["execution"], "open": r["open"],
@@ -208,7 +228,8 @@ def add_arguments(command, sub):
     if command != "request":
         return
     actions = sub.add_subparsers(dest="request_action", required=True)
-    actions.add_parser("list")
+    listing = actions.add_parser("list")
+    listing.add_argument("--ack-capture-failure", dest="ack_capture_failure", action="store_true")
     show = actions.add_parser("show")
     show.add_argument("--id", required=True)
     classify = actions.add_parser("classify")

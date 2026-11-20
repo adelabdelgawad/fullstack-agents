@@ -101,5 +101,15 @@ class SessionStateDashboardTests(unittest.TestCase):
         self.assertIn("Use REST or GraphQL?", session["need"])
 
 
+class TaskTileHoverBundleTests(unittest.TestCase):
+    """FSA2 unit B: the built dashboard bundle carries the waiting-worker label and tile hover truncation."""
+
+    def test_bundle_has_waiting_worker_label_and_tile_more_text(self):
+        bundle = (dash.REACT / "app.js").read_text()
+        self.assertIn("Waiting on worker", bundle)
+        self.assertIn("and ", bundle)
+        self.assertIn(" more", bundle)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -89,6 +89,12 @@ def _external_entry(identifier, entry):
     return info
 
 
+def waiting_worker_row(open_blockers, is_running):
+    """True when a row's open blockers are every one a worker blocker naming a currently running run
+    (FSA2 cause b): such a row reads as waiting on a live worker, not blocked, in dashboard displays."""
+    return bool(open_blockers) and all(e["kind"] == "worker" and is_running(e["text"]) for e in open_blockers)
+
+
 def session_state(items, blockers, now):
     """§13.3 as reduced by §13.10: one derived state plus the lists that explain it."""
     open_items = [item for item in items if item["status"] in OPEN]

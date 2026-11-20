@@ -532,16 +532,16 @@ def _parser():
     recover.add_argument("--session", default=session_default)
     recover.add_argument("--cwd", required=True)
     import task_evidence, task_evidence_cli, task_blockers, task_controls
-    import task_revisions
+    import task_revisions, result_outbox
     evidence_commands = task_evidence.COMMANDS
     blocker_commands = task_blockers.COMMANDS
     registrars = {"request": request_inbox.add_arguments, "control": task_controls.add_arguments,
-                  "revise": task_revisions.add_arguments}
+                  "revise": task_revisions.add_arguments, "report": result_outbox.add_arguments}
     for command in ("init", "bind", "set", "add", "show", "release", "checkpoint", "adopt", "close", "upgrade",
-                     "downgrade", "request", "control", "revise", *evidence_commands, *blocker_commands):
+                     "downgrade", "request", "control", "revise", "report", *evidence_commands, *blocker_commands):
         sub = actions.add_parser(command)
         sub.add_argument("--root", required=True)
-        sub.add_argument("--file", required=command not in ("request", "control", "revise"))
+        sub.add_argument("--file", required=command not in ("request", "control", "revise", "report"))
         sub.add_argument("--session", default=session_default)
         if command in evidence_commands:
             task_evidence_cli.add_arguments(command, sub)
@@ -766,6 +766,9 @@ def _dispatch(args, root, path):
     if args.command == "revise":
         import task_revisions
         commands[args.command] = lambda: task_revisions.dispatch(args, root)
+    if args.command == "report":
+        import result_outbox
+        commands[args.command] = lambda: result_outbox.dispatch(args, root)
     if args.command != "show":
         return commands[args.command]()
     record, state = task_ownership.current_owner(root, path)
@@ -790,7 +793,8 @@ def main(argv=None):
         root = _root(args.root)
         if args.command in ("init", "bind"):
             _binding_path(args.session)
-        path = None if args.command in ("request", "control", "revise") and not args.file else _file(root, args.file, existing=args.command != "init")
+        no_ledger_path = args.command == "report" or (args.command in ("request", "control", "revise") and not args.file)
+        path = None if no_ledger_path else _file(root, args.file, existing=args.command != "init")
         result = _cmd_init(args, root, path) if args.command == "init" else _dispatch(args, root, path)
         if result is None:
             return 0

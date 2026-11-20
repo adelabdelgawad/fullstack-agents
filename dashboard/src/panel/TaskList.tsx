@@ -14,12 +14,18 @@ export const taskStatusLabel = (status: string): string =>
       done: "Done",
       skipped: "Skipped",
       canceled: "Canceled",
+      waiting_worker: "Waiting on worker",
     }) as Record<string, string>
   )[status] || "Unknown";
 export const taskIsActive = (item: any): boolean =>
   item.is_active === true && Date.parse(item.active_until) > Date.now();
 
-export function taskStatusIcon(status: string, active = false): string {
+// A row waiting on a live worker reads with in-progress styling, never as blocked (its raw status).
+export const effectiveStatus = (item: any): string =>
+  item.display_status === "waiting_worker" ? "waiting_worker" : item.status;
+
+// standalone=false is for icons nested in a container that already carries the hover text (timeline items, tiles).
+export function taskStatusIcon(status: string, active = false, standalone = true): string {
   const paths: Record<string, string> = {
     pending: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
     in_progress: '<path d="M20 12a8 8 0 1 1-3-6.2M20 4v5h-5"/>',
@@ -29,11 +35,12 @@ export function taskStatusIcon(status: string, active = false): string {
     skipped: '<path d="m5 5 9 7-9 7ZM18 5v14"/>',
     canceled: '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/>',
   };
-  const canonical = status === "running" ? "in_progress" : status;
+  const canonical = status === "running" || status === "waiting_worker" ? "in_progress" : status;
   const label = taskStatusLabel(status) + (active ? " — actively executing (agent-reported)" : "");
+  const a11y = standalone ? `role="img" aria-label="${esc(label)}" title="${esc(label)}"` : `aria-hidden="true"`;
   return (
-    `<span class="task-status-icon ${esc(canonical)}${active ? " executing" : ""}" role="img" ` +
-    `aria-label="${esc(label)}" title="${esc(label)}"><svg viewBox="0 0 24 24" width="18" height="18" ` +
+    `<span class="task-status-icon ${esc(canonical)}${active ? " executing" : ""}" ${a11y}>` +
+    `<svg viewBox="0 0 24 24" width="18" height="18" ` +
     `fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" ` +
     `aria-hidden="true" focusable="false">${paths[canonical] || paths.pending}</svg></span>`
   );
@@ -82,13 +89,16 @@ export function taskProgressHtml(c: Card, compact = false): string {
       const timeline = compact
         ? ""
         : `<ol class="task-stage-timeline" aria-label="Task stage timeline">${t.items
-            .map(
-              (item: any) =>
-                `<li class="${esc(item.status)}" title="${esc(`${item.id}: ${item.title} — ${taskStatusLabel(item.status)}`)}" ` +
-                `aria-label="${esc(`${item.id}: ${item.title} — ${taskStatusLabel(item.status)}`)}">` +
-                `<span aria-hidden="true">${taskStatusIcon(item.status, taskIsActive(item))}</span>` +
-                `<small>${esc(item.id)}</small></li>`,
-            )
+            .map((item: any) => {
+              const effective = effectiveStatus(item),
+                cls = item.display_status === "waiting_worker" ? "in_progress" : item.status,
+                hover = `${item.id}: ${item.title}\n${taskStatusLabel(effective)}`;
+              return (
+                `<li class="${esc(cls)}" title="${esc(hover)}" aria-label="${esc(hover)}">` +
+                `${taskStatusIcon(effective, taskIsActive(item), false)}` +
+                `<small>${esc(item.id)}</small></li>`
+              );
+            })
             .join("")}</ol>`;
       const unrecorded = t.format === "v2" ? t.deliverables?.completion?.unrecorded || 0 : 0;
       const title =
@@ -113,7 +123,8 @@ export function taskProgressHtml(c: Card, compact = false): string {
 }
 
 function taskRow(t: any, x: any): string {
-  const state = x.status === "running" ? "in_progress" : x.status,
+  const effective = effectiveStatus(x),
+    state = effective === "running" || effective === "waiting_worker" ? "in_progress" : effective,
     live = taskIsActive(x);
   const completion =
     t.format === "v2" && x.status === "done" && x.completion === "unrecorded"
@@ -123,17 +134,32 @@ function taskRow(t: any, x: any): string {
         ? '<span class="tt-badge baseline" title="Completed using an attributed baseline failure">baseline failures</span>'
         : "";
   return (
-    `<li class="tracked-task ${esc(state)}${live ? " executing" : ""}">${taskStatusIcon(x.status, live)}` +
+    `<li class="tracked-task ${esc(state)}${live ? " executing" : ""}">${taskStatusIcon(effective, live)}` +
     `<div class="tt-main"><div class="tt-top"><b>${esc(x.id)}</b><span class="tt-title">${esc(x.title)}` +
     `${t.format === "v2" && x.parent ? ` <span class="s">(step of ${esc(x.parent)})</span>` : ""}</span>` +
     `<span class="tt-badges">` +
     `${live ? '<span class="tt-badge live" title="Agent-reported activity expires automatically; ' : ""}` +
     `${live ? 'it is separate from process detection">Actively executing</span>' : ""}` +
-    `<span class="tt-badge ${esc(state)}">${esc(taskStatusLabel(x.status))}</span>${completion}</span></div>\n        ` +
+    `<span class="tt-badge ${esc(state)}">${esc(taskStatusLabel(effective))}</span>${completion}</span></div>\n        ` +
     `<div class="s task-activity"><span class="tt-owner">${esc(x.owner || "Unassigned")}</span>` +
     `${x.activity ? ` · ${esc(x.activity)}` : ""}</div>${x.note ? `<div class="s tt-note">${esc(x.note)}</div>` : ""}` +
     `</div></li>`
   );
+}
+
+function tileBucket(item: any): string {
+  const effective = effectiveStatus(item);
+  return effective === "running" || effective === "waiting_worker" ? "in_progress" : effective;
+}
+
+function tileHoverText(key: string, items: any[]): string {
+  const matched = items.filter((item) => tileBucket(item) === key);
+  const lines = [
+    `${taskStatusLabel(key)} (${matched.length})`,
+    ...matched.slice(0, 12).map((item) => `${item.id}: ${item.title}`),
+  ];
+  if (matched.length > 12) lines.push(`and ${matched.length - 12} more`);
+  return lines.join("\n");
 }
 
 export function taskListHtml(c: Card): string {
@@ -146,12 +172,14 @@ export function taskListHtml(c: Card): string {
       const count = (key: string) => t.counts[key] ?? (key === "in_progress" ? t.counts.running : 0) ?? 0;
       const tiles = ["in_progress", "verifying", "blocked", "pending", "done", "skipped", "canceled"]
         .filter((key) => count(key) || ["in_progress", "blocked", "pending", "done"].includes(key))
-        .map(
-          (key) =>
-            `<div class="tt-tile ${esc(key)}" title="${esc(taskStatusLabel(key))}">${taskStatusIcon(key)}` +
+        .map((key) => {
+          const hover = tileHoverText(key, t.items);
+          return (
+            `<div class="tt-tile ${esc(key)}" title="${esc(hover)}" aria-label="${esc(hover)}">${taskStatusIcon(key, false, false)}` +
             `<div><div class="so-l">${esc(taskStatusLabel(key))}</div>` +
-            `<div class="tt-n">${esc(count(key))}</div></div></div>`,
-        )
+            `<div class="tt-n">${esc(count(key))}</div></div></div>`
+          );
+        })
         .join("");
       const order: Record<string, number> = {
         in_progress: 0,

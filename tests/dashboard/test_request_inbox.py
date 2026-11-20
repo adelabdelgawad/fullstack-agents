@@ -110,12 +110,22 @@ class CaptureTests(RequestInboxTestCase):
         self.assertIsNone(rid)
         self.assertEqual(self.events(), [])
 
-    def test_same_session_and_host_id_twice_is_one_request(self):
+    def test_same_session_and_host_id_and_text_twice_is_one_request(self):
         first = request_inbox.capture(self.hook("fix the bug", host_id="h1"))
-        second = request_inbox.capture(self.hook("fix the bug, please", host_id="h1"))
+        second = request_inbox.capture(self.hook("fix the bug", host_id="h1"))
         self.assertEqual(first, second)
         types = [e["type"] for e in self.events()]
         self.assertEqual(types, ["request.received", "request.duplicate_delivery"])
+
+    def test_same_host_id_different_text_is_a_new_mid_turn_request(self):
+        first = request_inbox.capture(self.hook("fix the bug", host_id="h1"))
+        second = request_inbox.capture(self.hook("actually, also check the signup flow", host_id="h1"))
+        self.assertNotEqual(first, second)
+        received = [e for e in self.events() if e["type"] == "request.received"]
+        self.assertEqual(len(received), 2)
+        self.assertNotIn("mid_turn", received[0])
+        self.assertEqual(received[1]["host_id"], "h1")
+        self.assertTrue(received[1]["mid_turn"])
 
     def test_no_host_id_same_text_within_two_seconds_is_one_request(self):
         first = request_inbox.capture(self.hook("fix the bug", host_id=None))
@@ -267,6 +277,21 @@ class RequestCliTests(RequestInboxTestCase):
         rid = request_inbox.capture(self.hook("do the thing"))
         error = self.call_fail("classify", "--id", rid, "--as", "nonsense")
         self.assertIn("Unknown classification: nonsense", error)
+
+    def test_open_requests_lists_unclassified_and_ambiguous_oldest_first(self):
+        rid1 = request_inbox.capture(self.hook("investigate the build", host_id="h1"))
+        rid2 = request_inbox.capture(self.hook("not sure what this means", host_id="h2"))
+        self.call("classify", "--id", rid2, "--as", "ambiguous", "--note", "unclear")
+        rid3 = request_inbox.capture(self.hook("also do this new work", host_id="h3"))
+        self.call("classify", "--id", rid3, "--as", "queued")
+        open_requests = request_inbox.open_requests(str(self.root))
+        self.assertEqual([r["id"] for r in open_requests], [rid1, rid2])
+
+    def test_ack_capture_failure_clears_the_marker(self):
+        coordination_log.mark_capture_failed(str(self.root))
+        self.assertTrue(coordination_log.capture_failed(str(self.root)))
+        self.call("list", "--ack-capture-failure")
+        self.assertFalse(coordination_log.capture_failed(str(self.root)))
 
 
 class StopGuardHoldTests(RequestInboxTestCase):

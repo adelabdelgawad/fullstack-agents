@@ -348,5 +348,36 @@ class AdditionalCandidateAndRecoveryTests(RegressionTestCase):
         self.assertIn("Active controls:", output)
 
 
+class CoordinationNoticeTests(RegressionTestCase):
+    """(10) SessionStart carries one coordination line for open requests and a capture-failure warning."""
+
+    def test_coordination_line_lists_unclassified_and_ambiguous_requests_with_a_preview(self):
+        rid1 = request_inbox.capture(self.hook("investigate why the build is red", session="S1"))
+        rid2 = request_inbox.capture(self.hook("not sure what this means", session="S1"))
+        self.classify(rid2, "ambiguous", session="S1")
+        output = task_lifecycle._session_start({"session_id": "S2", "source": "startup", "cwd": str(self.root)})
+        self.assertIn("Coordination:", output)
+        self.assertIn("2 open request(s):", output)
+        self.assertIn(f'{rid1} unclassified "investigate why the build is red"', output)
+        self.assertIn(f'{rid2} ambiguous "not sure what this means"', output)
+
+    def test_coordination_line_is_silent_once_every_request_is_classified(self):
+        rid = request_inbox.capture(self.hook("here is a status update", session="S1"))
+        self.classify(rid, "status", session="S1")
+        output = task_lifecycle._session_start({"session_id": "S2", "source": "startup", "cwd": str(self.root)})
+        self.assertIsNone(output)
+
+    def test_coordination_line_warns_when_a_capture_failed_marker_exists(self):
+        coordination_log.mark_capture_failed(str(self.root))
+        output = task_lifecycle._session_start({"session_id": "S2", "source": "startup", "cwd": str(self.root)})
+        self.assertIn("a request may be missing (capture failed)", output)
+
+    def test_ack_capture_failure_removes_the_marker_so_the_warning_stops(self):
+        coordination_log.mark_capture_failed(str(self.root))
+        self.call("request", "list", "--ack-capture-failure", session="S1")
+        output = task_lifecycle._session_start({"session_id": "S2", "source": "startup", "cwd": str(self.root)})
+        self.assertIsNone(output)
+
+
 if __name__ == "__main__":
     unittest.main()

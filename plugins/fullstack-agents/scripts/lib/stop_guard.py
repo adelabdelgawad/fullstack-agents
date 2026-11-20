@@ -11,6 +11,7 @@ from task_tracking import SID, load_tasks
 import coordination_log
 import prompt_history
 import request_inbox
+import result_outbox
 import task_controls
 import task_rules
 
@@ -211,6 +212,26 @@ def _request_hold(session_id, cwd, state, path):
     return f"classify {oldest} with `fsa-task request classify`"
 
 
+def _report_hold(session_id, cwd, state, path):
+    """Hold the turn while a report prepared in this session has no emission evidence yet (uncertain releases it,
+    but stays listed), capped at MAX_BLOCKS like the ledger."""
+    try:
+        oldest = result_outbox.oldest_unconfirmed(cwd, session_id)
+    except COORDINATION_ERRORS as error:
+        print(f"stop_guard: report coordination failed: {error}", file=sys.stderr)
+        return None
+    if oldest is None:
+        if state.get("report_blocks") or state.get("report_signature"):
+            _save(path, {**state, "report_blocks": 0, "report_signature": None})
+        return None
+    no_progress = state.get("report_signature") == oldest
+    blocks = state.get("report_blocks", 0) if no_progress else 0
+    if blocks >= MAX_BLOCKS:
+        return None
+    _save(path, {**state, "report_blocks": blocks + 1, "report_signature": oldest})
+    return f"include report {oldest} in the final reply: `fsa-task report show {oldest}`"
+
+
 def _pause_candidate_hold(session_id, cwd, state, path):
     """Hold the turn while this session's oldest pause candidate is unresolved, like an unclassified request."""
     candidate = task_controls.unresolved_session_candidate(cwd, session_id, "pause")
@@ -256,6 +277,9 @@ def decide(session_id, cwd, message, engine, stop_hook_active=False):
         return None
     state = _load(path)
     hold = _request_hold(session_id, cwd, state, path)
+    if hold is not None:
+        return hold
+    hold = _report_hold(session_id, cwd, state, path)
     if hold is not None:
         return hold
     try:

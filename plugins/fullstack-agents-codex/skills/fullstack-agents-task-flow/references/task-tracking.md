@@ -343,14 +343,15 @@ The Codex bundle has no SessionEnd or compaction-recovery hook. In Codex:
 
 The plugin saves every genuine user message as a request (`R<n>`) in a per-project log before any ledger row exists, and the
 stop guard holds the turn while one is unclassified. Classifying is the lead's job; the tool only records it.
+`--root` (and `--session`) go before the action word for `request` and `control`.
 
-- `fsa-task request list --root <root>` shows open requests. Classify each:
-  `fsa-task request classify --root <root> --id R3 --as supplementary|queued|correction|status|pause|cancel|approval|answer|other|ambiguous [--rows A,B] [--note "..."]`.
+- `fsa-task request --root <root> list` shows open requests. Classify each:
+  `fsa-task request --root <root> classify --id R3 --as supplementary|queued|correction|status|pause|cancel|approval|answer|other|ambiguous [--rows A,B] [--note "..."]`.
   A supplementary or queued request never replaces the current objective. `ambiguous` keeps it open: report the uncertainty to
   the user instead of guessing. Link it to rows with `request link`, close it with `request done` (`--dropped --reason` when it
   will not be done).
 - A pause, an approval or a deploy hold is a control with a scope. Hooks only flag candidates; you record the control from the
-  user's own words: `fsa-task control set --root <root> --kind deploy_hold|pause|approval --scope project|task|rows [--rows A,B] --request R4 --quote "<words from that request>"`.
+  user's own words: `fsa-task control --root <root> set --kind deploy_hold|pause|approval --scope project|task|rows [--rows A,B] --request R4 --quote "<words from that request>"`.
   Use `project` only when the user asked for everything; otherwise `task` or `rows`. A candidate that is not a control:
   `control dismiss --request R4 --kind <kind> --reason "..."`. Only the user's words lift or narrow one:
   `control lift --id C2 --request R9 --quote "..."`, `control narrow ...`. Never lift or broaden on your own reading.
@@ -360,3 +361,5 @@ stop guard holds the turn while one is unclassified. Classifying is the lead's j
   corrected brief. A run that ends `STATUS=STALE_REVISION` must be reconciled (`revise --reconciled <run-id> --note`) before
   dependent work.
 - After a handover no prompt hook fires: read the SessionStart "Active controls" line and treat it as binding.
+- A finished report goes through the outbox before the reply: `fsa-task report --root <root> save --file <md> [--request R4]`, then put the printed marker line and the report in the turn's final reply. A report listed as pending or uncertain at session start is offered again with `fsa-task report --root <root> show O<n>`; never rerun the work to repeat a report.
+- While a worker or a long test run is active, keep the row `in_progress` (a brief's `TASK:` line keeps it shown as executing); record a blocker only when the row truly cannot move.

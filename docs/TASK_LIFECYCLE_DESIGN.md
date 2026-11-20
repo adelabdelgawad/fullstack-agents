@@ -1043,11 +1043,27 @@ result are not fenced; the finish-time check treats an unreadable log as "not st
 carries the inbox, controls and revisions but not `deploy_hold.py` or `liveness.py`, so `control set|lift|migrate` for a deploy
 hold and the run listing of `revise` fail there with an import error (to be fixed with §15.5); pause and approval controls work.
 
-### 15.5 Not implemented yet
+### 15.5 Result outbox, mid-turn messages and the session-start summary (release 3.87.0)
 
-Result outbox (a prepared report saved before sending, states `prepared|uncertain|emitted`, re-offered after a handover), the
-SessionStart summary of open requests and pending reports, the `capture_failed` acknowledgement, and the scenario test spanning
-a handover.
+- **Result outbox.** `fsa-task report --root <root> save --file <md> [--request R<n>] [--rows A,B]` copies a prepared report to
+  `coordination/<key>.outbox/O<n>.md` (0600) before it is sent and prints the marker `[report O<n>]`; the same content saved
+  again returns the same id. At Stop the hook records what the host proves and nothing more: marker and report body in the
+  final reply → `emitted`; marker without the body, or marker/body only in an earlier text of the turn → `uncertain`. No
+  state means received or read. A report prepared in the session with no emission holds the turn once; `report list` and
+  `report show` re-offer it, `show` prefixing `REPEAT of O<n> (first emitted <at>, delivery unconfirmed)` when it was
+  emitted or uncertain before. Showing a report runs nothing.
+- **Mid-turn messages.** A message sent while a turn runs is delivered to UserPromptSubmit with the running prompt's
+  `prompt_id` (observed 2026-11-20). A duplicate is therefore same session + same `prompt_id` + same text; the same id with
+  different text is a new request flagged `mid_turn`. Release 3.86.0 matched on the id alone and dropped such messages.
+- **Session start.** Every SessionStart source prints one coordination line when there is something to say: open
+  (unclassified or ambiguous) requests of the project, pending or uncertain reports, and a capture-failure notice until
+  `fsa-task request --root <root> list --ack-capture-failure`.
+- **Scenario test.** `tests/dashboard/test_coordination_scenario.py` runs the multi-request case across a handover in
+  temporary state directories; `tests/dashboard/test_state_isolation.py` fails when a controls or hold test writes outside them.
+
+Known noise: the deploy-hold detector flags any sentence with "deploy" after a negation word, including pasted constraint
+lines such as "without claiming deployment"; each becomes a candidate the lead must set or dismiss, and blocks deploy commands
+for the project until then (fail closed by design).
 
 ### 15.6 Activation
 

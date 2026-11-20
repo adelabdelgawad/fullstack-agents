@@ -1,9 +1,12 @@
 """codex-task.sh dispatch contract with fake engines: registry location, records and arguments."""
 import json
+import subprocess
+import sys
+import time
 import unittest
 from pathlib import Path
 
-from dispatch_support import DispatchCase
+from dispatch_support import SCRIPTS, DispatchCase
 
 
 class RegistryLocationTests(unittest.TestCase):
@@ -182,6 +185,59 @@ class RoleContractTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         call = next(c for c in case.call_log() if c["engine"] == "claude")
         self.assertNotIn("--append-system-prompt", call["args"])
+
+
+class HeadlessRowRenewalTests(unittest.TestCase):
+    """FSA2 cause (a): a headless run (no herdr pane) must renew the TASK: row's lease itself."""
+
+    TASK_TRACKING = SCRIPTS / "lib/task_tracking.py"
+
+    def setUp(self):
+        self.case = DispatchCase("codex")
+        self.addCleanup(self.case.cleanup)
+
+    def ledger_cli(self, *args):
+        subprocess.run([sys.executable, "-I", str(self.TASK_TRACKING), *args, "--root", str(self.case.root),
+                        "--file", "ledger.md", "--session", "test-session"],
+                       env=self.case.env, cwd=self.case.root, check=True, capture_output=True, text=True)
+
+    def row_is_active(self):
+        out = subprocess.run([sys.executable, "-I", str(self.TASK_TRACKING), "show", "--root", str(self.case.root),
+                              "--file", "ledger.md", "--session", "test-session", "--json"],
+                             env=self.case.env, cwd=self.case.root, capture_output=True, text=True, check=True)
+        row = next(i for i in json.loads(out.stdout)["items"] if i["id"] == "R1")
+        return row["is_active"]
+
+    def test_a_headless_run_stays_active_past_one_lease_then_clears_on_exit(self):
+        self.ledger_cli("init", "--format", "v2")
+        self.ledger_cli("add", "--task", "R1|pending|do the thing|")
+        self.case.brief.write_text(
+            "IMPLEMENTER: codex\nPLAN: none: test\nALLOWED_PATHS:\napp.py\n\nGOAL: x\nTASK: ledger.md#R1\n")
+        env = {**self.case.env, "FSA_FAKE_MODE": "sleep", "FSA_FAKE_SLEEP": "8", "FSA_TASK_ROW_RENEW_S": "1",
+               "FSA_TASK_ROW_RENEW_POLL_S": "1", "FSA_TASK_ROW_ACTIVE_FOR_S": "3",
+               # The ledger is owned by "test-session"; codex-task.sh's own task-row calls omit --session and
+               # resolve the session from this var, so they must resolve to the same owner to be allowed to write.
+               "CLAUDE_CODE_SESSION_ID": "test-session"}
+        env.pop("CODEX_THREAD_ID", None)
+        proc = subprocess.Popen(["bash", str(SCRIPTS / "codex-task.sh"), "implement", str(self.case.brief)],
+                                env=env, cwd=self.case.root, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, stdin=subprocess.DEVNULL)
+        try:
+            time.sleep(4)
+            self.assertTrue(self.row_is_active(), "a renewal must have extended the initial 3s lease by now")
+            time.sleep(3)
+            self.assertTrue(self.row_is_active(), "renewal must outlive two renew intervals (2s) and the lease")
+            stdout, stderr = proc.communicate(timeout=30)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+        self.assertEqual(proc.returncode, 0, stderr)
+        self.assertFalse(self.row_is_active(), "activity must clear once the run ends")
+
+    def test_a_brief_without_a_task_line_dispatches_unaffected(self):
+        result = self.case.dispatch(env={"FSA_FAKE_MODE": "touch", "FSA_FAKE_TOUCH": "app.py"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("STATUS=OK", result.stdout)
 
 
 if __name__ == "__main__":

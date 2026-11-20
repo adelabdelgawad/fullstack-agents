@@ -361,3 +361,5 @@ stop guard holds the turn while one is unclassified. Classifying is the lead's j
   corrected brief. A run that ends `STATUS=STALE_REVISION` must be reconciled (`revise --reconciled <run-id> --note`) before
   dependent work.
 - After a handover no prompt hook fires: read the SessionStart "Active controls" line and treat it as binding.
+- A finished report goes through the outbox before the reply: `fsa-task report --root <root> save --file <md> [--request R4]`, then put the printed marker line and the report in the turn's final reply. A report listed as pending or uncertain at session start is offered again with `fsa-task report --root <root> show O<n>`; never rerun the work to repeat a report.
+- While a worker or a long test run is active, keep the row `in_progress` (a brief's `TASK:` line keeps it shown as executing); record a blocker only when the row truly cannot move.
