@@ -1,4 +1,4 @@
-import type { OfficeLayout, PlacedDesk, PlacedRoom } from "./model";
+import { BUILDING, type OfficeLayout, type PlacedBuilding, type PlacedDesk, type PlacedRoom } from "./model";
 
 const SHIRTS = ["#4f8ff7", "#4ade80", "#f2b24c", "#f472b6", "#a78bfa", "#22d3ee", "#fb7185", "#94a3b8"];
 const HAIR = ["#231b16", "#5b3825", "#d6a85f", "#8a5b3d", "#202938", "#6b4631", "#d7d2c8", "#b86b42"];
@@ -18,6 +18,29 @@ function drawFloor(ctx: CanvasRenderingContext2D): void {
       rect(ctx, x, y, 31, 31, (x / 32 + y / 32) % 2 ? "#121d29" : "#15212e");
     }
   }
+}
+
+function drawBuilding(ctx: CanvasRenderingContext2D, building: PlacedBuilding): void {
+  const { x, y, width, height, scale: s } = building;
+  const wall = BUILDING.wall * s;
+  const sign = BUILDING.sign * s;
+  rect(ctx, x, y, width, height, "#6b4f3a");
+  rect(ctx, x + wall, y + sign, width - 2 * wall, height - sign - wall, "#1f2a38");
+  for (let stripe = y + sign + 4 * s; stripe < y + height - wall; stripe += 8 * s) {
+    rect(ctx, x + wall, stripe, width - 2 * wall, s, "#243243");
+  }
+  rect(ctx, x, y, width, sign, "#3b2a1f");
+  rect(ctx, x, y + sign - 2 * s, width, 2 * s, "#2a1d15");
+  rect(ctx, x + width / 2 - 14 * s, y + height - wall, 28 * s, wall, "#c9a227");
+  const plate = Math.min(width - 16 * s, Math.max(80 * s, building.label.length * 4 * s + 24 * s));
+  rect(ctx, x + (width - plate) / 2, y + 3 * s, plate, sign - 7 * s, "#151b26");
+  ctx.fillStyle = "#f2b24c";
+  ctx.font = `bold ${7 * s}px monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(building.label.toUpperCase(), x + width / 2, y + sign / 2 - s, plate - 8 * s);
+  ctx.textAlign = "start";
+  ctx.textBaseline = "alphabetic";
 }
 
 function drawRoom(ctx: CanvasRenderingContext2D, room: PlacedRoom): void {
@@ -123,6 +146,7 @@ export function drawOffice(
   ctx.imageSmoothingEnabled = false;
   drawFloor(ctx);
   const frame = Math.floor(tMs / 375) % 2;
+  if (layout.building) drawBuilding(ctx, layout.building);
   for (const room of layout.rooms) drawRoom(ctx, room);
   for (const desk of layout.desks) {
     drawDesk(ctx, desk, desk.employee.pose === "typing" && frame === 1);

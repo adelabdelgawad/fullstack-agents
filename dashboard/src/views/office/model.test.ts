@@ -93,40 +93,44 @@ describe("officeOf", () => {
   });
 
   it("returns an empty office for absent state", () => {
-    expect(officeOf(null)).toEqual({ teams: [] });
+    expect(officeOf(null)).toEqual({ name: "", teams: [] });
   });
 });
 
 describe("layoutOffice", () => {
   it("places desks deterministically inside their team room", () => {
     const office = officeOf(dash([card({ sessions: [session(), session({ id: "two", name: "Two" })] })]));
-    const layout = layoutOffice(office, 300);
-    expect(layout).toEqual(layoutOffice(office, 300));
-    expect(layout.rooms.map(({ key, x, y, width }) => [key, x, y, width])).toEqual([["office", 16, 16, 256]]);
-    expect(layout.desks.map(({ x, y }) => [x, y])).toEqual([
-      [32, 48],
-      [144, 48],
-    ]);
-  });
-
-  it("gives every team its own room and wraps rooms that do not fit", () => {
-    const office = officeOf(
-      dash([
-        card({ key: "a", label: "A" }),
-        card({ key: "b", label: "B", sessions: [session({ id: "b1" })] }),
-      ]),
-    );
-    const layout = layoutOffice(office, 300);
-    expect(layout.rooms.map(({ key, x, y }) => [key, x, y])).toEqual([
-      ["a", 16, 16],
-      ["b", 16, 196],
-    ]);
+    const layout = layoutOffice(office, 400);
+    expect(layout).toEqual(layoutOffice(office, 400));
     for (const desk of layout.desks) {
-      const room = layout.rooms.find((candidate) => candidate.key === desk.employee.cardKey)!;
+      const room = layout.rooms[0];
       expect(desk.x).toBeGreaterThanOrEqual(room.x);
       expect(desk.x + 52 * desk.scale).toBeLessThanOrEqual(room.x + room.width);
       expect(desk.y + 58 * desk.scale).toBeLessThanOrEqual(room.y + room.height);
     }
-    expect(layout.height).toBe(196 + layout.rooms[1].height + 16);
+  });
+
+  it("puts every team room inside one company building, rows split by a corridor", () => {
+    const office = officeOf(
+      dash([card({ key: "a", label: "A" }), card({ key: "b", label: "B", sessions: [session({ id: "b1" })] })]),
+    );
+    office.name = "acme";
+    const layout = layoutOffice(office, 300);
+    const building = layout.building!;
+    expect(building.label).toBe("acme");
+    expect(layout.rooms.map((room) => room.key)).toEqual(["a", "b"]);
+    const [a, b] = layout.rooms;
+    expect(b.y).toBeGreaterThanOrEqual(a.y + a.height + 20 * a.scale);
+    for (const room of layout.rooms) {
+      expect(room.x).toBeGreaterThan(building.x);
+      expect(room.x + room.width).toBeLessThan(building.x + building.width);
+      expect(room.y).toBeGreaterThan(building.y);
+      expect(room.y + room.height).toBeLessThan(building.y + building.height);
+    }
+    expect(layout.height).toBe(building.y + building.height + 16);
+  });
+
+  it("names the company after the repository", () => {
+    expect(officeOf({ ...dash([card()]), repo: "/home/x/acme" }).name).toBe("acme");
   });
 });

@@ -24,6 +24,7 @@ export interface OfficeTeam {
 }
 
 export interface Office {
+  name: string;
   teams: OfficeTeam[];
 }
 
@@ -113,8 +114,9 @@ function teamOf(card: Card, panes: Record<string, string>): OfficeTeam {
 }
 
 export function officeOf(state: DashState | null): Office {
-  if (!state) return { teams: [] };
-  return { teams: state.cards.map((card) => teamOf(card, state.session_panes)) };
+  if (!state) return { name: "", teams: [] };
+  const name = textOf(state.repo).split("/").filter(Boolean).pop() || "Company";
+  return { name, teams: state.cards.map((card) => teamOf(card, state.session_panes)) };
 }
 
 export interface PlacedRoom {
@@ -127,7 +129,10 @@ export interface PlacedRoom {
   scale: number;
 }
 
+export type PlacedBuilding = PlacedRoom;
+
 export interface OfficeLayout {
+  building: PlacedBuilding | null;
   rooms: PlacedRoom[];
   desks: PlacedDesk[];
   height: number;
@@ -136,10 +141,13 @@ export interface OfficeLayout {
 const GAP = 16;
 const MAX_ROOM_COLUMNS = 4;
 
-function roomSize(team: OfficeTeam, width: number, scale: number) {
+/** Building geometry in unscaled pixels: outer wall, sign band, corridor between room rows. */
+export const BUILDING = { wall: 4, sign: 20, corridor: 20, pad: 6 };
+
+function roomSize(team: OfficeTeam, inner: number, scale: number) {
   const cellWidth = 56 * scale;
   const pad = 8 * scale;
-  const fit = Math.floor((Math.max(width, cellWidth + 2 * pad + 2 * GAP) - 2 * GAP - 2 * pad) / cellWidth);
+  const fit = Math.floor((Math.max(inner, cellWidth + 2 * pad) - 2 * pad) / cellWidth);
   const columns = Math.max(1, Math.min(MAX_ROOM_COLUMNS, fit, team.employees.length || 1));
   const rows = Math.max(1, Math.ceil(team.employees.length / columns));
   return { columns, width: columns * cellWidth + 2 * pad, height: 16 * scale + rows * 58 * scale + pad };
@@ -158,14 +166,18 @@ function placeDesks(team: OfficeTeam, room: PlacedRoom, columns: number): Placed
 export function layoutOffice(office: Office, width: number, scale = 2): OfficeLayout {
   const rooms: PlacedRoom[] = [];
   const desks: PlacedDesk[] = [];
-  let x = GAP;
-  let y = GAP;
+  if (!office.teams.length) return { building: null, rooms, desks, height: 0 };
+  const edge = (BUILDING.wall + BUILDING.pad) * scale;
+  const left = GAP + edge;
+  const right = Math.max(width, left + 120 * scale) - GAP - edge;
+  let x = left;
+  let y = GAP + BUILDING.sign * scale + BUILDING.pad * scale;
   let rowHeight = 0;
   for (const team of office.teams) {
-    const size = roomSize(team, width, scale);
-    if (x > GAP && x + size.width + GAP > width) {
-      x = GAP;
-      y += rowHeight + GAP;
+    const size = roomSize(team, right - left, scale);
+    if (x > left && x + size.width > right) {
+      x = left;
+      y += rowHeight + BUILDING.corridor * scale;
       rowHeight = 0;
     }
     const room = { key: team.key, label: team.label, x, y, width: size.width, height: size.height, scale };
@@ -174,5 +186,7 @@ export function layoutOffice(office: Office, width: number, scale = 2): OfficeLa
     x += size.width + GAP;
     rowHeight = Math.max(rowHeight, size.height);
   }
-  return { rooms, desks, height: rooms.length ? y + rowHeight + GAP : 0 };
+  const bottom = y + rowHeight + edge;
+  const building = { key: "building", label: office.name, x: GAP, y: GAP, width: right + edge - GAP, height: bottom - GAP, scale };
+  return { building, rooms, desks, height: bottom + GAP };
 }

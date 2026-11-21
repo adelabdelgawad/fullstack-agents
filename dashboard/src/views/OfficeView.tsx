@@ -194,7 +194,7 @@ export function OfficeView() {
   const state = useStore((storeState) => storeState.state);
   const office = useMemo(() => officeOf(state), [state]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const placed = useRef<OfficeLayout>({ rooms: [], desks: [], height: 0 });
+  const placed = useRef<OfficeLayout>({ building: null, rooms: [], desks: [], height: 0 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const employees = useMemo(() => office.teams.flatMap((team) => team.employees), [office]);
   const selected = employees.find((employee) => employee.id === selectedId) || null;
