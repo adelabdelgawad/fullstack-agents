@@ -1,6 +1,6 @@
 import { drawBreakRoom, drawBreakSpot } from "./breakroom";
 import { drawCorridor, drawDoor, drawLobby, drawMeetingRoom } from "./floorplan";
-import { BREAK_ROOM, BUILDING, MEETING_ROOM, reportingLines, type OfficeLayout, type ReportingLine, type PlacedBuilding, type PlacedDesk, type PlacedRoom } from "./model";
+import { BREAK_ROOM, BUILDING, MEETING_ROOM, type OfficeLayout, type PlacedBuilding, type PlacedDesk, type PlacedRoom } from "./model";
 
 const SHIRTS = ["#4f8ff7", "#4ade80", "#f2b24c", "#f472b6", "#a78bfa", "#22d3ee", "#fb7185", "#e5e7eb"];
 const HAIR = ["#231b16", "#5b3825", "#d6a85f", "#8a5b3d", "#202938", "#6b4631", "#d7d2c8", "#b86b42"];
@@ -196,33 +196,6 @@ function drawRing(ctx: CanvasRenderingContext2D, desk: PlacedDesk, tMs: number):
   ctx.restore();
 }
 
-/** Org-chart lines from the CTO to each agent; a work packet travels down the line of every working agent. */
-function drawReportingLines(ctx: CanvasRenderingContext2D, lines: ReportingLine[], tMs: number, s: number): void {
-  ctx.save();
-  ctx.lineWidth = Math.max(1, s / 2);
-  ctx.setLineDash([4 * s, 3 * s]);
-  for (const line of lines) {
-    ctx.strokeStyle = SHIRTS[line.colour];
-    ctx.globalAlpha = line.active ? 0.55 : 0.25;
-    ctx.beginPath();
-    ctx.moveTo(line.from.x, line.from.y);
-    ctx.lineTo(line.to.x, line.to.y);
-    ctx.stroke();
-  }
-  ctx.setLineDash([]);
-  ctx.globalAlpha = 1;
-  lines.forEach((line, index) => {
-    if (!line.active) return;
-    const t = ((tMs / 2400 + index * 0.37) % 1 + 1) % 1;
-    const px = line.from.x + (line.to.x - line.from.x) * t;
-    const py = line.from.y + (line.to.y - line.from.y) * t;
-    rect(ctx, px - 3 * s, py - 4 * s, 6 * s, 8 * s, "#f4f1ea");
-    rect(ctx, px - 2 * s, py - 2 * s, 4 * s, s, "#64748b");
-    rect(ctx, px - 2 * s, py, 4 * s, s, "#64748b");
-  });
-  ctx.restore();
-}
-
 function drawPerson(ctx: CanvasRenderingContext2D, desk: PlacedDesk, frame: number): void {
   const { x, y, scale: s, employee } = desk;
   const bob = employee.pose === "asleep" ? s : 0;
@@ -285,7 +258,6 @@ export function drawOffice(ctx: CanvasRenderingContext2D, layout: OfficeLayout, 
     drawDoor(ctx, room);
   }
   const frame = Math.floor(tMs / 375) % 2;
-  drawReportingLines(ctx, reportingLines(layout), tMs, layout.building?.scale || 2);
   for (const desk of layout.desks) {
     drawDesk(ctx, desk, frame);
     drawChair(ctx, desk);

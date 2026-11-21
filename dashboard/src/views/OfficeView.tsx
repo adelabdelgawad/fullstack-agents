@@ -27,11 +27,12 @@ function redraw(
   office: Office,
   selectedId: string | null,
   placed: MutableRefObject<OfficeLayout>,
+  zoomed: boolean,
 ): void {
   const available = canvas.parentElement?.clientHeight || canvas.getBoundingClientRect().height;
   const initialBounds = canvas.getBoundingClientRect();
   const scale = initialBounds.width < 520 ? 1 : 2;
-  placed.current = layoutOffice(office, initialBounds.width, available, scale);
+  placed.current = layoutOffice(office, initialBounds.width, available, scale, !zoomed);
   canvas.style.height = `${Math.max(available, placed.current.height)}px`;
   const bounds = canvas.getBoundingClientRect();
   const ratio = window.devicePixelRatio || 1;
@@ -52,6 +53,7 @@ function useOfficeCanvas(
   office: Office,
   selectedId: string | null,
   placed: MutableRefObject<OfficeLayout>,
+  zoomed: boolean,
 ): void {
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -59,7 +61,7 @@ function useOfficeCanvas(
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     let frame = 0;
     let lastPaint = -Infinity;
-    const paint = () => redraw(canvas, office, selectedId, placed);
+    const paint = () => redraw(canvas, office, selectedId, placed, zoomed);
     const tick = (now: number) => {
       if (now - lastPaint >= 125) {
         paint();
@@ -85,7 +87,7 @@ function useOfficeCanvas(
       window.removeEventListener("resize", syncAnimation);
       cancelAnimationFrame(frame);
     };
-  }, [canvasRef, office, placed, selectedId]);
+  }, [canvasRef, office, placed, selectedId, zoomed]);
 }
 
 function teamLabel(office: Office, employee: OfficeEmployee): string {
@@ -157,6 +159,23 @@ function ReportingChain({ employee }: { employee: OfficeEmployee }) {
         </ul>
       )}
     </div>
+  );
+}
+
+/** One button per team: zoom the floor to that team's office; "Whole floor" goes back. */
+function TeamZoom({ teams, zoom, setZoom }: { teams: Office["teams"]; zoom: string | null; setZoom: (key: string | null) => void }) {
+  return (
+    <nav className="office-zoom" aria-label="Zoom to a team">
+      <button type="button" aria-pressed={zoom === null} onClick={() => setZoom(null)}>
+        Whole floor
+      </button>
+      {teams.map((team) => (
+        <button key={team.key} type="button" aria-pressed={zoom === team.key} onClick={() => setZoom(zoom === team.key ? null : team.key)}>
+          {team.label}
+          <span>{team.employees.filter((employee) => employee.sessions > 0 || employee.fixed).length}</span>
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -256,7 +275,7 @@ function OfficeConsole({ cardKey, name, close }: { cardKey: string; name: string
     return () => window.removeEventListener("keydown", onKey);
   }, [close]);
   return (
-    <div className="office-console" role="dialog" aria-modal="true" aria-label={`${name} session console`}>
+    <div className="office-console office-console-full" role="dialog" aria-modal="true" aria-label={`${name} session console`}>
       <div className="office-console-head">
         <h2>{name}</h2>
         <button type="button" onClick={close}>
@@ -318,10 +337,13 @@ export function OfficeView() {
   const placed = useRef<OfficeLayout>(EMPTY_LAYOUT);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [consoleId, setConsoleId] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<string | null>(null);
+  const zoomTeam = office.teams.find((team) => team.key === zoom) || null;
+  const shown = useMemo(() => (zoomTeam ? { ...office, teams: [zoomTeam] } : office), [office, zoomTeam]);
   const employees = useMemo(() => office.teams.flatMap((team) => team.employees), [office]);
   const selected = employees.find((employee) => employee.id === selectedId) || null;
   const consoleAgent = employees.find((employee) => employee.id === consoleId) || null;
-  useOfficeCanvas(canvasRef, office, selectedId, placed);
+  useOfficeCanvas(canvasRef, shown, selectedId, placed, Boolean(zoomTeam));
   useEffect(() => {
     if (selectedId && !selected) setSelectedId(null);
   }, [selected, selectedId]);
@@ -339,6 +361,7 @@ export function OfficeView() {
     <section className={selected ? "office-view has-selection" : "office-view"} aria-label="Live session office">
       <div className="office-canvas-wrap">
         <DecisionBox />
+        <TeamZoom teams={office.teams} zoom={zoomTeam?.key || null} setZoom={setZoom} />
         <canvas ref={canvasRef} className="office-canvas" onClick={clickCanvas} aria-hidden="true" />
       </div>
       <AccessibleEmployees office={office} select={setSelectedId} />

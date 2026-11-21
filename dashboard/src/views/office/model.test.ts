@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Card, DashState, Session } from "../../lib/types";
-import { cardMembers, CTO_ID, departmentOf, layoutOffice, officeOf, reportingLines, teamOfEmployee, type Office } from "./model";
+import { cardMembers, CTO_ID, departmentOf, layoutOffice, officeOf, teamOfEmployee, type Office } from "./model";
 
 function session(patch: Partial<Session> = {}): Session {
   return { id: "lead", name: "Lead", state: "working", ...patch };
@@ -185,9 +185,11 @@ describe("layoutOffice", () => {
 
   it("keeps desks inside their office and sends away and meeting agents out of them", () => {
     const layout = layoutOffice(office(), 1400, 800);
-    const away = Object.fromEntries(layout.desks.map((desk) => [desk.employee.id, Boolean(desk.away)]));
+    const away = Object.fromEntries(
+      layout.desks.filter((desk) => !desk.employee.id.startsWith("vacant:")).map((desk) => [desk.employee.id, Boolean(desk.away)]),
+    );
     expect(away).toEqual({ [CTO_ID]: false, a: false, b: true, c: true, d: true });
-    const activities = Object.fromEntries(layout.spots.map((spot) => [spot.employee.id, spot.activity]));
+    const activities = Object.fromEntries(layout.spots.filter((spot) => !spot.employee.id.startsWith("team:")).map((spot) => [spot.employee.id, spot.activity]));
     expect(activities).toEqual({ b: "pingpong-left", c: "pingpong-right", d: "meeting" });
     const breakRoom = layout.rooms.find((room) => room.key === "break")!;
     expect(breakRoom.table).toBeDefined();
@@ -226,21 +228,42 @@ describe("reporting lines", () => {
     expect(solo.reports).toEqual([]);
     expect(office.teams[0].employees[0].reports?.map((report) => report.id)).toEqual(["office", "solo"]);
   });
+});
 
-  it("draws one line from the CTO desk to every agent, to where the agent is now", () => {
-    const office = officeOf(
-      dash([
-        card({ key: "busy", sessions: [session({ id: "b", action_running: true, action: "Bash build" })] }),
-        card({ key: "rest", sessions: [session({ id: "r", state: "idle" })] }),
-      ]),
-    );
+describe("background work keeps the agent at its desk", () => {
+  it("a running background shell or an open turn is not a break", () => {
+    const shell = card({ key: "bg", sessions: [session({ id: "a", state: "idle" })],
+      now: [session({ id: "a", state: "idle", agents: [{ id: "t1", state: "running", label: "shell · build" }] })] });
+    const open = card({ key: "open", sessions: [session({ id: "b", state: "still_open" })] });
+    const rest = card({ key: "rest", sessions: [session({ id: "c", state: "idle" })] });
+    const office = officeOf(dash([shell, open, rest]));
     const layout = layoutOffice(office, 1400, 800);
-    const lines = reportingLines(layout);
-    expect(lines).toHaveLength(2);
-    const cto = layout.desks.find((desk) => desk.employee.id === CTO_ID)!;
-    expect(lines.every((line) => line.from.x === cto.x + 28 * cto.scale)).toBe(true);
-    const rest = layout.spots.find((spot) => spot.employee.id === "rest")!;
-    expect(lines.map((line) => line.active)).toEqual([true, false]);
-    expect(lines[1].to).toEqual({ x: rest.x + 28 * rest.scale, y: rest.y + 30 * rest.scale });
+    const away = layout.spots.filter((spot) => spot.activity !== "meeting").map((spot) => spot.employee.id);
+    expect(away.filter((id) => !id.startsWith("team:"))).toEqual(["rest"]);
+  });
+});
+
+describe("idle departments", () => {
+  it("a department with no running work takes its break in the Break Room", () => {
+    const office = officeOf(dash([card({ key: "busy", sessions: [session({ id: "b", action_running: true, action: "Bash build" })] })]));
+    const layout = layoutOffice(office, 1400, 800);
+    const onBreak = layout.spots.filter((spot) => spot.employee.id.startsWith("team:"));
+    const busyTeam = office.teams.find((team) => team.employees.some((employee) => employee.id === "busy"))!;
+    expect(onBreak.length).toBe(office.teams.length - 2);
+    expect(onBreak.some((spot) => spot.employee.id === `team:${busyTeam.key}`)).toBe(false);
+    expect(onBreak.some((spot) => spot.employee.id === `team:${office.teams[0].key}`)).toBe(false);
+  });
+});
+
+describe("department offices", () => {
+  it("seat four desks; only agents on a running session work at a lit PC", () => {
+    const office = officeOf(dash([card({ key: "busy", sessions: [session({ id: "b", action_running: true, action: "Bash build" })] })]));
+    const layout = layoutOffice(office, 1400, 800);
+    const team = office.teams.find((item) => item.employees.some((employee) => employee.id === "busy"))!;
+    const room = layout.rooms.find((item) => item.key === team.key)!;
+    const desks = layout.desks.filter((desk) => desk.x >= room.x && desk.x < room.x + room.width && desk.y >= room.y && desk.y < room.y + room.height);
+    expect(desks).toHaveLength(4);
+    expect(desks.filter((desk) => !desk.away).map((desk) => desk.employee.id)).toEqual(["busy"]);
+    expect(layout.desks.filter((desk) => desk.employee.id === CTO_ID)).toHaveLength(1);
   });
 });

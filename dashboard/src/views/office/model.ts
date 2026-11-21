@@ -95,7 +95,10 @@ function poseOf(card: Card, item: Record<string, unknown>, role: OfficeRole): Of
   if ((role === "lead" && needsHuman(card)) || textOf(item.ask) || textOf(item.question)) return "waiting";
   if (item.state === "quiet") return "asleep";
   if (item.action_running && READ_ACTION.test(textOf(item.action))) return "reading";
-  if (item.action_running || item.state === "working") return "typing";
+  // A running background shell, subagent or worker run is work in progress: the agent stays at its desk.
+  if (item.action_running || item.state === "working" || item.state === "running") return "typing";
+  // An open turn waiting on its own background work (not on you) keeps the agent at its desk too.
+  if (item.state === "still_open") return "reading";
   return "idle";
 }
 
@@ -346,11 +349,23 @@ function placeCells(count: number, room: PlacedRoom, scale: number): { x: number
   }));
 }
 
+/** Every department office seats TEAM_DESKS; the CTO office seats the CTO alone. */
+export const TEAM_DESKS = 4;
+
+function deskCount(team: OfficeTeam): number {
+  return team.employees.some((employee) => employee.fixed) ? team.employees.length : Math.max(TEAM_DESKS, team.employees.length);
+}
+
+/** Agents on a running session sit at a lit PC first; the rest of the office's desks stand empty, computer off. */
 function placeDesks(team: OfficeTeam, room: PlacedRoom, scale: number): PlacedDesk[] {
-  const cells = placeCells(team.employees.length, room, scale);
-  return team.employees.map((employee, index) => ({
-    ...cells[index], scale, employee, away: isAway(employee) || inMeeting(employee),
-  }));
+  const cells = placeCells(deskCount(team), room, scale);
+  const seated = (employee: OfficeEmployee) => !isAway(employee) && !inMeeting(employee);
+  const order = [...team.employees.filter(seated), ...team.employees.filter((employee) => !seated(employee))];
+  return cells.map((cell, index) => {
+    const employee = order[index];
+    if (!employee) return { ...cell, scale, employee: { ...teamMember(team), id: `vacant:${team.key}:${index}` }, away: true };
+    return { ...cell, scale, employee, away: !seated(employee) };
+  });
 }
 
 /** The first pair plays at the fixed table; everyone else queues for coffee along the left of the room. */
@@ -446,17 +461,31 @@ function circulation(plan: Plan, inner: Rect, chrome: number): { corridors: Rect
   return { corridors, lobby };
 }
 
+/** A department with nobody at a desk (no running work) takes its break: it shows in the Break Room. */
+function teamOnBreak(team: OfficeTeam): boolean {
+  return !team.employees.some((employee) => employee.fixed || (!isAway(employee) && !inMeeting(employee)));
+}
+
+/** The department's stand-in for the Break Room: named after the team, with no card behind it. */
+function teamMember(team: OfficeTeam): OfficeEmployee {
+  return {
+    id: `team:${team.key}`, name: team.label, role: "helper", cardKey: "", pose: "idle", bubble: "", pane: null,
+    colour: colourOf(team.key), sessions: 0, total: 0, cost: null, tokens: 0,
+  };
+}
+
 export const EMPTY_LAYOUT: OfficeLayout = { building: null, rooms: [], desks: [], spots: [], corridors: [], lobby: null, height: 0 };
 
 /** Fit one company floor plan to the canvas: department offices, a meeting room and a break room along corridors. */
-export function layoutOffice(office: Office, width: number, height: number, chrome = 2): OfficeLayout {
+export function layoutOffice(office: Office, width: number, height: number, chrome = 2, common = true): OfficeLayout {
   if (!office.teams.length) return EMPTY_LAYOUT;
   const everyone = office.teams.flatMap((team) => team.employees);
-  const away = everyone.filter(isAway);
+  const away = [...everyone.filter(isAway), ...office.teams.filter(teamOnBreak).map(teamMember)];
   const meeting = everyone.filter(inMeeting);
-  const specs: Spec[] = [...office.teams.map((team) => ({ key: team.key, label: team.label, count: team.employees.length })),
-    { key: MEETING_ROOM, label: "Meeting Room", count: Math.max(4, meeting.length) },
+  const shared: Spec[] = [{ key: MEETING_ROOM, label: "Meeting Room", count: Math.max(4, meeting.length) },
     { key: BREAK_ROOM, label: "Break Room", count: Math.max(2, away.length) }];
+  const specs: Spec[] = [...office.teams.map((team) => ({ key: team.key, label: team.label, count: deskCount(team) })),
+    ...(common ? shared : [])];
   const edge = BUILDING.wall * chrome;
   const bw = Math.max(width, 240) - 2 * MARGIN;
   const bh = Math.max(height, 240) - 2 * MARGIN;
@@ -466,37 +495,10 @@ export function layoutOffice(office: Office, width: number, height: number, chro
   const rooms = placeRooms(specs, plan, inner, chrome);
   const roomOf = (key: string) => rooms.find((room) => room.key === key)!;
   const desks = office.teams.flatMap((team, index) => placeDesks(team, rooms[index], plan.scale));
-  const spots = [...placeBreak(away, roomOf(BREAK_ROOM), plan.scale), ...placeMeeting(meeting, roomOf(MEETING_ROOM), plan.scale)];
+  const spots = !common ? [] : [...placeBreak(away, roomOf(BREAK_ROOM), plan.scale), ...placeMeeting(meeting, roomOf(MEETING_ROOM), plan.scale)];
   const used = { ...inner, height: Math.max(inner.height, rooms[rooms.length - 1].y + plan.roomH + BUILDING.wallT * chrome + BUILDING.lobby * chrome - inner.y) };
   const { corridors, lobby } = circulation(plan, used, chrome);
   const bottom = used.y + used.height + edge;
   const building = { key: "building", label: office.name, x: MARGIN, y: MARGIN, width: bw, height: bottom - MARGIN, scale: chrome };
   return { building, rooms, desks, spots, corridors, lobby, height: bottom + MARGIN };
-}
-
-export interface ReportingLine {
-  from: { x: number; y: number };
-  to: { x: number; y: number };
-  colour: number;
-  /** The agent is working: a work packet travels down the line. */
-  active: boolean;
-}
-
-/** Reporting lines from the CTO's desk to every agent, wherever the agent is now (desk, meeting or break room). */
-export function reportingLines(layout: OfficeLayout): ReportingLine[] {
-  const centre = (place: { x: number; y: number; scale: number }) => ({ x: place.x + 28 * place.scale, y: place.y + 30 * place.scale });
-  const cto = layout.desks.find((desk) => desk.employee.id === CTO_ID);
-  if (!cto) return [];
-  const spots = new Map(layout.spots.map((spot) => [spot.employee.id, spot]));
-  return layout.desks
-    .filter((desk) => desk.employee.id !== CTO_ID)
-    .map((desk) => {
-      const where = spots.get(desk.employee.id) || desk;
-      return {
-        from: centre(cto),
-        to: centre(where),
-        colour: desk.employee.colour,
-        active: desk.employee.pose === "typing" || desk.employee.pose === "reading",
-      };
-    });
 }

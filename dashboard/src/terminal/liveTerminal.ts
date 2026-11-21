@@ -294,7 +294,8 @@ function startLiveTerminal(current: TerminalState, restoreFocus = false): void {
   current.term = new window.Terminal({
     scrollback: 0,
     fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--mono").trim(),
-    fontSize: 12,
+    // The full-screen Office console has room for a larger, clearer font than the card drawer.
+    fontSize: current.root.closest(".office-console-full") ? 16 : 12,
     cursorBlink: true,
     theme: terminalTheme(current.root, getComputedStyle(current.root).getPropertyValue("--herdr-text").trim()),
   });
