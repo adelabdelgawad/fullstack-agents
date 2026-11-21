@@ -10,6 +10,8 @@ export interface OfficeEmployee {
   role: OfficeRole;
   cardKey: string;
   pose: OfficePose;
+  /** The named person doing this session (from the team's members), shown above the session on the label. */
+  person?: string;
   /** First lines of the last answer, shown in a bubble while the agent has its hand up. */
   answer?: string[];
   bubble: string;
@@ -32,6 +34,12 @@ export interface OfficeTeam {
   key: string;
   label: string;
   employees: OfficeEmployee[];
+  /** Named staff with no session right now: they spend the time in the Break Room. */
+  idle?: string[];
+  /** Whether the team names its staff (then the people themselves take breaks, not a team stand-in). */
+  named?: boolean;
+  /** The office this team works in; related teams share one. Defaults to the team's own office. */
+  room?: string;
 }
 
 export interface Office {
@@ -46,9 +54,11 @@ export interface PlacedDesk {
   employee: OfficeEmployee;
   /** The employee is in the break room; the desk stays, empty, with its computer off. */
   away?: boolean;
+  /** Someone sits here with nothing running: the computer stays off. */
+  off?: boolean;
 }
 
-export type BreakActivity = "coffee" | "pingpong-left" | "pingpong-right" | "meeting";
+export type BreakActivity = "coffee" | "bar" | "gaming" | "pingpong-left" | "pingpong-right" | "meeting";
 
 export interface PlacedSpot {
   x: number;
@@ -64,6 +74,7 @@ export const BREAK_ROOM = "break";
 export const MEETING_ROOM = "meeting";
 export const CTO_ID = "cto";
 export const CTO_TEAM = "CTO";
+export const ASSISTANT_ID = "assistant";
 
 /** Idle and sleeping agents leave their desk for the break room; working and waiting agents stay at it. */
 export function isAway(employee: OfficeEmployee): boolean {
@@ -211,6 +222,25 @@ function ctoOf(agents: OfficeEmployee[]): OfficeEmployee {
   };
 }
 
+/** The CTO's assistant: always at her desk in the CTO office, busy while any agent works or waits. */
+function assistantOf(chief: OfficeEmployee, name: string): OfficeEmployee {
+  return {
+    id: ASSISTANT_ID, name: "Assistant", person: name, role: "helper", cardKey: "", bubble: "", cost: null, pane: null,
+    colour: 3, tokens: 0, sessions: 0, total: 0, fixed: true, pose: chief.pose === "idle" ? "idle" : "typing",
+  };
+}
+
+/** Name the team's sessions after its members, busiest first; members with no session are idle staff. */
+function staff(team: OfficeTeam, members: string[]): void {
+  if (!members.length) return;
+  team.named = true;
+  const ordered = [...team.employees].sort((a, b) => Number(isAway(a)) - Number(isAway(b)));
+  ordered.forEach((employee, index) => {
+    if (members[index]) employee.person = members[index];
+  });
+  team.idle = members.slice(ordered.length);
+}
+
 function baseName(path: string): string {
   return path.split("/").filter(Boolean).pop() || "";
 }
@@ -238,6 +268,8 @@ export function officeOf(state: DashState | null): Office {
   if (!state) return { name: "", teams: [] };
   const rules = state.office_teams || [];
   const teams = new Map<string, OfficeTeam>(rules.map((rule) => [rule.name, { key: rule.name, label: rule.name, employees: [] }]));
+  const members = new Map(rules.map((rule) => [rule.name, rule.members || []]));
+  const rooms = new Map(rules.map((rule) => [rule.name, rule.room || ""]));
   for (const card of state.cards) {
     const key = departmentOf(card, rules);
     const team = teams.get(key) || { key, label: key, employees: [] };
@@ -246,8 +278,16 @@ export function officeOf(state: DashState | null): Office {
     teams.set(key, team);
   }
   const cto = teams.get(CTO_TEAM) || { key: CTO_TEAM, label: CTO_TEAM, employees: [] };
-  cto.employees.unshift(ctoOf([...teams.values()].flatMap((team) => team.employees)));
+  const agents = [...teams.values()].flatMap((team) => team.employees);
+  const [ctoName, assistantName] = members.get(CTO_TEAM) || [];
+  const chief = ctoOf(agents);
+  cto.employees.unshift({ ...chief, person: ctoName });
+  if (assistantName) cto.employees.splice(1, 0, assistantOf(chief, assistantName));
   teams.delete(CTO_TEAM);
+  for (const team of teams.values()) {
+    staff(team, members.get(team.key) || []);
+    team.room = rooms.get(team.key) || team.key;
+  }
   return { name: baseName(textOf(state.repo)) || "Company", teams: [cto, ...teams.values()] };
 }
 
@@ -364,43 +404,112 @@ function placeCells(count: number, room: PlacedRoom, scale: number): { x: number
 }
 
 /** Every department office seats TEAM_DESKS; the CTO office seats the CTO alone. */
-export const TEAM_DESKS = 4;
+export const TEAM_DESKS = 2;
 
 function deskCount(team: OfficeTeam): number {
   return team.employees.some((employee) => employee.fixed) ? team.employees.length : Math.max(TEAM_DESKS, team.employees.length);
 }
 
 /** Agents on a running session sit at a lit PC first; the rest of the office's desks stand empty, computer off. */
-function placeDesks(team: OfficeTeam, room: PlacedRoom, scale: number): PlacedDesk[] {
-  const cells = placeCells(deskCount(team), room, scale);
-  const seated = (employee: OfficeEmployee) => !isAway(employee) && !inMeeting(employee);
-  const order = [...team.employees.filter(seated), ...team.employees.filter((employee) => !seated(employee))];
-  return cells.map((cell, index) => {
-    const employee = order[index];
-    if (!employee) return { ...cell, scale, employee: { ...teamMember(team), id: `vacant:${team.key}:${index}` }, away: true };
-    return { ...cell, scale, employee, away: !seated(employee) };
+/** The office a team works in. */
+export function roomOfTeam(team: OfficeTeam): string {
+  return team.room || team.key;
+}
+
+/** Offices in floor order: each holds one team, or two related teams that share it. */
+function officeGroups(teams: OfficeTeam[]): Array<{ key: string; teams: OfficeTeam[] }> {
+  const groups = new Map<string, OfficeTeam[]>();
+  for (const team of teams) groups.set(roomOfTeam(team), [...(groups.get(roomOfTeam(team)) || []), team]);
+  return [...groups].map(([key, members]) => ({ key, teams: members }));
+}
+
+/** Desks of an office shared by its teams: each team gets its own run of desks, in team order. */
+function placeGroupDesks(teams: OfficeTeam[], room: PlacedRoom, scale: number, onBreak: Set<string>): PlacedDesk[] {
+  const cells = placeCells(teams.reduce((sum, team) => sum + deskCount(team), 0), room, scale);
+  let offset = 0;
+  return teams.flatMap((team) => {
+    const mine = cells.slice(offset, (offset += deskCount(team)));
+    return placeDesks(team, mine, scale, onBreak);
   });
 }
 
+/** Desks: working agents at a lit PC first; idle people not on break this round sit at their desk with the PC off. */
+function placeDesks(team: OfficeTeam, cells: Array<{ x: number; y: number }>, scale: number, onBreak: Set<string>): PlacedDesk[] {
+  const seated = (employee: OfficeEmployee) => !inMeeting(employee) && (!isAway(employee) || !onBreak.has(employee.id));
+  const order = [...team.employees.filter(seated), ...team.employees.filter((employee) => !seated(employee))];
+  const resting = idleStaff(team).filter((member) => !onBreak.has(member.id));
+  return cells.map((cell, index) => {
+    const employee = order[index];
+    if (!employee) {
+      const member = resting.shift();
+      if (member) return { ...cell, scale, employee: member, off: true };
+      return { ...cell, scale, employee: { ...teamMember(team), id: `vacant:${team.key}:${index}` }, away: true };
+    }
+    return { ...cell, scale, employee, away: !seated(employee), off: seated(employee) && isAway(employee) };
+  });
+}
+
+/** At most this many take a break at once; the rest of the idle staff sit at their desks until their turn. */
+export const BREAK_SEATS = 8;
+
+function hashOf(text: string): number {
+  let hash = 2166136261;
+  for (const char of text) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  return hash >>> 0;
+}
+
+/** This round's break-takers, in activity order. Each person's turn depends only on their id and the round, so
+ * someone arriving or leaving moves at most one other person instead of reshuffling the whole room. */
+function breakTakers(candidates: OfficeEmployee[], round: number): OfficeEmployee[] {
+  const rank = (employee: OfficeEmployee) => hashOf(`${employee.id}:${round}`);
+  return [...candidates].sort((a, b) => rank(a) - rank(b)).slice(0, BREAK_SEATS);
+}
+
 /** The first pair plays at the fixed table; everyone else queues for coffee along the left of the room. */
-function placeBreak(away: OfficeEmployee[], room: PlacedRoom, s: number): PlacedSpot[] {
-  const table = room.table!;
+/** How long one round of break activities lasts before people swap: bar, ping-pong, PlayStation. */
+export const BREAK_ROUND_MS = 10 * 60 * 1000;
+
+/** Break-room furniture the activities use, in canvas pixels; drawBreakRoom draws the same pieces. */
+export function breakFurniture(room: PlacedRoom) {
   const d = room.scale;
-  const top = room.y + BUILDING.header * d + 26 * d;
-  let col = 0;
-  let y = top;
-  return away.map((employee, index) => {
-    if (away.length > 1 && index < 2) {
-      const x = table.x - 24 * s + index * DESK_W * s;
-      return { x, y: table.y - 24 * s, scale: s, employee, activity: index ? "pingpong-right" : "pingpong-left" };
+  const floor = room.y + BUILDING.header * d;
+  const roomy = room.width > 150 * d;
+  const sofa = room.height - BUILDING.header * d > 40 * d ? { x: room.x + room.width - 46 * d, y: room.y + room.height - 16 * d } : null;
+  return { floor, roomy, sofa, bar: { start: room.x + 8 * d, end: room.x + (roomy ? 72 : 46) * d, front: floor + 24 * d } };
+}
+
+/** Who does what this round: one pair plays ping-pong, the next pair plays PlayStation, the rest sit at the bar. */
+function breakRound(away: OfficeEmployee[], round: number): Array<{ employee: OfficeEmployee; activity: BreakActivity }> {
+  const n = away.length;
+  const order = away;
+  const games: BreakActivity[][] = round % 2 ? [["gaming", "gaming"], ["pingpong-left", "pingpong-right"]] : [["pingpong-left", "pingpong-right"], ["gaming", "gaming"]];
+  const plan: BreakActivity[] = n === 1 ? [round % 2 ? "gaming" : "bar"] : [...games[0], ...(n >= 4 ? games[1] : [])];
+  return order.map((employee, index) => ({ employee, activity: plan[index] || "bar" }));
+}
+
+function placeBreak(away: OfficeEmployee[], room: PlacedRoom, s: number, round = 0): PlacedSpot[] {
+  const table = room.table!;
+  const { bar, sofa } = breakFurniture(room);
+  const stools = Math.max(1, Math.floor((bar.end - bar.start) / (30 * s)));
+  let gamer = 0;
+  let stool = 0;
+  let standing = 0;
+  return breakRound(away, round).map(({ employee, activity }) => {
+    if (activity === "pingpong-left" || activity === "pingpong-right") {
+      const x = table.x - 24 * s + (activity === "pingpong-right" ? DESK_W * s : 0);
+      return { x, y: table.y - 24 * s, scale: s, employee, activity };
     }
-    let x = room.x + 10 * d - 22 * s + col * 26 * s;
-    if (col > 0 && x + 52 * s > table.x - 8 * s) {
-      col = 0;
-      y += 52 * s;
-      x = room.x + 10 * d - 22 * s;
+    if (activity === "gaming" && sofa) {
+      const cx = sofa.x + (9 + 18 * (gamer++ % 2)) * room.scale;
+      return { x: cx - 28 * s, y: sofa.y + 12 * room.scale - 42 * s, scale: s, employee, activity };
     }
-    col += 1;
+    if (stool < stools) {
+      const cx = bar.start + 15 * s + stool++ * 30 * s;
+      return { x: cx - 28 * s, y: bar.front - 16 * s, scale: s, employee, activity: "bar" as BreakActivity };
+    }
+    const index = standing++;
+    const x = room.x + 10 * room.scale - 22 * s + (index % 3) * 26 * s;
+    const y = room.y + room.height - 30 * room.scale - 42 * s - Math.floor(index / 3) * 50 * s;
     return { x, y, scale: s, employee, activity: "coffee" as BreakActivity };
   });
 }
@@ -428,7 +537,8 @@ function furnish(room: PlacedRoom, s: number, seats: number): PlacedRoom {
     const t = Math.min(s, (room.width - 8 * d) / 112);
     const width = 64 * t;
     const x = room.x + Math.max(room.width / 2 - width / 2, Math.min(room.width - width - 32 * t, room.width - width - 4 * d));
-    return { ...room, table: { x, y: floorTop + floorH / 2 - 7 * t, width, height: 14 * t } };
+    // Above centre, leaving the lower right for the PlayStation corner (TV, rug and sofa).
+    return { ...room, table: { x, y: floorTop + floorH * 0.4 - 7 * t, width, height: 14 * t } };
   }
   if (room.key === MEETING_ROOM) {
     const width = Math.min(room.width - 40 * d, Math.max(90 * s, Math.ceil(seats / 2) * 34 * s));
@@ -480,6 +590,11 @@ function teamOnBreak(team: OfficeTeam): boolean {
   return !team.employees.some((employee) => employee.fixed || (!isAway(employee) && !inMeeting(employee)));
 }
 
+/** A team's named members with no session, each as a person in the Break Room. */
+function idleStaff(team: OfficeTeam): OfficeEmployee[] {
+  return (team.idle || []).map((name) => ({ ...teamMember(team), id: `member:${team.key}:${name}`, name, colour: colourOf(name) }));
+}
+
 /** The department's stand-in for the Break Room: named after the team, with no card behind it. */
 function teamMember(team: OfficeTeam): OfficeEmployee {
   return {
@@ -491,14 +606,20 @@ function teamMember(team: OfficeTeam): OfficeEmployee {
 export const EMPTY_LAYOUT: OfficeLayout = { building: null, rooms: [], desks: [], spots: [], corridors: [], lobby: null, height: 0 };
 
 /** Fit one company floor plan to the canvas: department offices, a meeting room and a break room along corridors. */
-export function layoutOffice(office: Office, width: number, height: number, chrome = 2, common = true): OfficeLayout {
+export function layoutOffice(office: Office, width: number, height: number, chrome = 2, common = true, round = 0): OfficeLayout {
   if (!office.teams.length) return EMPTY_LAYOUT;
   const everyone = office.teams.flatMap((team) => team.employees);
-  const away = [...everyone.filter(isAway), ...office.teams.filter(teamOnBreak).map(teamMember)];
+  const away = breakTakers([...everyone.filter(isAway), ...office.teams.flatMap(idleStaff),
+    ...office.teams.filter((team) => !team.named && teamOnBreak(team)).map(teamMember)], round);
+  const onBreak = new Set(away.map((employee) => employee.id));
   const meeting = everyone.filter(inMeeting);
   const shared: Spec[] = [{ key: MEETING_ROOM, label: "Meeting Room", count: Math.max(4, meeting.length) },
     { key: BREAK_ROOM, label: "Break Room", count: Math.max(2, away.length) }];
-  const specs: Spec[] = [...office.teams.map((team) => ({ key: team.key, label: team.label, count: deskCount(team) })),
+  const groups = officeGroups(office.teams);
+  const specs: Spec[] = [...groups.map((group) => ({
+    key: group.key, label: group.teams.map((team) => team.label).join(" · "),
+    count: group.teams.reduce((sum, team) => sum + deskCount(team), 0),
+  })),
     ...(common ? shared : [])];
   const edge = BUILDING.wall * chrome;
   const bw = Math.max(width, 240) - 2 * MARGIN;
@@ -508,8 +629,8 @@ export function layoutOffice(office: Office, width: number, height: number, chro
   plan.roomH = Math.max(plan.roomH, (BUILDING.header + BUILDING.pad) * decorCap(chrome) + DESK_H * plan.scale);
   const rooms = placeRooms(specs, plan, inner, chrome);
   const roomOf = (key: string) => rooms.find((room) => room.key === key)!;
-  const desks = office.teams.flatMap((team, index) => placeDesks(team, rooms[index], plan.scale));
-  const spots = !common ? [] : [...placeBreak(away, roomOf(BREAK_ROOM), plan.scale), ...placeMeeting(meeting, roomOf(MEETING_ROOM), plan.scale)];
+  const desks = groups.flatMap((group, index) => placeGroupDesks(group.teams, rooms[index], plan.scale, onBreak));
+  const spots = !common ? [] : [...placeBreak(away, roomOf(BREAK_ROOM), plan.scale, round), ...placeMeeting(meeting, roomOf(MEETING_ROOM), plan.scale)];
   const used = { ...inner, height: Math.max(inner.height, rooms[rooms.length - 1].y + plan.roomH + BUILDING.wallT * chrome + BUILDING.lobby * chrome - inner.y) };
   const { corridors, lobby } = circulation(plan, used, chrome);
   const bottom = used.y + used.height + edge;

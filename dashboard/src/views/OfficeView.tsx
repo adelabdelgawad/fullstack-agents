@@ -15,7 +15,8 @@ import { openCard, toast, useStore } from "../store";
 import "../styles/office.css";
 import { CardTerminal } from "../terminal/CardTerminal";
 import { drawOffice, hitTest, pcHit, roomHit } from "./office/draw";
-import { CTO_ID, EMPTY_LAYOUT, layoutOffice, officeOf, teamOfEmployee, type Office, type OfficeEmployee, type OfficeLayout } from "./office/model";
+import { Walks } from "./office/walk";
+import { ASSISTANT_ID, BREAK_ROUND_MS, CTO_ID, EMPTY_LAYOUT, roomOfTeam, layoutOffice, officeOf, teamOfEmployee, type Office, type OfficeEmployee, type OfficeLayout } from "./office/model";
 
 interface SendResult {
   ok?: boolean;
@@ -28,11 +29,17 @@ function redraw(
   selectedId: string | null,
   placed: MutableRefObject<OfficeLayout>,
   zoomed: boolean,
-): void {
+  walks: Walks,
+  animate: boolean,
+): boolean {
   const available = canvas.parentElement?.clientHeight || canvas.getBoundingClientRect().height;
   const initialBounds = canvas.getBoundingClientRect();
   const scale = initialBounds.width < 520 ? 1 : 2;
-  placed.current = layoutOffice(office, initialBounds.width, available, scale, !zoomed);
+  const now = performance.now();
+  placed.current = layoutOffice(office, initialBounds.width, available, scale, !zoomed, Math.floor(Date.now() / BREAK_ROUND_MS));
+  const view = `${zoomed ? office.teams.map((team) => team.key).join("+") : "floor"}:${Math.round(initialBounds.width)}`;
+  walks.update(placed.current, view, now, animate);
+  const walkers = walks.walkers(now);
   canvas.style.height = `${Math.max(available, placed.current.height)}px`;
   const bounds = canvas.getBoundingClientRect();
   const ratio = window.devicePixelRatio || 1;
@@ -43,9 +50,10 @@ function redraw(
     canvas.height = height;
   }
   const context = canvas.getContext("2d");
-  if (!context) return;
+  if (!context) return walkers.size > 0;
   context.setTransform(ratio, 0, 0, ratio, 0, 0);
-  drawOffice(context, placed.current, performance.now(), selectedId);
+  drawOffice(context, placed.current, now, selectedId, walkers);
+  return walkers.size > 0;
 }
 
 function useOfficeCanvas(
@@ -55,15 +63,20 @@ function useOfficeCanvas(
   placed: MutableRefObject<OfficeLayout>,
   zoomed: boolean,
 ): void {
+  const walks = useRef(new Walks());
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     let frame = 0;
     let lastPaint = -Infinity;
-    const paint = () => redraw(canvas, office, selectedId, placed, zoomed);
+    let walking = false;
+    const paint = () => {
+      walking = redraw(canvas, office, selectedId, placed, zoomed, walks.current, !reduced);
+    };
     const tick = (now: number) => {
-      if (now - lastPaint >= 125) {
+      // Smooth frames while someone walks between rooms; the pixel-art idle loop needs only 8 a second.
+      if (now - lastPaint >= (walking ? 40 : 125)) {
         paint();
         lastPaint = now;
       }
@@ -162,7 +175,7 @@ function ReportingChain({ employee }: { employee: OfficeEmployee }) {
   );
 }
 
-/** One button per team: zoom the floor to that team's office; "Whole floor" goes back. */
+/** One button per team: zoom the floor to that team's office (shared with a related team); "Whole floor" goes back. */
 function TeamZoom({ teams, zoom, setZoom }: { teams: Office["teams"]; zoom: string | null; setZoom: (key: string | null) => void }) {
   return (
     <nav className="office-zoom" aria-label="Zoom to a team">
@@ -170,7 +183,12 @@ function TeamZoom({ teams, zoom, setZoom }: { teams: Office["teams"]; zoom: stri
         Whole floor
       </button>
       {teams.map((team) => (
-        <button key={team.key} type="button" aria-pressed={zoom === team.key} onClick={() => setZoom(zoom === team.key ? null : team.key)}>
+        <button
+          key={team.key}
+          type="button"
+          aria-pressed={zoom === roomOfTeam(team)}
+          onClick={() => setZoom(zoom === roomOfTeam(team) ? null : roomOfTeam(team))}
+        >
           {team.label}
           <span>{team.employees.filter((employee) => employee.sessions > 0 || employee.fixed).length}</span>
         </button>
@@ -316,8 +334,9 @@ export function OfficeView() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [consoleId, setConsoleId] = useState<string | null>(null);
   const [zoom, setZoom] = useState<string | null>(null);
-  const zoomTeam = office.teams.find((team) => team.key === zoom) || null;
-  const shown = useMemo(() => (zoomTeam ? { ...office, teams: [zoomTeam] } : office), [office, zoomTeam]);
+  const zoomTeams = useMemo(() => office.teams.filter((team) => roomOfTeam(team) === zoom), [office, zoom]);
+  const zoomTeam = zoomTeams.length ? zoom : null;
+  const shown = useMemo(() => (zoomTeams.length ? { ...office, teams: zoomTeams } : office), [office, zoomTeams]);
   const employees = useMemo(() => office.teams.flatMap((team) => team.employees), [office]);
   const selected = employees.find((employee) => employee.id === selectedId) || null;
   useOfficeCanvas(canvasRef, shown, selectedId, placed, Boolean(zoomTeam));
@@ -329,11 +348,13 @@ export function OfficeView() {
     const x = event.clientX - bounds.left;
     const y = event.clientY - bounds.top;
     const pc = pcHit(placed.current, x, y);
-    const person = hitTest(placed.current, x, y);
+    const found = hitTest(placed.current, x, y);
+    // Named staff without a session and the assistant have no card to show.
+    const person = found === ASSISTANT_ID || found?.startsWith("member:") || found?.startsWith("team:") ? null : found;
     const agent = pc && pc !== CTO_ID ? employees.find((employee) => employee.id === pc) : null;
     // A PC screen opens the agent's full card (Information, Git changes, Terminal), as on the Agents page.
     if (agent?.cardKey) openCard(agent.cardKey);
-    else if (pc || person === CTO_ID) setConsoleId(CTO_ID);
+    else if (pc === CTO_ID || person === CTO_ID) setConsoleId(CTO_ID);
     else if (person) setSelectedId(person);
     else {
       // Clicking an office's floor or header zooms into that team; inside the zoom it goes back to the whole floor.
@@ -347,7 +368,7 @@ export function OfficeView() {
     <section className={selected ? "office-view has-selection" : "office-view"} aria-label="Live session office">
       <div className="office-canvas-wrap">
         <DecisionBox />
-        <TeamZoom teams={office.teams} zoom={zoomTeam?.key || null} setZoom={setZoom} />
+        <TeamZoom teams={office.teams} zoom={zoomTeam} setZoom={setZoom} />
         <canvas ref={canvasRef} className="office-canvas" onClick={clickCanvas} aria-hidden="true" />
       </div>
       <AccessibleEmployees office={office} select={setSelectedId} />

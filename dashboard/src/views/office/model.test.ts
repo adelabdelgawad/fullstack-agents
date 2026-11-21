@@ -190,7 +190,8 @@ describe("layoutOffice", () => {
     );
     expect(away).toEqual({ [CTO_ID]: false, a: false, b: true, c: true, d: true });
     const activities = Object.fromEntries(layout.spots.filter((spot) => !spot.employee.id.startsWith("team:")).map((spot) => [spot.employee.id, spot.activity]));
-    expect(activities).toEqual({ b: "pingpong-left", c: "pingpong-right", d: "meeting" });
+    for (const id of ["b", "c"]) expect(["bar", "gaming", "pingpong-left", "pingpong-right", "coffee"]).toContain(activities[id]);
+    expect(activities.d).toBe("meeting");
     const breakRoom = layout.rooms.find((room) => room.key === "break")!;
     expect(breakRoom.table).toBeDefined();
     expect(layout.rooms.find((room) => room.key === "meeting")!.table).toBeDefined();
@@ -256,13 +257,13 @@ describe("idle departments", () => {
 });
 
 describe("department offices", () => {
-  it("seat four desks; only agents on a running session work at a lit PC", () => {
+  it("seat two desks; only agents on a running session work at a lit PC", () => {
     const office = officeOf(dash([card({ key: "busy", sessions: [session({ id: "b", action_running: true, action: "Bash build" })] })]));
     const layout = layoutOffice(office, 1400, 800);
     const team = office.teams.find((item) => item.employees.some((employee) => employee.id === "busy"))!;
     const room = layout.rooms.find((item) => item.key === team.key)!;
     const desks = layout.desks.filter((desk) => desk.x >= room.x && desk.x < room.x + room.width && desk.y >= room.y && desk.y < room.y + room.height);
-    expect(desks).toHaveLength(4);
+    expect(desks).toHaveLength(2);
     expect(desks.filter((desk) => !desk.away).map((desk) => desk.employee.id)).toEqual(["busy"]);
     expect(layout.desks.filter((desk) => desk.employee.id === CTO_ID)).toHaveLength(1);
   });

@@ -21,13 +21,28 @@ class OfficeTeamsTests(unittest.TestCase):
         self.assertEqual(names[:2], ["CTO", "Testers Team"])
         self.assertIn("VOIP Engineering", names)
 
+    def test_related_teams_share_a_room(self):
+        rooms = {team["name"]: team.get("room") for team in dash.DEFAULT_OFFICE_TEAMS}
+        self.assertEqual(rooms["DevOps"], rooms["Network Engineers"])
+        self.assertIsNone(rooms["CTO"])
+
+    def test_members_are_kept_trimmed_and_capped(self):
+        rows = [{"name": "Network", "match": ["vpn"], "members": [" Boraie ", "", "Karim", 7]}]
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+            json.dump(rows, handle)
+        try:
+            with patch.dict(os.environ, {"FSA_TEAMS": handle.name}):
+                self.assertEqual(dash.office_teams()[0]["members"], ["Boraie", "Karim", "7"])
+        finally:
+            os.unlink(handle.name)
+
     def test_teams_file_wins_and_malformed_rows_are_dropped(self):
         rows = [{"name": "QA", "match": ["Test", " "]}, {"name": "", "match": ["x"]}, {"name": "Bad"}, "junk"]
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
             json.dump(rows, handle)
         try:
             with patch.dict(os.environ, {"FSA_TEAMS": handle.name}):
-                self.assertEqual(dash.office_teams(), [{"name": "QA", "match": ["test"]}])
+                self.assertEqual(dash.office_teams(), [{"name": "QA", "match": ["test"], "members": []}])
         finally:
             os.unlink(handle.name)
 

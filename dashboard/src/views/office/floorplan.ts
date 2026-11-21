@@ -101,3 +101,48 @@ export function drawMeetingRoom(ctx: CanvasRenderingContext2D, room: PlacedRoom)
     rect(ctx, cx - 3 * s, table.y + table.height - 9 * s, 6 * s, 4 * s, "#f4f1ea");
   }
 }
+
+/** The CTO's executive office: deep carpet with a gold-trimmed rug, a leather sofa, art, a globe and tall plants. */
+export function drawExecutiveRoom(ctx: CanvasRenderingContext2D, room: PlacedRoom): void {
+  const { x, y, width, height, scale: s } = room;
+  const band = BUILDING.header * s;
+  rect(ctx, x, y + band, width, height - band, "#2d1f3d");
+  for (let row = 0; row * 10 * s < height - band; row += 1) {
+    if (row % 2) rect(ctx, x, y + band + row * 10 * s, width, 5 * s, "#33244a");
+  }
+  const rugW = Math.min(width - 24 * s, 120 * s);
+  const rugH = Math.min(height - band - 30 * s, 70 * s);
+  if (rugH > 20 * s) {
+    const rx = x + (width - rugW) / 2;
+    const ry = y + band + 10 * s;
+    rect(ctx, rx, ry, rugW, rugH, "#c8a24a");
+    rect(ctx, rx + 2 * s, ry + 2 * s, rugW - 4 * s, rugH - 4 * s, "#7a1f2b");
+    rect(ctx, rx + 6 * s, ry + 6 * s, rugW - 12 * s, rugH - 12 * s, "#8f2a37");
+  }
+  drawBackWall(ctx, room);
+  if (width > 110 * s) {
+    rect(ctx, x + 22 * s, y + 4 * s, 18 * s, 13 * s, "#c8a24a");
+    rect(ctx, x + 23 * s, y + 5 * s, 16 * s, 11 * s, "#1e3a5f");
+    rect(ctx, x + 25 * s, y + 11 * s, 12 * s, 4 * s, "#e9c46a");
+    rect(ctx, x + 30 * s, y + 7 * s, 3 * s, 3 * s, "#f4f1ea");
+  }
+  // Leather sofa and coffee table by the door wall; a globe in the far corner.
+  if (height - band > 70 * s && width > 120 * s) {
+    const sx = x + width - 50 * s;
+    const sy = y + height - 18 * s;
+    rect(ctx, sx, sy, 40 * s, 5 * s, "#4a2c1a");
+    rect(ctx, sx, sy + 5 * s, 40 * s, 7 * s, "#6b3e24");
+    rect(ctx, sx - 3 * s, sy + 2 * s, 4 * s, 10 * s, "#4a2c1a");
+    rect(ctx, sx + 39 * s, sy + 2 * s, 4 * s, 10 * s, "#4a2c1a");
+    rect(ctx, sx + 10 * s, sy - 12 * s, 20 * s, 7 * s, "#2b2b2b");
+    rect(ctx, sx + 11 * s, sy - 11 * s, 18 * s, 2 * s, "#c8a24a");
+    ctx.fillStyle = "#2a6f97";
+    ctx.beginPath();
+    ctx.arc(x + width - 16 * s, y + band + 14 * s, 6 * s, 0, Math.PI * 2);
+    ctx.fill();
+    rect(ctx, x + width - 18 * s, y + band + 10 * s, 5 * s, 3 * s, "#52b788");
+    rect(ctx, x + width - 17 * s, y + band + 20 * s, 2 * s, 4 * s, "#c8a24a");
+  }
+  drawPlant(ctx, x + 2 * s, y + height - 15 * s, s);
+  drawPlant(ctx, x + 14 * s, y + height - 15 * s, s);
+}

@@ -129,6 +129,7 @@ export function drawBreakRoom(ctx: CanvasRenderingContext2D, room: PlacedRoom, t
   if (height - band > 40 * s) {
     drawRug(ctx, x + width - 54 * s, y + height - 24 * s, 52 * s, 22 * s, s);
     drawSofa(ctx, x + width - 46 * s, y + height - 16 * s, s);
+    if (height - band > 70 * s) drawTv(ctx, x + width - 43 * s, y + height - 52 * s + 6 * s, s, tMs);
   }
   if (roomy && height - band > 70 * s) {
     drawCafeTable(ctx, x + 22 * s, y + height - 14 * s, s);
@@ -138,15 +139,72 @@ export function drawBreakRoom(ctx: CanvasRenderingContext2D, room: PlacedRoom, t
   if (room.table) drawTable(ctx, room.table);
 }
 
-function drawStanding(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, spot: PlacedSpot): void {
-  const colour = spot.employee.colour;
+function drawStanding(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, spot: PlacedSpot, step = 0): void {
+  drawFigure(ctx, x, y, s, spot.employee.colour, step);
+}
+
+/** A standing person seen from the front; `step` swings the legs (-1, 0, 1) for walking or shuffling. */
+function drawFigure(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, colour: number, step = 0): void {
   rect(ctx, x, y + 10 * s, 12 * s, 10 * s, SKIN);
   rect(ctx, x, y + 8 * s, 12 * s, 4 * s, HAIR[colour]);
   rect(ctx, x + 3 * s, y + 14 * s, 2 * s, 2 * s, "#1b1b22");
   rect(ctx, x + 7 * s, y + 14 * s, 2 * s, 2 * s, "#1b1b22");
   rect(ctx, x - s, y + 20 * s, 14 * s, 13 * s, SHIRTS[colour]);
-  rect(ctx, x + s, y + 33 * s, 4 * s, 10 * s, "#273348");
-  rect(ctx, x + 7 * s, y + 33 * s, 4 * s, 10 * s, "#273348");
+  rect(ctx, x + s, y + (33 - Math.max(0, step) * 2) * s, 4 * s, (10 - Math.max(0, step) * 2) * s, "#273348");
+  rect(ctx, x + 7 * s, y + (33 + Math.min(0, step) * 2) * s, 4 * s, (10 + Math.min(0, step) * 2) * s, "#273348");
+}
+
+/** An agent walking between rooms, feet at (fx, fy). */
+export function drawWalking(ctx: CanvasRenderingContext2D, fx: number, fy: number, s: number, colour: number, step: number): void {
+  drawFigure(ctx, fx - 6 * s, fy - 43 * s, s, colour, step ? 1 : -1);
+  rect(ctx, fx - 9 * s, fy - 22 * s + (step ? s : 0), 3 * s, 8 * s, SHIRTS[colour]);
+  rect(ctx, fx + 6 * s, fy - 22 * s + (step ? 0 : s), 3 * s, 8 * s, SHIRTS[colour]);
+}
+
+/** Seen from behind: hair, shoulders and back, seated on a bar stool or the sofa. */
+function drawBack(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, colour: number): void {
+  rect(ctx, x, y, 12 * s, 10 * s, HAIR[colour]);
+  rect(ctx, x - s, y + 3 * s, s, 3 * s, SKIN);
+  rect(ctx, x + 12 * s, y + 3 * s, s, 3 * s, SKIN);
+  rect(ctx, x - 2 * s, y + 10 * s, 16 * s, 12 * s, SHIRTS[colour]);
+  rect(ctx, x + 5 * s, y + 11 * s, 2 * s, 10 * s, "rgba(0,0,0,0.15)");
+}
+
+/** At the bar on a stool, back to us; every few seconds the agent lifts its cup. */
+function drawBarSeat(ctx: CanvasRenderingContext2D, spot: PlacedSpot, tMs: number): void {
+  const { x, y, scale: s, employee } = spot;
+  const px = x + 22 * s;
+  rect(ctx, px + s, y + 34 * s, 10 * s, 3 * s, "#5d4026");
+  rect(ctx, px + 5 * s, y + 37 * s, 2 * s, 6 * s, "#3b2617");
+  drawBack(ctx, px, y + 12 * s, s, employee.colour);
+  const sip = (tMs + employee.colour * 900) % 5000 < 900;
+  rect(ctx, px + 12 * s, y + (sip ? 14 : 20) * s, 3 * s, (sip ? 9 : 4) * s, SHIRTS[employee.colour]);
+  if (sip) rect(ctx, px + 12 * s, y + 11 * s, 4 * s, 4 * s, "#f4f1ea");
+}
+
+/** On the sofa playing PlayStation, back to us, controller in hand; the head bobs with the game. */
+function drawGamer(ctx: CanvasRenderingContext2D, spot: PlacedSpot, tMs: number): void {
+  const { x, y, scale: s, employee } = spot;
+  const px = x + 22 * s;
+  const bob = Math.floor((tMs + employee.colour * 170) / 260) % 3 === 0 ? s : 0;
+  drawBack(ctx, px, y + 20 * s - bob, s, employee.colour);
+  rect(ctx, px - 3 * s, y + 30 * s, 4 * s, 4 * s, SKIN);
+  rect(ctx, px + 11 * s, y + 30 * s, 4 * s, 4 * s, SKIN);
+  rect(ctx, px + s, y + 30 * s, 10 * s, 3 * s, "#1f2937");
+}
+
+/** A TV with a game on, and the console below it, facing the sofa. */
+function drawTv(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, tMs: number): void {
+  rect(ctx, x, y, 30 * s, 17 * s, "#111827");
+  const scene = Math.floor(tMs / 400) % 4;
+  rect(ctx, x + 2 * s, y + 2 * s, 26 * s, 13 * s, ["#1e3a8a", "#065f46", "#7c2d12", "#312e81"][scene]);
+  rect(ctx, x + (4 + scene * 5) * s, y + 9 * s, 4 * s, 4 * s, "#facc15");
+  rect(ctx, x + (22 - scene * 4) * s, y + 5 * s, 3 * s, 3 * s, "#f87171");
+  rect(ctx, x + 2 * s, y + 13 * s, 26 * s, 2 * s, "#16a34a");
+  rect(ctx, x + 13 * s, y + 17 * s, 4 * s, 3 * s, "#374151");
+  rect(ctx, x + 6 * s, y + 20 * s, 18 * s, 4 * s, "#1f2937");
+  rect(ctx, x + 8 * s, y + 21 * s, 8 * s, 2 * s, "#e5e7eb");
+  rect(ctx, x + 19 * s, y + 21 * s, 2 * s, 2 * s, "#3b82f6");
 }
 
 /** A seated meeting attendee: north of the table facing it, hands on the table; south seen from behind. */
@@ -192,25 +250,33 @@ function drawPaddle(ctx: CanvasRenderingContext2D, x: number, y: number, s: numb
   rect(ctx, x + 2 * s, y + 5 * s, s, 3 * s, "#5d4026");
 }
 
-/** Left player draws the shared table and the ball; each player stands at an outer end of its pair of cells. */
+/** A rally: the ball crosses the table and each player shuffles, then swings as the ball arrives. */
 function drawPingPong(ctx: CanvasRenderingContext2D, spot: PlacedSpot, tMs: number): void {
   const { x, y, scale: s } = spot;
   const left = spot.activity === "pingpong-left";
+  const phase = (tMs % 1200) / 600;
+  const t = phase < 1 ? phase : 2 - phase;
   if (left) {
     const tableX = x + 24 * s;
     const tableW = 64 * s;
-    const phase = (tMs % 1200) / 600;
-    const t = phase < 1 ? phase : 2 - phase;
     const hop = Math.abs(Math.sin(t * Math.PI)) * 8 * s;
-    rect(ctx, tableX + 6 * s + t * (tableW - 14 * s), y + 26 * s - hop, 2 * s, 2 * s, "#ffffff");
+    const bx = tableX + 6 * s + t * (tableW - 14 * s);
+    rect(ctx, bx, y + 30 * s, 2 * s, s, "rgba(0,0,0,0.25)");
+    rect(ctx, bx, y + 26 * s - hop, 2 * s, 2 * s, "#ffffff");
   }
-  const px = left ? x + 8 * s : x + 36 * s;
-  drawStanding(ctx, px, y, s, spot);
-  drawPaddle(ctx, left ? px + 12 * s : px - 5 * s, y + 22 * s, s);
+  const near = left ? 1 - t : t;
+  const swing = near > 0.82;
+  const shuffle = Math.round(Math.sin(tMs / 160 + (left ? 0 : 2)) * 1.5);
+  const px = (left ? x + 8 * s : x + 36 * s) + shuffle * s;
+  drawStanding(ctx, px, y - (swing ? s : 0), s, spot, Math.sign(shuffle));
+  const reach = swing ? 4 * s : 0;
+  drawPaddle(ctx, left ? px + 12 * s + reach : px - 5 * s - reach, y + (swing ? 17 : 22) * s, s);
 }
 
 export function drawBreakSpot(ctx: CanvasRenderingContext2D, spot: PlacedSpot, tMs: number, frame: number): void {
   if (spot.activity === "meeting") drawSeated(ctx, spot);
+  else if (spot.activity === "bar") drawBarSeat(ctx, spot, tMs);
+  else if (spot.activity === "gaming") drawGamer(ctx, spot, tMs);
   else if (spot.activity === "coffee") drawCoffee(ctx, spot, frame);
   else drawPingPong(ctx, spot, tMs);
 }

@@ -467,21 +467,23 @@ def start_session(created, name, engine="claude"):
 # Office departments: a session's card joins the first team whose keyword starts a word in its name, branch or repository.
 DEFAULT_OFFICE_TEAMS = [
     {"name": "CTO", "match": ["cto", "architecture", "strategy", "roadmap", "plan"]},
-    {"name": "Testers Team", "match": ["test", "qa", "e2e", "playwright", "vitest", "pytest", "regression"]},
-    {"name": "DevOps", "match": ["deploy", "docker", "compose", "nginx", "ssl", "ci", "infra", "server", "k8s"]},
-    {"name": "VOIP Engineering", "match": ["ivr", "voip", "sip", "webrtc", "tts", "asr", "call", "telephony",
+    {"name": "Testers Team", "room": "Quality and Voice", "match": ["test", "qa", "e2e", "playwright", "vitest", "pytest", "regression"]},
+    {"name": "DevOps", "room": "Infrastructure", "match": ["deploy", "docker", "compose", "nginx", "ssl", "ci", "infra", "server", "k8s"]},
+    {"name": "VOIP Engineering", "room": "Quality and Voice", "match": ["ivr", "voip", "sip", "webrtc", "tts", "asr", "call", "telephony",
                                            "asterisk", "freeswitch", "softphone", "audio"]},
-    {"name": "Network Engineers", "match": ["network", "firewall", "vpn", "dns", "router", "vlan", "fortigate",
+    {"name": "Network Engineers", "room": "Infrastructure", "match": ["network", "firewall", "vpn", "dns", "router", "vlan", "fortigate",
                                             "mikrotik", "zabbix"]},
-    {"name": "Platform / Agents", "match": ["fullstack-agents", "plugin", "dashboard", "agent", "skill", "hook",
+    {"name": "Platform / Agents", "room": "Engineering", "match": ["fullstack-agents", "plugin", "dashboard", "agent", "skill", "hook",
                                             "codex", "herdr", "office"]},
-    {"name": "Fullstack Engineers", "match": ["ucm", "nextjs", "fastapi", "rust", "frontend", "backend", "api",
+    {"name": "Fullstack Engineers", "room": "Engineering", "match": ["ucm", "nextjs", "fastapi", "rust", "frontend", "backend", "api",
                                               "contacts", "page", "ui"]},
 ]
 
 
 def office_teams():
-    """Departments for the Office view from ~/.config/fullstack-agents/teams.json (or FSA_TEAMS), else the defaults."""
+    """Departments for the Office view from ~/.config/fullstack-agents/teams.json (or FSA_TEAMS), else the defaults.
+    A team may name its staff in "members"; for the CTO team the first is the CTO and the second the assistant.
+    Teams naming the same "room" share one office."""
     path = Path(os.environ.get("FSA_TEAMS") or "~/.config/fullstack-agents/teams.json").expanduser()
     data = load_json(path)
     rows = data if isinstance(data, list) else DEFAULT_OFFICE_TEAMS
@@ -490,7 +492,12 @@ def office_teams():
         name = str(row.get("name") or "").strip() if isinstance(row, dict) else ""
         words = row.get("match") if name else None
         if name and isinstance(words, list):
-            teams.append({"name": name, "match": [str(w).strip().lower() for w in words if str(w).strip()]})
+            members = row.get("members") if isinstance(row.get("members"), list) else []
+            team = {"name": name, "match": [str(w).strip().lower() for w in words if str(w).strip()],
+                    "members": [str(m).strip() for m in members if str(m).strip()][:12]}
+            if str(row.get("room") or "").strip():
+                team["room"] = str(row["room"]).strip()
+            teams.append(team)
     return teams
 
 

@@ -114,6 +114,10 @@ export interface Locks {
 export interface OfficeTeamRule {
   name: string;
   match: string[];
+  /** The team's staff by name; for the CTO team the CTO first, then the assistant. */
+  members?: string[];
+  /** Teams that name the same room share one office (two related teams, e.g. DevOps and Network). */
+  room?: string;
 }
 
 export interface Goal {
