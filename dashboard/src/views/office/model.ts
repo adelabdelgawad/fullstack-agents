@@ -166,14 +166,20 @@ function sessionOffice(card: Card, panes: Record<string, string>): OfficeTeam | 
   const lead = members.find((member) => member.role === "lead");
   if (!lead) return null;
   const subagents = members.filter((member) => member.role !== "lead" && !isShell(member) && member.pose !== "idle");
+  const shells = members.filter((member) => isShell(member) && WORKING.includes(member.pose));
   const label = card.sessions[0]?.name || card.title || card.label || card.key;
+  // A leader waiting on its own background shell has not finished: it keeps working with the lamp on.
+  const pose: OfficePose = shells.length && !WORKING.includes(lead.pose) ? "typing" : lead.pose;
   const leader: OfficeEmployee = {
     ...lead,
+    pose,
     name: label,
     cost: card.usage?.cost ?? null,
     tokens: members.reduce((sum, member) => sum + member.tokens, 0),
-    sessions: members.filter((member) => ACTIVE.includes(member.pose)).length,
-    total: members.length,
+    // The number on the leader's screen: who works in this office now, the leader and its subagents (shells are not
+    // people in the office, so they keep the leader busy instead of adding to the count).
+    sessions: (WORKING.includes(pose) ? 1 : 0) + subagents.filter((member) => WORKING.includes(member.pose)).length,
+    total: 1 + subagents.length,
     reports: subagents,
   };
   return { key: card.key, label, employees: [leader, ...subagents] };

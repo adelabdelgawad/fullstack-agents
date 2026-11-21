@@ -151,6 +151,25 @@ describe("officeOf", () => {
   });
 });
 
+describe("leader count and shells", () => {
+  it("counts the leader and its subagents, not shells; a running shell keeps the leader at work", () => {
+    const source = card({
+      key: "w",
+      sessions: [session({ id: "w", state: "idle", said_full: "Started the runs." })],
+      now: [
+        session({
+          id: "w",
+          agents: [helper("r1", "completed", "diff-reviewer"), helper("s1", "running", "shell · wait")],
+        }),
+      ],
+    });
+    const [, office] = officeOf(dash([source])).teams;
+    expect(office.employees.map((employee) => employee.id)).toEqual(["w"]);
+    expect(office.employees[0]).toMatchObject({ pose: "typing", sessions: 1, total: 1 });
+    expect(finished(office.employees[0])).toBe(false);
+  });
+});
+
 describe("layoutOffice", () => {
   const office = () =>
     officeOf(
