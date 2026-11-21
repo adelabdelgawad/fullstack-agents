@@ -1,4 +1,4 @@
-import type { PlacedDesk } from "./model";
+import type { OfficeLayout, PlacedDesk, PlacedRoom } from "./model";
 
 const SHIRTS = ["#4f8ff7", "#4ade80", "#f2b24c", "#f472b6", "#a78bfa", "#22d3ee", "#fb7185", "#94a3b8"];
 const HAIR = ["#231b16", "#5b3825", "#d6a85f", "#8a5b3d", "#202938", "#6b4631", "#d7d2c8", "#b86b42"];
@@ -18,6 +18,40 @@ function drawFloor(ctx: CanvasRenderingContext2D): void {
       rect(ctx, x, y, 31, 31, (x / 32 + y / 32) % 2 ? "#121d29" : "#15212e");
     }
   }
+}
+
+function drawRoom(ctx: CanvasRenderingContext2D, room: PlacedRoom): void {
+  const { x, y, width, height, scale: s } = room;
+  const wall = 3 * s;
+  rect(ctx, x, y, width, height, "#2a2f3a");
+  const tile = 12 * s;
+  for (let row = 0; y + tile * (row + 1) < y + height - wall; row += 1) {
+    for (let col = 0; x + wall + tile * col < x + width - wall; col += 1) {
+      const tx = x + wall + tile * col;
+      const ty = y + tile * (row + 1);
+      const colour = (row + col) % 2 ? "#3a3226" : "#43392b";
+      rect(ctx, tx, ty, Math.min(tile, x + width - wall - tx), Math.min(tile, y + height - wall - ty), colour);
+    }
+  }
+  rect(ctx, x, y, width, 12 * s, "#4b5568");
+  rect(ctx, x, y + 10 * s, width, 2 * s, "#323a49");
+  rect(ctx, x, y, wall, height, "#596377");
+  rect(ctx, x + width - wall, y, wall, height, "#596377");
+  rect(ctx, x, y + height - wall, width, wall, "#596377");
+  rect(ctx, x + width / 2 - 8 * s, y + height - wall, 16 * s, wall, "#8b5a32");
+  drawPlate(ctx, room);
+}
+
+function drawPlate(ctx: CanvasRenderingContext2D, room: PlacedRoom): void {
+  const { x, y, width, scale: s } = room;
+  rect(ctx, x + 6 * s, y + 2 * s, width - 12 * s, 8 * s, "#151b26");
+  ctx.fillStyle = "#f2b24c";
+  ctx.font = `bold ${5 * s}px monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(room.label, x + width / 2, y + 6 * s, width - 16 * s);
+  ctx.textAlign = "start";
+  ctx.textBaseline = "alphabetic";
 }
 
 function drawDesk(ctx: CanvasRenderingContext2D, desk: PlacedDesk, glow: boolean): void {
@@ -82,14 +116,15 @@ function drawSelection(ctx: CanvasRenderingContext2D, desk: PlacedDesk): void {
 
 export function drawOffice(
   ctx: CanvasRenderingContext2D,
-  placed: PlacedDesk[],
+  layout: OfficeLayout,
   tMs: number,
   selectedId: string | null,
 ): void {
   ctx.imageSmoothingEnabled = false;
   drawFloor(ctx);
   const frame = Math.floor(tMs / 375) % 2;
-  for (const desk of placed) {
+  for (const room of layout.rooms) drawRoom(ctx, room);
+  for (const desk of layout.desks) {
     drawDesk(ctx, desk, desk.employee.pose === "typing" && frame === 1);
     drawPerson(ctx, desk, frame);
     drawLabel(ctx, desk);

@@ -98,12 +98,35 @@ describe("officeOf", () => {
 });
 
 describe("layoutOffice", () => {
-  it("places desks deterministically within the available grid", () => {
+  it("places desks deterministically inside their team room", () => {
     const office = officeOf(dash([card({ sessions: [session(), session({ id: "two", name: "Two" })] })]));
-    expect(layoutOffice(office, 300)).toEqual(layoutOffice(office, 300));
-    expect(layoutOffice(office, 300).map(({ x, y }) => [x, y])).toEqual([
-      [16, 16],
-      [128, 16],
+    const layout = layoutOffice(office, 300);
+    expect(layout).toEqual(layoutOffice(office, 300));
+    expect(layout.rooms.map(({ key, x, y, width }) => [key, x, y, width])).toEqual([["office", 16, 16, 256]]);
+    expect(layout.desks.map(({ x, y }) => [x, y])).toEqual([
+      [32, 48],
+      [144, 48],
     ]);
+  });
+
+  it("gives every team its own room and wraps rooms that do not fit", () => {
+    const office = officeOf(
+      dash([
+        card({ key: "a", label: "A" }),
+        card({ key: "b", label: "B", sessions: [session({ id: "b1" })] }),
+      ]),
+    );
+    const layout = layoutOffice(office, 300);
+    expect(layout.rooms.map(({ key, x, y }) => [key, x, y])).toEqual([
+      ["a", 16, 16],
+      ["b", 16, 196],
+    ]);
+    for (const desk of layout.desks) {
+      const room = layout.rooms.find((candidate) => candidate.key === desk.employee.cardKey)!;
+      expect(desk.x).toBeGreaterThanOrEqual(room.x);
+      expect(desk.x + 52 * desk.scale).toBeLessThanOrEqual(room.x + room.width);
+      expect(desk.y + 58 * desk.scale).toBeLessThanOrEqual(room.y + room.height);
+    }
+    expect(layout.height).toBe(196 + layout.rooms[1].height + 16);
   });
 });
