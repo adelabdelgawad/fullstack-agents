@@ -3,10 +3,10 @@ import { STATE_TEXT } from "../lib/cards";
 import type { Card, WaitingEntry } from "../lib/types";
 import { openCard, setView, store, useStore } from "../store";
 import { openNewSession } from "../terminal/HerdrOverlay";
-import { TileCards } from "./agents/FleetTiles";
 import "../styles/office.css";
 import { drawOffice, hitTest, pcHit, roomHit, zoomIconHit } from "./office/draw";
 import { ChatConsole, endSession } from "./office/ChatConsole";
+import { UsagePanel } from "./office/UsagePanel";
 import { Walks } from "./office/walk";
 import { CTO_ID, CTO_TEAM, EMPTY_LAYOUT, layoutOffice, officeOf, type Office, type OfficeLayout } from "./office/model";
 
@@ -233,7 +233,7 @@ function CtoMenu({
   );
 }
 
-/** Plan usage, tokens and cost: the same summary tiles as the Agents page, in a modal. */
+/** Plan usage, tokens and cost for the CTO, in a modal. */
 function UsageModal({ close }: { close: () => void }) {
   useEffect(() => {
     const key = (event: KeyboardEvent) => event.key === "Escape" && close();
@@ -249,7 +249,7 @@ function UsageModal({ close }: { close: () => void }) {
             Close
           </button>
         </header>
-        <TileCards />
+        <UsagePanel />
       </section>
     </div>
   );

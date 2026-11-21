@@ -3,19 +3,19 @@ import { ago, fmtCost, fmtTokens } from "../../lib/format";
 import { setFleet, useStore } from "../../store";
 import { fleetTpm } from "./tpm";
 
-interface PlanWindow {
+export interface PlanWindow {
   name: string;
   pct?: number | null;
   resets_at: string;
 }
-interface PlanData {
+export interface PlanData {
   plan?: string;
   windows?: PlanWindow[];
   stale?: string;
   error?: string;
   credits?: { balance: number; unlimited: boolean };
 }
-interface SpendData {
+export interface SpendData {
   plan?: string;
   spend?: Array<{ name: string; cost: number | null; tokens: number }>;
   last_at?: number;
@@ -36,7 +36,7 @@ export function Sparkline({ points }: { points: number[] }) {
   );
 }
 
-function untilText(iso: string): string {
+export function untilText(iso: string): string {
   const seconds = (Date.parse(iso) - Date.now()) / 1000;
   if (!(seconds > 0)) return "";
   if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
@@ -198,8 +198,7 @@ function Tile({
   );
 }
 
-/** The fleet summary tiles: plan usage, tokens and cost (also shown in the Office's usage modal). */
-export function TileCards() {
+function TileCards() {
   const state = useStore((value) => value.state);
   const totals = (state?.totals || {}) as Record<string, number>;
   const plan = (state?.plan || {}) as Record<string, PlanData | SpendData>;

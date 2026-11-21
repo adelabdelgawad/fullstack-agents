@@ -77,7 +77,7 @@
     }
   ],
   "source_hashes": {
-    ".claude-plugin/plugin.json": "2d9430afe93a4878659b691b41f0f09d1e5b90bd4f9ef62026ccf716fa445673",
+    ".claude-plugin/plugin.json": "a8a059dda82b4bbe4f063e2f6c67afce1b29ebe57e96e888154bc4c11d731802",
     "README.md": "dc82241641183a996a0041fdb30fdda248f14dae956d35ca29a12b1f6f750361",
     "agents/lead/bounded-extractor.md": "610bd8956a5df0204e6b8257dea773cfe30d0416407e58554c39a7f4593c1f56",
     "agents/lead/diff-reviewer.md": "21d2de6ab37162f654721c19ae1c98072d29b99b92b8941e707e9803fcd547be",
@@ -193,8 +193,8 @@
     "scripts/lib/code_map_joins.py": "d7758e702ee24f96197b747ec536a75651b8c898a4d78a5334a81fcaf7f6a3f9",
     "scripts/lib/context_handoff.py": "10e6ac0a857c0c7fa4b16504769880075bfbdca322afb6249f86922020c479aa",
     "scripts/lib/coordination_log.py": "3aadd386a133a510d1b8fe46b4c721ab506de2301f69d60f6d01e2edddf274f2",
-    "scripts/lib/dashboard-react/app.css": "f8a7d2cbc2e8d6cfc9459d204b5b656c73e5b1b480e64cf179f78eff43d44af0",
-    "scripts/lib/dashboard-react/app.js": "bc4677359af79523e58e3105d534e4d57476fbfe96b29accc3c5b8dfefa5bca3",
+    "scripts/lib/dashboard-react/app.css": "c1337a953142f3090e761d3876b54cc1887310084bbc932877247003877bc3da",
+    "scripts/lib/dashboard-react/app.js": "afa18dc23d0e6c54d4f223834038b0676e5407521a262d0e1ce42bfe027e585e",
     "scripts/lib/dashboard-react/index.html": "47b90e57ede3bb6db1519c716c1d601c63ba57fbca42f0f054adee912de9c738",
     "scripts/lib/deploy_hold.py": "cb35c5db0ed708ce400139a8540c64d6de2c1d16474a902b377b9d5a2fbc9347",
     "scripts/lib/extract-result.py": "d49fa538799f294b972db08cf556a0d9561e91ba3f831566ded9f88eab876640",

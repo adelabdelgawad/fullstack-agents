@@ -822,3 +822,230 @@ html.office-page aside#panel {
   font: inherit;
   cursor: pointer;
 }
+
+/* The CTO's usage modal. */
+.office-usage {
+  width: min(1100px, 100%);
+}
+
+.usage-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.usage-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.usage-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.usage-stat-value {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.usage-stat-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.usage-stat-note {
+  font-size: 12px;
+  color: var(--muted, #a6b0c2);
+}
+
+.usage-stat.warn .usage-stat-value {
+  color: #f2b24c;
+}
+
+.usage-stat.bad .usage-stat-value {
+  color: #f87171;
+}
+
+.usage-section {
+  margin: 6px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted, #a6b0c2);
+}
+
+.usage-plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.usage-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.usage-plan header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.usage-plan h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.usage-tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--blue-bg);
+  font-size: 12px;
+  color: var(--blue);
+}
+
+.usage-tag.stale {
+  background: rgba(242, 178, 76, 0.15);
+  color: #f2b24c;
+}
+
+.usage-window {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.usage-window-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.usage-pct {
+  font-size: 22px;
+}
+
+.usage-pct.ok {
+  color: #4ade80;
+}
+
+.usage-pct.warn {
+  color: #f2b24c;
+}
+
+.usage-pct.bad {
+  color: #f87171;
+}
+
+.usage-bar {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.usage-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #4ade80;
+}
+
+.usage-bar.warn span {
+  background: #f2b24c;
+}
+
+.usage-bar.bad span {
+  background: #f87171;
+}
+
+.usage-window-foot,
+.usage-none,
+.usage-credits {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted, #a6b0c2);
+}
+
+.usage-spend {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: baseline;
+  font-size: 14px;
+}
+
+.usage-spend strong {
+  font-size: 20px;
+}
+
+.usage-spend em {
+  font-style: normal;
+  color: var(--muted, #a6b0c2);
+}
+
+.usage-tokens {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) 1fr;
+  gap: 12px;
+}
+
+.usage-token-figures {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.usage-chart {
+  min-height: 160px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.usage-chart svg {
+  width: 100%;
+  height: 100%;
+  min-height: 140px;
+}
+
+.usage-chart polyline {
+  fill: none;
+  stroke: var(--blue);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+@media (max-width: 680px) {
+  .usage-tokens {
+    grid-template-columns: 1fr;
+  }
+}
+
+.usage-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.usage-chart-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted, #a6b0c2);
+}
