@@ -225,12 +225,8 @@ export function OfficeView() {
         <canvas ref={canvasRef} className="office-canvas" onClick={clickCanvas} aria-hidden="true" />
       </div>
       <AccessibleEmployees office={office} select={open} />
-      {consoleId === CTO_ID && (
-        <ChatConsole close={() => setConsoleId(null)} decisions title={`${ctoName} · decisions waiting`} />
-      )}
-      {consoleId === ALL_SESSIONS && (
-        <ChatConsole close={() => setConsoleId(null)} decisions={false} title="Assistants · all sessions" />
-      )}
+      {consoleId === CTO_ID && <ChatConsole close={() => setConsoleId(null)} title={`${ctoName} · needs you first`} />}
+      {consoleId === ALL_SESSIONS && <ChatConsole close={() => setConsoleId(null)} title="Assistants · all sessions" />}
     </section>
   );
 }

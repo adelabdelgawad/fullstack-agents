@@ -3,7 +3,8 @@ import { getJson, postJson } from "../../lib/api";
 import { cardAgents, needsHuman, STATE_TEXT } from "../../lib/cards";
 import { esc } from "../../lib/format";
 import type { Card } from "../../lib/types";
-import { openCard, toast, useStore } from "../../store";
+import { load, openCard, toast, useStore } from "../../store";
+import { openHerdrConfirm, openNewSession } from "../../terminal/HerdrOverlay";
 import { CardTerminal } from "../../terminal/CardTerminal";
 
 interface Message {
@@ -88,6 +89,38 @@ function Workers({ workers, picked, pick }: { workers: Worker[]; picked: string 
   );
 }
 
+/** Sessions that need you first, then the rest; each group keeps the dashboard's order (most recent first). */
+export function needsYouFirst(cards: Card[]): Card[] {
+  return [...cards.filter(needsHuman), ...cards.filter((card) => !needsHuman(card))];
+}
+
+/** A heading where a group starts: "Needs you" over the first, "Other sessions" over the rest when both exist. */
+function sectionHeading(cards: Card[], index: number): string {
+  const asks = needsHuman(cards[index]);
+  if (index > 0 && needsHuman(cards[index - 1]) === asks) return "";
+  if (asks) return "Needs you";
+  return index > 0 ? "Other sessions" : "";
+}
+
+/** Close the session's herdr pane after a confirmation, as the Agents page's "end session" does. */
+function endSession(card: Card, pane: string, anchor: HTMLElement): void {
+  const name = sessionTitle(card);
+  openHerdrConfirm(
+    "End session?",
+    `${name} — closes herdr pane ${pane} and stops the agent running in it. Unsaved work in that session is lost.`,
+    "pane.close",
+    { pane_id: pane },
+    anchor,
+    {
+      confirm: "end session",
+      after: () => {
+        toast(`<b>Ended</b> ${esc(name)}`, "blue");
+        void load();
+      },
+    },
+  );
+}
+
 function Sidebar({
   cards,
   current,
@@ -101,24 +134,38 @@ function Sidebar({
   picked: string | null;
   pickWorker: (id: string) => void;
 }) {
+  const panes = useStore((storeState) => storeState.state?.session_panes || {});
   return (
     <nav className="chat-sidebar" aria-label="Running sessions">
-      {cards.map((card) => {
+      <button type="button" className="chat-new" onClick={(event) => void openNewSession(event.currentTarget)}>
+        + New session
+      </button>
+      {cards.map((card, index) => {
         const state = card.sessions[0]?.state || "";
+        const heading = sectionHeading(cards, index);
         const selected = card.key === current?.key;
         return (
           <div key={card.key}>
-            <button
-              type="button"
-              className={selected && !picked ? "on" : ""}
-              aria-current={selected}
-              onClick={() => pick(card.key)}
-            >
-              <span className="chat-sidebar-title">{sessionTitle(card)}</span>
-              <span className={`chat-state ${needsHuman(card) ? "ask" : state}`}>
-                {needsHuman(card) ? "needs you" : STATE_TEXT[state] || state || card.phase}
-              </span>
-            </button>
+            {heading && <span className="chat-section">{heading}</span>}
+            <div className={`chat-session${selected && !picked ? " on" : ""}`}>
+              <button type="button" aria-current={selected} onClick={() => pick(card.key)}>
+                <span className="chat-sidebar-title">{sessionTitle(card)}</span>
+                <span className={`chat-state ${needsHuman(card) ? "ask" : state}`}>
+                  {needsHuman(card) ? "needs you" : STATE_TEXT[state] || state || card.phase}
+                </span>
+              </button>
+              {panes[card.sessions[0]?.id || ""] && (
+                <button
+                  type="button"
+                  className="chat-end"
+                  title="End session"
+                  aria-label={`End session ${sessionTitle(card)}`}
+                  onClick={(event) => endSession(card, panes[card.sessions[0].id], event.currentTarget)}
+                >
+                  ×
+                </button>
+              )}
+            </div>
             {selected && <Workers workers={workersOf(card)} picked={picked} pick={pickWorker} />}
           </div>
         );
@@ -233,10 +280,10 @@ function Composer({ pane }: { pane: string | undefined }) {
 
 /** The CTO console as a chat: running sessions on the left with the selected one's subagents and shells under it,
  * and the conversation (or the picked subagent's or shell's output) on the right. */
-export function ChatConsole({ close, decisions, title }: { close: () => void; decisions: boolean; title: string }) {
+export function ChatConsole({ close, title }: { close: () => void; title: string }) {
   const all = useStore((storeState) => storeState.state?.cards || []);
   const panes = useStore((storeState) => storeState.state?.session_panes || {});
-  const cards = decisions ? all.filter(needsHuman) : all;
+  const cards = needsYouFirst(all);
   const [key, setKey] = useState<string | null>(null);
   const [terminal, setTerminal] = useState(false);
   const [workerId, setWorkerId] = useState<string | null>(null);
@@ -250,7 +297,8 @@ export function ChatConsole({ close, decisions, title }: { close: () => void; de
   const messages = useConversation(sid);
   useEffect(() => {
     const onKey = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") close();
+      // Escape in a dialog opened from here (new or end session) closes only that dialog.
+      if (event.key === "Escape" && !document.querySelector(".herdr-modal-backdrop")) close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -302,7 +350,7 @@ export function ChatConsole({ close, decisions, title }: { close: () => void; de
               {!terminal && !worker && <Composer pane={sid ? panes[sid] : undefined} />}
             </>
           ) : (
-            <div className="chat-thread chat-empty">{decisions ? "No decisions waiting." : "No live sessions."}</div>
+            <div className="chat-thread chat-empty">No live sessions.</div>
           )}
         </section>
       </div>

@@ -501,3 +501,66 @@ html.office-page aside#panel {
   font-size: 12px;
   color: var(--muted, #a6b0c2);
 }
+
+.chat-section {
+  display: block;
+  padding: 10px 10px 4px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #a6b0c2);
+}
+
+.chat-new {
+  margin-bottom: 6px;
+  padding: 9px 12px;
+  border: 1px dashed var(--line) !important;
+  border-radius: 8px;
+  font-weight: 600;
+  text-align: center !important;
+  align-items: center !important;
+}
+
+.chat-session {
+  display: flex;
+  align-items: stretch;
+  border-radius: 6px;
+}
+
+.chat-session.on {
+  background: var(--blue-bg);
+}
+
+.chat-session:hover {
+  background: var(--card-hover, #1c2838);
+}
+
+.chat-session > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-sidebar .chat-session > button:first-child:hover {
+  background: transparent;
+}
+
+.chat-sidebar .chat-end {
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  padding: 0;
+  font-size: 18px;
+  color: var(--muted, #a6b0c2);
+  opacity: 0;
+}
+
+.chat-session:hover .chat-end,
+.chat-session.on .chat-end,
+.chat-sidebar .chat-end:focus-visible {
+  opacity: 1;
+}
+
+.chat-sidebar .chat-end:hover {
+  color: #f87171;
+}
