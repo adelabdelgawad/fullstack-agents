@@ -37,6 +37,7 @@ function useAppEffects(view: string, wall: boolean): void {
   useLayoutEffect(() => {
     document.documentElement.classList.toggle("agents-page", view === "agents");
     document.documentElement.classList.toggle("herdr-page", view === "herdr");
+    document.documentElement.classList.toggle("office-page", view === "office");
   }, [view]);
   useEffect(() => {
     document.documentElement.classList.toggle("wall", wall);

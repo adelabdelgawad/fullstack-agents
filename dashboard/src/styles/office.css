@@ -398,3 +398,10 @@
   font-size: 0.7rem;
   text-align: center;
 }
+
+/* From the Office, an agent's card opens full screen. */
+html.office-page aside#panel {
+  width: 100vw;
+  z-index: 50;
+  border-left: none;
+}

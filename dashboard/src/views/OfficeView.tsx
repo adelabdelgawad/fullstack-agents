@@ -265,28 +265,6 @@ function AccessibleEmployees({ office, select }: { office: Office; select: (id: 
   );
 }
 
-function OfficeConsole({ cardKey, name, close }: { cardKey: string; name: string; close: () => void }) {
-  const card = useStore((storeState) => storeState.state?.cards.find((item) => item.key === cardKey));
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [close]);
-  return (
-    <div className="office-console office-console-full" role="dialog" aria-modal="true" aria-label={`${name} session console`}>
-      <div className="office-console-head">
-        <h2>{name}</h2>
-        <button type="button" onClick={close}>
-          Close
-        </button>
-      </div>
-      {card ? <CardTerminal card={card} /> : <div className="empty">This session has ended</div>}
-    </div>
-  );
-}
-
 function sessionTitle(card: Card): string {
   return card.sessions[0]?.name || card.title || card.label || card.key;
 }
@@ -342,7 +320,6 @@ export function OfficeView() {
   const shown = useMemo(() => (zoomTeam ? { ...office, teams: [zoomTeam] } : office), [office, zoomTeam]);
   const employees = useMemo(() => office.teams.flatMap((team) => team.employees), [office]);
   const selected = employees.find((employee) => employee.id === selectedId) || null;
-  const consoleAgent = employees.find((employee) => employee.id === consoleId) || null;
   useOfficeCanvas(canvasRef, shown, selectedId, placed, Boolean(zoomTeam));
   useEffect(() => {
     if (selectedId && !selected) setSelectedId(null);
@@ -353,7 +330,10 @@ export function OfficeView() {
     const y = event.clientY - bounds.top;
     const pc = pcHit(placed.current, x, y);
     const person = hitTest(placed.current, x, y);
-    if (pc || person === CTO_ID) setConsoleId(pc || person);
+    const agent = pc && pc !== CTO_ID ? employees.find((employee) => employee.id === pc) : null;
+    // A PC screen opens the agent's full card (Information, Git changes, Terminal), as on the Agents page.
+    if (agent?.cardKey) openCard(agent.cardKey);
+    else if (pc || person === CTO_ID) setConsoleId(CTO_ID);
     else setSelectedId(person);
   };
   if (!employees.length) return <div className="office-empty">No live sessions</div>;
@@ -367,9 +347,6 @@ export function OfficeView() {
       <AccessibleEmployees office={office} select={setSelectedId} />
       {selected && <EmployeeDialog key={selected.id} employee={selected} team={teamLabel(office, selected)} />}
       {consoleId === CTO_ID && <CtoConsole close={() => setConsoleId(null)} />}
-      {consoleAgent && consoleId !== CTO_ID && (
-        <OfficeConsole cardKey={consoleAgent.cardKey} name={consoleAgent.name} close={() => setConsoleId(null)} />
-      )}
     </section>
   );
 }
