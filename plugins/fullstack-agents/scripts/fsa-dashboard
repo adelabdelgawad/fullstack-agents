@@ -1000,6 +1000,34 @@ def read_run(runs, rid, log_mtime, now, projects, others=()):
     }
 
 
+def foreign_runs(repo, session_ids, now):
+    """Live Codex runs of these sessions filed in another project's registry. A session dispatches into the repo it
+    works on (a session in this repo running workers against UCM files them in UCM's registry, ~/.codex/kc-runs), so
+    its workers live outside this repo's run directories; every ~/.codex/*-runs registry is checked, matched by the
+    session id the dispatch recorded."""
+    if not session_ids:
+        return []
+    own = {Path(d).resolve() for d in getattr(repo, "run_dirs", ())}
+    out = []
+    for runs in sorted(CODEX_HOME.glob("*-runs")):
+        if not runs.is_dir() or runs.resolve() in own:
+            continue
+        for log in runs.glob("*.log"):
+            rid = log.stem
+            try:
+                mtime = log.stat().st_mtime
+            except OSError:
+                continue
+            if now - mtime > RUN_WINDOW_S or not RUN_ID_RE.match(rid):
+                continue
+            if (load_json(runs / f"{rid}.meta.json") or {}).get("session") not in session_ids:
+                continue
+            run = read_run(runs, rid, mtime, now, getattr(repo, "projects", []), [runs])
+            if run["state"] in ("running", "stalled"):
+                out.append(run)
+    return out
+
+
 def collect_runs(repo, now):
     out, seen = [], set()
     for runs in repo.run_dirs:
@@ -2476,6 +2504,10 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
         if own in trees and own != main_root:
             key = own
         groups.setdefault(key, {"runs": [], "sessions": []})["sessions"].append(s)
+    for r in foreign_runs(repo, {s["id"] for s in sessions}, now):
+        home = next((g for g in groups.values() if any(x["id"] == r["session"] for x in g["sessions"])), None)
+        if home is not None and not any(x["id"] == r["id"] for x in home["runs"]):
+            home["runs"].append(r)
 
     if only is not None:
         # A live Herdr lead owns one card, including every checkout/run it used.
