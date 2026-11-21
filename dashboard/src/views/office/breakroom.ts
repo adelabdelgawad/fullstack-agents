@@ -1,4 +1,4 @@
-import { BUILDING, type PlacedRoom, type PlacedSpot } from "./model";
+import { BUILDING, type PlacedRoom, type PlacedSpot, type Rect } from "./model";
 
 const SHIRTS = ["#4f8ff7", "#4ade80", "#f2b24c", "#f472b6", "#a78bfa", "#22d3ee", "#fb7185", "#e5e7eb"];
 const HAIR = ["#231b16", "#5b3825", "#d6a85f", "#8a5b3d", "#202938", "#6b4631", "#d7d2c8", "#b86b42"];
@@ -40,7 +40,17 @@ function drawSofa(ctx: CanvasRenderingContext2D, x: number, y: number, s: number
   rect(ctx, x + 35 * s, y + 2 * s, 4 * s, 10 * s, "#9b2c48");
 }
 
-/** The break room: checkered kitchen floor, a coffee bar on the back wall and a sofa. */
+function drawTable(ctx: CanvasRenderingContext2D, table: Rect): void {
+  const s = table.height / 14;
+  const { x, y, width } = table;
+  rect(ctx, x, y, width, 14 * s, "#2e7d4f");
+  rect(ctx, x, y + 6.5 * s, width, s, "#f4f1ea");
+  rect(ctx, x + width / 2 - s / 2, y - 3 * s, s, 18 * s, "#e5e7eb");
+  rect(ctx, x + 2 * s, y + 14 * s, 2 * s, 6 * s, "#3b3b3b");
+  rect(ctx, x + width - 4 * s, y + 14 * s, 2 * s, 6 * s, "#3b3b3b");
+}
+
+/** The break room: checkered kitchen floor, a coffee corner, the table-tennis table and a sofa. */
 export function drawBreakRoom(ctx: CanvasRenderingContext2D, room: PlacedRoom, tMs: number): void {
   const { x, y, width, height, scale: s } = room;
   const band = BUILDING.header * s;
@@ -57,8 +67,9 @@ export function drawBreakRoom(ctx: CanvasRenderingContext2D, room: PlacedRoom, t
   ctx.fillText(room.label, x + width / 2, y + 7.5 * s, plate - 6 * s);
   ctx.textAlign = "start";
   ctx.textBaseline = "alphabetic";
-  if (width > 60 * s && height - band > 30 * s) drawCoffeeBar(ctx, x + 6 * s, y + band + 4 * s, s, tMs);
+  drawCoffeeBar(ctx, x + 6 * s, y + band + 4 * s, s, tMs);
   if (height - band > 40 * s) drawSofa(ctx, x + width - 46 * s, y + height - 16 * s, s);
+  if (room.table) drawTable(ctx, room.table);
 }
 
 function drawStanding(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, spot: PlacedSpot): void {
@@ -99,11 +110,6 @@ function drawPingPong(ctx: CanvasRenderingContext2D, spot: PlacedSpot, tMs: numb
   if (left) {
     const tableX = x + 24 * s;
     const tableW = 64 * s;
-    rect(ctx, tableX, y + 24 * s, tableW, 14 * s, "#2e7d4f");
-    rect(ctx, tableX, y + 30.5 * s, tableW, s, "#f4f1ea");
-    rect(ctx, tableX + tableW / 2 - s / 2, y + 21 * s, s, 18 * s, "#e5e7eb");
-    rect(ctx, tableX + 2 * s, y + 38 * s, 2 * s, 6 * s, "#3b3b3b");
-    rect(ctx, tableX + tableW - 4 * s, y + 38 * s, 2 * s, 6 * s, "#3b3b3b");
     const phase = (tMs % 1200) / 600;
     const t = phase < 1 ? phase : 2 - phase;
     const hop = Math.abs(Math.sin(t * Math.PI)) * 8 * s;
@@ -115,6 +121,7 @@ function drawPingPong(ctx: CanvasRenderingContext2D, spot: PlacedSpot, tMs: numb
 }
 
 export function drawBreakSpot(ctx: CanvasRenderingContext2D, spot: PlacedSpot, tMs: number, frame: number): void {
-  if (spot.activity === "coffee") drawCoffee(ctx, spot, frame);
+  if (spot.activity === "meeting") drawStanding(ctx, spot.x + 22 * spot.scale, spot.y, spot.scale, spot);
+  else if (spot.activity === "coffee") drawCoffee(ctx, spot, frame);
   else drawPingPong(ctx, spot, tMs);
 }

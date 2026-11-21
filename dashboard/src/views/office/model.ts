@@ -15,6 +15,13 @@ export interface OfficeEmployee {
   tokens: number;
   pane: string | null;
   colour: number;
+  /** Sessions of this agent (lead, workers, subagents) that are working or waiting, and all of them. */
+  sessions: number;
+  total: number;
+  /** Planning or design work: the agent sits in the meeting room instead of at its desk. */
+  meeting?: boolean;
+  /** The CTO never leaves the CTO office. */
+  fixed?: boolean;
 }
 
 export interface OfficeTeam {
@@ -37,7 +44,7 @@ export interface PlacedDesk {
   away?: boolean;
 }
 
-export type BreakActivity = "coffee" | "pingpong-left" | "pingpong-right";
+export type BreakActivity = "coffee" | "pingpong-left" | "pingpong-right" | "meeting";
 
 export interface PlacedSpot {
   x: number;
@@ -48,11 +55,20 @@ export interface PlacedSpot {
 }
 
 export const BREAK_ROOM = "break";
+export const MEETING_ROOM = "meeting";
+export const CTO_ID = "cto";
+export const CTO_TEAM = "CTO";
 
 /** Idle and sleeping agents leave their desk for the break room; working and waiting agents stay at it. */
 export function isAway(employee: OfficeEmployee): boolean {
-  return employee.pose === "idle" || employee.pose === "asleep";
+  return !employee.fixed && employee.sessions === 0;
 }
+
+export function inMeeting(employee: OfficeEmployee): boolean {
+  return !isAway(employee) && Boolean(employee.meeting);
+}
+
+const MEETING_PHASES = /^(?:plan|design)/i;
 
 const READ_ACTION = /^(?:Read|Grep|Glob|search|rg|WebFetch|WebSearch)\b/i;
 
@@ -81,6 +97,8 @@ function poseOf(card: Card, item: Record<string, unknown>, role: OfficeRole): Of
 
 function baseEmployee(card: Card, item: Record<string, unknown>, role: OfficeRole, id: string) {
   return {
+    sessions: 0,
+    total: 1,
     id,
     role,
     cardKey: card.key,
@@ -125,11 +143,49 @@ function helperEmployee(card: Card, helper: Record<string, unknown>, panes: Reco
   };
 }
 
-function cardEmployees(card: Card, panes: Record<string, string>): OfficeEmployee[] {
+/** Every session of one card: its lead, running implementer runs and subagents. */
+export function cardMembers(card: Card, panes: Record<string, string>): OfficeEmployee[] {
   const leads = card.sessions.map((lead) => leadEmployee(card, lead, panes));
   const workers = card.runs.filter((run) => run.state === "running").map((run) => workerEmployee(card, run, panes));
   const helpers = cardAgents(card).map((helper) => helperEmployee(card, helper, panes));
   return [...leads, ...workers, ...helpers];
+}
+
+const ACTIVE: OfficePose[] = ["waiting", "typing", "reading"];
+
+/** One agent per card: its desk computer is on while one or more of its sessions works or waits. */
+function agentOf(card: Card, panes: Record<string, string>): OfficeEmployee | null {
+  const members = cardMembers(card, panes);
+  const lead = members.find((member) => member.role === "lead") || members[0];
+  if (!lead) return null;
+  const active = members.filter((member) => ACTIVE.includes(member.pose));
+  const pose = ACTIVE.find((candidate) => active.some((member) => member.pose === candidate))
+    || (members.every((member) => member.pose === "asleep") ? "asleep" : "idle");
+  return {
+    ...lead,
+    id: card.key,
+    name: lead.role === "lead" ? lead.name : card.title || lead.name,
+    pose,
+    bubble: active.find((member) => member.bubble)?.bubble || lead.bubble,
+    cost: card.usage?.cost ?? null,
+    tokens: members.reduce((sum, member) => sum + member.tokens, 0),
+    colour: colourOf(card.key),
+    sessions: active.length,
+    total: members.length,
+    meeting: MEETING_PHASES.test(textOf(card.phase)),
+  };
+}
+
+/** The CTO leads every agent: at the desk always, busy while any agent works, waiting while any agent waits. */
+function ctoOf(agents: OfficeEmployee[]): OfficeEmployee {
+  const pose = ACTIVE.find((candidate) => agents.some((agent) => agent.pose === candidate)) || "idle";
+  return {
+    id: CTO_ID, name: "CTO", role: "lead", cardKey: "", pose, bubble: "", cost: null, pane: null, colour: 2,
+    tokens: agents.reduce((sum, agent) => sum + agent.tokens, 0),
+    sessions: agents.reduce((sum, agent) => sum + agent.sessions, 0),
+    total: agents.length,
+    fixed: true,
+  };
 }
 
 function baseName(path: string): string {
@@ -162,24 +218,35 @@ export function officeOf(state: DashState | null): Office {
   for (const card of state.cards) {
     const key = departmentOf(card, rules);
     const team = teams.get(key) || { key, label: key, employees: [] };
-    team.employees.push(...cardEmployees(card, state.session_panes));
+    const agent = agentOf(card, state.session_panes);
+    if (agent) team.employees.push(agent);
     teams.set(key, team);
   }
-  return { name: baseName(textOf(state.repo)) || "Company", teams: [...teams.values()] };
+  const cto = teams.get(CTO_TEAM) || { key: CTO_TEAM, label: CTO_TEAM, employees: [] };
+  cto.employees.unshift(ctoOf([...teams.values()].flatMap((team) => team.employees)));
+  teams.delete(CTO_TEAM);
+  return { name: baseName(textOf(state.repo)) || "Company", teams: [cto, ...teams.values()] };
 }
 
 export function teamOfEmployee(office: Office, id: string): OfficeTeam | undefined {
   return office.teams.find((team) => team.employees.some((employee) => employee.id === id));
 }
 
-export interface PlacedRoom {
-  key: string;
-  label: string;
+export interface Rect {
   x: number;
   y: number;
   width: number;
   height: number;
+}
+
+export interface PlacedRoom extends Rect {
+  key: string;
+  label: string;
   scale: number;
+  /** The door gap in the room's bottom wall, opening onto the corridor or lobby below. */
+  door?: { x: number; width: number; depth: number };
+  /** Fixed furniture: the meeting table or the table-tennis table, in desk-scale pixels. */
+  table?: Rect;
 }
 
 export type PlacedBuilding = PlacedRoom;
@@ -189,6 +256,8 @@ export interface OfficeLayout {
   rooms: PlacedRoom[];
   desks: PlacedDesk[];
   spots: PlacedSpot[];
+  corridors: Rect[];
+  lobby: Rect | null;
   height: number;
 }
 
@@ -198,8 +267,8 @@ const DESK_H = 58;
 /** The wall art may grow to 1.5x the chrome scale when the room has space. */
 const decorCap = (chrome: number) => chrome * 1.5;
 
-/** Building chrome in units of the chrome scale: outer wall, sign band, corridor, room header and padding. */
-export const BUILDING = { wall: 6, sign: 18, corridor: 6, pad: 6, header: 26 };
+/** Floor-plan geometry in chrome units: walls, sign band, corridors, spine corridor, lobby, room header and padding. */
+export const BUILDING = { wall: 6, wallT: 4, sign: 18, corridor: 22, spine: 26, lobby: 44, pad: 6, header: 26 };
 
 interface Fit {
   scale: number;
@@ -216,20 +285,41 @@ function deskFit(count: number, width: number, height: number): Fit {
   return best;
 }
 
-function roomGrid(counts: number[], innerW: number, innerH: number, chrome: number) {
-  const corridor = BUILDING.corridor * chrome;
+interface Plan {
+  columns: number;
+  rows: number;
+  roomW: number;
+  roomH: number;
+  scale: number;
+}
+
+/** Desk size counts up to the 3x cap; past it, rooms shaped like real offices (about 1.4:1) win over long strips. */
+function roomScore(scale: number, roomW: number, roomH: number): number {
+  const shape = Math.abs(Math.log(Math.max(roomW, 1) / Math.max(roomH, 1) / 1.4));
+  return Math.min(scale, 3) - shape * 0.6;
+}
+
+/** Rows of rooms, a corridor under every row but the last (which opens onto the lobby), a spine corridor on the right. */
+function planGrid(counts: number[], innerW: number, innerH: number, chrome: number): Plan {
+  const b = (key: keyof typeof BUILDING) => BUILDING[key] * chrome;
   const cap = decorCap(chrome);
   const inset = { x: 2 * BUILDING.pad * cap, y: (BUILDING.header + BUILDING.pad) * cap };
-  let best = { columns: 1, scale: -1, roomW: 0, roomH: 0 };
+  let best: Plan = { columns: 1, rows: 1, roomW: 0, roomH: 0, scale: -1 };
+  let bestScore = -Infinity;
   for (let columns = 1; columns <= counts.length; columns += 1) {
     const rows = Math.ceil(counts.length / columns);
-    const roomW = (innerW - (columns - 1) * corridor) / columns;
-    const roomH = (innerH - (rows - 1) * corridor) / rows;
-    const fits = counts.map((count) => deskFit(count, roomW - inset.x, roomH - inset.y).scale);
-    const scale = Math.min(...fits);
-    if (scale > best.scale) best = { columns, scale, roomW, roomH };
+    const spine = rows > 1 ? b("spine") + b("wallT") : 0;
+    const roomW = (innerW - spine - (columns - 1) * b("wall")) / columns;
+    const roomH = (innerH - b("lobby") - rows * b("wallT") - (rows - 1) * b("corridor")) / rows;
+    const scale = Math.min(...counts.map((count) => deskFit(count, roomW - inset.x, roomH - inset.y).scale));
+    const score = roomScore(scale, roomW, roomH);
+    if (scale > 0 && score > bestScore) {
+      bestScore = score;
+      best = { columns, rows, roomW, roomH, scale };
+    }
   }
-  return { ...best, corridor, scale: Math.max(0.5, Math.min(3, Math.floor(best.scale * 4) / 4)) };
+  if (best.scale < 0) best = { columns: 1, rows: counts.length, roomW: innerW, roomH: innerH / counts.length, scale: 0.5 };
+  return { ...best, scale: Math.max(0.5, Math.min(3, Math.floor(best.scale * 4) / 4)) };
 }
 
 /** Desks spread over the room floor like an office: each sits centred in its cell, cells at most 1.8x a desk. */
@@ -252,45 +342,122 @@ function placeCells(count: number, room: PlacedRoom, scale: number): { x: number
 
 function placeDesks(team: OfficeTeam, room: PlacedRoom, scale: number): PlacedDesk[] {
   const cells = placeCells(team.employees.length, room, scale);
-  return team.employees.map((employee, index) => ({ ...cells[index], scale, employee, away: isAway(employee) }));
+  return team.employees.map((employee, index) => ({
+    ...cells[index], scale, employee, away: isAway(employee) || inMeeting(employee),
+  }));
 }
 
-/** Pairs in one row play table tennis; everyone else gets a coffee. */
-function placeSpots(away: OfficeEmployee[], room: PlacedRoom, scale: number): PlacedSpot[] {
-  const cells = placeCells(away.length, room, scale);
+/** The first pair plays at the fixed table; everyone else queues for coffee along the left of the room. */
+function placeBreak(away: OfficeEmployee[], room: PlacedRoom, s: number): PlacedSpot[] {
+  const table = room.table!;
+  const d = room.scale;
+  const top = room.y + BUILDING.header * d + 26 * d;
+  let col = 0;
+  let y = top;
   return away.map((employee, index) => {
-    const pair = index - (index % 2);
-    const sameRow = pair + 1 < away.length && Math.abs(cells[pair].y - cells[pair + 1].y) < 1;
-    const activity: BreakActivity = sameRow ? (index % 2 ? "pingpong-right" : "pingpong-left") : "coffee";
-    const x = activity === "pingpong-right" ? cells[pair].x + DESK_W * scale : cells[index].x;
-    return { x, y: cells[index].y, scale, employee, activity };
+    if (away.length > 1 && index < 2) {
+      const x = table.x - 24 * s + index * DESK_W * s;
+      return { x, y: table.y - 24 * s, scale: s, employee, activity: index ? "pingpong-right" : "pingpong-left" };
+    }
+    let x = room.x + 10 * d - 22 * s + col * 26 * s;
+    if (col > 0 && x + 52 * s > table.x - 8 * s) {
+      col = 0;
+      y += 52 * s;
+      x = room.x + 10 * d - 22 * s;
+    }
+    col += 1;
+    return { x, y, scale: s, employee, activity: "coffee" as BreakActivity };
   });
 }
 
-/** Fit one company building to the canvas: one room per team plus the break room, desks scaled to fit every room. */
+/** Meeting seats along both long sides of the table. */
+function placeMeeting(people: OfficeEmployee[], room: PlacedRoom, s: number): PlacedSpot[] {
+  const table = room.table!;
+  const perSide = Math.max(1, Math.ceil(people.length / 2));
+  const step = table.width / perSide;
+  return people.map((employee, index) => {
+    const side = index % 2;
+    const seat = Math.floor(index / 2);
+    const x = table.x + step * (seat + 0.5) - 28 * s;
+    const y = side ? table.y + table.height - 14 * s : table.y - 36 * s;
+    return { x, y, scale: s, employee, activity: "meeting" as BreakActivity };
+  });
+}
+
+function furnish(room: PlacedRoom, s: number, seats: number): PlacedRoom {
+  const d = room.scale;
+  const floorTop = room.y + BUILDING.header * d;
+  const floorH = room.y + room.height - floorTop;
+  if (room.key === BREAK_ROOM) {
+    const t = Math.min(s, (room.width - 8 * d) / 112);
+    const width = 64 * t;
+    const x = room.x + Math.max(room.width / 2 - width / 2, Math.min(room.width - width - 32 * t, room.width - width - 4 * d));
+    return { ...room, table: { x, y: floorTop + floorH / 2 - 7 * t, width, height: 14 * t } };
+  }
+  if (room.key === MEETING_ROOM) {
+    const width = Math.min(room.width - 40 * d, Math.max(90 * s, Math.ceil(seats / 2) * 34 * s));
+    return { ...room, table: { x: room.x + (room.width - width) / 2, y: floorTop + floorH / 2 - 10 * s, width, height: 22 * s } };
+  }
+  return room;
+}
+
+interface Spec {
+  key: string;
+  label: string;
+  count: number;
+}
+
+function placeRooms(specs: Spec[], plan: Plan, origin: { x: number; y: number }, chrome: number): PlacedRoom[] {
+  const b = (key: keyof typeof BUILDING) => BUILDING[key] * chrome;
+  const decor = Math.max(chrome, Math.min(decorCap(chrome), plan.scale));
+  return specs.map((spec, index) => {
+    const x = origin.x + (index % plan.columns) * (plan.roomW + b("wall"));
+    const y = origin.y + Math.floor(index / plan.columns) * (plan.roomH + b("wallT") + b("corridor"));
+    const room: PlacedRoom = { key: spec.key, label: spec.label, x, y, width: plan.roomW, height: plan.roomH, scale: decor };
+    room.door = { x: x + 10 * decor, width: Math.min(20 * decor, plan.roomW / 3), depth: b("wallT") };
+    return furnish(room, plan.scale, spec.count);
+  });
+}
+
+function circulation(plan: Plan, inner: Rect, chrome: number): { corridors: Rect[]; lobby: Rect } {
+  const b = (key: keyof typeof BUILDING) => BUILDING[key] * chrome;
+  const lobby = { x: inner.x, y: inner.y + inner.height - b("lobby"), width: inner.width, height: b("lobby") };
+  const corridors: Rect[] = [];
+  for (let row = 0; row < plan.rows - 1; row += 1) {
+    const y = inner.y + (row + 1) * (plan.roomH + b("wallT")) + row * b("corridor");
+    corridors.push({ x: inner.x, y, width: inner.width, height: b("corridor") });
+  }
+  if (corridors.length) {
+    const top = corridors[0].y;
+    corridors.push({ x: inner.x + inner.width - b("spine"), y: top, width: b("spine"), height: lobby.y - top });
+  }
+  return { corridors, lobby };
+}
+
+export const EMPTY_LAYOUT: OfficeLayout = { building: null, rooms: [], desks: [], spots: [], corridors: [], lobby: null, height: 0 };
+
+/** Fit one company floor plan to the canvas: department offices, a meeting room and a break room along corridors. */
 export function layoutOffice(office: Office, width: number, height: number, chrome = 2): OfficeLayout {
-  if (!office.teams.length) return { building: null, rooms: [], desks: [], spots: [], height: 0 };
-  const away = office.teams.flatMap((team) => team.employees.filter(isAway));
-  const specs = [...office.teams.map((team) => ({ key: team.key, label: team.label, count: team.employees.length })),
+  if (!office.teams.length) return EMPTY_LAYOUT;
+  const everyone = office.teams.flatMap((team) => team.employees);
+  const away = everyone.filter(isAway);
+  const meeting = everyone.filter(inMeeting);
+  const specs: Spec[] = [...office.teams.map((team) => ({ key: team.key, label: team.label, count: team.employees.length })),
+    { key: MEETING_ROOM, label: "Meeting Room", count: Math.max(4, meeting.length) },
     { key: BREAK_ROOM, label: "Break Room", count: Math.max(2, away.length) }];
   const edge = BUILDING.wall * chrome;
   const bw = Math.max(width, 240) - 2 * MARGIN;
   const bh = Math.max(height, 240) - 2 * MARGIN;
-  const grid = roomGrid(specs.map((spec) => spec.count), bw - 2 * edge, bh - BUILDING.sign * chrome - edge, chrome);
-  const roomH = Math.max(grid.roomH, (BUILDING.header + BUILDING.pad) * decorCap(chrome) + DESK_H * grid.scale);
-  const decor = Math.max(chrome, Math.min(decorCap(chrome), grid.scale));
-  const rooms: PlacedRoom[] = specs.map((spec, index) => ({
-    key: spec.key,
-    label: spec.label,
-    x: MARGIN + edge + (index % grid.columns) * (grid.roomW + grid.corridor),
-    y: MARGIN + BUILDING.sign * chrome + Math.floor(index / grid.columns) * (roomH + grid.corridor),
-    width: grid.roomW,
-    height: roomH,
-    scale: decor,
-  }));
-  const desks = office.teams.flatMap((team, index) => placeDesks(team, rooms[index], grid.scale));
-  const spots = placeSpots(away, rooms[rooms.length - 1], grid.scale);
-  const bottom = Math.max(MARGIN + bh, rooms[rooms.length - 1].y + roomH + edge);
+  const inner = { x: MARGIN + edge, y: MARGIN + BUILDING.sign * chrome, width: bw - 2 * edge, height: bh - BUILDING.sign * chrome - edge };
+  const plan = planGrid(specs.map((spec) => spec.count), inner.width, inner.height, chrome);
+  plan.roomH = Math.max(plan.roomH, (BUILDING.header + BUILDING.pad) * decorCap(chrome) + DESK_H * plan.scale);
+  const rooms = placeRooms(specs, plan, inner, chrome);
+  const roomOf = (key: string) => rooms.find((room) => room.key === key)!;
+  const desks = office.teams.flatMap((team, index) => placeDesks(team, rooms[index], plan.scale));
+  const spots = [...placeBreak(away, roomOf(BREAK_ROOM), plan.scale), ...placeMeeting(meeting, roomOf(MEETING_ROOM), plan.scale)];
+  const used = { ...inner, height: Math.max(inner.height, rooms[rooms.length - 1].y + plan.roomH + BUILDING.wallT * chrome + BUILDING.lobby * chrome - inner.y) };
+  const { corridors, lobby } = circulation(plan, used, chrome);
+  const bottom = used.y + used.height + edge;
   const building = { key: "building", label: office.name, x: MARGIN, y: MARGIN, width: bw, height: bottom - MARGIN, scale: chrome };
-  return { building, rooms, desks, spots, height: bottom + MARGIN };
+  return { building, rooms, desks, spots, corridors, lobby, height: bottom + MARGIN };
 }

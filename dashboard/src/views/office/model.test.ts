@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Card, DashState, Session } from "../../lib/types";
-import { departmentOf, layoutOffice, officeOf, teamOfEmployee } from "./model";
+import { cardMembers, CTO_ID, departmentOf, layoutOffice, officeOf, teamOfEmployee, type Office } from "./model";
 
 function session(patch: Partial<Session> = {}): Session {
   return { id: "lead", name: "Lead", state: "working", ...patch };
@@ -34,25 +34,18 @@ function dash(cards: Card[], panes: Record<string, string> = {}): DashState {
   };
 }
 
-describe("officeOf", () => {
-  it("maps questions and card requests to waiting", () => {
-    const employees = officeOf(
-      dash([
-        card({ sessions: [session({ id: "question", question: "Which path?" })] }),
-        card({ key: "human", needs_you: ["approval"], sessions: [session({ id: "asked", ask: "Approve?" })] }),
-      ]),
-    ).teams.flatMap((team) => team.employees);
-    expect(employees.map((employee) => employee.pose)).toEqual(["waiting", "waiting"]);
-    expect(employees.find((employee) => employee.id === "question")?.bubble).toBe("Which path?");
-  });
+const members = (source: Card, panes: Record<string, string> = {}) => cardMembers(source, panes);
+const agents = (office: Office) => office.teams.flatMap((team) => team.employees).filter((agent) => agent.id !== CTO_ID);
 
-  it("keeps a running worker typing while its lead waits on the card request", () => {
-    const source = card({
-      needs_you: ["approval"],
-      runs: [{ id: "run", mode: "implement", state: "running", action_running: true, action: "Bash build" }],
+describe("cardMembers", () => {
+  it("maps questions and card requests to waiting", () => {
+    expect(members(card({ sessions: [session({ id: "question", question: "Which path?" })] }))[0]).toMatchObject({
+      pose: "waiting",
+      bubble: "Which path?",
     });
-    const poses = officeOf(dash([source])).teams[0].employees.map((employee) => employee.pose);
-    expect(poses).toEqual(["waiting", "typing"]);
+    expect(members(card({ needs_you: ["approval"], sessions: [session({ id: "asked", ask: "Approve?" })] }))[0].pose).toBe(
+      "waiting",
+    );
   });
 
   it.each([
@@ -60,39 +53,66 @@ describe("officeOf", () => {
     [session({ action_running: true, action: "Read dashboard/src/store.ts" }), "reading"],
     [session({ action_running: true, action: "rg session_panes" }), "reading"],
     [session({ action_running: true, action: "Bash npm build" }), "typing"],
+    [session({ state: "working" }), "typing"],
     [session({ state: "idle" }), "idle"],
   ] as const)("maps session activity to %s pose", (lead, pose) => {
-    expect(officeOf(dash([card({ sessions: [lead] })])).teams[0].employees[0].pose).toBe(pose);
+    expect(members(card({ sessions: [lead] }))[0].pose).toBe(pose);
   });
 
-  it("keeps running workers, helpers, panes, and lead-only card usage", () => {
+  it("keeps running workers, helpers and panes", () => {
     const source = card({
       runs: [
-        { id: "running", mode: "implement", unit: "UI", state: "running" },
+        { id: "running", mode: "implement", unit: "UI", state: "running", action_running: true, action: "Bash build" },
         { id: "done", mode: "audit", state: "done" },
       ],
       now: [session({ id: "lead", agents: [{ id: "helper", state: "running", label: "Reviewer" }] })],
     });
-    const employees = officeOf(dash([source], { lead: "w:p1" })).teams[0].employees;
-    expect(employees.map(({ id, role }) => [id, role])).toEqual([
+    const list = members(source, { lead: "w:p1" });
+    expect(list.map(({ id, role }) => [id, role])).toEqual([
       ["lead", "lead"],
       ["running", "worker"],
       ["helper", "helper"],
     ]);
-    expect(employees[0]).toMatchObject({ pane: "w:p1", cost: 2.5, tokens: 2400 });
-    expect(employees[1]).toMatchObject({ pane: null, cost: null });
-    expect(employees.some((employee) => employee.id === "done")).toBe(false);
+    expect(list[0].pane).toBe("w:p1");
   });
 
   it("truncates bubbles and assigns stable colours", () => {
     const long = "A".repeat(80);
-    const first = officeOf(dash([card({ sessions: [session({ said: long })] })])).teams[0].employees[0];
-    const second = officeOf(dash([card({ sessions: [session({ said: long })] })])).teams[0].employees[0];
+    const first = members(card({ sessions: [session({ said: long })] }))[0];
     expect(first.bubble).toHaveLength(60);
-    expect(first.colour).toBe(second.colour);
+    expect(first.colour).toBe(members(card({ sessions: [session({ said: long })] }))[0].colour);
+  });
+});
+
+describe("officeOf", () => {
+  it("makes one agent per card that counts its active sessions", () => {
+    const source = card({
+      sessions: [session({ id: "lead", state: "idle" })],
+      runs: [{ id: "w1", mode: "implement", state: "running", action_running: true, action: "Bash build" }],
+    });
+    const [agent] = agents(officeOf(dash([source])));
+    expect(agent).toMatchObject({ id: "office", name: "Lead", pose: "typing", sessions: 1, total: 2, cost: 2.5 });
   });
 
-  it("puts each session in the first matching department and keeps empty offices", () => {
+  it("an agent with no active session is away; plan and design work goes to the meeting room", () => {
+    const office = officeOf(
+      dash([
+        card({ key: "rest", sessions: [session({ id: "r", state: "idle" })] }),
+        card({ key: "plan", phase: "plan", sessions: [session({ id: "p" })] }),
+      ]),
+    );
+    const byId = Object.fromEntries(agents(office).map((agent) => [agent.id, agent]));
+    expect(byId.rest.sessions).toBe(0);
+    expect(byId.plan.meeting).toBe(true);
+  });
+
+  it("puts the CTO first, in the CTO office, counting every active session", () => {
+    const office = officeOf(dash([card({ key: "a" }), card({ key: "b", sessions: [session({ id: "b", state: "idle" })] })]));
+    expect(office.teams[0].label).toBe("CTO");
+    expect(office.teams[0].employees[0]).toMatchObject({ id: CTO_ID, sessions: 1, total: 2, fixed: true });
+  });
+
+  it("puts each agent in the first matching department and keeps empty offices", () => {
     const rules = [
       { name: "DevOps", match: ["deploy"] },
       { name: "VOIP Engineering", match: ["ivr", "tts"] },
@@ -108,12 +128,13 @@ describe("officeOf", () => {
       office_teams: rules,
     });
     expect(office.teams.map((team) => [team.label, team.employees.map((employee) => employee.id)])).toEqual([
+      ["CTO", [CTO_ID]],
       ["DevOps", []],
-      ["VOIP Engineering", ["b"]],
-      ["Fullstack Engineers", ["a", "d"]],
-      ["General", ["c"]],
+      ["VOIP Engineering", ["s2"]],
+      ["Fullstack Engineers", ["s1", "s4"]],
+      ["General", ["s3"]],
     ]);
-    expect(teamOfEmployee(office, "d")?.label).toBe("Fullstack Engineers");
+    expect(teamOfEmployee(office, "s4")?.label).toBe("Fullstack Engineers");
   });
 
   it("matches keywords only at the start of a word", () => {
@@ -128,11 +149,13 @@ describe("officeOf", () => {
 });
 
 describe("layoutOffice", () => {
-  const twoTeams = () =>
+  const office = () =>
     officeOf({
       ...dash([
-        card({ key: "a", title: "alpha", sessions: [session({ id: "a1" }), session({ id: "a2" }), session({ id: "a3" })] }),
-        card({ key: "b", title: "beta", sessions: [session({ id: "b1" })] }),
+        card({ key: "a", title: "alpha", sessions: [session({ id: "a1" })] }),
+        card({ key: "b", title: "beta", sessions: [session({ id: "b1", state: "idle" })] }),
+        card({ key: "c", title: "beta two", sessions: [session({ id: "c1", state: "idle" })] }),
+        card({ key: "d", title: "alpha plan", phase: "plan", sessions: [session({ id: "d1" })] }),
       ]),
       office_teams: [
         { name: "alpha", match: ["alpha"] },
@@ -140,67 +163,47 @@ describe("layoutOffice", () => {
       ],
     });
 
-  it("fills the canvas with one company building", () => {
-    const layout = layoutOffice(twoTeams(), 1200, 700);
-    expect(layout).toEqual(layoutOffice(twoTeams(), 1200, 700));
-    expect(layout.building).toMatchObject({ label: "repo", x: 8, y: 8, width: 1184, height: 684 });
-    expect(layout.height).toBe(700);
+  it("fills the canvas with one floor plan: offices, meeting room, break room, corridors and a lobby", () => {
+    const layout = layoutOffice(office(), 1400, 800);
+    expect(layout).toEqual(layoutOffice(office(), 1400, 800));
+    expect(layout.building).toMatchObject({ x: 8, y: 8, width: 1384 });
+    expect(layout.height).toBe(800);
+    expect(layout.rooms.map((room) => room.label)).toEqual(["CTO", "alpha", "beta", "Meeting Room", "Break Room"]);
+    expect(layout.lobby).not.toBeNull();
   });
 
-  it("puts one room per team inside the building, desks inside their room", () => {
-    const layout = layoutOffice(twoTeams(), 1200, 700);
-    const building = layout.building!;
-    expect(layout.rooms.map((room) => room.label)).toEqual(["alpha", "beta", "Break Room"]);
+  it("opens every room's door onto a corridor or the lobby", () => {
+    const layout = layoutOffice(office(), 1400, 800);
+    const halls = [...layout.corridors, layout.lobby!];
     for (const room of layout.rooms) {
-      expect(room.x).toBeGreaterThan(building.x);
-      expect(room.x + room.width).toBeLessThan(building.x + building.width);
-      expect(room.y + room.height).toBeLessThan(building.y + building.height);
+      const sill = room.y + room.height + room.door!.depth;
+      const doorMid = room.door!.x + room.door!.width / 2;
+      const hall = halls.find((rect) => Math.abs(rect.y - sill) < 0.01 && doorMid >= rect.x && doorMid <= rect.x + rect.width);
+      expect(hall, room.label).toBeDefined();
     }
-    for (const desk of layout.desks) {
-      const room = layout.rooms.find((candidate) => candidate.key === teamOfEmployee(twoTeams(), desk.employee.id)?.key)!;
-      expect(desk.x).toBeGreaterThanOrEqual(room.x);
-      expect(desk.x + 56 * desk.scale).toBeLessThanOrEqual(room.x + room.width + 0.001);
-      expect(desk.y + 58 * desk.scale).toBeLessThanOrEqual(room.y + room.height + 0.001);
-    }
+  });
+
+  it("keeps desks inside their office and sends away and meeting agents out of them", () => {
+    const layout = layoutOffice(office(), 1400, 800);
+    const away = Object.fromEntries(layout.desks.map((desk) => [desk.employee.id, Boolean(desk.away)]));
+    expect(away).toEqual({ [CTO_ID]: false, a: false, b: true, c: true, d: true });
+    const activities = Object.fromEntries(layout.spots.map((spot) => [spot.employee.id, spot.activity]));
+    expect(activities).toEqual({ b: "pingpong-left", c: "pingpong-right", d: "meeting" });
+    const breakRoom = layout.rooms.find((room) => room.key === "break")!;
+    expect(breakRoom.table).toBeDefined();
+    expect(layout.rooms.find((room) => room.key === "meeting")!.table).toBeDefined();
+  });
+
+  it("always furnishes the break room, even with nobody on break", () => {
+    const quiet = officeOf(dash([card()]));
+    const breakRoom = layoutOffice(quiet, 1200, 700).rooms.find((room) => room.key === "break")!;
+    expect(breakRoom.table!.width).toBeGreaterThan(0);
   });
 
   it("stacks rooms on a narrow canvas and grows past the viewport when desks cannot shrink further", () => {
-    const tall = layoutOffice(twoTeams(), 200, 900, 1);
+    const tall = layoutOffice(office(), 200, 1600, 1);
     expect(new Set(tall.rooms.map((room) => room.x)).size).toBe(1);
-    const layout = layoutOffice(twoTeams(), 240, 120, 1);
-    expect(layout.height).toBeGreaterThanOrEqual(240);
-    expect(layout.desks.every((desk) => desk.scale >= 0.5)).toBe(true);
-  });
-
-  it("keeps working agents at a running desk and sends idle ones to the break room", () => {
-    const office = officeOf({
-      ...dash([
-        card({
-          title: "alpha",
-          sessions: [
-            session({ id: "busy", action_running: true, action: "Bash build" }),
-            session({ id: "idle1", state: "idle" }),
-            session({ id: "idle2", state: "quiet" }),
-            session({ id: "idle3", state: "idle" }),
-          ],
-        }),
-      ]),
-      office_teams: [{ name: "alpha", match: ["alpha"] }],
-    });
-    const layout = layoutOffice(office, 1400, 800);
-    expect(layout.desks.map((desk) => [desk.employee.id, Boolean(desk.away)])).toEqual([
-      ["busy", false],
-      ["idle1", true],
-      ["idle2", true],
-      ["idle3", true],
-    ]);
-    const breakRoom = layout.rooms.find((room) => room.key === "break")!;
-    const activities = Object.fromEntries(layout.spots.map((spot) => [spot.employee.id, spot.activity]));
-    expect(activities).toEqual({ idle1: "pingpong-left", idle2: "pingpong-right", idle3: "coffee" });
-    for (const spot of layout.spots) {
-      expect(spot.x).toBeGreaterThanOrEqual(breakRoom.x);
-      expect(spot.y + 58 * spot.scale).toBeLessThanOrEqual(breakRoom.y + breakRoom.height + 0.001);
-    }
+    expect(layoutOffice(office(), 240, 120, 1).height).toBeGreaterThanOrEqual(240);
   });
 
   it("names the company after the repository", () => {

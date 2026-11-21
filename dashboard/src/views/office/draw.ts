@@ -1,5 +1,6 @@
 import { drawBreakRoom, drawBreakSpot } from "./breakroom";
-import { BREAK_ROOM, BUILDING, type OfficeLayout, type PlacedBuilding, type PlacedDesk, type PlacedRoom } from "./model";
+import { drawCorridor, drawDoor, drawLobby, drawMeetingRoom } from "./floorplan";
+import { BREAK_ROOM, BUILDING, MEETING_ROOM, type OfficeLayout, type PlacedBuilding, type PlacedDesk, type PlacedRoom } from "./model";
 
 const SHIRTS = ["#4f8ff7", "#4ade80", "#f2b24c", "#f472b6", "#a78bfa", "#22d3ee", "#fb7185", "#e5e7eb"];
 const HAIR = ["#231b16", "#5b3825", "#d6a85f", "#8a5b3d", "#202938", "#6b4631", "#d7d2c8", "#b86b42"];
@@ -31,12 +32,12 @@ const C = {
   text: "#e5e9f0",
 };
 
-function rect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, colour: string): void {
+export function rect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, colour: string): void {
   ctx.fillStyle = colour;
   ctx.fillRect(x, y, w, h);
 }
 
-function text(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, size: number, max: number): void {
+export function text(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, size: number, max: number): void {
   ctx.font = `bold ${size}px monospace`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -55,14 +56,13 @@ function drawBuilding(ctx: CanvasRenderingContext2D, building: PlacedBuilding): 
   const sign = BUILDING.sign * s;
   rect(ctx, x, y, width, height, C.wall);
   rect(ctx, x, y, width, sign, C.wallTrim);
-  rect(ctx, x + width / 2 - 14 * s, y + height - 3 * s, 28 * s, 3 * s, "#c9a227");
   const plate = Math.min(width - 16 * s, Math.max(80 * s, building.label.length * 4.5 * s + 24 * s));
   rect(ctx, x + (width - plate) / 2, y + 3 * s, plate, sign - 6 * s, "#1d2433");
   ctx.fillStyle = C.gold;
   text(ctx, building.label.toUpperCase(), x + width / 2, y + sign / 2, 7 * s, plate - 8 * s);
 }
 
-function drawFloor(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, s: number): void {
+export function drawFloor(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, s: number): void {
   rect(ctx, x, y, w, h, C.floor);
   const plank = 6 * s;
   for (let row = 0; row * plank < h; row += 1) {
@@ -73,7 +73,7 @@ function drawFloor(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   }
 }
 
-function drawPlant(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
+export function drawPlant(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
   rect(ctx, x + 2 * s, y + 9 * s, 6 * s, 5 * s, C.pot);
   rect(ctx, x + 3 * s, y + 13 * s, 4 * s, s, "#6b4430");
   rect(ctx, x + 4 * s, y, 2 * s, 9 * s, C.leaf);
@@ -107,7 +107,7 @@ function drawClock(ctx: CanvasRenderingContext2D, x: number, y: number, s: numbe
   rect(ctx, x, y - 0.5 * s, 2 * s, s, "#222");
 }
 
-function drawBackWall(ctx: CanvasRenderingContext2D, room: PlacedRoom): void {
+export function drawBackWall(ctx: CanvasRenderingContext2D, room: PlacedRoom): void {
   const { x, y, width, scale: s } = room;
   const band = BUILDING.header * s;
   rect(ctx, x, y, width, band, C.backWall);
@@ -145,17 +145,6 @@ function drawSideTable(ctx: CanvasRenderingContext2D, x: number, y: number, s: n
   rect(ctx, x + 12 * s, y - 3 * s, 5 * s, s, "#e5e7eb");
 }
 
-function drawDoors(ctx: CanvasRenderingContext2D, rooms: PlacedRoom[]): void {
-  for (const room of rooms) {
-    const s = room.scale;
-    const gap = BUILDING.corridor * s;
-    const right = rooms.find((other) => Math.abs(other.y - room.y) < 1 && Math.abs(other.x - room.x - room.width - gap) < 1);
-    if (right) drawFloor(ctx, room.x + room.width, room.y + room.height / 2 + 4 * s, gap, 22 * s, s);
-    const below = rooms.find((other) => Math.abs(other.x - room.x) < 1 && Math.abs(other.y - room.y - room.height - gap) < 1);
-    if (below) drawFloor(ctx, room.x + room.width / 2 - 12 * s, room.y + room.height, 24 * s, gap, s);
-  }
-}
-
 function screenColour(desk: PlacedDesk, frame: number): string {
   if (desk.away) return C.screenOff;
   return desk.employee.pose === "typing" && frame ? "#6fe39a" : C.screenOn;
@@ -174,6 +163,9 @@ function drawDesk(ctx: CanvasRenderingContext2D, desk: PlacedDesk, frame: number
     const line = (frame + Math.floor(x)) % 3;
     rect(ctx, x + 22 * s, y + (5 + line * 2) * s, 9 * s, s, "#d9ffe6");
     rect(ctx, x + 22 * s, y + (6 + ((line + 1) % 3) * 2) * s, 6 * s, s, "#a7f3c0");
+    rect(ctx, x + 30 * s, y + 5 * s, 6 * s, 6 * s, "#0f3d24");
+    ctx.fillStyle = "#d9ffe6";
+    text(ctx, String(desk.employee.sessions), x + 33 * s, y + 8.2 * s, 5 * s, 6 * s);
   }
   rect(ctx, x + 25 * s, y + 15 * s, 6 * s, 2 * s, C.pcShade);
   rect(ctx, x + 20 * s, y + 18 * s, 16 * s, 3 * s, "#d8d3c4");
@@ -241,11 +233,14 @@ export function drawOffice(ctx: CanvasRenderingContext2D, layout: OfficeLayout, 
   ctx.imageSmoothingEnabled = false;
   drawOutside(ctx);
   if (layout.building) drawBuilding(ctx, layout.building);
+  for (const corridor of layout.corridors) drawCorridor(ctx, corridor, layout.building?.scale || 2);
+  if (layout.lobby && layout.building) drawLobby(ctx, layout.lobby, layout.building);
   for (const room of layout.rooms) {
     if (room.key === BREAK_ROOM) drawBreakRoom(ctx, room, tMs);
+    else if (room.key === MEETING_ROOM) drawMeetingRoom(ctx, room);
     else drawRoom(ctx, room);
+    drawDoor(ctx, room);
   }
-  drawDoors(ctx, layout.rooms);
   const frame = Math.floor(tMs / 375) % 2;
   for (const desk of layout.desks) {
     drawDesk(ctx, desk, frame);
@@ -260,6 +255,15 @@ export function drawOffice(ctx: CanvasRenderingContext2D, layout: OfficeLayout, 
     drawLabel(ctx, spot);
     if (spot.employee.id === selectedId) drawSelection(ctx, spot);
   }
+}
+
+/** The running computer of an agent at its desk, for opening that agent's session console. */
+export function pcHit(layout: OfficeLayout, x: number, y: number): string | null {
+  const desk = layout.desks.find(
+    (item) => !item.away && x >= item.x + 16 * item.scale && x <= item.x + 40 * item.scale
+      && y >= item.y && y <= item.y + 18 * item.scale,
+  );
+  return desk ? desk.employee.id : null;
 }
 
 /** People in the break room first, then the employees seated at their desks. */

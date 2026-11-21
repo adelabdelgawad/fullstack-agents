@@ -9,11 +9,13 @@ import {
   type RefObject,
 } from "react";
 import { STATE_TEXT } from "../lib/cards";
+import type { Card } from "../lib/types";
 import { esc, fmtCost, fmtTokens } from "../lib/format";
 import { openCard, toast, useStore } from "../store";
 import "../styles/office.css";
-import { drawOffice, hitTest } from "./office/draw";
-import { layoutOffice, officeOf, teamOfEmployee, type Office, type OfficeEmployee, type OfficeLayout } from "./office/model";
+import { CardTerminal } from "../terminal/CardTerminal";
+import { drawOffice, hitTest, pcHit } from "./office/draw";
+import { CTO_ID, EMPTY_LAYOUT, layoutOffice, officeOf, teamOfEmployee, type Office, type OfficeEmployee, type OfficeLayout } from "./office/model";
 
 interface SendResult {
   ok?: boolean;
@@ -158,6 +160,12 @@ function EmployeeDialog({ employee, team }: { employee: OfficeEmployee; team: st
           <dd>{STATE_TEXT[employee.pose] || employee.pose}</dd>
         </div>
         <div>
+          <dt>Sessions</dt>
+          <dd>
+            {employee.sessions} active of {employee.total}
+          </dd>
+        </div>
+        <div>
           <dt>Cost</dt>
           <dd>{fmtCost(employee.cost)}</dd>
         </div>
@@ -190,21 +198,93 @@ function AccessibleEmployees({ office, select }: { office: Office; select: (id: 
   );
 }
 
+function OfficeConsole({ cardKey, name, close }: { cardKey: string; name: string; close: () => void }) {
+  const card = useStore((storeState) => storeState.state?.cards.find((item) => item.key === cardKey));
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [close]);
+  return (
+    <div className="office-console" role="dialog" aria-modal="true" aria-label={`${name} session console`}>
+      <div className="office-console-head">
+        <h2>{name}</h2>
+        <button type="button" onClick={close}>
+          Close
+        </button>
+      </div>
+      {card ? <CardTerminal card={card} /> : <div className="empty">This session has ended</div>}
+    </div>
+  );
+}
+
+function sessionTitle(card: Card): string {
+  return card.sessions[0]?.name || card.title || card.label || card.key;
+}
+
+/** The CTO sees every session: one tab per live session, each with its live console. */
+function CtoConsole({ close }: { close: () => void }) {
+  const cards = useStore((storeState) => storeState.state?.cards || []);
+  const [tab, setTab] = useState<string | null>(null);
+  const current = cards.find((card) => card.key === tab) || cards[0] || null;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [close]);
+  return (
+    <div className="office-console" role="dialog" aria-modal="true" aria-label="CTO: all sessions">
+      <div className="office-console-head">
+        <h2>CTO · all sessions</h2>
+        <button type="button" onClick={close}>
+          Close
+        </button>
+      </div>
+      <div className="office-console-tabs" role="tablist" aria-label="Sessions">
+        {cards.map((card) => (
+          <button
+            key={card.key}
+            type="button"
+            role="tab"
+            aria-selected={card.key === current?.key}
+            className={card.key === current?.key ? "on" : ""}
+            onClick={() => setTab(card.key)}
+          >
+            {sessionTitle(card)}
+          </button>
+        ))}
+      </div>
+      {current ? <CardTerminal key={current.key} card={current} /> : <div className="empty">No live sessions</div>}
+    </div>
+  );
+}
+
 export function OfficeView() {
   const state = useStore((storeState) => storeState.state);
   const office = useMemo(() => officeOf(state), [state]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const placed = useRef<OfficeLayout>({ building: null, rooms: [], desks: [], spots: [], height: 0 });
+  const placed = useRef<OfficeLayout>(EMPTY_LAYOUT);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [consoleId, setConsoleId] = useState<string | null>(null);
   const employees = useMemo(() => office.teams.flatMap((team) => team.employees), [office]);
   const selected = employees.find((employee) => employee.id === selectedId) || null;
+  const consoleAgent = employees.find((employee) => employee.id === consoleId) || null;
   useOfficeCanvas(canvasRef, office, selectedId, placed);
   useEffect(() => {
     if (selectedId && !selected) setSelectedId(null);
   }, [selected, selectedId]);
   const clickCanvas = (event: MouseEvent<HTMLCanvasElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
-    setSelectedId(hitTest(placed.current, event.clientX - bounds.left, event.clientY - bounds.top));
+    const x = event.clientX - bounds.left;
+    const y = event.clientY - bounds.top;
+    const pc = pcHit(placed.current, x, y);
+    const person = hitTest(placed.current, x, y);
+    if (pc || person === CTO_ID) setConsoleId(pc || person);
+    else setSelectedId(person);
   };
   if (!employees.length) return <div className="office-empty">No live sessions</div>;
   return (
@@ -214,6 +294,10 @@ export function OfficeView() {
       </div>
       <AccessibleEmployees office={office} select={setSelectedId} />
       {selected && <EmployeeDialog key={selected.id} employee={selected} team={teamLabel(office, selected)} />}
+      {consoleId === CTO_ID && <CtoConsole close={() => setConsoleId(null)} />}
+      {consoleAgent && consoleId !== CTO_ID && (
+        <OfficeConsole cardKey={consoleAgent.cardKey} name={consoleAgent.name} close={() => setConsoleId(null)} />
+      )}
     </section>
   );
 }
