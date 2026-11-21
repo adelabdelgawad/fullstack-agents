@@ -502,15 +502,6 @@ html.office-page aside#panel {
   color: var(--muted, #a6b0c2);
 }
 
-.chat-section {
-  display: block;
-  padding: 10px 10px 4px;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted, #a6b0c2);
-}
-
 .chat-new {
   margin-bottom: 6px;
   padding: 9px 12px;
@@ -725,4 +716,23 @@ html.office-page aside#panel {
   .chat-pulse {
     animation: none;
   }
+}
+
+/* Session rows: red while one needs your decision, green while one is running. */
+.chat-session.ask {
+  background: rgba(248, 113, 113, 0.14);
+  box-shadow: inset 3px 0 0 #f87171;
+}
+
+.chat-session.working {
+  background: rgba(74, 222, 128, 0.1);
+  box-shadow: inset 3px 0 0 #4ade80;
+}
+
+.chat-session.on.ask {
+  background: rgba(248, 113, 113, 0.24);
+}
+
+.chat-session.on.working {
+  background: rgba(74, 222, 128, 0.2);
 }

@@ -35,7 +35,8 @@ function dash(cards: Card[], panes: Record<string, string> = {}): DashState {
 }
 
 const members = (source: Card, panes: Record<string, string> = {}) => cardMembers(source, panes);
-const agents = (office: Office) => office.teams.flatMap((team) => team.employees).filter((agent) => agent.id !== CTO_ID);
+const agents = (office: Office) =>
+  office.teams.flatMap((team) => team.employees).filter((agent) => agent.id !== CTO_ID);
 
 describe("cardMembers", () => {
   it("maps questions and card requests to waiting", () => {
@@ -43,9 +44,9 @@ describe("cardMembers", () => {
       pose: "waiting",
       bubble: "Which path?",
     });
-    expect(members(card({ needs_you: ["approval"], sessions: [session({ id: "asked", ask: "Approve?" })] }))[0].pose).toBe(
-      "waiting",
-    );
+    expect(
+      members(card({ needs_you: ["approval"], sessions: [session({ id: "asked", ask: "Approve?" })] }))[0].pose,
+    ).toBe("waiting");
   });
 
   it.each([
@@ -106,10 +107,12 @@ describe("officeOf", () => {
     expect(byId.plan.meeting).toBe(true);
   });
 
-  it("puts the CTO first, in the CTO office, counting only the sessions waiting on a decision", () => {
-    const office = officeOf(dash([card({ key: "a" }), card({ key: "b", sessions: [session({ id: "b", state: "waiting" })] })]));
+  it("puts the CTO first, in the CTO office, counting every active session", () => {
+    const office = officeOf(
+      dash([card({ key: "a" }), card({ key: "b", sessions: [session({ id: "b", state: "idle" })] })]),
+    );
     expect(office.teams[0].label).toBe("CTO");
-    expect(office.teams[0].employees[0]).toMatchObject({ id: CTO_ID, sessions: 1, total: 1, fixed: true, pose: "waiting" });
+    expect(office.teams[0].employees[0]).toMatchObject({ id: CTO_ID, sessions: 1, total: 2, fixed: true });
   });
 
   it("puts each agent in the first matching department and keeps empty offices", () => {
@@ -178,7 +181,9 @@ describe("layoutOffice", () => {
     for (const room of layout.rooms) {
       const sill = room.y + room.height + room.door!.depth;
       const doorMid = room.door!.x + room.door!.width / 2;
-      const hall = halls.find((rect) => Math.abs(rect.y - sill) < 0.01 && doorMid >= rect.x && doorMid <= rect.x + rect.width);
+      const hall = halls.find(
+        (rect) => Math.abs(rect.y - sill) < 0.01 && doorMid >= rect.x && doorMid <= rect.x + rect.width,
+      );
       expect(hall, room.label).toBeDefined();
     }
   });
@@ -186,11 +191,18 @@ describe("layoutOffice", () => {
   it("keeps desks inside their office and sends away and meeting agents out of them", () => {
     const layout = layoutOffice(office(), 1400, 800);
     const away = Object.fromEntries(
-      layout.desks.filter((desk) => !desk.employee.id.startsWith("vacant:")).map((desk) => [desk.employee.id, Boolean(desk.away)]),
+      layout.desks
+        .filter((desk) => !desk.employee.id.startsWith("vacant:"))
+        .map((desk) => [desk.employee.id, Boolean(desk.away)]),
     );
     expect(away).toEqual({ [CTO_ID]: false, a: false, b: true, c: true, d: true });
-    const activities = Object.fromEntries(layout.spots.filter((spot) => !spot.employee.id.startsWith("team:")).map((spot) => [spot.employee.id, spot.activity]));
-    for (const id of ["b", "c"]) expect(["bar", "gaming", "pingpong-left", "pingpong-right", "coffee"]).toContain(activities[id]);
+    const activities = Object.fromEntries(
+      layout.spots
+        .filter((spot) => !spot.employee.id.startsWith("team:"))
+        .map((spot) => [spot.employee.id, spot.activity]),
+    );
+    for (const id of ["b", "c"])
+      expect(["bar", "gaming", "pingpong-left", "pingpong-right", "coffee"]).toContain(activities[id]);
     expect(activities.d).toBe("meeting");
     const breakRoom = layout.rooms.find((room) => room.key === "break")!;
     expect(breakRoom.table).toBeDefined();
@@ -215,7 +227,7 @@ describe("layoutOffice", () => {
 });
 
 describe("reporting lines", () => {
-  it("each agent delegates to its workers and subagents; the CTO handles only waiting decisions", () => {
+  it("each agent delegates to its workers and subagents; the CTO leads every agent", () => {
     const source = card({
       runs: [{ id: "w1", mode: "implement", state: "running", action_running: true, action: "Bash build" }],
       now: [session({ id: "lead", agents: [{ id: "h1", state: "running", label: "Reviewer" }] })],
@@ -227,14 +239,17 @@ describe("reporting lines", () => {
       ["h1", "helper"],
     ]);
     expect(solo.reports).toEqual([]);
-    expect(office.teams[0].employees[0].reports).toEqual([]);
+    expect(office.teams[0].employees[0].reports?.map((report) => report.id)).toEqual(["office", "solo"]);
   });
 });
 
 describe("background work keeps the agent at its desk", () => {
   it("a running background shell or a finished answer is not a break", () => {
-    const shell = card({ key: "bg", sessions: [session({ id: "a", state: "idle" })],
-      now: [session({ id: "a", state: "idle", agents: [{ id: "t1", state: "running", label: "shell · build" }] })] });
+    const shell = card({
+      key: "bg",
+      sessions: [session({ id: "a", state: "idle" })],
+      now: [session({ id: "a", state: "idle", agents: [{ id: "t1", state: "running", label: "shell · build" }] })],
+    });
     const open = card({ key: "open", sessions: [session({ id: "b", state: "still_open", said_full: "Done." })] });
     const rest = card({ key: "rest", sessions: [session({ id: "c", state: "idle" })] });
     const office = officeOf(dash([shell, open, rest]));
@@ -246,7 +261,9 @@ describe("background work keeps the agent at its desk", () => {
 
 describe("idle departments", () => {
   it("a department with no running work takes its break in the Break Room", () => {
-    const office = officeOf(dash([card({ key: "busy", sessions: [session({ id: "b", action_running: true, action: "Bash build" })] })]));
+    const office = officeOf(
+      dash([card({ key: "busy", sessions: [session({ id: "b", action_running: true, action: "Bash build" })] })]),
+    );
     const layout = layoutOffice(office, 1400, 800);
     const onBreak = layout.spots.filter((spot) => spot.employee.id.startsWith("team:"));
     const busyTeam = office.teams.find((team) => team.employees.some((employee) => employee.id === "busy"))!;
@@ -258,11 +275,15 @@ describe("idle departments", () => {
 
 describe("department offices", () => {
   it("seat two desks; only agents on a running session work at a lit PC", () => {
-    const office = officeOf(dash([card({ key: "busy", sessions: [session({ id: "b", action_running: true, action: "Bash build" })] })]));
+    const office = officeOf(
+      dash([card({ key: "busy", sessions: [session({ id: "b", action_running: true, action: "Bash build" })] })]),
+    );
     const layout = layoutOffice(office, 1400, 800);
     const team = office.teams.find((item) => item.employees.some((employee) => employee.id === "busy"))!;
     const room = layout.rooms.find((item) => item.key === team.key)!;
-    const desks = layout.desks.filter((desk) => desk.x >= room.x && desk.x < room.x + room.width && desk.y >= room.y && desk.y < room.y + room.height);
+    const desks = layout.desks.filter(
+      (desk) => desk.x >= room.x && desk.x < room.x + room.width && desk.y >= room.y && desk.y < room.y + room.height,
+    );
     expect(desks).toHaveLength(2);
     expect(desks.filter((desk) => !desk.away).map((desk) => desk.employee.id)).toEqual(["busy"]);
     expect(layout.desks.filter((desk) => desk.employee.id === CTO_ID)).toHaveLength(1);
@@ -279,7 +300,9 @@ describe("finished agents", () => {
   });
 
   it("a question for you stays a wait, not a raised hand", () => {
-    const office = officeOf(dash([card({ key: "ask", sessions: [session({ id: "q", state: "waiting", said_full: "Which one?" })] })]));
+    const office = officeOf(
+      dash([card({ key: "ask", sessions: [session({ id: "q", state: "waiting", said_full: "Which one?" })] })]),
+    );
     expect(agents(office)[0].pose).toBe("waiting");
   });
 });
@@ -287,7 +310,11 @@ describe("finished agents", () => {
 describe("office zoom hit", () => {
   it("finds the department office under the point, never the meeting or break room", async () => {
     const { roomHit } = await import("./draw");
-    const layout = layoutOffice(officeOf(dash([card({ key: "a", sessions: [session({ id: "a", action_running: true, action: "Bash x" })] })])), 1400, 800);
+    const layout = layoutOffice(
+      officeOf(dash([card({ key: "a", sessions: [session({ id: "a", action_running: true, action: "Bash x" })] })])),
+      1400,
+      800,
+    );
     for (const room of layout.rooms) {
       const hit = roomHit(layout, room.x + room.width / 2, room.y + room.height / 2);
       expect(hit).toBe(room.key === "break" || room.key === "meeting" ? null : room.key);

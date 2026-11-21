@@ -10,12 +10,13 @@ describe("chat inline markdown", () => {
 });
 
 describe("session order", () => {
-  it("puts the sessions that need you first and keeps each group's order", async () => {
-    const { needsYouFirst } = await import("./ChatConsole");
-    const card = (key: string, phase: string) =>
-      ({ key, phase, sessions: [{ id: key, name: key, state: "working" }], needs_you: [], runs: [], now: [] }) as never;
-    const order = needsYouFirst([card("a", "implement"), card("b", "review"), card("c", "plan"), card("d", "review")]);
-    expect(order.map((item: { key: string }) => item.key)).toEqual(["b", "d", "a", "c"]);
+  it("keeps each session where it first appeared and adds new ones at the end", async () => {
+    const { stableOrder } = await import("./ChatConsole");
+    const cards = (...keys: string[]) => keys.map((key) => ({ key }) as never);
+    const first = stableOrder([], cards("a", "b", "c"));
+    expect(first).toEqual(["a", "b", "c"]);
+    expect(stableOrder(first, cards("c", "b", "a", "d"))).toEqual(["a", "b", "c", "d"]);
+    expect(stableOrder(first, cards("c", "a"))).toEqual(["a", "c"]);
   });
 });
 

@@ -34,7 +34,14 @@ export function drawLobby(ctx: CanvasRenderingContext2D, lobby: Rect, building: 
   for (let row = 0; row * tile < height; row += 1) {
     for (let col = 0; col * tile < width; col += 1) {
       const w = Math.min(tile, width - col * tile);
-      rect(ctx, x + col * tile, y + row * tile, w, Math.min(tile, height - row * tile), (row + col) % 2 ? LOBBY_A : LOBBY_B);
+      rect(
+        ctx,
+        x + col * tile,
+        y + row * tile,
+        w,
+        Math.min(tile, height - row * tile),
+        (row + col) % 2 ? LOBBY_A : LOBBY_B,
+      );
     }
   }
   const door = x + width / 2;
@@ -80,7 +87,8 @@ export function drawMeetingRoom(ctx: CanvasRenderingContext2D, room: PlacedRoom)
   const { x, y, width, height, scale: d } = room;
   const band = BUILDING.header * d;
   rect(ctx, x, y + band, width, height - band, "#34506b");
-  for (let line = y + band + 6 * d; line < y + height; line += 6 * d) rect(ctx, x, line, width, Math.max(1, d / 3), "#3c5a77");
+  for (let line = y + band + 6 * d; line < y + height; line += 6 * d)
+    rect(ctx, x, line, width, Math.max(1, d / 3), "#3c5a77");
   drawBackWall(ctx, room);
   if (width > 140 * d) drawWhiteboard(ctx, x + 4 * d, y + 5 * d, d * 0.9);
   const table = room.table;

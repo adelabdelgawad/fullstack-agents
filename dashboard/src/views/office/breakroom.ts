@@ -47,7 +47,8 @@ function drawVending(ctx: CanvasRenderingContext2D, x: number, y: number, s: num
   rect(ctx, x + 2 * s, y + 2 * s, 10 * s, 20 * s, "#1e293b");
   const snacks = ["#f2b24c", "#4ade80", "#60a5fa", "#f472b6"];
   for (let row = 0; row < 4; row += 1) {
-    for (let col = 0; col < 2; col += 1) rect(ctx, x + (3 + col * 5) * s, y + (3 + row * 5) * s, 3 * s, 3 * s, snacks[(row + col) % 4]);
+    for (let col = 0; col < 2; col += 1)
+      rect(ctx, x + (3 + col * 5) * s, y + (3 + row * 5) * s, 3 * s, 3 * s, snacks[(row + col) % 4]);
   }
   rect(ctx, x + 13 * s, y + 4 * s, 3 * s, 6 * s, Math.floor(tMs / 700) % 2 ? "#4ade80" : "#14532d");
   rect(ctx, x + 2 * s, y + 24 * s, 10 * s, 2 * s, "#0f172a");
@@ -139,7 +140,14 @@ export function drawBreakRoom(ctx: CanvasRenderingContext2D, room: PlacedRoom, t
   if (room.table) drawTable(ctx, room.table);
 }
 
-function drawStanding(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, spot: PlacedSpot, step = 0): void {
+function drawStanding(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  s: number,
+  spot: PlacedSpot,
+  step = 0,
+): void {
   drawFigure(ctx, x, y, s, spot.employee.colour, step);
 }
 
@@ -155,7 +163,14 @@ function drawFigure(ctx: CanvasRenderingContext2D, x: number, y: number, s: numb
 }
 
 /** An agent walking between rooms, feet at (fx, fy). */
-export function drawWalking(ctx: CanvasRenderingContext2D, fx: number, fy: number, s: number, colour: number, step: number): void {
+export function drawWalking(
+  ctx: CanvasRenderingContext2D,
+  fx: number,
+  fy: number,
+  s: number,
+  colour: number,
+  step: number,
+): void {
   drawFigure(ctx, fx - 6 * s, fy - 43 * s, s, colour, step ? 1 : -1);
   rect(ctx, fx - 9 * s, fy - 22 * s + (step ? s : 0), 3 * s, 8 * s, SHIRTS[colour]);
   rect(ctx, fx + 6 * s, fy - 22 * s + (step ? 0 : s), 3 * s, 8 * s, SHIRTS[colour]);

@@ -92,17 +92,19 @@ function Workers({ workers, picked, pick }: { workers: Worker[]; picked: string 
   );
 }
 
-/** Sessions that need you first, then the rest; each group keeps the dashboard's order (most recent first). */
-export function needsYouFirst(cards: Card[]): Card[] {
-  return [...cards.filter(needsHuman), ...cards.filter((card) => !needsHuman(card))];
+/** Sessions in a fixed order: each keeps the place it first appeared in, new ones join at the end, so the list never
+ * reshuffles while you work in it. Sessions that need a decision are marked red instead of moved. */
+export function stableOrder(previous: string[], cards: Card[]): string[] {
+  const live = new Set(cards.map((card) => card.key));
+  const kept = previous.filter((key) => live.has(key));
+  return [...kept, ...cards.map((card) => card.key).filter((key) => !kept.includes(key))];
 }
 
-/** A heading where a group starts: "Needs you" over the first, "Other sessions" over the rest when both exist. */
-function sectionHeading(cards: Card[], index: number): string {
-  const asks = needsHuman(cards[index]);
-  if (index > 0 && needsHuman(cards[index - 1]) === asks) return "";
-  if (asks) return "Needs you";
-  return index > 0 ? "Other sessions" : "";
+function useStableCards(cards: Card[]): Card[] {
+  const order = useRef<string[]>([]);
+  order.current = stableOrder(order.current, cards);
+  const byKey = new Map(cards.map((card) => [card.key, card]));
+  return order.current.map((key) => byKey.get(key)!);
 }
 
 /** Close the session's herdr pane after a confirmation, as the Agents page's "end session" does. */
@@ -143,14 +145,16 @@ function Sidebar({
       <button type="button" className="chat-new" onClick={(event) => void openNewSession(event.currentTarget)}>
         + New session
       </button>
-      {cards.map((card, index) => {
+      {cards.map((card) => {
         const state = card.sessions[0]?.state || "";
-        const heading = sectionHeading(cards, index);
         const selected = card.key === current?.key;
         return (
           <div key={card.key}>
-            {heading && <span className="chat-section">{heading}</span>}
-            <div className={`chat-session${selected && !picked ? " on" : ""}`}>
+            <div
+              className={`chat-session${selected && !picked ? " on" : ""}${
+                needsHuman(card) ? " ask" : state === "working" ? " working" : ""
+              }`}
+            >
               <button type="button" aria-current={selected} onClick={() => pick(card.key)}>
                 <span className="chat-sidebar-title">{sessionTitle(card)}</span>
                 <span className={`chat-state ${needsHuman(card) ? "ask" : state}`}>
@@ -384,7 +388,7 @@ function Composer({ pane }: { pane: string | undefined }) {
 export function ChatConsole({ close, title }: { close: () => void; title: string }) {
   const all = useStore((storeState) => storeState.state?.cards || []);
   const panes = useStore((storeState) => storeState.state?.session_panes || {});
-  const cards = needsYouFirst(all);
+  const cards = useStableCards(all);
   const [key, setKey] = useState<string | null>(null);
   const [terminal, setTerminal] = useState(false);
   const [workerId, setWorkerId] = useState<string | null>(null);

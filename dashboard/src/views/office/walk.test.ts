@@ -8,16 +8,28 @@ function session(patch: Partial<Session> = {}): Session {
 }
 
 function card(key: string, busy: boolean, title = key): Card {
-  const lead = busy ? session({ id: key, action_running: true, action: "Bash build" }) : session({ id: key, state: "quiet" });
+  const lead = busy
+    ? session({ id: key, action_running: true, action: "Bash build" })
+    : session({ id: key, state: "quiet" });
   return { key, title, label: key, updated: 1, runs: [], now: [], sessions: [lead], needs_you: [], phase: "implement" };
 }
 
 function dash(cards: Card[], teams: DashState["office_teams"] = []): DashState {
-  return { cards, waiting: [], still_open: [], history: [], session_panes: {}, repo: "/repo", locks: {}, generated: 1, office_teams: teams };
+  return {
+    cards,
+    waiting: [],
+    still_open: [],
+    history: [],
+    session_panes: {},
+    repo: "/repo",
+    locks: {},
+    generated: 1,
+    office_teams: teams,
+  };
 }
 
 const TEAMS = [
-  { name: "CTO", match: ["cto"], members: ["Adel", "Radwa", "Doha"] },
+  { name: "CTO", match: ["cto"], members: ["Adel"] },
   { name: "Network Engineers", match: ["network"], members: ["Boraie", "Moustafa", "Karim", "Abudaif"] },
 ];
 
@@ -26,12 +38,10 @@ function layout(cards: Card[], round = 0): OfficeLayout {
 }
 
 describe("named staff", () => {
-  it("names the CTO, seats the assistant, and sends idle members to the break room in person", () => {
+  it("names the CTO and sends idle members to the break room in person", () => {
     const placed = layout([card("network-vpn", true)]);
     const people = new Map([...placed.desks, ...placed.spots].map((place) => [place.employee.id, place.employee]));
     expect(people.get("cto")?.person).toBe("Adel");
-    expect(people.get("assistant:Radwa")?.person).toBe("Radwa");
-    expect(people.get("assistant:Doha")?.person).toBe("Doha");
     expect(people.get("network-vpn")?.person).toBe("Boraie");
     const onBreak = placed.spots.map((spot) => spot.employee.name);
     expect(onBreak).toEqual(expect.arrayContaining(["Moustafa", "Karim", "Abudaif"]));
@@ -41,7 +51,13 @@ describe("named staff", () => {
 
 describe("break rounds", () => {
   it("swap who plays ping-pong, who plays PlayStation and who sits at the bar every round", () => {
-    const cards = [card("network-a", false), card("network-b", false), card("network-c", false), card("network-d", false), card("network-e", false)];
+    const cards = [
+      card("network-a", false),
+      card("network-b", false),
+      card("network-c", false),
+      card("network-d", false),
+      card("network-e", false),
+    ];
     const activities = (round: number) =>
       Object.fromEntries(layout(cards, round).spots.map((spot) => [spot.employee.id, spot.activity]));
     const first = activities(0);
@@ -90,9 +106,14 @@ describe("shared offices", () => {
     const placed = layoutOffice(officeOf(dash([card("deploy-x", true), card("network-y", true)], teams)), 1400, 800);
     const room = placed.rooms.find((item) => item.key === "Infrastructure")!;
     expect(room.label).toBe("DevOps · Network Engineers");
-    const inside = placed.desks.filter((desk) => desk.x >= room.x && desk.x < room.x + room.width && desk.y >= room.y && desk.y < room.y + room.height);
+    const inside = placed.desks.filter(
+      (desk) => desk.x >= room.x && desk.x < room.x + room.width && desk.y >= room.y && desk.y < room.y + room.height,
+    );
     expect(inside).toHaveLength(4);
-    expect(inside.filter((desk) => !desk.away && !desk.off).map((desk) => desk.employee.person)).toEqual(["Desouky", "Boraie"]);
+    expect(inside.filter((desk) => !desk.away && !desk.off).map((desk) => desk.employee.person)).toEqual([
+      "Desouky",
+      "Boraie",
+    ]);
   });
 });
 
@@ -108,21 +129,14 @@ describe("stable breaks", () => {
 });
 
 describe("CTO office", () => {
-  it("the CTO has his own desk and the two assistants share one desk", () => {
-    const placed = layout([card("network-a", true)]);
-    const desk = (id: string) => placed.desks.find((item) => item.employee.id === id)!;
-    const [radwa, doha, adel] = [desk("assistant:Radwa"), desk("assistant:Doha"), desk(CTO_ID)];
-    expect(radwa.y).toBe(doha.y);
-    expect(Math.abs(doha.x - radwa.x)).toBe(40 * radwa.scale);
-    expect(adel.x === radwa.x && adel.y === radwa.y).toBe(false);
-  });
-
-  it("the assistants carry every session; the CTO only those waiting on a decision", () => {
-    const asking = { ...card("network-ask", true), sessions: [session({ id: "q", state: "waiting", question: "Ship it?" })] };
+  it("the CTO sits alone and carries every session, waiting while any needs a decision", () => {
+    const asking = {
+      ...card("network-ask", true),
+      sessions: [session({ id: "q", state: "waiting", question: "Ship it?" })],
+    };
     const office = officeOf(dash([card("network-a", true), asking], TEAMS));
-    const people = new Map(office.teams.flatMap((team) => team.employees).map((employee) => [employee.id, employee]));
-    expect(people.get(CTO_ID)).toMatchObject({ sessions: 1, pose: "waiting", person: "Adel" });
-    expect(people.get(CTO_ID)?.reports?.map((report) => report.id)).toEqual(["network-ask"]);
-    expect(people.get("assistant:Radwa")).toMatchObject({ sessions: 2, total: 2, pose: "typing" });
+    const cto = office.teams[0];
+    expect(cto.employees.map((employee) => employee.id)).toEqual([CTO_ID]);
+    expect(cto.employees[0]).toMatchObject({ sessions: 2, total: 2, pose: "waiting", person: "Adel" });
   });
 });

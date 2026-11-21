@@ -8,7 +8,6 @@ import { Walks } from "./office/walk";
 import {
   BREAK_ROUND_MS,
   CTO_ID,
-  isAssistant,
   EMPTY_LAYOUT,
   roomOfTeam,
   layoutOffice,
@@ -179,8 +178,6 @@ function AccessibleEmployees({ office, select }: { office: Office; select: (id: 
   );
 }
 
-const ALL_SESSIONS = "all-sessions";
-
 export function OfficeView() {
   const state = useStore((storeState) => storeState.state);
   const office = useMemo(() => officeOf(state), [state]);
@@ -194,12 +191,11 @@ export function OfficeView() {
   const employees = useMemo(() => office.teams.flatMap((team) => team.employees), [office]);
   const ctoName = employees.find((employee) => employee.id === CTO_ID)?.person || "CTO";
   useOfficeCanvas(canvasRef, shown, null, placed, Boolean(zoomTeam));
-  /** An agent, or its screen, opens what that screen shows: the agent's card, the CTO's decisions, or every session
-   * for the assistants. Named staff with no session have nothing to open. */
+  /** An agent, or its screen, opens what that screen shows: the agent's card, or every session for the CTO. Named
+   * staff with no session have nothing to open. */
   const open = (id: string | null): boolean => {
     if (!id) return false;
-    if (isAssistant(id)) setConsoleId(ALL_SESSIONS);
-    else if (id === CTO_ID) setConsoleId(CTO_ID);
+    if (id === CTO_ID) setConsoleId(CTO_ID);
     else {
       const agent = employees.find((employee) => employee.id === id);
       if (!agent?.cardKey) return false;
@@ -225,8 +221,7 @@ export function OfficeView() {
         <canvas ref={canvasRef} className="office-canvas" onClick={clickCanvas} aria-hidden="true" />
       </div>
       <AccessibleEmployees office={office} select={open} />
-      {consoleId === CTO_ID && <ChatConsole close={() => setConsoleId(null)} title={`${ctoName} · needs you first`} />}
-      {consoleId === ALL_SESSIONS && <ChatConsole close={() => setConsoleId(null)} title="Assistants · all sessions" />}
+      {consoleId === CTO_ID && <ChatConsole close={() => setConsoleId(null)} title={`${ctoName} · all sessions`} />}
     </section>
   );
 }

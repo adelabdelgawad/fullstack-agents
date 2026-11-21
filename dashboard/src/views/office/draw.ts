@@ -1,7 +1,16 @@
 import { drawBreakRoom, drawBreakSpot, drawWalking } from "./breakroom";
 import type { Walker } from "./walk";
 import { drawCorridor, drawDoor, drawExecutiveRoom, drawLobby, drawMeetingRoom } from "./floorplan";
-import { BREAK_ROOM, BUILDING, CTO_TEAM, MEETING_ROOM, type OfficeLayout, type PlacedBuilding, type PlacedDesk, type PlacedRoom } from "./model";
+import {
+  BREAK_ROOM,
+  BUILDING,
+  CTO_TEAM,
+  MEETING_ROOM,
+  type OfficeLayout,
+  type PlacedBuilding,
+  type PlacedDesk,
+  type PlacedRoom,
+} from "./model";
 
 const SHIRTS = ["#4f8ff7", "#4ade80", "#f2b24c", "#f472b6", "#a78bfa", "#22d3ee", "#fb7185", "#e5e7eb"];
 const HAIR = ["#231b16", "#5b3825", "#d6a85f", "#8a5b3d", "#202938", "#6b4631", "#d7d2c8", "#b86b42"];
@@ -38,7 +47,14 @@ export function rect(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
   ctx.fillRect(x, y, w, h);
 }
 
-export function text(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, size: number, max: number): void {
+export function text(
+  ctx: CanvasRenderingContext2D,
+  value: string,
+  x: number,
+  y: number,
+  size: number,
+  max: number,
+): void {
   ctx.font = `bold ${size}px monospace`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -70,7 +86,8 @@ export function drawFloor(ctx: CanvasRenderingContext2D, x: number, y: number, w
     const py = y + row * plank;
     if (row % 2) rect(ctx, x, py, w, Math.min(plank, y + h - py), C.floorAlt);
     rect(ctx, x, py, w, Math.max(1, s / 2), C.plank);
-    for (let seam = (row % 3) * 9 * s; seam < w; seam += 28 * s) rect(ctx, x + seam, py, Math.max(1, s / 2), plank, C.plank);
+    for (let seam = (row % 3) * 9 * s; seam < w; seam += 28 * s)
+      rect(ctx, x + seam, py, Math.max(1, s / 2), plank, C.plank);
   }
 }
 
@@ -181,7 +198,14 @@ function drawChair(ctx: CanvasRenderingContext2D, desk: PlacedDesk): void {
   rect(ctx, x + 33 * s, y + 44 * s, 2 * s, 3 * s, "#555");
 }
 
-const RING: Record<string, string> = { typing: "#4ade80", reading: "#60a5fa", waiting: "#f87171", done: "#f2b24c", idle: "#94a3b8", asleep: "#475569" };
+const RING: Record<string, string> = {
+  typing: "#4ade80",
+  reading: "#60a5fa",
+  waiting: "#f87171",
+  done: "#f2b24c",
+  idle: "#94a3b8",
+  asleep: "#475569",
+};
 
 /** A status ring on the floor under the agent: green working, blue reading, pulsing red waiting on you. */
 function drawRing(ctx: CanvasRenderingContext2D, desk: PlacedDesk, tMs: number): void {
@@ -278,7 +302,10 @@ function drawPose(ctx: CanvasRenderingContext2D, desk: PlacedDesk, frame: number
   }
 }
 
-function drawLabel(ctx: CanvasRenderingContext2D, desk: { x: number; y: number; scale: number; employee: PlacedDesk["employee"] }): void {
+function drawLabel(
+  ctx: CanvasRenderingContext2D,
+  desk: { x: number; y: number; scale: number; employee: PlacedDesk["employee"] },
+): void {
   const { x, y, scale: s, employee } = desk;
   const clip = (value: string) => (value.length > 18 ? `${value.slice(0, 17)}…` : value);
   // A named person shows the name, with the session below; otherwise the session name alone. Bold so it reads at
@@ -368,8 +395,12 @@ function drawWalkers(ctx: CanvasRenderingContext2D, layout: OfficeLayout, walker
 /** The running computer of an agent at its desk, for opening that agent's session console. */
 export function pcHit(layout: OfficeLayout, x: number, y: number): string | null {
   const desk = layout.desks.find(
-    (item) => !item.away && x >= item.x + 16 * item.scale && x <= item.x + 40 * item.scale
-      && y >= item.y && y <= item.y + 18 * item.scale,
+    (item) =>
+      !item.away &&
+      x >= item.x + 16 * item.scale &&
+      x <= item.x + 40 * item.scale &&
+      y >= item.y &&
+      y <= item.y + 18 * item.scale,
   );
   return desk ? desk.employee.id : null;
 }
@@ -378,8 +409,13 @@ export function pcHit(layout: OfficeLayout, x: number, y: number): string | null
 /** The office (a department room) under the point, for zooming; the meeting and break rooms are not offices. */
 export function roomHit(layout: OfficeLayout, x: number, y: number): string | null {
   const room = layout.rooms.find(
-    (item) => item.key !== BREAK_ROOM && item.key !== MEETING_ROOM
-      && x >= item.x && x <= item.x + item.width && y >= item.y && y <= item.y + item.height,
+    (item) =>
+      item.key !== BREAK_ROOM &&
+      item.key !== MEETING_ROOM &&
+      x >= item.x &&
+      x <= item.x + item.width &&
+      y >= item.y &&
+      y <= item.y + item.height,
   );
   return room?.key ?? null;
 }

@@ -26,8 +26,7 @@ const cells = (line: string) =>
     .split("|")
     .map((cell) => cell.trim());
 const isRow = (line: string | undefined) => Boolean(line && /^\s*\|.*\|\s*$/.test(line));
-const isRule = (line: string | undefined) =>
-  Boolean(line && /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(line));
+const isRule = (line: string | undefined) => Boolean(line && /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(line));
 
 /** Split a reply into blocks; anything that is not a table, fence or heading stays text with its line breaks. */
 export function blocks(source: string): Block[] {

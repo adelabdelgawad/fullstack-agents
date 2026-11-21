@@ -34,7 +34,8 @@ const MAX_MS = 7000;
 export function placesOf(layout: OfficeLayout): Map<string, Point & { scale: number }> {
   const places = new Map<string, Point & { scale: number }>();
   for (const desk of layout.desks) {
-    if (!desk.away) places.set(desk.employee.id, { x: desk.x + 28 * desk.scale, y: desk.y + 42 * desk.scale, scale: desk.scale });
+    if (!desk.away)
+      places.set(desk.employee.id, { x: desk.x + 28 * desk.scale, y: desk.y + 42 * desk.scale, scale: desk.scale });
   }
   for (const spot of layout.spots) {
     const s = spot.scale;
@@ -131,13 +132,20 @@ export class Walks {
     this.view = view;
     if (fresh) this.walks.clear();
     const places = placesOf(layout);
-    const entrance = layout.lobby ? { x: layout.lobby.x + layout.lobby.width / 2, y: layout.lobby.y + layout.lobby.height - 4 } : null;
+    const entrance = layout.lobby
+      ? { x: layout.lobby.x + layout.lobby.width / 2, y: layout.lobby.y + layout.lobby.height - 4 }
+      : null;
     for (const [id, place] of places) {
       const anchor = anchorOf(layout, place);
       const before = this.anchors.get(id);
       if (anchor) this.anchors.set(id, anchor);
       if (fresh || !animate || !anchor) continue;
-      if (before && before.room === anchor.room && Math.abs(before.fx - anchor.fx) + Math.abs(before.fy - anchor.fy) < 0.01) continue;
+      if (
+        before &&
+        before.room === anchor.room &&
+        Math.abs(before.fx - anchor.fx) + Math.abs(before.fy - anchor.fy) < 0.01
+      )
+        continue;
       const current = this.walks.get(id);
       const from = current ? along(current, now) : before ? pointOf(layout, before) : entrance;
       if (!from) continue;
