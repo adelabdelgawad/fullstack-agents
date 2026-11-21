@@ -9,6 +9,7 @@ import { HerdrOverlay } from "./terminal/HerdrOverlay";
 import { AgentsActions, AgentsView } from "./views/AgentsView";
 import { HerdrView } from "./views/HerdrView";
 import { HistoryView } from "./views/HistoryView";
+import { GoalsView } from "./views/GoalsView";
 import { OfficeView } from "./views/OfficeView";
 
 function onEscape(e: KeyboardEvent): void {
@@ -57,7 +58,7 @@ export function App() {
   const view = useStore((s) => s.view);
   const wall = useStore((s) => s.wall);
   useAppEffects(view, wall);
-  const View = view === "history" ? HistoryView : view === "office" ? OfficeView : AgentsView;
+  const View = view === "history" ? HistoryView : view === "office" ? OfficeView : view === "goals" ? GoalsView : AgentsView;
   return (
     <>
       <Layout actions={view === "agents" ? <AgentsActions /> : undefined}>

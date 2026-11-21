@@ -40,6 +40,7 @@ from plan_usage import plan_usage
 from runs_dir import read_dirs, runs_dir
 import liveness
 import herdr_web
+import goals
 REACT = HERE / "lib" / "dashboard-react"
 FIRST_PROMPTS = {}
 LAST_ASKS = {}
@@ -2149,7 +2150,7 @@ def pane_session(pane, root, now):
 def merge_states(home, parts, now):
     board = load_json(home.board) or {}
     st = {"generated": now, "ui": ui_stamp(), "repo": str(home.root), "main": home.main,
-          "cards": [], "waiting": [], "still_open": [], "_sources": {}, "_docs": {}, "_scopes": {},
+          "cards": [], "waiting": [], "still_open": [], "_sources": {}, "_docs": {}, "_scopes": {}, "goals": [],
           "session_panes": {}, "abandoned": [], "office_teams": office_teams(),
           "locks": board.get("locks") or {}, "events": (board.get("events") or [])[-12:],
           "totals": totals([], [], [], now), "history": []}
@@ -2159,10 +2160,13 @@ def merge_states(home, parts, now):
         st["history"] += p["history"]
         for k in ("cards", "waiting", "still_open", "abandoned"):
             st[k] += p[k]
+        st["goals"] += [{**goal, "repo": p.get("repo", "")} for goal in p.get("goals") or []]
         for k in ("_sources", "_docs", "_scopes", "session_panes"):
             st[k].update(p[k])
     st["cards"].sort(key=lambda c: -c["updated"])
     st["history"].sort(key=lambda h: -h["updated"])
+    if not any(p.get("repo") == str(home.root) for p in parts):
+        st["goals"] += [{**goal, "repo": str(home.root)} for goal in goals.for_cards(str(home.root), st["cards"])]
     return st
 
 
@@ -2461,8 +2465,9 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
             out.append({**s, "key": key, "phase": card["phase"] if card else "", "card": card["key"] if card else ""})
         return sorted(out, key=lambda x: -x["updated"])
 
+    goal_rows = goals.for_cards(main_root, cards)
     return {
-        "generated": now, "ui": ui_stamp(), "repo": main_root, "main": repo.main,
+        "generated": now, "ui": ui_stamp(), "repo": main_root, "main": repo.main, "goals": goal_rows,
         "cards": sorted(cards, key=lambda c: -c["updated"]),
         "waiting": attention("waiting"), "still_open": attention("still_open"),
         "_sources": output_sources(sessions),
@@ -2881,7 +2886,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         q = urllib.parse.parse_qs(url.query)
         if not self.authorised(q):
             return self.send(403, b"forbidden: open the URL printed by 'fsa-dashboard start'", "text/plain")
-        if url.path.rstrip("/") in ("", "/next", "/next/agents", "/next/herdr", "/next/history", "/next/office"):
+        if url.path.rstrip("/") in ("", "/next", "/next/agents", "/next/herdr", "/next/history", "/next/office", "/next/goals"):
             cookie = f"fsa_t={self.server.token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000"
             return self.send(200, (REACT / "index.html").read_bytes(), "text/html; charset=utf-8", {"Set-Cookie": cookie})
         if url.path == "/api/state":

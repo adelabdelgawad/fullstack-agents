@@ -224,6 +224,7 @@ def render(output):
     shutil.copy2(SOURCE / "scripts/lib/prompt_history.py", output / "scripts/prompt_history.py")
     shutil.copy2(SOURCE / "scripts/lib/coordination_log.py", output / "scripts/coordination_log.py")
     shutil.copy2(SOURCE / "scripts/lib/request_inbox.py", output / "scripts/request_inbox.py")
+    shutil.copy2(SOURCE / "scripts/lib/goals.py", output / "scripts/goals.py")
     shutil.copy2(SOURCE / "scripts/lib/task_controls.py", output / "scripts/task_controls.py")
     shutil.copy2(SOURCE / "scripts/lib/task_revisions.py", output / "scripts/task_revisions.py")
     shutil.copy2(SOURCE / "scripts/lib/result_outbox.py", output / "scripts/result_outbox.py")

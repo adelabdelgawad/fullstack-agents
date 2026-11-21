@@ -350,6 +350,10 @@ stop guard holds the turn while one is unclassified. Classifying is the lead's j
   A supplementary or queued request never replaces the current objective. `ambiguous` keeps it open: report the uncertainty to
   the user instead of guessing. Link it to rows with `request link`, close it with `request done` (`--dropped --reason` when it
   will not be done).
+- Business goals (`G<n>`) live in the same log and show on the dashboard's Goals tab, with progress taken from linked
+  cards. Record one only when the user names a goal: `fsa-task goal --root <root> add --title "..." [--owner CTO]`.
+  Link work with `goal link --id G1 [--requests R3,R4] [--sessions <id>]` (with neither, it links the current session). Change
+  it with `goal set --id G1 [--status active|done|dropped] [--title ...] [--owner ...]`. List goals with `goal list`.
 - A pause, an approval or a deploy hold is a control with a scope. Hooks only flag candidates; you record the control from the
   user's own words: `fsa-task control --root <root> set --kind deploy_hold|pause|approval --scope project|task|rows [--rows A,B] --request R4 --quote "<words from that request>"`.
   Use `project` only when the user asked for everything; otherwise `task` or `rows`. A candidate that is not a control:

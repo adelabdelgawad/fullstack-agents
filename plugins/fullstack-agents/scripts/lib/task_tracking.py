@@ -535,13 +535,14 @@ def _parser():
     import task_revisions, result_outbox
     evidence_commands = task_evidence.COMMANDS
     blocker_commands = task_blockers.COMMANDS
-    registrars = {"request": request_inbox.add_arguments, "control": task_controls.add_arguments,
+    import goals
+    registrars = {"goal": goals.add_arguments, "request": request_inbox.add_arguments, "control": task_controls.add_arguments,
                   "revise": task_revisions.add_arguments, "report": result_outbox.add_arguments}
     for command in ("init", "bind", "set", "add", "show", "release", "checkpoint", "adopt", "close", "upgrade",
-                     "downgrade", "request", "control", "revise", "report", *evidence_commands, *blocker_commands):
+                     "downgrade", "goal", "request", "control", "revise", "report", *evidence_commands, *blocker_commands):
         sub = actions.add_parser(command)
         sub.add_argument("--root", required=True)
-        sub.add_argument("--file", required=command not in ("request", "control", "revise", "report"))
+        sub.add_argument("--file", required=command not in ("goal", "request", "control", "revise", "report"))
         sub.add_argument("--session", default=session_default)
         if command in evidence_commands:
             task_evidence_cli.add_arguments(command, sub)
@@ -760,6 +761,9 @@ def _dispatch(args, root, path):
         commands[args.command] = lambda: task_blockers.dispatch(args, root, path)
     if args.command == "request":
         commands[args.command] = lambda: request_inbox.dispatch(args, root)
+    if args.command == "goal":
+        import goals
+        commands[args.command] = lambda: goals.dispatch(args, root)
     if args.command == "control":
         import task_controls
         commands[args.command] = lambda: task_controls.dispatch(args, root)
@@ -793,7 +797,7 @@ def main(argv=None):
         root = _root(args.root)
         if args.command in ("init", "bind"):
             _binding_path(args.session)
-        no_ledger_path = args.command == "report" or (args.command in ("request", "control", "revise") and not args.file)
+        no_ledger_path = args.command == "report" or (args.command in ("goal", "request", "control", "revise") and not args.file)
         path = None if no_ledger_path else _file(root, args.file, existing=args.command != "init")
         result = _cmd_init(args, root, path) if args.command == "init" else _dispatch(args, root, path)
         if result is None:

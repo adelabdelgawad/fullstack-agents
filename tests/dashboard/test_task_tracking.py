@@ -240,6 +240,7 @@ class TaskTrackingTests(unittest.TestCase):
         (bundle / "task_tracking.py").write_bytes(MODULE.read_bytes())
         (bundle / "coordination_log.py").write_bytes((LIB / "coordination_log.py").read_bytes())
         (bundle / "request_inbox.py").write_bytes((LIB / "request_inbox.py").read_bytes())
+        (bundle / "goals.py").write_bytes((LIB / "goals.py").read_bytes())
         (bundle / "task_controls.py").write_bytes((LIB / "task_controls.py").read_bytes())
         (bundle / "task_revisions.py").write_bytes((LIB / "task_revisions.py").read_bytes())
         (bundle / "result_outbox.py").write_bytes((LIB / "result_outbox.py").read_bytes())

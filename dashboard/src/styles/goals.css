@@ -1,0 +1,89 @@
+.goals {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.goal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 2px solid #65758e;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 4px 4px 0 #080c12;
+}
+
+.goal-card p {
+  margin: 0;
+}
+
+.goal-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.goal-head h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.goal-id,
+.goal-status {
+  font-family: var(--mono, monospace);
+  font-size: 0.75rem;
+  color: var(--muted, inherit);
+}
+
+.goal-done .goal-status {
+  color: var(--green, #4ade80);
+}
+
+.goal-dropped {
+  opacity: 0.6;
+}
+
+.goal-meta {
+  font-size: 0.8rem;
+  color: var(--muted, inherit);
+}
+
+.goal-bar {
+  height: 8px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.goal-bar span {
+  display: block;
+  height: 100%;
+  background: var(--blue);
+}
+
+.goal-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.goal-cards button {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.goal-cards button:hover,
+.goal-cards button:focus-visible {
+  border-color: var(--blue);
+}

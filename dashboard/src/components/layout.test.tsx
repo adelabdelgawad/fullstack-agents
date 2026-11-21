@@ -91,7 +91,7 @@ describe("shared view layout", () => {
   it.each(VIEWS)("renders the shared tabs and status on %s", (view) => {
     const result = render(view);
     const tabs = result.querySelectorAll('[role="tab"]');
-    expect(Array.from(tabs, (tab) => tab.getAttribute("aria-label"))).toEqual(["Agents", "Herdr", "History", "Office"]);
+    expect(Array.from(tabs, (tab) => tab.getAttribute("aria-label"))).toEqual(["Agents", "Herdr", "History", "Office", "Goals"]);
     expect(result.querySelector(`#view-${view}`)?.getAttribute("aria-selected")).toBe("true");
     expect(result.querySelector("#view-agents .viewtab-count")?.textContent).toBe("2");
     expect(result.querySelector("#fwall")).not.toBeNull();

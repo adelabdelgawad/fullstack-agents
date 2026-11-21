@@ -116,6 +116,18 @@ export interface OfficeTeamRule {
   match: string[];
 }
 
+export interface Goal {
+  id: string;
+  title: string;
+  owner: string;
+  status: string;
+  requests: string[];
+  cards: string[];
+  done: number;
+  total: number;
+  repo?: string;
+}
+
 export interface DashState {
   cards: Card[];
   waiting: WaitingEntry[];
@@ -128,6 +140,7 @@ export interface DashState {
   generated: number;
   ui?: string;
   office_teams?: OfficeTeamRule[];
+  goals?: Goal[];
   [key: string]: unknown;
 }
 
