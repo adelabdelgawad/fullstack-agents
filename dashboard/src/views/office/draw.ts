@@ -383,13 +383,23 @@ export function drawOffice(
     if (walker) continue;
     drawRing(ctx, desk, tMs);
     drawPerson(ctx, desk, frame);
-    drawLabel(ctx, desk);
     if (desk.employee.id === selectedId) drawSelection(ctx, desk);
   }
+  drawLightsOut(ctx, layout);
+  for (const desk of layout.desks) if (!walkers.has(desk.employee.id)) drawLabel(ctx, desk);
   drawWalkers(ctx, walkers);
   for (const desk of layout.desks) {
     if (desk.employee.pose === "done" && !walkers.has(desk.employee.id)) drawAnswer(ctx, desk);
   }
+}
+
+/** Offices whose session has finished: the lights are out, so the whole room is dimmed (labels stay readable). */
+function drawLightsOut(ctx: CanvasRenderingContext2D, layout: OfficeLayout): void {
+  const dark = new Set(layout.desks.filter((desk) => finished(desk.employee)).map((desk) => desk.employee.cardKey));
+  ctx.save();
+  ctx.fillStyle = "rgba(3, 5, 10, 0.62)";
+  for (const room of layout.rooms) if (dark.has(room.key)) ctx.fillRect(room.x, room.y, room.width, room.height);
+  ctx.restore();
 }
 
 /** Agents on their way: subagents carrying a desk to or from the warehouse, leaders walking in from the lobby. */
