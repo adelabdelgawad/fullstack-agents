@@ -14,7 +14,7 @@ import { esc, fmtCost, fmtTokens } from "../lib/format";
 import { openCard, toast, useStore } from "../store";
 import "../styles/office.css";
 import { CardTerminal } from "../terminal/CardTerminal";
-import { drawOffice, hitTest, pcHit } from "./office/draw";
+import { drawOffice, hitTest, pcHit, roomHit } from "./office/draw";
 import { CTO_ID, EMPTY_LAYOUT, layoutOffice, officeOf, teamOfEmployee, type Office, type OfficeEmployee, type OfficeLayout } from "./office/model";
 
 interface SendResult {
@@ -334,7 +334,13 @@ export function OfficeView() {
     // A PC screen opens the agent's full card (Information, Git changes, Terminal), as on the Agents page.
     if (agent?.cardKey) openCard(agent.cardKey);
     else if (pc || person === CTO_ID) setConsoleId(CTO_ID);
-    else setSelectedId(person);
+    else if (person) setSelectedId(person);
+    else {
+      // Clicking an office's floor or header zooms into that team; inside the zoom it goes back to the whole floor.
+      const room = roomHit(placed.current, x, y);
+      if (room) setZoom(zoomTeam ? null : room);
+      setSelectedId(null);
+    }
   };
   if (!employees.length) return <div className="office-empty">No live sessions</div>;
   return (

@@ -207,6 +207,30 @@ function drawPerson(ctx: CanvasRenderingContext2D, desk: PlacedDesk, frame: numb
   drawPose(ctx, desk, frame);
 }
 
+/** A magnifier in the office's header corner: click the office to zoom in ("-" when already zoomed). */
+function drawZoomIcon(ctx: CanvasRenderingContext2D, room: PlacedRoom, zoomed: boolean): void {
+  const s = room.scale;
+  const cx = room.x + room.width - 9 * s;
+  const cy = room.y + 7 * s;
+  ctx.save();
+  ctx.fillStyle = "#151b26";
+  ctx.fillRect(cx - 6 * s, cy - 5 * s, 12 * s, 10 * s);
+  ctx.strokeStyle = "#f2b24c";
+  ctx.lineWidth = Math.max(1, s);
+  ctx.beginPath();
+  ctx.arc(cx - s, cy - s, 3 * s, 0, Math.PI * 2);
+  ctx.moveTo(cx + 1.2 * s, cy + 1.2 * s);
+  ctx.lineTo(cx + 4 * s, cy + 4 * s);
+  ctx.moveTo(cx - 2.5 * s, cy - s);
+  ctx.lineTo(cx + 0.5 * s, cy - s);
+  if (!zoomed) {
+    ctx.moveTo(cx - s, cy - 2.5 * s);
+    ctx.lineTo(cx - s, cy + 0.5 * s);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** A speech bubble over the desk with the first three lines of the agent's answer. */
 function drawAnswer(ctx: CanvasRenderingContext2D, desk: PlacedDesk): void {
   const lines = desk.employee.answer || [];
@@ -255,12 +279,15 @@ function drawPose(ctx: CanvasRenderingContext2D, desk: PlacedDesk, frame: number
 
 function drawLabel(ctx: CanvasRenderingContext2D, desk: { x: number; y: number; scale: number; employee: PlacedDesk["employee"] }): void {
   const { x, y, scale: s, employee } = desk;
-  rect(ctx, x + 6 * s, y + 48 * s, 44 * s, 8 * s, C.label);
+  // The session name under the agent: a larger, bold font so it reads at whole-floor zoom.
+  const name = employee.name.length > 18 ? `${employee.name.slice(0, 17)}…` : employee.name;
+  ctx.font = `bold ${7 * s}px monospace`;
+  const width = Math.min(84 * s, ctx.measureText(name).width + 6 * s);
+  rect(ctx, x + 28 * s - width / 2, y + 47 * s, width, 11 * s, C.label);
   ctx.fillStyle = C.text;
-  ctx.font = `${5 * s}px monospace`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(employee.name.slice(0, 14), x + 28 * s, y + 52 * s, 42 * s);
+  ctx.fillText(name, x + 28 * s, y + 52.5 * s, width - 4 * s);
   ctx.textAlign = "start";
   ctx.textBaseline = "alphabetic";
 }
@@ -283,6 +310,7 @@ export function drawOffice(ctx: CanvasRenderingContext2D, layout: OfficeLayout, 
     else if (room.key === MEETING_ROOM) drawMeetingRoom(ctx, room);
     else drawRoom(ctx, room);
     drawDoor(ctx, room);
+    if (room.key !== BREAK_ROOM && room.key !== MEETING_ROOM) drawZoomIcon(ctx, room, layout.rooms.length === 1);
   }
   const frame = Math.floor(tMs / 375) % 2;
   for (const desk of layout.desks) {
@@ -312,6 +340,15 @@ export function pcHit(layout: OfficeLayout, x: number, y: number): string | null
 }
 
 /** People in the break room first, then the employees seated at their desks. */
+/** The office (a department room) under the point, for zooming; the meeting and break rooms are not offices. */
+export function roomHit(layout: OfficeLayout, x: number, y: number): string | null {
+  const room = layout.rooms.find(
+    (item) => item.key !== BREAK_ROOM && item.key !== MEETING_ROOM
+      && x >= item.x && x <= item.x + item.width && y >= item.y && y <= item.y + item.height,
+  );
+  return room?.key ?? null;
+}
+
 export function hitTest(layout: OfficeLayout, x: number, y: number): string | null {
   const placed = [...layout.desks.filter((desk) => !desk.away), ...layout.spots];
   for (let index = placed.length - 1; index >= 0; index -= 1) {

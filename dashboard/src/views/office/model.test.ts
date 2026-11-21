@@ -282,3 +282,14 @@ describe("finished agents", () => {
     expect(agents(office)[0].pose).toBe("waiting");
   });
 });
+
+describe("office zoom hit", () => {
+  it("finds the department office under the point, never the meeting or break room", async () => {
+    const { roomHit } = await import("./draw");
+    const layout = layoutOffice(officeOf(dash([card({ key: "a", sessions: [session({ id: "a", action_running: true, action: "Bash x" })] })])), 1400, 800);
+    for (const room of layout.rooms) {
+      const hit = roomHit(layout, room.x + room.width / 2, room.y + room.height / 2);
+      expect(hit).toBe(room.key === "break" || room.key === "meeting" ? null : room.key);
+    }
+  });
+});
