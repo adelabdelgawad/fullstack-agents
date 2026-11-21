@@ -53,6 +53,7 @@ CODEX_JUDGE_S = 600
 RUN_WINDOW_S = 72 * 3600
 SESSION_WINDOW_S = 48 * 3600
 STALL_S = 300
+PENDING_TOOL_S = 30 * 60
 IDLE_DROP_S = 12 * 3600
 ABANDON_S = 24 * 3600
 LOOSE_RUN_S = 12 * 3600
@@ -1478,6 +1479,10 @@ def read_session(path, now, wt_re, names, waits):
     if not last:
         return None
     chips, busy = subagent_chips(path.with_suffix(""), now)
+    # A tool call still waiting for its result is work in progress, not a stall: Claude Code writes nothing until a
+    # long foreground command (a build, clippy, a test run) returns. A pending question waits on the user instead.
+    pending = bool(action_id) and action_id not in answered and not action.startswith("AskUserQuestion")
+    busy = busy or pending and now - (iso_epoch(action_at) or mtime) < PENDING_TOOL_S
     ended = last[0] == "assistant" and last[1] == "end_turn"
     updated = iso_epoch(seen_at) or mtime
     idle = now - updated

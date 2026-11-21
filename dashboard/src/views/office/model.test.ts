@@ -98,7 +98,7 @@ describe("officeOf", () => {
     expect(office.teams[1].employees[0]).toMatchObject({ id: "a", role: "lead", name: "ivr-domain" });
   });
 
-  it("seats the session's running subagents and workers in its office, never its shells or finished helpers", () => {
+  it("seats the session's running subagents, workers and shells in its office, never finished ones", () => {
     const source = card({
       key: "a",
       sessions: [session({ id: "a" })],
@@ -119,8 +119,9 @@ describe("officeOf", () => {
       ["a", "lead"],
       ["w1", "worker"],
       ["h1", "helper"],
+      ["s1", "helper"],
     ]);
-    expect(office.employees[0].reports?.map((report) => report.id)).toEqual(["w1", "h1"]);
+    expect(office.employees[0].reports?.map((report) => report.id)).toEqual(["w1", "h1", "s1"]);
   });
 
   it("the CTO, named from the CTO team, carries every session and waits while any needs a decision", () => {
@@ -152,7 +153,7 @@ describe("officeOf", () => {
 });
 
 describe("leader count and shells", () => {
-  it("counts the leader and its subagents, not shells; a running shell keeps the leader at work", () => {
+  it("a running shell sits at a desk and keeps the leader at work", () => {
     const source = card({
       key: "w",
       sessions: [session({ id: "w", state: "idle", said_full: "Started the runs." })],
@@ -164,8 +165,8 @@ describe("leader count and shells", () => {
       ],
     });
     const [, office] = officeOf(dash([source])).teams;
-    expect(office.employees.map((employee) => employee.id)).toEqual(["w"]);
-    expect(office.employees[0]).toMatchObject({ pose: "typing", sessions: 1, total: 1 });
+    expect(office.employees.map((employee) => employee.id)).toEqual(["w", "s1"]);
+    expect(office.employees[0]).toMatchObject({ pose: "typing", sessions: 2, total: 2 });
     expect(finished(office.employees[0])).toBe(false);
   });
 });

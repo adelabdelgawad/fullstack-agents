@@ -160,29 +160,33 @@ export function finished(employee: OfficeEmployee): boolean {
 
 const isShell = (member: OfficeEmployee) => member.name.startsWith("shell · ");
 
-/** A session's office: its leader (the session itself) and the subagents and worker runs it has running now. */
+/** A session's office: its leader (the session itself) and everything it has running now: subagents, Codex worker
+ * runs and background shells, each at its own desk. */
 function sessionOffice(card: Card, panes: Record<string, string>): OfficeTeam | null {
   const members = cardMembers(card, panes);
   const lead = members.find((member) => member.role === "lead");
   if (!lead) return null;
-  const subagents = members.filter((member) => member.role !== "lead" && !isShell(member) && member.pose !== "idle");
-  const shells = members.filter((member) => isShell(member) && WORKING.includes(member.pose));
+  const workers = members
+    .filter(
+      (member) => member.role !== "lead" && (isShell(member) ? WORKING.includes(member.pose) : member.pose !== "idle"),
+    )
+    .map((member) => ({ ...member, sessions: WORKING.includes(member.pose) ? 1 : 0, total: 1 }));
   const label = card.sessions[0]?.name || card.title || card.label || card.key;
-  // A leader waiting on its own background shell has not finished: it keeps working with the lamp on.
-  const pose: OfficePose = shells.length && !WORKING.includes(lead.pose) ? "typing" : lead.pose;
+  // A leader whose background work still runs has not finished: it keeps working with the lamp on.
+  const busy = workers.some((member) => WORKING.includes(member.pose));
+  const pose: OfficePose = busy && !WORKING.includes(lead.pose) ? "typing" : lead.pose;
   const leader: OfficeEmployee = {
     ...lead,
     pose,
     name: label,
     cost: card.usage?.cost ?? null,
     tokens: members.reduce((sum, member) => sum + member.tokens, 0),
-    // The number on the leader's screen: who works in this office now, the leader and its subagents (shells are not
-    // people in the office, so they keep the leader busy instead of adding to the count).
-    sessions: (WORKING.includes(pose) ? 1 : 0) + subagents.filter((member) => WORKING.includes(member.pose)).length,
-    total: 1 + subagents.length,
-    reports: subagents,
+    // The number on the leader's screen: who works in this office now, the leader and everyone at a desk beside it.
+    sessions: (WORKING.includes(pose) ? 1 : 0) + workers.filter((member) => WORKING.includes(member.pose)).length,
+    total: 1 + workers.length,
+    reports: workers,
   };
-  return { key: card.key, label, employees: [leader, ...subagents] };
+  return { key: card.key, label, employees: [leader, ...workers] };
 }
 
 /** The CTO runs every session: his desk counts them all; he waits while any needs a decision, else works while any does. */
