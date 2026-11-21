@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { getJson, postJson } from "../../lib/api";
-import { needsHuman, STATE_TEXT } from "../../lib/cards";
+import { cardAgents, needsHuman, STATE_TEXT } from "../../lib/cards";
 import { esc } from "../../lib/format";
 import type { Card } from "../../lib/types";
 import { openCard, toast, useStore } from "../../store";
@@ -39,27 +39,121 @@ function useConversation(sid: string | undefined): Message[] {
   return messages;
 }
 
-function Sidebar({ cards, current, pick }: { cards: Card[]; current: Card | null; pick: (key: string) => void }) {
+/** A subagent or background shell of the selected session. */
+interface Worker {
+  id: string;
+  sid: string;
+  label: string;
+  state: string;
+  shell: boolean;
+}
+
+function workersOf(card: Card | null): Worker[] {
+  return (card ? cardAgents(card) : []).map((agent) => {
+    const label = String(agent.label || agent.id);
+    const shell = Boolean(agent.shell) || label.startsWith("shell · ");
+    return { id: agent.id, sid: agent.sid, state: agent.state, shell, label: label.replace(/^shell · /, "") };
+  });
+}
+
+/** The selected session's subagents and shells, grouped under it; picking one shows its output. */
+function Workers({ workers, picked, pick }: { workers: Worker[]; picked: string | null; pick: (id: string) => void }) {
+  const groups: Array<[string, Worker[]]> = [
+    ["Subagents", workers.filter((worker) => !worker.shell)],
+    ["Shells", workers.filter((worker) => worker.shell)],
+  ];
+  if (!workers.length) return <div className="chat-workers chat-workers-none">No subagents or shells running</div>;
+  return (
+    <div className="chat-workers">
+      {groups.map(([name, items]) =>
+        items.length ? (
+          <div key={name} role="group" aria-label={name}>
+            <span className="chat-workers-title">{`${name} (${items.length})`}</span>
+            {items.map((worker) => (
+              <button
+                key={worker.id}
+                type="button"
+                className={worker.id === picked ? "on" : ""}
+                aria-current={worker.id === picked}
+                onClick={() => pick(worker.id)}
+              >
+                <span className={`chat-dot ${worker.state}`} aria-hidden="true" />
+                <span className="chat-sidebar-title">{worker.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : null,
+      )}
+    </div>
+  );
+}
+
+function Sidebar({
+  cards,
+  current,
+  pick,
+  picked,
+  pickWorker,
+}: {
+  cards: Card[];
+  current: Card | null;
+  pick: (key: string) => void;
+  picked: string | null;
+  pickWorker: (id: string) => void;
+}) {
   return (
     <nav className="chat-sidebar" aria-label="Running sessions">
       {cards.map((card) => {
         const state = card.sessions[0]?.state || "";
+        const selected = card.key === current?.key;
         return (
-          <button
-            key={card.key}
-            type="button"
-            className={card.key === current?.key ? "on" : ""}
-            aria-current={card.key === current?.key}
-            onClick={() => pick(card.key)}
-          >
-            <span className="chat-sidebar-title">{sessionTitle(card)}</span>
-            <span className={`chat-state ${needsHuman(card) ? "ask" : state}`}>
-              {needsHuman(card) ? "needs you" : STATE_TEXT[state] || state || card.phase}
-            </span>
-          </button>
+          <div key={card.key}>
+            <button
+              type="button"
+              className={selected && !picked ? "on" : ""}
+              aria-current={selected}
+              onClick={() => pick(card.key)}
+            >
+              <span className="chat-sidebar-title">{sessionTitle(card)}</span>
+              <span className={`chat-state ${needsHuman(card) ? "ask" : state}`}>
+                {needsHuman(card) ? "needs you" : STATE_TEXT[state] || state || card.phase}
+              </span>
+            </button>
+            {selected && <Workers workers={workersOf(card)} picked={picked} pick={pickWorker} />}
+          </div>
         );
       })}
     </nav>
+  );
+}
+
+/** A subagent's transcript or a shell's output, refreshed while shown. */
+function WorkerOutput({ worker }: { worker: Worker }) {
+  const [text, setText] = useState("");
+  const end = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let live = true;
+    const url = `/api/output?sid=${encodeURIComponent(worker.sid)}&id=${encodeURIComponent(worker.id)}`;
+    const load = () =>
+      fetch(url, { cache: "no-store" })
+        .then((response) => (response.ok ? response.text() : "(this item is no longer listed)"))
+        .then((body) => live && setText(body))
+        .catch(() => undefined);
+    void load();
+    const timer = setInterval(load, REFRESH_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [worker.sid, worker.id]);
+  useEffect(() => {
+    void end.current?.scrollIntoView({ block: "end" });
+  }, [text]);
+  return (
+    <div className="chat-thread">
+      <pre className="chat-output">{text || "No output yet."}</pre>
+      <div ref={end} />
+    </div>
   );
 }
 
@@ -76,7 +170,10 @@ export function inline(text: string): Array<string | JSX.Element> {
 
 function Thread({ messages }: { messages: Message[] }) {
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView({ block: "end" }), [messages.length]);
+  useEffect(() => {
+    // Newer browsers return a Promise here; an effect must return nothing or a cleanup function.
+    void end.current?.scrollIntoView({ block: "end" });
+  }, [messages.length]);
   if (!messages.length) return <div className="chat-thread chat-empty">No messages yet.</div>;
   return (
     <div className="chat-thread">
@@ -134,14 +231,21 @@ function Composer({ pane }: { pane: string | undefined }) {
   );
 }
 
-/** The CTO console as a chat: running sessions on the left, the selected session's conversation on the right. */
+/** The CTO console as a chat: running sessions on the left with the selected one's subagents and shells under it,
+ * and the conversation (or the picked subagent's or shell's output) on the right. */
 export function ChatConsole({ close, decisions, title }: { close: () => void; decisions: boolean; title: string }) {
   const all = useStore((storeState) => storeState.state?.cards || []);
   const panes = useStore((storeState) => storeState.state?.session_panes || {});
   const cards = decisions ? all.filter(needsHuman) : all;
   const [key, setKey] = useState<string | null>(null);
   const [terminal, setTerminal] = useState(false);
+  const [workerId, setWorkerId] = useState<string | null>(null);
   const current = cards.find((card) => card.key === key) || cards[0] || null;
+  const worker = workersOf(current).find((item) => item.id === workerId) || null;
+  const pickSession = (next: string) => {
+    setKey(next);
+    setWorkerId(null);
+  };
   const sid = current?.sessions[0]?.id;
   const messages = useConversation(sid);
   useEffect(() => {
@@ -160,14 +264,27 @@ export function ChatConsole({ close, decisions, title }: { close: () => void; de
         </button>
       </div>
       <div className="chat-layout">
-        <Sidebar cards={cards} current={current} pick={setKey} />
+        <Sidebar
+          cards={cards}
+          current={current}
+          pick={pickSession}
+          picked={worker?.id || null}
+          pickWorker={setWorkerId}
+        />
         <section className="chat-main" aria-label="Conversation">
           {current ? (
             <>
               <header className="chat-head">
-                <strong>{sessionTitle(current)}</strong>
+                <strong>{worker ? `${sessionTitle(current)} › ${worker.label}` : sessionTitle(current)}</strong>
                 <div>
-                  <button type="button" aria-pressed={terminal} onClick={() => setTerminal(!terminal)}>
+                  <button
+                    type="button"
+                    aria-pressed={terminal}
+                    onClick={() => {
+                      setWorkerId(null);
+                      setTerminal(!terminal);
+                    }}
+                  >
                     {terminal ? "Chat" : "Terminal"}
                   </button>
                   <button type="button" onClick={() => openCard(current.key)}>
@@ -175,8 +292,14 @@ export function ChatConsole({ close, decisions, title }: { close: () => void; de
                   </button>
                 </div>
               </header>
-              {terminal ? <CardTerminal key={current.key} card={current} /> : <Thread messages={messages} />}
-              {!terminal && <Composer pane={sid ? panes[sid] : undefined} />}
+              {worker ? (
+                <WorkerOutput key={worker.id} worker={worker} />
+              ) : terminal ? (
+                <CardTerminal key={current.key} card={current} />
+              ) : (
+                <Thread messages={messages} />
+              )}
+              {!terminal && !worker && <Composer pane={sid ? panes[sid] : undefined} />}
             </>
           ) : (
             <div className="chat-thread chat-empty">{decisions ? "No decisions waiting." : "No live sessions."}</div>
