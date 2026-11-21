@@ -5,6 +5,8 @@ import { esc } from "../../lib/format";
 import type { Card } from "../../lib/types";
 import { load, openCard, toast, useStore } from "../../store";
 import { openHerdrConfirm, openNewSession } from "../../terminal/HerdrOverlay";
+import { filesFromPaste, LIVE_UPLOAD_MAX_BYTES, uploadFiles } from "../../terminal/files";
+import { matchCommands, SlashMenu, useSlashCommands } from "./slash";
 import { CardTerminal } from "../../terminal/CardTerminal";
 
 interface Message {
@@ -238,6 +240,32 @@ function Thread({ messages }: { messages: Message[] }) {
 function Composer({ pane }: { pane: string | undefined }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const commands = useSlashCommands();
+  const [active, setActive] = useState(0);
+  const [hidden, setHidden] = useState(false);
+  const suggestions = hidden ? [] : matchCommands(commands, text);
+  const [uploading, setUploading] = useState(false);
+  const picker = useRef<HTMLInputElement>(null);
+  /** Upload the files to this machine and add their paths to the message, as the Herdr terminal's attach does;
+   * the session reads them from there (images, PDFs, code). */
+  const attach = async (files: File[]) => {
+    if (!files.length) return;
+    if (files.some((file) => file.size > LIVE_UPLOAD_MAX_BYTES))
+      return toast("<b>Attach failed</b> 50 MB maximum", "red");
+    setUploading(true);
+    try {
+      const paths = await uploadFiles(files, "/api/herdr/file?");
+      setText((current) => `${current}${current && !current.endsWith(" ") ? " " : ""}${paths.join(" ")} `);
+    } catch (error) {
+      toast(`<b>Attach failed</b> ${esc(error instanceof Error ? error.message : "upload failed")}`, "red");
+    } finally {
+      setUploading(false);
+    }
+  };
+  const complete = (name: string) => {
+    setText(`/${name} `);
+    setActive(0);
+  };
   const send = async (event?: FormEvent) => {
     event?.preventDefault();
     const prompt = text.trim();
@@ -258,15 +286,62 @@ function Composer({ pane }: { pane: string | undefined }) {
     }
   };
   const onKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // While suggestions show: arrows move, Tab or Enter completes, Escape hides them (not the console).
+    if (suggestions.length) {
+      const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
+      if (step) {
+        event.preventDefault();
+        setActive((active + step + suggestions.length) % suggestions.length);
+        return;
+      }
+      if (event.key === "Tab" || (event.key === "Enter" && !event.shiftKey)) {
+        event.preventDefault();
+        complete(suggestions[Math.min(active, suggestions.length - 1)].name);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setHidden(true);
+        return;
+      }
+    }
     if (event.key === "Enter" && !event.shiftKey) void send(event);
   };
   return (
     <form className="chat-composer" onSubmit={send}>
+      <input
+        ref={picker}
+        type="file"
+        multiple
+        hidden
+        onChange={(event) => {
+          void attach([...(event.target.files || [])]);
+          event.target.value = "";
+        }}
+      />
+      <button
+        type="button"
+        className="chat-attach"
+        title="Attach files"
+        aria-label="Attach files"
+        disabled={!pane || uploading}
+        onClick={() => picker.current?.click()}
+      >
+        {uploading ? "…" : "📎"}
+      </button>
+      {suggestions.length > 0 && (
+        <SlashMenu items={suggestions} active={Math.min(active, suggestions.length - 1)} pick={complete} />
+      )}
       <textarea
         value={text}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => {
+          setText(event.target.value);
+          setActive(0);
+          setHidden(false);
+        }}
         onKeyDown={onKey}
-        placeholder={pane ? "Reply to this session…" : "This session has no terminal pane to send to"}
+        onPaste={(event) => void attach(filesFromPaste(event.nativeEvent))}
+        placeholder={pane ? "Reply to this session… (/ for commands)" : "This session has no terminal pane to send to"}
         aria-label="Message"
         disabled={!pane}
         rows={2}
@@ -298,7 +373,8 @@ export function ChatConsole({ close, title }: { close: () => void; title: string
   useEffect(() => {
     const onKey = (event: globalThis.KeyboardEvent) => {
       // Escape in a dialog opened from here (new or end session) closes only that dialog.
-      if (event.key === "Escape" && !document.querySelector(".herdr-modal-backdrop")) close();
+      if (event.key === "Escape" && !event.defaultPrevented && !document.querySelector(".herdr-modal-backdrop"))
+        close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

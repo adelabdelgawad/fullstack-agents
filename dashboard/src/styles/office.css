@@ -564,3 +564,61 @@ html.office-page aside#panel {
 .chat-sidebar .chat-end:hover {
   color: #f87171;
 }
+
+.chat-composer {
+  position: relative;
+}
+
+.chat-slash {
+  position: absolute;
+  right: 24px;
+  bottom: calc(100% - 4px);
+  left: 24px;
+  z-index: 2;
+  max-height: 320px;
+  margin: 0;
+  padding: 6px;
+  overflow: auto;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.chat-slash li {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.chat-slash li.on,
+.chat-slash li:hover {
+  background: var(--blue-bg);
+}
+
+.chat-slash-name {
+  flex: none;
+  min-width: 220px;
+  font-family: var(--mono, monospace);
+  font-size: 13px;
+  color: var(--blue);
+}
+
+.chat-slash-text {
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--muted, #a6b0c2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-composer .chat-attach {
+  min-width: 48px;
+  padding: 0;
+  background: var(--panel);
+  font-size: 18px;
+}

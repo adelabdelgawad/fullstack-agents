@@ -41,6 +41,7 @@ from runs_dir import read_dirs, runs_dir
 import liveness
 import herdr_web
 import goals
+import slash_commands
 REACT = HERE / "lib" / "dashboard-react"
 FIRST_PROMPTS = {}
 LAST_ASKS = {}
@@ -2992,6 +2993,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             full = (q.get("full") or [""])[0] == "1"
             lines = tail_lines(log, 400000 if full else 12000)
             return self.send(200, ANSI_RE.sub("", "\n".join(lines[-3000 if full else -120:])).encode(), "text/plain; charset=utf-8")
+        if url.path == "/api/slash":
+            return self.send(200, json.dumps({"commands": slash_commands.discover(str(self.server.repo.root))}).encode(),
+                             "application/json")
         if url.path == "/api/conversation":
             sid = (q.get("sid") or [""])[0]
             if not SOURCE_ID_RE.match(sid):
