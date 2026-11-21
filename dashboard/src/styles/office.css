@@ -405,3 +405,7 @@ html.office-page aside#panel {
   z-index: 50;
   border-left: none;
 }
+
+.office-chain-dot.pose-done {
+  background: #f2b24c;
+}

@@ -2,7 +2,7 @@ import { cardAgents, needsHuman } from "../../lib/cards";
 import type { Card, DashState, OfficeTeamRule, Run, Session } from "../../lib/types";
 
 export type OfficeRole = "lead" | "worker" | "helper";
-export type OfficePose = "typing" | "reading" | "waiting" | "idle" | "asleep";
+export type OfficePose = "typing" | "reading" | "waiting" | "done" | "idle" | "asleep";
 
 export interface OfficeEmployee {
   id: string;
@@ -10,6 +10,8 @@ export interface OfficeEmployee {
   role: OfficeRole;
   cardKey: string;
   pose: OfficePose;
+  /** First lines of the last answer, shown in a bubble while the agent has its hand up. */
+  answer?: string[];
   bubble: string;
   cost: number | null;
   tokens: number;
@@ -85,6 +87,15 @@ function shortBubble(item: Record<string, unknown>): string {
   return text.length <= 60 ? text : `${text.slice(0, 59)}…`;
 }
 
+/** The first three lines of the agent's last answer, for the raised-hand bubble. */
+export function answerLines(item: Record<string, unknown>): string[] {
+  return textOf(item.said_full || item.said)
+    .split("\n")
+    .map((line) => line.replace(/[*_`#>]/g, "").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
 function colourOf(id: string): number {
   let hash = 2166136261;
   for (const char of id) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
@@ -92,13 +103,14 @@ function colourOf(id: string): number {
 }
 
 function poseOf(card: Card, item: Record<string, unknown>, role: OfficeRole): OfficePose {
-  if ((role === "lead" && needsHuman(card)) || textOf(item.ask) || textOf(item.question)) return "waiting";
+  if (item.state === "waiting" || textOf(item.ask) || textOf(item.question)) return "waiting";
+  // The turn ended with an answer and no question: the agent raises its hand with the answer in a bubble.
+  if ((item.state === "idle" || item.state === "still_open") && textOf(item.said_full || item.said)) return "done";
+  if (role === "lead" && needsHuman(card)) return "waiting";
   if (item.state === "quiet") return "asleep";
   if (item.action_running && READ_ACTION.test(textOf(item.action))) return "reading";
   // A running background shell, subagent or worker run is work in progress: the agent stays at its desk.
   if (item.action_running || item.state === "working" || item.state === "running") return "typing";
-  // An open turn waiting on its own background work (not on you) keeps the agent at its desk too.
-  if (item.state === "still_open") return "reading";
   return "idle";
 }
 
@@ -111,6 +123,7 @@ function baseEmployee(card: Card, item: Record<string, unknown>, role: OfficeRol
     cardKey: card.key,
     pose: poseOf(card, item, role),
     bubble: shortBubble(item),
+    answer: answerLines(item),
     pane: null as string | null,
     colour: colourOf(id),
   };
@@ -158,7 +171,7 @@ export function cardMembers(card: Card, panes: Record<string, string>): OfficeEm
   return [...leads, ...workers, ...helpers];
 }
 
-const ACTIVE: OfficePose[] = ["waiting", "typing", "reading"];
+const ACTIVE: OfficePose[] = ["waiting", "typing", "reading", "done"];
 
 /** One agent per card: its desk computer is on while one or more of its sessions works or waits. */
 function agentOf(card: Card, panes: Record<string, string>): OfficeEmployee | null {
@@ -174,6 +187,7 @@ function agentOf(card: Card, panes: Record<string, string>): OfficeEmployee | nu
     name: lead.role === "lead" ? lead.name : card.title || lead.name,
     pose,
     bubble: active.find((member) => member.bubble)?.bubble || lead.bubble,
+    answer: pose === "done" ? active.find((member) => member.pose === "done")?.answer || [] : [],
     cost: card.usage?.cost ?? null,
     tokens: members.reduce((sum, member) => sum + member.tokens, 0),
     colour: colourOf(card.key),

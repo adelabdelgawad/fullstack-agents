@@ -180,7 +180,7 @@ function drawChair(ctx: CanvasRenderingContext2D, desk: PlacedDesk): void {
   rect(ctx, x + 33 * s, y + 44 * s, 2 * s, 3 * s, "#555");
 }
 
-const RING: Record<string, string> = { typing: "#4ade80", reading: "#60a5fa", waiting: "#f87171", idle: "#94a3b8", asleep: "#475569" };
+const RING: Record<string, string> = { typing: "#4ade80", reading: "#60a5fa", waiting: "#f87171", done: "#f2b24c", idle: "#94a3b8", asleep: "#475569" };
 
 /** A status ring on the floor under the agent: green working, blue reading, pulsing red waiting on you. */
 function drawRing(ctx: CanvasRenderingContext2D, desk: PlacedDesk, tMs: number): void {
@@ -207,6 +207,29 @@ function drawPerson(ctx: CanvasRenderingContext2D, desk: PlacedDesk, frame: numb
   drawPose(ctx, desk, frame);
 }
 
+/** A speech bubble over the desk with the first three lines of the agent's answer. */
+function drawAnswer(ctx: CanvasRenderingContext2D, desk: PlacedDesk): void {
+  const lines = desk.employee.answer || [];
+  if (!lines.length) return;
+  const { x, y, scale: s } = desk;
+  const width = 110 * s;
+  const height = (lines.length * 7 + 6) * s;
+  const left = x + 28 * s - width / 2;
+  const top = y - height - 4 * s;
+  rect(ctx, left - s, top - s, width + 2 * s, height + 2 * s, "#1b1b22");
+  rect(ctx, left, top, width, height, "#fffbea");
+  rect(ctx, x + 30 * s, top + height, 4 * s, 3 * s, "#fffbea");
+  rect(ctx, x + 31 * s, top + height + 3 * s, 2 * s, 2 * s, "#fffbea");
+  ctx.fillStyle = "#1b1b22";
+  ctx.font = `${5 * s}px monospace`;
+  ctx.textBaseline = "top";
+  lines.forEach((line, index) => {
+    const text = line.length > 34 ? `${line.slice(0, 33)}…` : line;
+    ctx.fillText(text, left + 3 * s, top + (3 + index * 7) * s, width - 6 * s);
+  });
+  ctx.textBaseline = "alphabetic";
+}
+
 function drawPose(ctx: CanvasRenderingContext2D, desk: PlacedDesk, frame: number): void {
   const { x, y, scale: s, employee } = desk;
   if (employee.pose === "typing") {
@@ -219,6 +242,10 @@ function drawPose(ctx: CanvasRenderingContext2D, desk: PlacedDesk, frame: number
     rect(ctx, x + 40 * s, y + (18 - frame) * s, 8 * s, 10 * s, "#ffffff");
     rect(ctx, x + 43 * s, y + (20 - frame) * s, 2 * s, 4 * s, C.gold);
     rect(ctx, x + 43 * s, y + (25 - frame) * s, 2 * s, 2 * s, C.gold);
+  } else if (employee.pose === "done") {
+    // Hand raised, waving: the task is finished.
+    rect(ctx, x + 36 * s, y + 17 * s, 3 * s, 15 * s, SHIRTS[employee.colour]);
+    rect(ctx, x + (35 + frame) * s, y + 12 * s, 5 * s, 5 * s, C.skin);
   } else if (employee.pose === "asleep") {
     ctx.fillStyle = "#80b5ff";
     ctx.font = `bold ${6 * s}px monospace`;
@@ -267,6 +294,7 @@ export function drawOffice(ctx: CanvasRenderingContext2D, layout: OfficeLayout, 
     drawLabel(ctx, desk);
     if (desk.employee.id === selectedId) drawSelection(ctx, desk);
   }
+  for (const desk of layout.desks) if (!desk.away && desk.employee.pose === "done") drawAnswer(ctx, desk);
   for (const spot of layout.spots) {
     drawBreakSpot(ctx, spot, tMs, frame);
     drawLabel(ctx, spot);

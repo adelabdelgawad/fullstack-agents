@@ -231,10 +231,10 @@ describe("reporting lines", () => {
 });
 
 describe("background work keeps the agent at its desk", () => {
-  it("a running background shell or an open turn is not a break", () => {
+  it("a running background shell or a finished answer is not a break", () => {
     const shell = card({ key: "bg", sessions: [session({ id: "a", state: "idle" })],
       now: [session({ id: "a", state: "idle", agents: [{ id: "t1", state: "running", label: "shell · build" }] })] });
-    const open = card({ key: "open", sessions: [session({ id: "b", state: "still_open" })] });
+    const open = card({ key: "open", sessions: [session({ id: "b", state: "still_open", said_full: "Done." })] });
     const rest = card({ key: "rest", sessions: [session({ id: "c", state: "idle" })] });
     const office = officeOf(dash([shell, open, rest]));
     const layout = layoutOffice(office, 1400, 800);
@@ -265,5 +265,20 @@ describe("department offices", () => {
     expect(desks).toHaveLength(4);
     expect(desks.filter((desk) => !desk.away).map((desk) => desk.employee.id)).toEqual(["busy"]);
     expect(layout.desks.filter((desk) => desk.employee.id === CTO_ID)).toHaveLength(1);
+  });
+});
+
+describe("finished agents", () => {
+  it("raise a hand with the first three lines of the answer", () => {
+    const said_full = "**Shipped 3.94.0.**\n\n- Office PC opens the card\n- Tests pass\n- Build clean";
+    const office = officeOf(dash([card({ key: "fin", sessions: [session({ id: "f", state: "idle", said_full })] })]));
+    const agent = agents(office)[0];
+    expect(agent.pose).toBe("done");
+    expect(agent.answer).toEqual(["Shipped 3.94.0.", "- Office PC opens the card", "- Tests pass"]);
+  });
+
+  it("a question for you stays a wait, not a raised hand", () => {
+    const office = officeOf(dash([card({ key: "ask", sessions: [session({ id: "q", state: "waiting", said_full: "Which one?" })] })]));
+    expect(agents(office)[0].pose).toBe("waiting");
   });
 });
