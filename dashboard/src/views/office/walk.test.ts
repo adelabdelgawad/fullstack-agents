@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Card, DashState, Session } from "../../lib/types";
-import { ASSISTANT_ID, BREAK_ROOM, layoutOffice, officeOf, type OfficeLayout } from "./model";
+import { BREAK_ROOM, CTO_ID, layoutOffice, officeOf, type OfficeLayout } from "./model";
 import { placesOf, route, Walks } from "./walk";
 
 function session(patch: Partial<Session> = {}): Session {
@@ -17,7 +17,7 @@ function dash(cards: Card[], teams: DashState["office_teams"] = []): DashState {
 }
 
 const TEAMS = [
-  { name: "CTO", match: ["cto"], members: ["Adel", "Radwa"] },
+  { name: "CTO", match: ["cto"], members: ["Adel", "Radwa", "Doha"] },
   { name: "Network Engineers", match: ["network"], members: ["Boraie", "Moustafa", "Karim", "Abudaif"] },
 ];
 
@@ -30,7 +30,8 @@ describe("named staff", () => {
     const placed = layout([card("network-vpn", true)]);
     const people = new Map([...placed.desks, ...placed.spots].map((place) => [place.employee.id, place.employee]));
     expect(people.get("cto")?.person).toBe("Adel");
-    expect(people.get(ASSISTANT_ID)?.person).toBe("Radwa");
+    expect(people.get("assistant:Radwa")?.person).toBe("Radwa");
+    expect(people.get("assistant:Doha")?.person).toBe("Doha");
     expect(people.get("network-vpn")?.person).toBe("Boraie");
     const onBreak = placed.spots.map((spot) => spot.employee.name);
     expect(onBreak).toEqual(expect.arrayContaining(["Moustafa", "Karim", "Abudaif"]));
@@ -103,5 +104,25 @@ describe("stable breaks", () => {
     const after = where([...many, card("network-new", false)]);
     const changed = [...before].filter(([id, activity]) => after.get(id) !== activity);
     expect(changed.length).toBeLessThanOrEqual(3);
+  });
+});
+
+describe("CTO office", () => {
+  it("the CTO has his own desk and the two assistants share one desk", () => {
+    const placed = layout([card("network-a", true)]);
+    const desk = (id: string) => placed.desks.find((item) => item.employee.id === id)!;
+    const [radwa, doha, adel] = [desk("assistant:Radwa"), desk("assistant:Doha"), desk(CTO_ID)];
+    expect(radwa.y).toBe(doha.y);
+    expect(Math.abs(doha.x - radwa.x)).toBe(40 * radwa.scale);
+    expect(adel.x === radwa.x && adel.y === radwa.y).toBe(false);
+  });
+
+  it("the assistants carry every session; the CTO only those waiting on a decision", () => {
+    const asking = { ...card("network-ask", true), sessions: [session({ id: "q", state: "waiting", question: "Ship it?" })] };
+    const office = officeOf(dash([card("network-a", true), asking], TEAMS));
+    const people = new Map(office.teams.flatMap((team) => team.employees).map((employee) => [employee.id, employee]));
+    expect(people.get(CTO_ID)).toMatchObject({ sessions: 1, pose: "waiting", person: "Adel" });
+    expect(people.get(CTO_ID)?.reports?.map((report) => report.id)).toEqual(["network-ask"]);
+    expect(people.get("assistant:Radwa")).toMatchObject({ sessions: 2, total: 2, pose: "typing" });
   });
 });

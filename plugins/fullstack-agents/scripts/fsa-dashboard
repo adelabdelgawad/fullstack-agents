@@ -1226,6 +1226,61 @@ def codex_transcript_lines(p):
     return []
 
 
+def chat_prompt(d, msg):
+    """A genuine user prompt with its line breaks; skill loads, hook output and other meta messages are not prompts."""
+    if d.get("isMeta") or d.get("isCompactSummary"):
+        return ""
+    flat = prompt_text(msg)
+    if not flat:
+        return ""
+    content = msg.get("content")
+    raw = "\n".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text") \
+        if isinstance(content, list) else str(content or "")
+    raw = PASTED_RE.sub(" ", raw).strip()
+    return flat if raw.startswith("<") else raw
+
+
+CONVERSATION_MAX = 80
+CONVERSATION_TEXT = 6000
+
+
+def conversation(path):
+    """The chat of one session: the user's prompts and the agent's text replies, oldest first, without tool calls.
+    Consecutive assistant texts in one reply are joined; at most the last CONVERSATION_MAX messages."""
+    out = []
+
+    def add(role, text, at):
+        text = text.strip()
+        if not text:
+            return
+        if out and out[-1]["role"] == role == "assistant":
+            out[-1]["text"] = (out[-1]["text"] + "\n\n" + text)[-CONVERSATION_TEXT:].strip()
+            return
+        out.append({"role": role, "text": text[-CONVERSATION_TEXT:], "at": at})
+
+    for line in tail_lines(path, 3000000):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        at = iso_epoch(d.get("timestamp") or "")
+        if d.get("type") == "response_item":
+            p = d.get("payload") or {}
+            if p.get("type") == "message" and p.get("role") in ("user", "assistant"):
+                text = codex_text(p)
+                if p["role"] == "assistant" or not text.startswith("<"):
+                    add(p["role"], text, at)
+            continue
+        msg = d.get("message") or {}
+        if d.get("type") == "user":
+            add("user", chat_prompt(d, msg), at)
+        elif d.get("type") == "assistant":
+            blocks = msg.get("content") if isinstance(msg.get("content"), list) else []
+            add("assistant", "\n\n".join(b.get("text", "") for b in blocks
+                                         if isinstance(b, dict) and b.get("type") == "text"), at)
+    return out[-CONVERSATION_MAX:]
+
+
 def render_transcript(path):
     out = []
     for line in tail_lines(path, 400000):
@@ -1400,6 +1455,7 @@ def read_session(path, now, wt_re, names, waits):
         "cwd": cwd, "branch": branch, "worktree": worktree, "state": state, "updated": updated,
         "turn_at": iso_epoch(turn_at),
         "agents": agents + shell_items(path, bg, finished, now, {a["id"] for a in agents}, cwd),
+        "transcript": str(path),
         "idle": idle, "snippet": snippet(text) if state in ("waiting", "still_open", "idle") else "",
         "briefs": sorted(briefs), "chips": chips,
         "ask": snippet(ask, 600), "need": need, "action": action, "action_at": iso_epoch(action_at),
@@ -2507,6 +2563,8 @@ def session_panes(repo):
 def output_sources(sessions):
     out = {}
     for s in sessions:
+        if s.get("transcript"):
+            out[f"{s['id']}/{s['id']}"] = s["transcript"]
         for x in s["agents"]:
             out[f"{s['id']}/{x['id']}"] = x["path"]
     return out
@@ -2934,6 +2992,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             full = (q.get("full") or [""])[0] == "1"
             lines = tail_lines(log, 400000 if full else 12000)
             return self.send(200, ANSI_RE.sub("", "\n".join(lines[-3000 if full else -120:])).encode(), "text/plain; charset=utf-8")
+        if url.path == "/api/conversation":
+            sid = (q.get("sid") or [""])[0]
+            if not SOURCE_ID_RE.match(sid):
+                return self.send(400, b"bad session id", "text/plain")
+            self.server.state()
+            path = self.server.sources.get(f"{sid}/{sid}")
+            if not path:
+                return self.send(404, b"unknown session", "text/plain")
+            return self.send(200, json.dumps({"messages": conversation(path)}).encode(), "application/json")
         if url.path == "/api/output":
             sid, aid = ((q.get(k) or [""])[0] for k in ("sid", "id"))
             if not SOURCE_ID_RE.match(sid) or not SOURCE_ID_RE.match(aid):

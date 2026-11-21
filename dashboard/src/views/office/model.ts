@@ -210,24 +210,33 @@ function agentOf(card: Card, panes: Record<string, string>): OfficeEmployee | nu
 }
 
 /** The CTO leads every agent: at the desk always, busy while any agent works, waiting while any agent waits. */
+/** The CTO handles decisions only: his desk shows the sessions waiting on a decision, and he waits while any do. */
 function ctoOf(agents: OfficeEmployee[]): OfficeEmployee {
-  const pose = ACTIVE.find((candidate) => agents.some((agent) => agent.pose === candidate)) || "idle";
+  const decisions = agents.filter((agent) => agent.pose === "waiting");
   return {
-    id: CTO_ID, name: "CTO", role: "lead", cardKey: "", pose, bubble: "", cost: null, pane: null, colour: 2,
-    tokens: agents.reduce((sum, agent) => sum + agent.tokens, 0),
-    sessions: agents.reduce((sum, agent) => sum + agent.sessions, 0),
-    total: agents.length,
+    id: CTO_ID, name: "CTO", role: "lead", cardKey: "", pose: decisions.length ? "waiting" : "idle", bubble: "",
+    cost: null, pane: null, colour: 2,
+    tokens: decisions.reduce((sum, agent) => sum + agent.tokens, 0),
+    sessions: decisions.length,
+    total: decisions.length,
     fixed: true,
-    reports: agents,
+    reports: decisions,
   };
 }
 
-/** The CTO's assistant: always at her desk in the CTO office, busy while any agent works or waits. */
-function assistantOf(chief: OfficeEmployee, name: string): OfficeEmployee {
+/** A CTO assistant: runs every session for the CTO, so her desk shows them all; busy while any agent works or waits. */
+function assistantOf(agents: OfficeEmployee[], name: string): OfficeEmployee {
+  const busy = agents.some((agent) => ACTIVE.includes(agent.pose));
   return {
-    id: ASSISTANT_ID, name: "Assistant", person: name, role: "helper", cardKey: "", bubble: "", cost: null, pane: null,
-    colour: 3, tokens: 0, sessions: 0, total: 0, fixed: true, pose: chief.pose === "idle" ? "idle" : "typing",
+    id: `${ASSISTANT_ID}:${name}`, name: "Assistant", person: name, role: "helper", cardKey: "", bubble: "", cost: null,
+    pane: null, colour: colourOf(name), tokens: agents.reduce((sum, agent) => sum + agent.tokens, 0),
+    sessions: agents.reduce((sum, agent) => sum + agent.sessions, 0), total: agents.length, fixed: true,
+    pose: busy ? "typing" : "idle", reports: agents,
   };
+}
+
+export function isAssistant(id: string | null | undefined): boolean {
+  return Boolean(id?.startsWith(`${ASSISTANT_ID}:`));
 }
 
 /** Name the team's sessions after its members, busiest first; members with no session are idle staff. */
@@ -279,10 +288,8 @@ export function officeOf(state: DashState | null): Office {
   }
   const cto = teams.get(CTO_TEAM) || { key: CTO_TEAM, label: CTO_TEAM, employees: [] };
   const agents = [...teams.values()].flatMap((team) => team.employees);
-  const [ctoName, assistantName] = members.get(CTO_TEAM) || [];
-  const chief = ctoOf(agents);
-  cto.employees.unshift({ ...chief, person: ctoName });
-  if (assistantName) cto.employees.splice(1, 0, assistantOf(chief, assistantName));
+  const [ctoName, ...assistants] = members.get(CTO_TEAM) || [];
+  cto.employees.unshift({ ...ctoOf(agents), person: ctoName }, ...assistants.map((name) => assistantOf(agents, name)));
   teams.delete(CTO_TEAM);
   for (const team of teams.values()) {
     staff(team, members.get(team.key) || []);
@@ -407,7 +414,21 @@ function placeCells(count: number, room: PlacedRoom, scale: number): { x: number
 export const TEAM_DESKS = 2;
 
 function deskCount(team: OfficeTeam): number {
-  return team.employees.some((employee) => employee.fixed) ? team.employees.length : Math.max(TEAM_DESKS, team.employees.length);
+  if (!team.employees.some((employee) => employee.fixed)) return Math.max(TEAM_DESKS, team.employees.length);
+  const assistants = team.employees.filter((employee) => isAssistant(employee.id)).length;
+  return team.employees.length - assistants + (assistants ? 1 : 0);
+}
+
+/** The CTO's own desk, and one shared desk with the assistants side by side (two desks pushed together). */
+function placeExecutive(team: OfficeTeam, cells: Array<{ x: number; y: number }>, scale: number): PlacedDesk[] {
+  const assistants = team.employees.filter((employee) => isAssistant(employee.id));
+  const others = team.employees.filter((employee) => !isAssistant(employee.id));
+  const own = others.map((employee, index) => ({ ...cells[index], scale, employee }));
+  const shared = cells[others.length];
+  if (!shared) return own;
+  const step = 40 * scale;
+  const start = shared.x - (step * (assistants.length - 1)) / 2;
+  return [...own, ...assistants.map((employee, index) => ({ x: start + index * step, y: shared.y, scale, employee }))];
 }
 
 /** Agents on a running session sit at a lit PC first; the rest of the office's desks stand empty, computer off. */
@@ -429,6 +450,7 @@ function placeGroupDesks(teams: OfficeTeam[], room: PlacedRoom, scale: number, o
   let offset = 0;
   return teams.flatMap((team) => {
     const mine = cells.slice(offset, (offset += deskCount(team)));
+    if (team.employees.some((employee) => employee.id === CTO_ID)) return placeExecutive(team, mine, scale);
     return placeDesks(team, mine, scale, onBreak);
   });
 }

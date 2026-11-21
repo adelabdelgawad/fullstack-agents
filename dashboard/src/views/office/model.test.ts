@@ -106,10 +106,10 @@ describe("officeOf", () => {
     expect(byId.plan.meeting).toBe(true);
   });
 
-  it("puts the CTO first, in the CTO office, counting every active session", () => {
-    const office = officeOf(dash([card({ key: "a" }), card({ key: "b", sessions: [session({ id: "b", state: "idle" })] })]));
+  it("puts the CTO first, in the CTO office, counting only the sessions waiting on a decision", () => {
+    const office = officeOf(dash([card({ key: "a" }), card({ key: "b", sessions: [session({ id: "b", state: "waiting" })] })]));
     expect(office.teams[0].label).toBe("CTO");
-    expect(office.teams[0].employees[0]).toMatchObject({ id: CTO_ID, sessions: 1, total: 2, fixed: true });
+    expect(office.teams[0].employees[0]).toMatchObject({ id: CTO_ID, sessions: 1, total: 1, fixed: true, pose: "waiting" });
   });
 
   it("puts each agent in the first matching department and keeps empty offices", () => {
@@ -215,7 +215,7 @@ describe("layoutOffice", () => {
 });
 
 describe("reporting lines", () => {
-  it("each agent delegates to its workers and subagents; the CTO leads every agent", () => {
+  it("each agent delegates to its workers and subagents; the CTO handles only waiting decisions", () => {
     const source = card({
       runs: [{ id: "w1", mode: "implement", state: "running", action_running: true, action: "Bash build" }],
       now: [session({ id: "lead", agents: [{ id: "h1", state: "running", label: "Reviewer" }] })],
@@ -227,7 +227,7 @@ describe("reporting lines", () => {
       ["h1", "helper"],
     ]);
     expect(solo.reports).toEqual([]);
-    expect(office.teams[0].employees[0].reports?.map((report) => report.id)).toEqual(["office", "solo"]);
+    expect(office.teams[0].employees[0].reports).toEqual([]);
   });
 });
 
