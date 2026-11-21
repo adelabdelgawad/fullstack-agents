@@ -6,10 +6,8 @@ import { drawOffice, hitTest, pcHit, roomHit } from "./office/draw";
 import { ChatConsole } from "./office/ChatConsole";
 import { Walks } from "./office/walk";
 import {
-  BREAK_ROUND_MS,
   CTO_ID,
   EMPTY_LAYOUT,
-  roomOfTeam,
   layoutOffice,
   officeOf,
   type Office,
@@ -29,14 +27,7 @@ function redraw(
   const initialBounds = canvas.getBoundingClientRect();
   const scale = initialBounds.width < 520 ? 1 : 2;
   const now = performance.now();
-  placed.current = layoutOffice(
-    office,
-    initialBounds.width,
-    available,
-    scale,
-    !zoomed,
-    Math.floor(Date.now() / BREAK_ROUND_MS),
-  );
+  placed.current = layoutOffice(office, initialBounds.width, available, scale);
   const view = `${zoomed ? office.teams.map((team) => team.key).join("+") : "floor"}:${Math.round(initialBounds.width)}`;
   walks.update(placed.current, view, now, animate);
   const walkers = walks.walkers(now);
@@ -122,8 +113,8 @@ function TeamZoom({
         <button
           key={team.key}
           type="button"
-          aria-pressed={zoom === roomOfTeam(team)}
-          onClick={() => setZoom(zoom === roomOfTeam(team) ? null : roomOfTeam(team))}
+          aria-pressed={zoom === team.key}
+          onClick={() => setZoom(zoom === team.key ? null : team.key)}
         >
           {team.label}
           <span>{team.employees.filter((employee) => employee.sessions > 0 || employee.fixed).length}</span>
@@ -185,7 +176,7 @@ export function OfficeView() {
   const placed = useRef<OfficeLayout>(EMPTY_LAYOUT);
   const [consoleId, setConsoleId] = useState<string | null>(null);
   const [zoom, setZoom] = useState<string | null>(null);
-  const zoomTeams = useMemo(() => office.teams.filter((team) => roomOfTeam(team) === zoom), [office, zoom]);
+  const zoomTeams = useMemo(() => office.teams.filter((team) => team.key === zoom), [office, zoom]);
   const zoomTeam = zoomTeams.length ? zoom : null;
   const shown = useMemo(() => (zoomTeams.length ? { ...office, teams: zoomTeams } : office), [office, zoomTeams]);
   const employees = useMemo(() => office.teams.flatMap((team) => team.employees), [office]);

@@ -1,4 +1,4 @@
-import type { OfficeLayout, PlacedRoom, Rect } from "./model";
+import type { OfficeEmployee, OfficeLayout, PlacedRoom, Rect } from "./model";
 
 /** A point on the floor where an agent's feet are. */
 export interface Point {
@@ -6,7 +6,7 @@ export interface Point {
   y: number;
 }
 
-/** A place in room-relative terms, so it survives a re-layout (rooms resize when people come and go). */
+/** A place in room-relative terms, so it survives a re-layout (rooms resize when sessions come and go). */
 interface Anchor {
   room: string;
   fx: number;
@@ -19,30 +19,40 @@ interface Walk {
   total: number;
   start: number;
   duration: number;
+  employee: OfficeEmployee;
+  scale: number;
+  /** Path segments [from, to) during which the agent carries a desk. */
+  carry: [number, number];
+  /** A subagent on its way in: its desk is not in the office until it arrives with it. */
+  arriving: boolean;
 }
 
 export interface Walker extends Point {
   /** Leg phase, alternating while walking. */
   step: number;
+  carrying: boolean;
+  arriving: boolean;
+  employee: OfficeEmployee;
+  scale: number;
 }
 
 const SPEED = 55; // floor pixels per second at scale 1
-const MIN_MS = 1200;
-const MAX_MS = 7000;
+const MIN_MS = 1500;
+const MAX_MS = 9000;
 
-/** Where each agent stands: the feet below its chair at a desk, or at its break or meeting spot. */
-export function placesOf(layout: OfficeLayout): Map<string, Point & { scale: number }> {
-  const places = new Map<string, Point & { scale: number }>();
-  for (const desk of layout.desks) {
-    if (!desk.away)
-      places.set(desk.employee.id, { x: desk.x + 28 * desk.scale, y: desk.y + 42 * desk.scale, scale: desk.scale });
-  }
-  for (const spot of layout.spots) {
-    const s = spot.scale;
-    const dx = spot.activity === "pingpong-left" ? 14 : spot.activity === "pingpong-right" ? 42 : 28;
-    places.set(spot.employee.id, { x: spot.x + dx * s, y: spot.y + 42 * s, scale: s });
-  }
-  return places;
+interface Place extends Point {
+  scale: number;
+  employee: OfficeEmployee;
+}
+
+/** Where each agent sits: the feet below its chair at its desk. */
+export function placesOf(layout: OfficeLayout): Map<string, Place> {
+  return new Map(
+    layout.desks.map((desk) => [
+      desk.employee.id,
+      { x: desk.x + 28 * desk.scale, y: desk.y + 42 * desk.scale, scale: desk.scale, employee: desk.employee },
+    ]),
+  );
 }
 
 function inside(rect: Rect, point: Point): boolean {
@@ -86,6 +96,22 @@ export function route(layout: OfficeLayout, from: Point, to: Point): Point[] {
   return [...a.path, ...middle, ...b.path.slice().reverse()];
 }
 
+/** Two routes walked one after the other; returns the joined path and where the second one starts. */
+function join(first: Point[], second: Point[]): [Point[], number] {
+  return [[...first, ...second.slice(1)], first.length - 1];
+}
+
+export function entranceOf(layout: OfficeLayout): Point | null {
+  return layout.lobby
+    ? { x: layout.lobby.x + layout.lobby.width / 2, y: layout.lobby.y + layout.lobby.height - 4 }
+    : null;
+}
+
+export function warehouseDoor(layout: OfficeLayout): Point | null {
+  const w = layout.warehouse;
+  return w ? { x: w.x + w.width / 2, y: w.y + w.height } : null;
+}
+
 function anchorOf(layout: OfficeLayout, point: Point): Anchor | null {
   const room = roomAt(layout, point);
   return room ? { room: room.key, fx: (point.x - room.x) / room.width, fy: (point.y - room.y) / room.height } : null;
@@ -96,14 +122,34 @@ function pointOf(layout: OfficeLayout, anchor: Anchor): Point | null {
   return room ? { x: room.x + anchor.fx * room.width, y: room.y + anchor.fy * room.height } : null;
 }
 
-function walkOf(path: Point[], start: number, scale: number): Walk {
-  const lengths = path.slice(1).map((point, index) => Math.hypot(point.x - path[index].x, point.y - path[index].y));
-  const total = lengths.reduce((sum, length) => sum + length, 0);
-  const duration = Math.min(MAX_MS, Math.max(MIN_MS, (total / (SPEED * scale)) * 1000));
-  return { path, lengths, total, start, duration };
+function segmentLengths(path: Point[]): number[] {
+  return path.slice(1).map((point, index) => Math.hypot(point.x - path[index].x, point.y - path[index].y));
 }
 
-function along(walk: Walk, now: number): Point {
+function walkOf(
+  path: Point[],
+  start: number,
+  place: { scale: number; employee: OfficeEmployee },
+  extra: Partial<Walk> = {},
+): Walk {
+  const lengths = segmentLengths(path);
+  const total = lengths.reduce((sum, length) => sum + length, 0);
+  const duration = Math.min(MAX_MS, Math.max(MIN_MS, (total / (SPEED * place.scale)) * 1000));
+  return {
+    path,
+    lengths,
+    total,
+    start,
+    duration,
+    employee: place.employee,
+    scale: place.scale,
+    carry: [0, 0],
+    arriving: false,
+    ...extra,
+  };
+}
+
+function along(walk: Walk, now: number): Point & { segment: number } {
   let distance = Math.min(1, (now - walk.start) / walk.duration) * walk.total;
   for (let index = 0; index < walk.lengths.length; index += 1) {
     const length = walk.lengths[index];
@@ -111,19 +157,21 @@ function along(walk: Walk, now: number): Point {
       const t = length ? Math.min(1, distance / length) : 1;
       const a = walk.path[index];
       const b = walk.path[index + 1];
-      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, segment: index };
     }
     distance -= length;
   }
-  return walk.path[walk.path.length - 1];
+  return { ...walk.path[walk.path.length - 1], segment: walk.lengths.length };
 }
 
 /**
- * Remembers where every agent was and walks it to its new place when that changes: desk to break room, one break
- * activity to the next, or in from the lobby when a session starts. A new view (zoom or resize) starts fresh.
+ * Remembers where every agent was and walks it when that changes. A new subagent comes in from the lobby, collects a
+ * desk at the warehouse and carries it to its session's office; a finished one carries its desk back and leaves. A new
+ * session's leader walks in from the lobby. A new view (zoom or resize) starts fresh, without walks.
  */
 export class Walks {
   private anchors = new Map<string, Anchor>();
+  private people = new Map<string, { employee: OfficeEmployee; scale: number }>();
   private walks = new Map<string, Walk>();
   private view = "";
 
@@ -132,26 +180,41 @@ export class Walks {
     this.view = view;
     if (fresh) this.walks.clear();
     const places = placesOf(layout);
-    const entrance = layout.lobby
-      ? { x: layout.lobby.x + layout.lobby.width / 2, y: layout.lobby.y + layout.lobby.height - 4 }
-      : null;
+    const entrance = entranceOf(layout);
+    const store = warehouseDoor(layout);
     for (const [id, place] of places) {
       const anchor = anchorOf(layout, place);
       const before = this.anchors.get(id);
       if (anchor) this.anchors.set(id, anchor);
-      if (fresh || !animate || !anchor) continue;
-      if (
-        before &&
-        before.room === anchor.room &&
-        Math.abs(before.fx - anchor.fx) + Math.abs(before.fy - anchor.fy) < 0.01
-      )
+      this.people.set(id, { employee: place.employee, scale: place.scale });
+      if (fresh || !animate || !anchor || !entrance) continue;
+      if (!before) {
+        const subagent = place.employee.role !== "lead";
+        if (subagent && store) {
+          const [path, from] = join(route(layout, entrance, store), route(layout, store, place));
+          this.walks.set(id, walkOf(path, now, place, { carry: [from, path.length], arriving: true }));
+        } else this.walks.set(id, walkOf(route(layout, entrance, place), now, place));
+        continue;
+      }
+      if (before.room === anchor.room && Math.abs(before.fx - anchor.fx) + Math.abs(before.fy - anchor.fy) < 0.01)
         continue;
       const current = this.walks.get(id);
-      const from = current ? along(current, now) : before ? pointOf(layout, before) : entrance;
-      if (!from) continue;
-      this.walks.set(id, walkOf(route(layout, from, place), now, place.scale));
+      const from = current ? along(current, now) : pointOf(layout, before);
+      if (from) this.walks.set(id, walkOf(route(layout, from, place), now, place));
     }
-    for (const id of this.anchors.keys()) if (!places.has(id)) this.anchors.delete(id);
+    for (const [id, anchor] of this.anchors) {
+      if (places.has(id)) continue;
+      this.anchors.delete(id);
+      const person = this.people.get(id);
+      this.people.delete(id);
+      const from = pointOf(layout, anchor);
+      if (fresh || !animate || !person || !from || !entrance || person.employee.role === "lead") continue;
+      // A finished subagent takes its desk back to the warehouse, then goes home.
+      const [path, from2] = store
+        ? join(route(layout, from, store), route(layout, store, entrance))
+        : [route(layout, from, entrance), 0];
+      this.walks.set(id, walkOf(path, now, person, { carry: [0, store ? from2 : 0] }));
+    }
   }
 
   /** Agents walking right now, with their position; finished walks are dropped. */
@@ -162,7 +225,16 @@ export class Walks {
         this.walks.delete(id);
         continue;
       }
-      out.set(id, { ...along(walk, now), step: Math.floor((now - walk.start) / 180) % 2 });
+      const point = along(walk, now);
+      out.set(id, {
+        x: point.x,
+        y: point.y,
+        step: Math.floor((now - walk.start) / 180) % 2,
+        carrying: point.segment >= walk.carry[0] && point.segment < walk.carry[1],
+        arriving: walk.arriving,
+        employee: walk.employee,
+        scale: walk.scale,
+      });
     }
     return out;
   }

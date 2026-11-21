@@ -71,45 +71,6 @@ export function drawDoor(ctx: CanvasRenderingContext2D, room: PlacedRoom): void 
   ctx.stroke();
 }
 
-function drawWhiteboard(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
-  rect(ctx, x, y, 44 * s, 16 * s, "#9aa3ad");
-  rect(ctx, x + s, y + s, 42 * s, 14 * s, "#f7f7f2");
-  rect(ctx, x + 4 * s, y + 4 * s, 10 * s, 6 * s, "#4f8ff7");
-  rect(ctx, x + 18 * s, y + 4 * s, 10 * s, 6 * s, "#4ade80");
-  rect(ctx, x + 14 * s, y + 6.5 * s, 4 * s, s, "#333");
-  rect(ctx, x + 28 * s, y + 6.5 * s, 4 * s, s, "#333");
-  rect(ctx, x + 32 * s, y + 4 * s, 8 * s, 6 * s, "#f472b6");
-  rect(ctx, x + 4 * s, y + 12 * s, 26 * s, s, "#c0392b");
-}
-
-/** Meeting room for plan and design work: carpet, a whiteboard, a long table with chairs and laptops. */
-export function drawMeetingRoom(ctx: CanvasRenderingContext2D, room: PlacedRoom): void {
-  const { x, y, width, height, scale: d } = room;
-  const band = BUILDING.header * d;
-  rect(ctx, x, y + band, width, height - band, "#34506b");
-  for (let line = y + band + 6 * d; line < y + height; line += 6 * d)
-    rect(ctx, x, line, width, Math.max(1, d / 3), "#3c5a77");
-  drawBackWall(ctx, room);
-  if (width > 140 * d) drawWhiteboard(ctx, x + 4 * d, y + 5 * d, d * 0.9);
-  const table = room.table;
-  if (!table) return;
-  const s = table.height / 22;
-  const seats = Math.max(1, Math.round(table.width / (34 * s)));
-  const step = table.width / seats;
-  for (let seat = 0; seat < seats; seat += 1) {
-    const cx = table.x + step * (seat + 0.5);
-    rect(ctx, cx - 6 * s, table.y - 8 * s, 12 * s, 6 * s, "#6b7280");
-    rect(ctx, cx - 6 * s, table.y + table.height + 2 * s, 12 * s, 6 * s, "#6b7280");
-  }
-  rect(ctx, table.x, table.y, table.width, table.height, "#6b4430");
-  rect(ctx, table.x + 2 * s, table.y + 2 * s, table.width - 4 * s, table.height - 6 * s, "#7d5236");
-  for (let seat = 0; seat < seats; seat += 1) {
-    const cx = table.x + step * (seat + 0.5);
-    rect(ctx, cx - 4 * s, table.y + 3 * s, 8 * s, 5 * s, "#cfd5dd");
-    rect(ctx, cx - 3 * s, table.y + table.height - 9 * s, 6 * s, 4 * s, "#f4f1ea");
-  }
-}
-
 /** The CTO's executive office: deep carpet with a gold-trimmed rug, a leather sofa, art, a globe and tall plants. */
 export function drawExecutiveRoom(ctx: CanvasRenderingContext2D, room: PlacedRoom): void {
   const { x, y, width, height, scale: s } = room;
@@ -153,4 +114,31 @@ export function drawExecutiveRoom(ctx: CanvasRenderingContext2D, room: PlacedRoo
   }
   drawPlant(ctx, x + 2 * s, y + height - 15 * s, s);
   drawPlant(ctx, x + 14 * s, y + height - 15 * s, s);
+}
+
+/** The assets warehouse: a small storeroom in the lobby with spare desks stacked on shelves. Subagents collect a desk
+ * here when they start and bring it back when they finish. */
+export function drawWarehouse(ctx: CanvasRenderingContext2D, store: Rect, s: number): void {
+  const { x, y, width, height } = store;
+  rect(ctx, x - s, y - s, width + 2 * s, height + 2 * s, "#3b2f24");
+  rect(ctx, x, y, width, height, "#6b5a45");
+  for (let row = 0; row * 6 * s < height; row += 1) rect(ctx, x, y + row * 6 * s, width, Math.max(1, s / 2), "#5e4e3b");
+  const door = width / 2;
+  rect(ctx, x + door - 8 * s, y + height - s, 16 * s, 2 * s, "#cfc8b8");
+  const plate = Math.min(width - 4 * s, 52 * s);
+  rect(ctx, x + (width - plate) / 2, y + 2 * s, plate, 8 * s, "#151b26");
+  ctx.fillStyle = "#f2b24c";
+  text(ctx, "Warehouse", x + width / 2, y + 6 * s, 4.5 * s, plate - 4 * s);
+  // Spare desks stacked in two piles.
+  const deskW = 18 * s;
+  const piles = Math.max(1, Math.floor((width - 8 * s) / (deskW + 6 * s)));
+  for (let pile = 0; pile < Math.min(piles, 3); pile += 1) {
+    const px = x + 4 * s + pile * (deskW + 6 * s);
+    for (let level = 0; level < 3; level += 1) {
+      const py = y + height - 8 * s - level * 6 * s;
+      if (py < y + 12 * s) break;
+      rect(ctx, px, py, deskW, 4 * s, "#c8955a");
+      rect(ctx, px, py + 4 * s, deskW, s, "#9a6b3c");
+    }
+  }
 }

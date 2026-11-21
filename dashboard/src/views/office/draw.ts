@@ -1,11 +1,10 @@
-import { drawBreakRoom, drawBreakSpot, drawWalking } from "./breakroom";
 import type { Walker } from "./walk";
-import { drawCorridor, drawDoor, drawExecutiveRoom, drawLobby, drawMeetingRoom } from "./floorplan";
+import { drawCorridor, drawDoor, drawExecutiveRoom, drawLobby, drawWarehouse } from "./floorplan";
+import { drawWalking } from "./sprites";
 import {
-  BREAK_ROOM,
   BUILDING,
   CTO_TEAM,
-  MEETING_ROOM,
+  finished,
   type OfficeLayout,
   type PlacedBuilding,
   type PlacedDesk,
@@ -164,7 +163,7 @@ function drawSideTable(ctx: CanvasRenderingContext2D, x: number, y: number, s: n
 }
 
 function screenColour(desk: PlacedDesk, frame: number): string {
-  if (desk.away || desk.off) return C.screenOff;
+  if (finished(desk.employee)) return C.screenOff;
   return desk.employee.pose === "typing" && frame ? "#6fe39a" : C.screenOn;
 }
 
@@ -177,7 +176,7 @@ function drawDesk(ctx: CanvasRenderingContext2D, desk: PlacedDesk, frame: number
   rect(ctx, x + 18 * s, y + 2 * s, 20 * s, 13 * s, C.pc);
   rect(ctx, x + 18 * s, y + 13 * s, 20 * s, 2 * s, C.pcShade);
   rect(ctx, x + 20 * s, y + 4 * s, 16 * s, 8 * s, screenColour(desk, frame));
-  if (!desk.away && !desk.off) {
+  if (!finished(desk.employee)) {
     const line = (frame + Math.floor(x)) % 3;
     rect(ctx, x + 22 * s, y + (5 + line * 2) * s, 9 * s, s, "#d9ffe6");
     rect(ctx, x + 22 * s, y + (6 + ((line + 1) % 3) * 2) * s, 6 * s, s, "#a7f3c0");
@@ -221,9 +220,28 @@ function drawRing(ctx: CanvasRenderingContext2D, desk: PlacedDesk, tMs: number):
   ctx.restore();
 }
 
+/** A session leader's desk lamp: lit while the session works, switched off when it has finished. */
+function drawLamp(ctx: CanvasRenderingContext2D, desk: PlacedDesk): void {
+  const { x, y, scale: s, employee } = desk;
+  const on = !finished(employee);
+  if (on) {
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = "#ffe08a";
+    ctx.beginPath();
+    ctx.arc(x + 12 * s, y + 18 * s, 11 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  rect(ctx, x + 9 * s, y + 22 * s, 7 * s, 2 * s, "#3b3f47");
+  rect(ctx, x + 12 * s, y + 12 * s, s, 10 * s, "#3b3f47");
+  rect(ctx, x + 8 * s, y + 9 * s, 9 * s, 4 * s, on ? "#f2b24c" : "#5b6270");
+  if (on) rect(ctx, x + 9 * s, y + 13 * s, 7 * s, s, "#fff3c4");
+}
+
 function drawPerson(ctx: CanvasRenderingContext2D, desk: PlacedDesk, frame: number): void {
   const { x, y, scale: s, employee } = desk;
-  const bob = employee.pose === "asleep" ? s : 0;
+  const bob = employee.pose === "asleep" || finished(employee) ? s : 0;
   rect(ctx, x + 20 * s, y + (31 + bob / s) * s, 16 * s, 10 * s, SHIRTS[employee.colour]);
   rect(ctx, x + 23 * s, y + 29 * s + bob, 10 * s, 3 * s, C.skin);
   rect(ctx, x + 22 * s, y + 20 * s + bob, 12 * s, 11 * s, HAIR[employee.colour]);
@@ -291,11 +309,7 @@ function drawPose(ctx: CanvasRenderingContext2D, desk: PlacedDesk, frame: number
     rect(ctx, x + 40 * s, y + (18 - frame) * s, 8 * s, 10 * s, "#ffffff");
     rect(ctx, x + 43 * s, y + (20 - frame) * s, 2 * s, 4 * s, C.gold);
     rect(ctx, x + 43 * s, y + (25 - frame) * s, 2 * s, 2 * s, C.gold);
-  } else if (employee.pose === "done") {
-    // Hand raised, waving: the task is finished.
-    rect(ctx, x + 36 * s, y + 17 * s, 3 * s, 15 * s, SHIRTS[employee.colour]);
-    rect(ctx, x + (35 + frame) * s, y + 12 * s, 5 * s, 5 * s, C.skin);
-  } else if (employee.pose === "asleep") {
+  } else if (employee.pose === "asleep" || finished(employee)) {
     ctx.fillStyle = "#80b5ff";
     ctx.font = `bold ${6 * s}px monospace`;
     ctx.fillText(frame ? "z" : "Z", x + 38 * s, y + 22 * s);
@@ -351,44 +365,39 @@ export function drawOffice(
   if (layout.building) drawBuilding(ctx, layout.building);
   for (const corridor of layout.corridors) drawCorridor(ctx, corridor, layout.building?.scale || 2);
   if (layout.lobby && layout.building) drawLobby(ctx, layout.lobby, layout.building);
+  if (layout.warehouse) drawWarehouse(ctx, layout.warehouse, layout.building?.scale || 2);
   for (const room of layout.rooms) {
-    if (room.key === BREAK_ROOM) drawBreakRoom(ctx, room, tMs);
-    else if (room.key === MEETING_ROOM) drawMeetingRoom(ctx, room);
-    else if (room.key === CTO_TEAM) drawExecutiveRoom(ctx, room);
+    if (room.key === CTO_TEAM) drawExecutiveRoom(ctx, room);
     else drawRoom(ctx, room);
     drawDoor(ctx, room);
-    if (room.key !== BREAK_ROOM && room.key !== MEETING_ROOM) drawZoomIcon(ctx, room, layout.rooms.length === 1);
+    drawZoomIcon(ctx, room, layout.rooms.length === 1);
   }
   const frame = Math.floor(tMs / 375) % 2;
   for (const desk of layout.desks) {
+    const walker = walkers.get(desk.employee.id);
+    // A subagent still on its way in is carrying its desk; it appears here when it arrives.
+    if (walker?.arriving) continue;
     drawDesk(ctx, desk, frame);
+    if (desk.employee.role === "lead" && !desk.employee.fixed) drawLamp(ctx, desk);
     drawChair(ctx, desk);
-    if (desk.away || walkers.has(desk.employee.id)) continue;
+    if (walker) continue;
     drawRing(ctx, desk, tMs);
     drawPerson(ctx, desk, frame);
     drawLabel(ctx, desk);
     if (desk.employee.id === selectedId) drawSelection(ctx, desk);
   }
-  for (const spot of layout.spots) {
-    if (walkers.has(spot.employee.id)) continue;
-    drawBreakSpot(ctx, spot, tMs, frame);
-    drawLabel(ctx, spot);
-    if (spot.employee.id === selectedId) drawSelection(ctx, spot);
-  }
-  drawWalkers(ctx, layout, walkers);
+  drawWalkers(ctx, walkers);
   for (const desk of layout.desks) {
-    if (!desk.away && desk.employee.pose === "done" && !walkers.has(desk.employee.id)) drawAnswer(ctx, desk);
+    if (desk.employee.pose === "done" && !walkers.has(desk.employee.id)) drawAnswer(ctx, desk);
   }
 }
 
-/** Agents on their way between rooms, drawn where they are now with their name. */
-function drawWalkers(ctx: CanvasRenderingContext2D, layout: OfficeLayout, walkers: Map<string, Walker>): void {
-  for (const place of [...layout.desks.filter((desk) => !desk.away), ...layout.spots]) {
-    const walker = walkers.get(place.employee.id);
-    if (!walker) continue;
-    const s = place.scale;
-    drawWalking(ctx, walker.x, walker.y, s, place.employee.colour, walker.step);
-    drawLabel(ctx, { x: walker.x - 28 * s, y: walker.y - 42 * s, scale: s, employee: place.employee });
+/** Agents on their way: subagents carrying a desk to or from the warehouse, leaders walking in from the lobby. */
+function drawWalkers(ctx: CanvasRenderingContext2D, walkers: Map<string, Walker>): void {
+  for (const walker of walkers.values()) {
+    const s = walker.scale;
+    drawWalking(ctx, walker.x, walker.y, s, walker.employee.colour, walker.step, walker.carrying);
+    drawLabel(ctx, { x: walker.x - 28 * s, y: walker.y - 42 * s, scale: s, employee: walker.employee });
   }
 }
 
@@ -396,32 +405,21 @@ function drawWalkers(ctx: CanvasRenderingContext2D, layout: OfficeLayout, walker
 export function pcHit(layout: OfficeLayout, x: number, y: number): string | null {
   const desk = layout.desks.find(
     (item) =>
-      !item.away &&
-      x >= item.x + 16 * item.scale &&
-      x <= item.x + 40 * item.scale &&
-      y >= item.y &&
-      y <= item.y + 18 * item.scale,
+      x >= item.x + 16 * item.scale && x <= item.x + 40 * item.scale && y >= item.y && y <= item.y + 18 * item.scale,
   );
   return desk ? desk.employee.id : null;
 }
 
-/** People in the break room first, then the employees seated at their desks. */
-/** The office (a department room) under the point, for zooming; the meeting and break rooms are not offices. */
+/** The office under the point, for zooming. */
 export function roomHit(layout: OfficeLayout, x: number, y: number): string | null {
   const room = layout.rooms.find(
-    (item) =>
-      item.key !== BREAK_ROOM &&
-      item.key !== MEETING_ROOM &&
-      x >= item.x &&
-      x <= item.x + item.width &&
-      y >= item.y &&
-      y <= item.y + item.height,
+    (item) => x >= item.x && x <= item.x + item.width && y >= item.y && y <= item.y + item.height,
   );
   return room?.key ?? null;
 }
 
 export function hitTest(layout: OfficeLayout, x: number, y: number): string | null {
-  const placed = [...layout.desks.filter((desk) => !desk.away), ...layout.spots];
+  const placed = layout.desks;
   for (let index = placed.length - 1; index >= 0; index -= 1) {
     const desk = placed[index];
     if (x >= desk.x && x <= desk.x + 56 * desk.scale && y >= desk.y && y <= desk.y + 58 * desk.scale) {
