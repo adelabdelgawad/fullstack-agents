@@ -1,18 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type MutableRefObject, type RefObject } from "react";
 import { STATE_TEXT } from "../lib/cards";
-import { openCard, useStore } from "../store";
+import type { Card, WaitingEntry } from "../lib/types";
+import { openCard, setView, store, useStore } from "../store";
+import { openNewSession } from "../terminal/HerdrOverlay";
+import { TileCards } from "./agents/FleetTiles";
 import "../styles/office.css";
-import { drawOffice, hitTest, pcHit, roomHit } from "./office/draw";
-import { ChatConsole } from "./office/ChatConsole";
+import { drawOffice, hitTest, pcHit, roomHit, zoomIconHit } from "./office/draw";
+import { ChatConsole, endSession } from "./office/ChatConsole";
 import { Walks } from "./office/walk";
-import {
-  CTO_ID,
-  EMPTY_LAYOUT,
-  layoutOffice,
-  officeOf,
-  type Office,
-  type OfficeLayout,
-} from "./office/model";
+import { CTO_ID, CTO_TEAM, EMPTY_LAYOUT, layoutOffice, officeOf, type Office, type OfficeLayout } from "./office/model";
 
 function redraw(
   canvas: HTMLCanvasElement,
@@ -126,7 +122,7 @@ function TeamZoom({
 
 /** Everything waiting on the user, in one box: each entry opens its card. */
 function DecisionBox() {
-  const waiting = useStore((storeState) => storeState.state?.waiting || []);
+  const waiting = useStore((storeState) => storeState.state?.waiting) || NO_WAITING;
   const [open, setOpen] = useState(false);
   if (!waiting.length) return null;
   return (
@@ -169,12 +165,170 @@ function AccessibleEmployees({ office, select }: { office: Office; select: (id: 
   );
 }
 
+/** A session's live console: its card, full screen, on the Terminal tab (that session's herdr pane). */
+function openConsole(key: string): void {
+  openCard(key);
+  store.set({ tab2: "terminal" });
+}
+
+/** A small right-click menu at the click point; closes on Escape or a click outside. */
+function useMenu(close: () => void) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.querySelector("button")?.focus();
+    const away = (event: Event) => {
+      if (!ref.current?.contains(event.target as Node)) close();
+    };
+    const key = (event: KeyboardEvent) => event.key === "Escape" && close();
+    window.addEventListener("mousedown", away);
+    window.addEventListener("keydown", key);
+    return () => {
+      window.removeEventListener("mousedown", away);
+      window.removeEventListener("keydown", key);
+    };
+  }, [close]);
+  return ref;
+}
+
+/** Right-click on the CTO's office: start a session, the chat with every session, the herdr console, plan usage. */
+function CtoMenu({
+  at,
+  close,
+  chat,
+  usage,
+}: {
+  at: { x: number; y: number };
+  close: () => void;
+  chat: () => void;
+  usage: () => void;
+}) {
+  const ref = useMenu(close);
+  const run = (action: () => void) => () => {
+    close();
+    action();
+  };
+  return (
+    <div ref={ref} className="office-menu" role="menu" style={{ left: at.x, top: at.y }}>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={(event) => {
+          const anchor = event.currentTarget;
+          close();
+          void openNewSession(anchor);
+        }}
+      >
+        New conversation
+      </button>
+      <button type="button" role="menuitem" onClick={run(chat)}>
+        Open chat
+      </button>
+      <button type="button" role="menuitem" onClick={run(() => setView("herdr"))}>
+        Open console
+      </button>
+      <button type="button" role="menuitem" onClick={run(usage)}>
+        Open usage information
+      </button>
+    </div>
+  );
+}
+
+/** Plan usage, tokens and cost: the same summary tiles as the Agents page, in a modal. */
+function UsageModal({ close }: { close: () => void }) {
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => event.key === "Escape" && close();
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [close]);
+  return (
+    <div className="office-usage-backdrop" onMouseDown={(event) => event.target === event.currentTarget && close()}>
+      <section className="office-usage" role="dialog" aria-modal="true" aria-label="Usage information">
+        <header>
+          <h2>Usage</h2>
+          <button type="button" onClick={close}>
+            Close
+          </button>
+        </header>
+        <TileCards />
+      </section>
+    </div>
+  );
+}
+
+// Stable empty values: a selector returning a fresh [] or {} on every read makes React re-render forever.
+const NO_CARDS: Card[] = [];
+const NO_PANES: Record<string, string> = {};
+const NO_WAITING: WaitingEntry[] = [];
+
+/** The right-click menu of a session's office: its chat, its card, its live console, or end it. */
+function OfficeMenu({
+  menu,
+  card,
+  pane,
+  close,
+  chat,
+}: {
+  menu: { key: string; x: number; y: number };
+  card: Card | undefined;
+  pane: Record<string, string>;
+  close: () => void;
+  chat: (key: string) => void;
+}) {
+  const ref = useMenu(close);
+  if (!card) return null;
+  const sessionPane = pane[card.sessions[0]?.id || ""];
+  const run = (action: () => void) => () => {
+    close();
+    action();
+  };
+  return (
+    <div ref={ref} className="office-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
+      <button type="button" role="menuitem" onClick={run(() => chat(card.key))}>
+        Open chat conversation
+      </button>
+      <button type="button" role="menuitem" onClick={run(() => openCard(card.key))}>
+        Open dashboard
+      </button>
+      <button type="button" role="menuitem" onClick={run(() => openConsole(card.key))}>
+        Open console
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        className="danger"
+        disabled={!sessionPane}
+        title={sessionPane ? "" : "This session has no herdr pane"}
+        onClick={(event) => {
+          const anchor = event.currentTarget;
+          close();
+          endSession(card, sessionPane, anchor);
+        }}
+      >
+        End session
+      </button>
+    </div>
+  );
+}
+
 export function OfficeView() {
   const state = useStore((storeState) => storeState.state);
   const office = useMemo(() => officeOf(state), [state]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const placed = useRef<OfficeLayout>(EMPTY_LAYOUT);
   const [consoleId, setConsoleId] = useState<string | null>(null);
+  const [chatKey, setChatKey] = useState<string | undefined>(undefined);
+  const [usage, setUsage] = useState(false);
+  const [menu, setMenu] = useState<{ key: string; x: number; y: number } | null>(null);
+  const cards = useStore((storeState) => storeState.state?.cards) || NO_CARDS;
+  const panes = useStore((storeState) => storeState.state?.session_panes) || NO_PANES;
+  /** Right-click on a session's office: a menu for that session. */
+  const contextCanvas = (event: MouseEvent<HTMLCanvasElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const key = roomHit(placed.current, event.clientX - bounds.left, event.clientY - bounds.top);
+    if (!key || (key !== CTO_TEAM && !cards.some((card) => card.key === key))) return;
+    event.preventDefault();
+    setMenu({ key, x: event.clientX - bounds.left, y: event.clientY - bounds.top });
+  };
   const [zoom, setZoom] = useState<string | null>(null);
   const zoomTeams = useMemo(() => office.teams.filter((team) => team.key === zoom), [office, zoom]);
   const zoomTeam = zoomTeams.length ? zoom : null;
@@ -198,10 +352,13 @@ export function OfficeView() {
     const bounds = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - bounds.left;
     const y = event.clientY - bounds.top;
-    if (open(pcHit(placed.current, x, y)) || open(hitTest(placed.current, x, y))) return;
-    // Clicking an office's floor or header zooms into that team; inside the zoom it goes back to the whole floor.
+    // The magnifier zooms into that office (or back out); anywhere else in a session's office opens its console.
+    const icon = zoomIconHit(placed.current, x, y);
+    if (icon) return setZoom(zoomTeam ? null : icon);
     const room = roomHit(placed.current, x, y);
-    if (room) setZoom(zoomTeam ? null : room);
+    const card = cards.find((item) => item.key === room);
+    if (card) return openConsole(card.key);
+    open(pcHit(placed.current, x, y)) || open(hitTest(placed.current, x, y));
   };
   if (!employees.length) return <div className="office-empty">No live sessions</div>;
   return (
@@ -209,10 +366,50 @@ export function OfficeView() {
       <div className="office-canvas-wrap">
         <DecisionBox />
         <TeamZoom teams={office.teams} zoom={zoomTeam} setZoom={setZoom} />
-        <canvas ref={canvasRef} className="office-canvas" onClick={clickCanvas} aria-hidden="true" />
+        <canvas
+          ref={canvasRef}
+          className="office-canvas"
+          onClick={clickCanvas}
+          onContextMenu={contextCanvas}
+          aria-hidden="true"
+        />
+        {menu?.key === CTO_TEAM && (
+          <CtoMenu
+            at={menu}
+            close={() => setMenu(null)}
+            chat={() => {
+              setChatKey(undefined);
+              setConsoleId(CTO_ID);
+            }}
+            usage={() => setUsage(true)}
+          />
+        )}
+        {menu && menu.key !== CTO_TEAM && (
+          <OfficeMenu
+            menu={menu}
+            card={cards.find((card) => card.key === menu.key)}
+            pane={panes}
+            close={() => setMenu(null)}
+            chat={(key) => {
+              setChatKey(key);
+              setConsoleId(CTO_ID);
+            }}
+          />
+        )}
       </div>
       <AccessibleEmployees office={office} select={open} />
-      {consoleId === CTO_ID && <ChatConsole close={() => setConsoleId(null)} title={`${ctoName} · all sessions`} />}
+      {consoleId === CTO_ID && (
+        <ChatConsole
+          key={chatKey || "all"}
+          initial={chatKey}
+          close={() => {
+            setConsoleId(null);
+            setChatKey(undefined);
+          }}
+          title={`${ctoName} · all sessions`}
+        />
+      )}
+      {usage && <UsageModal close={() => setUsage(false)} />}
     </section>
   );
 }

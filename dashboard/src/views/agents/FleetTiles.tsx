@@ -198,7 +198,8 @@ function Tile({
   );
 }
 
-function TileCards() {
+/** The fleet summary tiles: plan usage, tokens and cost (also shown in the Office's usage modal). */
+export function TileCards() {
   const state = useStore((value) => value.state);
   const totals = (state?.totals || {}) as Record<string, number>;
   const plan = (state?.plan || {}) as Record<string, PlanData | SpendData>;

@@ -17,6 +17,9 @@ interface Message {
 }
 
 const REFRESH_MS = 4000;
+// Stable empty values: a selector returning a fresh [] or {} on every read makes React re-render forever.
+const NO_CARDS: Card[] = [];
+const NO_PANES: Record<string, string> = {};
 
 function sessionTitle(card: Card): string {
   return card.sessions[0]?.name || card.title || card.label || card.key;
@@ -108,7 +111,7 @@ function useStableCards(cards: Card[]): Card[] {
 }
 
 /** Close the session's herdr pane after a confirmation, as the Agents page's "end session" does. */
-function endSession(card: Card, pane: string, anchor: HTMLElement): void {
+export function endSession(card: Card, pane: string, anchor: HTMLElement): void {
   const name = sessionTitle(card);
   openHerdrConfirm(
     "End session?",
@@ -139,7 +142,7 @@ function Sidebar({
   picked: string | null;
   pickWorker: (id: string) => void;
 }) {
-  const panes = useStore((storeState) => storeState.state?.session_panes || {});
+  const panes = useStore((storeState) => storeState.state?.session_panes) || NO_PANES;
   return (
     <nav className="chat-sidebar" aria-label="Running sessions">
       <button type="button" className="chat-new" onClick={(event) => void openNewSession(event.currentTarget)}>
@@ -385,11 +388,11 @@ function Composer({ pane }: { pane: string | undefined }) {
 
 /** The CTO console as a chat: running sessions on the left with the selected one's subagents and shells under it,
  * and the conversation (or the picked subagent's or shell's output) on the right. */
-export function ChatConsole({ close, title }: { close: () => void; title: string }) {
-  const all = useStore((storeState) => storeState.state?.cards || []);
-  const panes = useStore((storeState) => storeState.state?.session_panes || {});
+export function ChatConsole({ close, title, initial }: { close: () => void; title: string; initial?: string }) {
+  const all = useStore((storeState) => storeState.state?.cards) || NO_CARDS;
+  const panes = useStore((storeState) => storeState.state?.session_panes) || NO_PANES;
   const cards = useStableCards(all);
-  const [key, setKey] = useState<string | null>(null);
+  const [key, setKey] = useState<string | null>(initial ?? null);
   const [terminal, setTerminal] = useState(false);
   const [workerId, setWorkerId] = useState<string | null>(null);
   const current = cards.find((card) => card.key === key) || cards[0] || null;

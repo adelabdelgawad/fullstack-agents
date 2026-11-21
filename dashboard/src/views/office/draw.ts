@@ -420,7 +420,17 @@ export function pcHit(layout: OfficeLayout, x: number, y: number): string | null
   return desk ? desk.employee.id : null;
 }
 
-/** The office under the point, for zooming. */
+/** The magnifier in an office's header corner (see drawZoomIcon): clicking it zooms in or back out. */
+export function zoomIconHit(layout: OfficeLayout, x: number, y: number): string | null {
+  const room = layout.rooms.find(
+    (item) =>
+      Math.abs(x - (item.x + item.width - 9 * item.scale)) <= 7 * item.scale &&
+      Math.abs(y - (item.y + 7 * item.scale)) <= 6 * item.scale,
+  );
+  return room?.key ?? null;
+}
+
+/** The office under the point. */
 export function roomHit(layout: OfficeLayout, x: number, y: number): string | null {
   const room = layout.rooms.find(
     (item) => x >= item.x && x <= item.x + item.width && y >= item.y && y <= item.y + item.height,
