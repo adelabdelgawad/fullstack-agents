@@ -82,7 +82,7 @@ export function drawMeetingRoom(ctx: CanvasRenderingContext2D, room: PlacedRoom)
   rect(ctx, x, y + band, width, height - band, "#34506b");
   for (let line = y + band + 6 * d; line < y + height; line += 6 * d) rect(ctx, x, line, width, Math.max(1, d / 3), "#3c5a77");
   drawBackWall(ctx, room);
-  if (width > 140 * d) drawWhiteboard(ctx, x + 18 * d, y + 5 * d, d * 0.9);
+  if (width > 140 * d) drawWhiteboard(ctx, x + 4 * d, y + 5 * d, d * 0.9);
   const table = room.table;
   if (!table) return;
   const s = table.height / 22;

@@ -139,6 +139,53 @@ function PromptForm({ employee }: { employee: OfficeEmployee }) {
   );
 }
 
+/** Who the agent reports to and who it delegates to: the CTO leads every agent; a lead leads its workers and subagents. */
+function ReportingChain({ employee }: { employee: OfficeEmployee }) {
+  const reports = employee.reports || [];
+  return (
+    <div className="office-chain">
+      {employee.id !== CTO_ID && <p>Reports to: CTO</p>}
+      <p>{reports.length ? `Delegates to (${reports.length}):` : "Delegates to: nobody right now"}</p>
+      {reports.length > 0 && (
+        <ul>
+          {reports.map((report) => (
+            <li key={report.id}>
+              <span className={`office-chain-dot pose-${report.pose}`} aria-hidden="true" />
+              {report.name} · {report.role} · {STATE_TEXT[report.pose] || report.pose}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Everything waiting on the user, in one box: each entry opens its card. */
+function DecisionBox() {
+  const waiting = useStore((storeState) => storeState.state?.waiting || []);
+  const [open, setOpen] = useState(false);
+  if (!waiting.length) return null;
+  return (
+    <aside className="office-decisions" aria-label="Decisions waiting on you">
+      <button type="button" className="office-decisions-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+        Decision box · {waiting.length} waiting on you
+      </button>
+      {open && (
+        <ul>
+          {waiting.map((entry) => (
+            <li key={entry.key}>
+              <button type="button" onClick={() => entry.card && openCard(entry.card)}>
+                <strong>{entry.name}</strong>
+                <span>{entry.snippet || "Waiting for your answer"}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </aside>
+  );
+}
+
 function EmployeeDialog({ employee, team }: { employee: OfficeEmployee; team: string }) {
   const titleId = `office-dialog-${employee.id.replace(/[^a-z0-9_-]/gi, "-")}`;
   return (
@@ -175,6 +222,7 @@ function EmployeeDialog({ employee, team }: { employee: OfficeEmployee; team: st
         </div>
       </dl>
       {employee.bubble && <blockquote className="office-bubble">{employee.bubble}</blockquote>}
+      <ReportingChain employee={employee} />
       <PromptForm employee={employee} />
     </section>
   );
@@ -237,7 +285,7 @@ function CtoConsole({ close }: { close: () => void }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [close]);
   return (
-    <div className="office-console" role="dialog" aria-modal="true" aria-label="CTO: all sessions">
+    <div className="office-console office-console-full" role="dialog" aria-modal="true" aria-label="CTO: all sessions">
       <div className="office-console-head">
         <h2>CTO · all sessions</h2>
         <button type="button" onClick={close}>
@@ -290,6 +338,7 @@ export function OfficeView() {
   return (
     <section className={selected ? "office-view has-selection" : "office-view"} aria-label="Live session office">
       <div className="office-canvas-wrap">
+        <DecisionBox />
         <canvas ref={canvasRef} className="office-canvas" onClick={clickCanvas} aria-hidden="true" />
       </div>
       <AccessibleEmployees office={office} select={setSelectedId} />

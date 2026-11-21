@@ -255,3 +255,112 @@
   color: var(--text, inherit);
   box-shadow: inset 0 2px 0 var(--blue);
 }
+
+.office-chain {
+  font-size: 0.85rem;
+}
+
+.office-chain p {
+  margin: 4px 0;
+}
+
+.office-chain ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.office-chain li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.office-chain-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.office-chain-dot.pose-typing {
+  background: #4ade80;
+}
+
+.office-chain-dot.pose-reading {
+  background: #60a5fa;
+}
+
+.office-chain-dot.pose-waiting {
+  background: #f87171;
+}
+
+.office-decisions {
+  margin-bottom: 8px;
+  max-height: 30vh;
+  overflow: auto;
+  border: 2px solid #f87171;
+  background: var(--panel);
+}
+
+.office-decisions-head {
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: #7f1d1d;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.office-decisions ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.office-decisions li button {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.office-decisions li button:hover,
+.office-decisions li button:focus-visible {
+  background: var(--card);
+}
+
+.office-decisions li span {
+  color: var(--muted, inherit);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.office-view {
+  position: relative;
+}
+
+.office-console.office-console-full {
+  inset: 0;
+  box-shadow: none;
+  border: none;
+}
+
+.office-console-full > :last-child {
+  flex: 1;
+  min-height: 0;
+}

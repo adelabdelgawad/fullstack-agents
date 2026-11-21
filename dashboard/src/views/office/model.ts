@@ -22,6 +22,8 @@ export interface OfficeEmployee {
   meeting?: boolean;
   /** The CTO never leaves the CTO office. */
   fixed?: boolean;
+  /** Who this agent delegates to: its card's workers and subagents (the CTO: every agent). */
+  reports?: OfficeEmployee[];
 }
 
 export interface OfficeTeam {
@@ -52,6 +54,8 @@ export interface PlacedSpot {
   scale: number;
   employee: OfficeEmployee;
   activity: BreakActivity;
+  /** Meeting seats: the side of the table the agent sits on. */
+  seat?: "north" | "south";
 }
 
 export const BREAK_ROOM = "break";
@@ -173,6 +177,7 @@ function agentOf(card: Card, panes: Record<string, string>): OfficeEmployee | nu
     sessions: active.length,
     total: members.length,
     meeting: MEETING_PHASES.test(textOf(card.phase)),
+    reports: members.filter((member) => member !== lead),
   };
 }
 
@@ -185,6 +190,7 @@ function ctoOf(agents: OfficeEmployee[]): OfficeEmployee {
     sessions: agents.reduce((sum, agent) => sum + agent.sessions, 0),
     total: agents.length,
     fixed: true,
+    reports: agents,
   };
 }
 
@@ -379,8 +385,9 @@ function placeMeeting(people: OfficeEmployee[], room: PlacedRoom, s: number): Pl
     const side = index % 2;
     const seat = Math.floor(index / 2);
     const x = table.x + step * (seat + 0.5) - 28 * s;
-    const y = side ? table.y + table.height - 14 * s : table.y - 36 * s;
-    return { x, y, scale: s, employee, activity: "meeting" as BreakActivity };
+    // Spot y keeps the desk convention (name label at y + 48s): above a north seat, below a south seat.
+    const y = side ? table.y + table.height + s - 24 * s : table.y - 22 * s - 58 * s;
+    return { x, y, scale: s, employee, activity: "meeting" as BreakActivity, seat: side ? "south" : "north" } as PlacedSpot;
   });
 }
 
@@ -410,11 +417,16 @@ interface Spec {
 function placeRooms(specs: Spec[], plan: Plan, origin: { x: number; y: number }, chrome: number): PlacedRoom[] {
   const b = (key: keyof typeof BUILDING) => BUILDING[key] * chrome;
   const decor = Math.max(chrome, Math.min(decorCap(chrome), plan.scale));
+  const rowWidth = plan.columns * plan.roomW + (plan.columns - 1) * b("wall");
+  const lastRow = Math.floor((specs.length - 1) / plan.columns);
+  const lastCount = specs.length - lastRow * plan.columns;
   return specs.map((spec, index) => {
-    const x = origin.x + (index % plan.columns) * (plan.roomW + b("wall"));
-    const y = origin.y + Math.floor(index / plan.columns) * (plan.roomH + b("wallT") + b("corridor"));
-    const room: PlacedRoom = { key: spec.key, label: spec.label, x, y, width: plan.roomW, height: plan.roomH, scale: decor };
-    room.door = { x: x + 10 * decor, width: Math.min(20 * decor, plan.roomW / 3), depth: b("wallT") };
+    const row = Math.floor(index / plan.columns);
+    const width = row === lastRow ? (rowWidth - (lastCount - 1) * b("wall")) / lastCount : plan.roomW;
+    const x = origin.x + (index % plan.columns) * (width + b("wall"));
+    const y = origin.y + row * (plan.roomH + b("wallT") + b("corridor"));
+    const room: PlacedRoom = { key: spec.key, label: spec.label, x, y, width, height: plan.roomH, scale: decor };
+    room.door = { x: x + 10 * decor, width: Math.min(20 * decor, width / 3), depth: b("wallT") };
     return furnish(room, plan.scale, spec.count);
   });
 }
@@ -428,7 +440,7 @@ function circulation(plan: Plan, inner: Rect, chrome: number): { corridors: Rect
     corridors.push({ x: inner.x, y, width: inner.width, height: b("corridor") });
   }
   if (corridors.length) {
-    const top = corridors[0].y;
+    const top = inner.y;
     corridors.push({ x: inner.x + inner.width - b("spine"), y: top, width: b("spine"), height: lobby.y - top });
   }
   return { corridors, lobby };
@@ -460,4 +472,31 @@ export function layoutOffice(office: Office, width: number, height: number, chro
   const bottom = used.y + used.height + edge;
   const building = { key: "building", label: office.name, x: MARGIN, y: MARGIN, width: bw, height: bottom - MARGIN, scale: chrome };
   return { building, rooms, desks, spots, corridors, lobby, height: bottom + MARGIN };
+}
+
+export interface ReportingLine {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  colour: number;
+  /** The agent is working: a work packet travels down the line. */
+  active: boolean;
+}
+
+/** Reporting lines from the CTO's desk to every agent, wherever the agent is now (desk, meeting or break room). */
+export function reportingLines(layout: OfficeLayout): ReportingLine[] {
+  const centre = (place: { x: number; y: number; scale: number }) => ({ x: place.x + 28 * place.scale, y: place.y + 30 * place.scale });
+  const cto = layout.desks.find((desk) => desk.employee.id === CTO_ID);
+  if (!cto) return [];
+  const spots = new Map(layout.spots.map((spot) => [spot.employee.id, spot]));
+  return layout.desks
+    .filter((desk) => desk.employee.id !== CTO_ID)
+    .map((desk) => {
+      const where = spots.get(desk.employee.id) || desk;
+      return {
+        from: centre(cto),
+        to: centre(where),
+        colour: desk.employee.colour,
+        active: desk.employee.pose === "typing" || desk.employee.pose === "reading",
+      };
+    });
 }

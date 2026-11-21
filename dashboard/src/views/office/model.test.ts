@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Card, DashState, Session } from "../../lib/types";
-import { cardMembers, CTO_ID, departmentOf, layoutOffice, officeOf, teamOfEmployee, type Office } from "./model";
+import { cardMembers, CTO_ID, departmentOf, layoutOffice, officeOf, reportingLines, teamOfEmployee, type Office } from "./model";
 
 function session(patch: Partial<Session> = {}): Session {
   return { id: "lead", name: "Lead", state: "working", ...patch };
@@ -208,5 +208,39 @@ describe("layoutOffice", () => {
 
   it("names the company after the repository", () => {
     expect(officeOf({ ...dash([card()]), repo: "/home/x/acme" }).name).toBe("acme");
+  });
+});
+
+describe("reporting lines", () => {
+  it("each agent delegates to its workers and subagents; the CTO leads every agent", () => {
+    const source = card({
+      runs: [{ id: "w1", mode: "implement", state: "running", action_running: true, action: "Bash build" }],
+      now: [session({ id: "lead", agents: [{ id: "h1", state: "running", label: "Reviewer" }] })],
+    });
+    const office = officeOf(dash([source, card({ key: "solo", sessions: [session({ id: "s" })] })]));
+    const [agent, solo] = agents(office);
+    expect(agent.reports?.map((report) => [report.id, report.role])).toEqual([
+      ["w1", "worker"],
+      ["h1", "helper"],
+    ]);
+    expect(solo.reports).toEqual([]);
+    expect(office.teams[0].employees[0].reports?.map((report) => report.id)).toEqual(["office", "solo"]);
+  });
+
+  it("draws one line from the CTO desk to every agent, to where the agent is now", () => {
+    const office = officeOf(
+      dash([
+        card({ key: "busy", sessions: [session({ id: "b", action_running: true, action: "Bash build" })] }),
+        card({ key: "rest", sessions: [session({ id: "r", state: "idle" })] }),
+      ]),
+    );
+    const layout = layoutOffice(office, 1400, 800);
+    const lines = reportingLines(layout);
+    expect(lines).toHaveLength(2);
+    const cto = layout.desks.find((desk) => desk.employee.id === CTO_ID)!;
+    expect(lines.every((line) => line.from.x === cto.x + 28 * cto.scale)).toBe(true);
+    const rest = layout.spots.find((spot) => spot.employee.id === "rest")!;
+    expect(lines.map((line) => line.active)).toEqual([true, false]);
+    expect(lines[1].to).toEqual({ x: rest.x + 28 * rest.scale, y: rest.y + 30 * rest.scale });
   });
 });
