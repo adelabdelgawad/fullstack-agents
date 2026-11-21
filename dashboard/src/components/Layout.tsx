@@ -8,6 +8,7 @@ const VIEWS: Array<[View, string]> = [
   ["agents", "Agents"],
   ["herdr", "Herdr"],
   ["history", "History"],
+  ["office", "Office"],
 ];
 
 function ViewIcon({ view }: { view: View }) {
@@ -17,6 +18,8 @@ function ViewIcon({ view }: { view: View }) {
     herdr: "M2 2.5h12v9H8.75L6 14v-2.5H2v-9Zm2.25 2 2.25 2-2.25 2 1 1 3.25-3-3.25-3-1 1ZM9 9.5h3v-1.5H9v1.5Z",
     history:
       "M8 1.5a6.5 6.5 0 1 1-6.15 4.39l1.42.48A5 5 0 1 0 4.4 4.5H6v1.5H1.5V1.5H3v1.72A6.47 6.47 0 0 1 8 1.5Zm-.75 3h1.5v3.19l2.37 1.37-.75 1.3-3.12-1.8V4.5Z",
+    office:
+      "M4.5 1.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4ZM1.5 7h6v3H6v4.5H4.5V10h-3V7Zm7.5-.5h5.5v5H12v3h-1.5v-3H9v-5Zm1.5 1.5v2h2.5V8h-2.5Z",
   };
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">

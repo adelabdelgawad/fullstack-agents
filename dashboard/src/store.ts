@@ -22,7 +22,7 @@ const ls = {
   },
 };
 
-export type View = "agents" | "herdr" | "history";
+export type View = "agents" | "herdr" | "history" | "office";
 export type Tab2 = "info" | "git" | "terminal";
 
 export interface FleetSlice {
@@ -68,7 +68,7 @@ type Listener = () => void;
 
 export function viewFromPath(path: string): View {
   const name = path.replace(/\/$/, "").split("/").pop();
-  return name === "herdr" || name === "history" ? name : "agents";
+  return name === "herdr" || name === "history" || name === "office" ? name : "agents";
 }
 
 const initialView = viewFromPath(window.location.pathname);
@@ -152,7 +152,7 @@ export function closePanel(): void {
 }
 
 export function setView(next: string, navigate = true): void {
-  const view: View = next === "herdr" || next === "history" ? next : "agents";
+  const view: View = next === "herdr" || next === "history" || next === "office" ? next : "agents";
   if (navigate && window.location.pathname !== `/next/${view}`) {
     window.history.pushState(null, "", `/next/${view}`);
   }

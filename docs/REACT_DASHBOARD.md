@@ -31,6 +31,7 @@ style, API call, poll interval, localStorage key and keyboard shortcut stays as 
 | U3 panel | `panel/*.tsx`, `components/OutDialog.tsx` | `dashboard.html` 1809-1868, 1903-2537, 2627-2757 |
 | U4 terminal | `terminal/*.ts(x)`, `views/HerdrView.tsx` | `dashboard.html` 651-1656 |
 | U5 history | `views/HistoryView.tsx` | `fleet.js` 174-186 |
+| Office (new, not a port) | `views/OfficeView.tsx`, `views/office/*`, `styles/office.css` | none: draws `/api/state` sessions as pixel employees on a canvas (no new requests, no model calls); its prompt box posts `{pane, kind: "prompt"}` to `/api/herdr/send`; served at `/next/office` |
 
 A unit edits only its own files. A needed change to another unit's file is reported, never made.
 
