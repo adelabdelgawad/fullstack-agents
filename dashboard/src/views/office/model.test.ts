@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Card, DashState, Session } from "../../lib/types";
-import { cardMembers, CTO_ID, finished, layoutOffice, officeOf, type Office } from "./model";
+import { cardMembers, CTO_ID, finished, layoutOffice, officeOf, SUBAGENT_SCALE, type Office } from "./model";
 
 function session(patch: Partial<Session> = {}): Session {
   return { id: "lead", name: "Lead", state: "working", ...patch };
@@ -240,3 +240,33 @@ describe("helpers", () => {
 function office2(): Office {
   return officeOf(dash([card({ key: "x" })]));
 }
+
+describe("office seating", () => {
+  it("the leader sits in the middle; smaller subagent desks line the walls, right first, then left", () => {
+    const source = card({
+      key: "a",
+      sessions: [session({ id: "a" })],
+      now: [session({ id: "a", agents: [helper("h1", "running"), helper("h2", "running"), helper("h3", "running")] })],
+    });
+    const layout = layoutOffice(officeOf(dash([source])), 1400, 800);
+    const room = layout.rooms.find((item) => item.key === "a")!;
+    const desk = (id: string) => layout.desks.find((item) => item.employee.id === id)!;
+    const lead = desk("a");
+    expect(Math.abs(lead.x + (56 * lead.scale) / 2 - (room.x + room.width / 2))).toBeLessThan(1);
+    for (const id of ["h1", "h2", "h3"]) expect(desk(id).scale).toBeCloseTo(lead.scale * SUBAGENT_SCALE);
+    expect(desk("h1").x).toBeGreaterThan(lead.x);
+    expect(desk("h2").x).toBeLessThan(lead.x);
+    expect(desk("h3").x).toBe(desk("h1").x);
+    expect(desk("h3").y).toBeGreaterThan(desk("h1").y);
+  });
+
+  it("the CTO's screen counts sessions, not their subagents", () => {
+    const busy = card({
+      key: "a",
+      sessions: [session({ id: "a" })],
+      now: [session({ id: "a", agents: [helper("h1", "running"), helper("h2", "running")] })],
+    });
+    const office = officeOf(dash([busy, card({ key: "b", sessions: [session({ id: "b" })] })]));
+    expect(office.teams[0].employees[0]).toMatchObject({ sessions: 2, total: 2 });
+  });
+});

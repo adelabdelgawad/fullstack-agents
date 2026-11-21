@@ -1,11 +1,22 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type MutableRefObject, type RefObject } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type MutableRefObject,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { STATE_TEXT } from "../lib/cards";
 import type { Card, WaitingEntry } from "../lib/types";
+import { openRunLog } from "../panel/Panel";
 import { openCard, setView, store, useStore } from "../store";
 import { openNewSession } from "../terminal/HerdrOverlay";
 import "../styles/office.css";
 import { drawOffice, hitTest, pcHit, roomHit, zoomIconHit } from "./office/draw";
 import { ChatConsole, endSession } from "./office/ChatConsole";
+import { HistoryView } from "./HistoryView";
 import { UsagePanel } from "./office/UsagePanel";
 import { Walks } from "./office/walk";
 import { CTO_ID, CTO_TEAM, EMPTY_LAYOUT, layoutOffice, officeOf, type Office, type OfficeLayout } from "./office/model";
@@ -196,11 +207,13 @@ function CtoMenu({
   close,
   chat,
   usage,
+  history,
 }: {
   at: { x: number; y: number };
   close: () => void;
   chat: () => void;
   usage: () => void;
+  history: () => void;
 }) {
   const ref = useMenu(close);
   const run = (action: () => void) => () => {
@@ -229,12 +242,15 @@ function CtoMenu({
       <button type="button" role="menuitem" onClick={run(usage)}>
         Open usage information
       </button>
+      <button type="button" role="menuitem" onClick={run(history)}>
+        History
+      </button>
     </div>
   );
 }
 
-/** Plan usage, tokens and cost for the CTO, in a modal. */
-function UsageModal({ close }: { close: () => void }) {
+/** A scrollable modal over the Office: the CTO's usage view or the session history. */
+function OfficeModal({ title, close, children }: { title: string; close: () => void; children: ReactNode }) {
   useEffect(() => {
     const key = (event: KeyboardEvent) => event.key === "Escape" && close();
     window.addEventListener("keydown", key);
@@ -242,14 +258,14 @@ function UsageModal({ close }: { close: () => void }) {
   }, [close]);
   return (
     <div className="office-usage-backdrop" onMouseDown={(event) => event.target === event.currentTarget && close()}>
-      <section className="office-usage" role="dialog" aria-modal="true" aria-label="Usage information">
+      <section className="office-usage" role="dialog" aria-modal="true" aria-label={title}>
         <header>
-          <h2>Usage</h2>
+          <h2>{title}</h2>
           <button type="button" onClick={close}>
             Close
           </button>
         </header>
-        <UsagePanel />
+        {children}
       </section>
     </div>
   );
@@ -318,6 +334,8 @@ export function OfficeView() {
   const [consoleId, setConsoleId] = useState<string | null>(null);
   const [chatKey, setChatKey] = useState<string | undefined>(undefined);
   const [usage, setUsage] = useState(false);
+  const [history, setHistory] = useState(false);
+  const [chatWorker, setChatWorker] = useState<string | undefined>(undefined);
   const [menu, setMenu] = useState<{ key: string; x: number; y: number } | null>(null);
   const cards = useStore((storeState) => storeState.state?.cards) || NO_CARDS;
   const panes = useStore((storeState) => storeState.state?.session_panes) || NO_PANES;
@@ -340,12 +358,19 @@ export function OfficeView() {
    * staff with no session have nothing to open. */
   const open = (id: string | null): boolean => {
     if (!id) return false;
-    if (id === CTO_ID) setConsoleId(CTO_ID);
-    else {
-      const agent = employees.find((employee) => employee.id === id);
-      if (!agent?.cardKey) return false;
-      openCard(agent.cardKey);
+    if (id === CTO_ID) {
+      setConsoleId(CTO_ID);
+      return true;
     }
+    const agent = employees.find((employee) => employee.id === id);
+    if (!agent?.cardKey) return false;
+    // A subagent or shell opens its own live output in the chat console, a Codex worker its run log; a leader its console.
+    if (agent.role === "worker") openRunLog(agent.cardKey, agent.id);
+    else if (agent.role === "helper") {
+      setChatKey(agent.cardKey);
+      setChatWorker(agent.id);
+      setConsoleId(CTO_ID);
+    } else openConsole(agent.cardKey);
     return true;
   };
   const clickCanvas = (event: MouseEvent<HTMLCanvasElement>) => {
@@ -355,10 +380,10 @@ export function OfficeView() {
     // The magnifier zooms into that office (or back out); anywhere else in a session's office opens its console.
     const icon = zoomIconHit(placed.current, x, y);
     if (icon) return setZoom(zoomTeam ? null : icon);
+    if (open(pcHit(placed.current, x, y)) || open(hitTest(placed.current, x, y))) return;
     const room = roomHit(placed.current, x, y);
     const card = cards.find((item) => item.key === room);
-    if (card) return openConsole(card.key);
-    open(pcHit(placed.current, x, y)) || open(hitTest(placed.current, x, y));
+    if (card) openConsole(card.key);
   };
   if (!employees.length) return <div className="office-empty">No live sessions</div>;
   return (
@@ -379,9 +404,11 @@ export function OfficeView() {
             close={() => setMenu(null)}
             chat={() => {
               setChatKey(undefined);
+              setChatWorker(undefined);
               setConsoleId(CTO_ID);
             }}
             usage={() => setUsage(true)}
+            history={() => setHistory(true)}
           />
         )}
         {menu && menu.key !== CTO_TEAM && (
@@ -392,6 +419,7 @@ export function OfficeView() {
             close={() => setMenu(null)}
             chat={(key) => {
               setChatKey(key);
+              setChatWorker(undefined);
               setConsoleId(CTO_ID);
             }}
           />
@@ -400,16 +428,27 @@ export function OfficeView() {
       <AccessibleEmployees office={office} select={open} />
       {consoleId === CTO_ID && (
         <ChatConsole
-          key={chatKey || "all"}
+          key={`${chatKey || "all"}:${chatWorker || ""}`}
           initial={chatKey}
+          initialWorker={chatWorker}
           close={() => {
             setConsoleId(null);
             setChatKey(undefined);
+            setChatWorker(undefined);
           }}
           title={`${ctoName} · all sessions`}
         />
       )}
-      {usage && <UsageModal close={() => setUsage(false)} />}
+      {usage && (
+        <OfficeModal title="Usage" close={() => setUsage(false)}>
+          <UsagePanel />
+        </OfficeModal>
+      )}
+      {history && (
+        <OfficeModal title="History" close={() => setHistory(false)}>
+          <HistoryView />
+        </OfficeModal>
+      )}
     </section>
   );
 }

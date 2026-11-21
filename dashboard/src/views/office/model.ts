@@ -204,7 +204,8 @@ function ctoOf(leaders: OfficeEmployee[], name: string | undefined): OfficeEmplo
     pane: null,
     colour: 2,
     tokens: leaders.reduce((sum, agent) => sum + agent.tokens, 0),
-    sessions: leaders.reduce((sum, agent) => sum + agent.sessions, 0),
+    // The number on the CTO's screen: sessions, not their subagents or shells.
+    sessions: leaders.length,
     total: leaders.length,
     fixed: true,
     reports: leaders,
@@ -325,24 +326,6 @@ function planGrid(counts: number[], innerW: number, innerH: number, chrome: numb
   return { ...best, scale: Math.max(0.5, Math.min(3, Math.floor(best.scale * 4) / 4)) };
 }
 
-/** Desks spread over the room floor like an office: each sits centred in its cell, cells at most 1.8x a desk. */
-function placeCells(count: number, room: PlacedRoom, scale: number): { x: number; y: number; columns: number }[] {
-  const d = room.scale;
-  const innerW = room.width - 2 * BUILDING.pad * d;
-  const innerH = room.height - (BUILDING.header + BUILDING.pad) * d;
-  const { columns } = deskFit(count, innerW, innerH);
-  const rows = Math.max(1, Math.ceil(count / columns));
-  const cellW = Math.max(DESK_W * scale, Math.min(innerW / columns, DESK_W * scale * 1.8));
-  const cellH = Math.max(DESK_H * scale, Math.min(innerH / rows, DESK_H * scale * 1.5));
-  const left = room.x + (room.width - columns * cellW) / 2 + (cellW - DESK_W * scale) / 2;
-  const top = room.y + BUILDING.header * d + Math.max(0, (innerH - rows * cellH) / 2) + (cellH - DESK_H * scale) / 2;
-  return Array.from({ length: count }, (_, index) => ({
-    x: left + (index % columns) * cellW,
-    y: top + Math.floor(index / columns) * cellH,
-    columns,
-  }));
-}
-
 /** A session office has room for its leader and two subagents before it grows. */
 export const OFFICE_DESKS = 3;
 
@@ -388,6 +371,37 @@ function circulation(plan: Plan, inner: Rect, chrome: number): { corridors: Rect
   return { corridors, lobby };
 }
 
+/** Subagent desks are smaller than the leader's. */
+export const SUBAGENT_SCALE = 0.6;
+
+/** A session office: the leader's desk in the middle, its subagents at smaller desks along the side walls, the first on
+ * the right wall, then the left, alternating, each wall filling top to bottom (then a second row inwards). */
+function placeTeam(team: OfficeTeam, room: PlacedRoom, scale: number): PlacedDesk[] {
+  const [leader, ...workers] = team.employees;
+  if (!leader) return [];
+  const d = room.scale;
+  const floorTop = room.y + BUILDING.header * d;
+  const floorH = room.y + room.height - floorTop;
+  const lead = {
+    x: room.x + (room.width - DESK_W * scale) / 2,
+    y: floorTop + (floorH - DESK_H * scale) / 2,
+    scale,
+    employee: leader,
+  };
+  const small = scale * SUBAGENT_SCALE;
+  const pad = BUILDING.pad * d;
+  const perWall = Math.max(1, Math.floor((floorH - pad) / (DESK_H * small)));
+  const placed = workers.map((employee, index) => {
+    const right = index % 2 === 0;
+    const slot = Math.floor(index / 2);
+    const row = slot % perWall;
+    const inward = Math.floor(slot / perWall) * DESK_W * small;
+    const x = right ? room.x + room.width - pad - DESK_W * small - inward : room.x + pad + inward;
+    return { x, y: floorTop + pad / 2 + row * DESK_H * small, scale: small, employee };
+  });
+  return [lead, ...placed];
+}
+
 /** The assets warehouse: a small storeroom at the right end of the lobby. */
 function warehouseOf(lobby: Rect, chrome: number): Rect {
   const width = Math.min(90 * chrome, lobby.width / 4);
@@ -430,12 +444,7 @@ export function layoutOffice(office: Office, width: number, height: number, chro
   );
   plan.roomH = Math.max(plan.roomH, (BUILDING.header + BUILDING.pad) * decorCap(chrome) + DESK_H * plan.scale);
   const rooms = placeRooms(specs, plan, inner, chrome);
-  const desks = office.teams.flatMap((team, index) => {
-    const cells = placeCells(deskCount(team), rooms[index], plan.scale);
-    return team.employees
-      .slice(0, cells.length)
-      .map((employee, cell) => ({ ...cells[cell], scale: plan.scale, employee }));
-  });
+  const desks = office.teams.flatMap((team, index) => placeTeam(team, rooms[index], plan.scale));
   const used = {
     ...inner,
     height: Math.max(

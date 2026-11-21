@@ -388,13 +388,23 @@ function Composer({ pane }: { pane: string | undefined }) {
 
 /** The CTO console as a chat: running sessions on the left with the selected one's subagents and shells under it,
  * and the conversation (or the picked subagent's or shell's output) on the right. */
-export function ChatConsole({ close, title, initial }: { close: () => void; title: string; initial?: string }) {
+export function ChatConsole({
+  close,
+  title,
+  initial,
+  initialWorker,
+}: {
+  close: () => void;
+  title: string;
+  initial?: string;
+  initialWorker?: string;
+}) {
   const all = useStore((storeState) => storeState.state?.cards) || NO_CARDS;
   const panes = useStore((storeState) => storeState.state?.session_panes) || NO_PANES;
   const cards = useStableCards(all);
   const [key, setKey] = useState<string | null>(initial ?? null);
   const [terminal, setTerminal] = useState(false);
-  const [workerId, setWorkerId] = useState<string | null>(null);
+  const [workerId, setWorkerId] = useState<string | null>(initialWorker ?? null);
   const current = cards.find((card) => card.key === key) || cards[0] || null;
   const worker = workersOf(current).find((item) => item.id === workerId) || null;
   const pickSession = (next: string) => {
