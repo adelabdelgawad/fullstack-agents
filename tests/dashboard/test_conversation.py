@@ -38,9 +38,20 @@ class ConversationTests(unittest.TestCase):
             assistant({"type": "text", "text": "Fixed.\n\n- tests pass"}),
             user("<system-reminder>noise</system-reminder>"),
         ])
-        self.assertEqual([m["role"] for m in messages], ["user", "assistant"])
+        self.assertEqual([m["role"] for m in messages], ["user", "assistant", "tool", "assistant"])
         self.assertEqual(messages[0]["text"], "Fix the login page\n\n- keep the layout")
-        self.assertEqual(messages[1]["text"], "Looking at it.\n\nFixed.\n\n- tests pass")
+        self.assertEqual(messages[1]["text"], "Looking at it.")
+        self.assertEqual(messages[2]["text"], "Read")
+        self.assertEqual(messages[3]["text"], "Fixed.\n\n- tests pass")
+
+    def test_consecutive_tool_steps_are_grouped_and_capped(self):
+        steps = [assistant({"type": "tool_use", "name": "Bash", "input": {"description": f"step {i}"}})
+                 for i in range(dash.CONVERSATION_TOOLS + 3)]
+        [group] = self.read(steps)
+        self.assertEqual(group["role"], "tool")
+        lines = group["text"].split("\n")
+        self.assertEqual(len(lines), dash.CONVERSATION_TOOLS)
+        self.assertEqual(lines[-1], f"Bash: step {dash.CONVERSATION_TOOLS + 2}")
 
     def test_only_the_latest_messages_are_kept(self):
         rows = []

@@ -622,3 +622,107 @@ html.office-page aside#panel {
   background: var(--panel);
   font-size: 18px;
 }
+
+.chat-bubble p {
+  margin: 0 0 10px;
+}
+
+.chat-bubble p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-bubble .chat-heading {
+  margin-top: 6px;
+  font-weight: 700;
+}
+
+.chat-bubble pre {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  overflow: auto;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  font-family: var(--mono, monospace);
+  font-size: 13px;
+  white-space: pre;
+}
+
+.chat-table {
+  margin: 0 0 12px;
+  overflow-x: auto;
+}
+
+.chat-table table {
+  border-collapse: collapse;
+  font-size: 14px;
+  white-space: normal;
+}
+
+.chat-table th,
+.chat-table td {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.chat-table th {
+  background: rgba(128, 181, 255, 0.08);
+  font-weight: 600;
+}
+
+.chat-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--line);
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+  color: var(--muted, #a6b0c2);
+}
+
+.chat-steps div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-steps button {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--blue);
+  font: inherit;
+  cursor: pointer;
+}
+
+.chat-working {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+  color: #f2b24c;
+}
+
+.chat-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #f2b24c;
+  animation: chat-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes chat-pulse {
+  50% {
+    opacity: 0.25;
+    transform: scale(0.7);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-pulse {
+    animation: none;
+  }
+}

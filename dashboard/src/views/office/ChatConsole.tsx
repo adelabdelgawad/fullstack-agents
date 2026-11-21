@@ -6,11 +6,12 @@ import type { Card } from "../../lib/types";
 import { load, openCard, toast, useStore } from "../../store";
 import { openHerdrConfirm, openNewSession } from "../../terminal/HerdrOverlay";
 import { filesFromPaste, LIVE_UPLOAD_MAX_BYTES, uploadFiles } from "../../terminal/files";
+import { inline, Markdown } from "./markdown";
 import { matchCommands, SlashMenu, useSlashCommands } from "./slash";
 import { CardTerminal } from "../../terminal/CardTerminal";
 
 interface Message {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "tool";
   text: string;
   at: number;
 }
@@ -206,31 +207,56 @@ function WorkerOutput({ worker }: { worker: Worker }) {
   );
 }
 
-/** Bold and inline code from Markdown, as React nodes (no HTML injection); everything else stays plain text. */
-export function inline(text: string): Array<string | JSX.Element> {
-  return text.split(/(\*\*[^*\n]+\*\*|`[^`\n]+`)/g).map((part, index) => {
-    if (part.startsWith("**") && part.endsWith("**") && part.length > 4)
-      return <strong key={index}>{part.slice(2, -2)}</strong>;
-    if (part.startsWith("`") && part.endsWith("`") && part.length > 2)
-      return <code key={index}>{part.slice(1, -1)}</code>;
-    return part;
-  });
+/** A run of tool steps between messages: the last few, with the rest behind "+N earlier steps". */
+function Steps({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const lines = text.split("\n");
+  const shown = open ? lines : lines.slice(-3);
+  return (
+    <div className="chat-steps">
+      {lines.length > shown.length && (
+        <button type="button" onClick={() => setOpen(true)}>{`+${lines.length - shown.length} earlier steps`}</button>
+      )}
+      {shown.map((line, index) => (
+        <div key={index}>⚙ {line}</div>
+      ))}
+    </div>
+  );
 }
 
-function Thread({ messages }: { messages: Message[] }) {
+/** "Working" while the session runs, with what it is doing right now. */
+export function workingLine(session: Card["sessions"][number] | undefined): string {
+  if (!session || session.state !== "working") return "";
+  const action = session.action_running && typeof session.action === "string" ? session.action : "";
+  return action ? `Working · ${action}` : "Working…";
+}
+
+function Thread({ messages, working }: { messages: Message[]; working: string }) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     // Newer browsers return a Promise here; an effect must return nothing or a cleanup function.
     void end.current?.scrollIntoView({ block: "end" });
-  }, [messages.length]);
-  if (!messages.length) return <div className="chat-thread chat-empty">No messages yet.</div>;
+  }, [messages.length, working]);
+  if (!messages.length && !working) return <div className="chat-thread chat-empty">No messages yet.</div>;
   return (
     <div className="chat-thread">
-      {messages.map((message, index) => (
-        <div key={`${message.at}-${index}`} className={`chat-message ${message.role}`}>
-          <div className="chat-bubble">{inline(message.text)}</div>
+      {messages.map((message, index) =>
+        message.role === "tool" ? (
+          <Steps key={`${message.at}-${index}`} text={message.text} />
+        ) : (
+          <div key={`${message.at}-${index}`} className={`chat-message ${message.role}`}>
+            <div className="chat-bubble">
+              {message.role === "assistant" ? <Markdown text={message.text} /> : inline(message.text)}
+            </div>
+          </div>
+        ),
+      )}
+      {working && (
+        <div className="chat-working" role="status">
+          <span className="chat-pulse" aria-hidden="true" />
+          {working}
         </div>
-      ))}
+      )}
       <div ref={end} />
     </div>
   );
@@ -421,7 +447,7 @@ export function ChatConsole({ close, title }: { close: () => void; title: string
               ) : terminal ? (
                 <CardTerminal key={current.key} card={current} />
               ) : (
-                <Thread messages={messages} />
+                <Thread messages={messages} working={workingLine(current.sessions[0])} />
               )}
               {!terminal && !worker && <Composer pane={sid ? panes[sid] : undefined} />}
             </>

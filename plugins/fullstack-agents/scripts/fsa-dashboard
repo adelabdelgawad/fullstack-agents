@@ -1172,10 +1172,25 @@ def created_at(path):
         return 0
 
 
+def foreign_task_logs(tasks, launched):
+    """Outputs of shells this transcript launched that live under another session folder of the same project.
+    A Claude process keeps writing task output under the session id it started with, so after a /clear or a
+    context handoff the transcript id no longer names the folder. Only ids this transcript launched are taken."""
+    own = {log.stem for log in tasks.glob("*.output")}
+    wanted = [tid for tid in launched if tid not in own and SOURCE_ID_RE.match(tid)]
+    if not wanted:
+        return []
+    found = []
+    for folder in tasks.parent.parent.glob("*/tasks"):
+        if folder != tasks:
+            found += [folder / f"{tid}.output" for tid in wanted if (folder / f"{tid}.output").exists()]
+    return found
+
+
 def shell_items(path, bg, ended, now, skip=(), cwd=""):
     launched = bg["tasks"]
     tasks = Path(os.environ.get("CLAUDE_CODE_TMPDIR") or "/tmp") / f"claude-{os.getuid()}" / path.parent.name / path.stem / "tasks"
-    out, logs = [], sorted(tasks.glob("*.output"), key=created_at)
+    out, logs = [], sorted([*tasks.glob("*.output"), *foreign_task_logs(tasks, launched)], key=created_at)
     moved = [x.stem for x in logs if x.stem not in launched and x.stem not in ended and x.stem not in skip]
     launched = {**dict(zip(moved[::-1], [dict(f, moved=True) for f in bg.get("pending", [])[::-1]])), **launched}
     for log in logs:
@@ -1242,17 +1257,22 @@ def chat_prompt(d, msg):
 
 
 CONVERSATION_MAX = 80
+CONVERSATION_TOOLS = 12
 CONVERSATION_TEXT = 6000
 
 
 def conversation(path):
-    """The chat of one session: the user's prompts and the agent's text replies, oldest first, without tool calls.
-    Consecutive assistant texts in one reply are joined; at most the last CONVERSATION_MAX messages."""
+    """The chat of one session, oldest first: the user's prompts, the agent's text replies, and its tool steps
+    (role "tool", one line each, consecutive steps grouped, the last CONVERSATION_TOOLS kept per group).
+    At most the last CONVERSATION_MAX messages."""
     out = []
 
     def add(role, text, at):
         text = text.strip()
         if not text:
+            return
+        if out and out[-1]["role"] == role == "tool":
+            out[-1]["text"] = "\n".join((out[-1]["text"] + "\n" + text).split("\n")[-CONVERSATION_TOOLS:])
             return
         if out and out[-1]["role"] == role == "assistant":
             out[-1]["text"] = (out[-1]["text"] + "\n\n" + text)[-CONVERSATION_TEXT:].strip()
@@ -1271,14 +1291,19 @@ def conversation(path):
                 text = codex_text(p)
                 if p["role"] == "assistant" or not text.startswith("<"):
                     add(p["role"], text, at)
+            elif p.get("type") in ("function_call", "custom_tool_call"):
+                add("tool", codex_action(p), at)
             continue
         msg = d.get("message") or {}
         if d.get("type") == "user":
             add("user", chat_prompt(d, msg), at)
         elif d.get("type") == "assistant":
             blocks = msg.get("content") if isinstance(msg.get("content"), list) else []
-            add("assistant", "\n\n".join(b.get("text", "") for b in blocks
-                                         if isinstance(b, dict) and b.get("type") == "text"), at)
+            for b in blocks:
+                if isinstance(b, dict) and b.get("type") == "text":
+                    add("assistant", b.get("text", ""), at)
+                elif isinstance(b, dict) and b.get("type") == "tool_use":
+                    add("tool", tool_action({"content": [b]})[0], at)
     return out[-CONVERSATION_MAX:]
 
 
@@ -1312,7 +1337,7 @@ def render_transcript(path):
             if b.get("type") == "text" and b.get("text", "").strip():
                 out.append(f"\nClaude: {b['text'].strip()}")
             elif b.get("type") == "tool_use":
-                out.append(f"  ⚙ {tool_action({'content': [b]})}")
+                out.append(f"  ⚙ {tool_action({'content': [b]})[0]}")
     return "\n".join(out)[-OUTPUT_CHARS:]
 
 
@@ -2630,6 +2655,11 @@ class Server(http.server.ThreadingHTTPServer):
                              pane_bindings={sid: bindings[sid] for sid in sids}) for root, sids in wanted.items()]
         return merge_states(self.repo, parts, now)
 
+    def source(self, key):
+        """A session's or worker's transcript path, from the last state when it is known: rebuilding the whole
+        state (under its lock) for every chat refresh made the console slow to open and update."""
+        return self.sources.get(key) or (self.state() and self.sources.get(key))
+
     def state(self):
         with self.lock:
             if time.time() - self.cached_at > STATE_TTL_S:
@@ -3000,8 +3030,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             sid = (q.get("sid") or [""])[0]
             if not SOURCE_ID_RE.match(sid):
                 return self.send(400, b"bad session id", "text/plain")
-            self.server.state()
-            path = self.server.sources.get(f"{sid}/{sid}")
+            path = self.server.source(f"{sid}/{sid}")
             if not path:
                 return self.send(404, b"unknown session", "text/plain")
             return self.send(200, json.dumps({"messages": conversation(path)}).encode(), "application/json")
@@ -3009,8 +3038,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             sid, aid = ((q.get(k) or [""])[0] for k in ("sid", "id"))
             if not SOURCE_ID_RE.match(sid) or not SOURCE_ID_RE.match(aid):
                 return self.send(400, b"bad subagent id", "text/plain")
-            self.server.state()
-            path = self.server.sources.get(f"{sid}/{aid}")
+            path = self.server.source(f"{sid}/{aid}")
             if not path:
                 return self.send(404, b"unknown subagent", "text/plain")
             text = shell_output(path) if path.endswith(".output") else render_transcript(path)

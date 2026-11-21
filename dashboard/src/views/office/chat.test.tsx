@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { inline } from "./ChatConsole";
+import { inline, Markdown } from "./markdown";
 
 describe("chat inline markdown", () => {
   it("renders bold and code as elements and leaves other text and HTML as plain text", () => {
@@ -16,5 +16,34 @@ describe("session order", () => {
       ({ key, phase, sessions: [{ id: key, name: key, state: "working" }], needs_you: [], runs: [], now: [] }) as never;
     const order = needsYouFirst([card("a", "implement"), card("b", "review"), card("c", "plan"), card("d", "review")]);
     expect(order.map((item: { key: string }) => item.key)).toEqual(["b", "d", "a", "c"]);
+  });
+});
+
+describe("chat markdown blocks", () => {
+  it("renders a table, a code fence and a heading, keeping other text as paragraphs", () => {
+    const reply =
+      "Done.\n\n## Results\n| Check | Result |\n|---|:--:|\n| **tests** | 182 pass |\n| build | `clean` |\n\n```\nnpm test\n```";
+    const html = renderToStaticMarkup(<Markdown text={reply} />);
+    expect(html).toContain("<p>Done.</p>");
+    expect(html).toContain('<p class="chat-heading">Results</p>');
+    expect(html).toContain("<th>Check</th><th>Result</th>");
+    expect(html).toContain("<td><strong>tests</strong></td><td>182 pass</td>");
+    expect(html).toContain("<td>build</td><td><code>clean</code></td>");
+    expect(html).toContain("<pre>npm test</pre>");
+  });
+
+  it("leaves pipes that are not a table as text", () => {
+    expect(renderToStaticMarkup(<Markdown text={"a | b"} />)).toBe("<p>a | b</p>");
+  });
+});
+
+describe("working line", () => {
+  it("shows the running action while the session works, and nothing otherwise", async () => {
+    const { workingLine } = await import("./ChatConsole");
+    expect(workingLine({ id: "a", state: "working", action: "Bash: run tests", action_running: true } as never)).toBe(
+      "Working · Bash: run tests",
+    );
+    expect(workingLine({ id: "a", state: "working" } as never)).toBe("Working…");
+    expect(workingLine({ id: "a", state: "idle", action: "Bash: x", action_running: true } as never)).toBe("");
   });
 });
