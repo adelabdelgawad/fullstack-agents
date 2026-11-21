@@ -111,6 +111,11 @@ export interface Locks {
   [key: string]: unknown;
 }
 
+export interface OfficeTeamRule {
+  name: string;
+  match: string[];
+}
+
 export interface DashState {
   cards: Card[];
   waiting: WaitingEntry[];
@@ -122,6 +127,7 @@ export interface DashState {
   locks: Locks;
   generated: number;
   ui?: string;
+  office_teams?: OfficeTeamRule[];
   [key: string]: unknown;
 }
 

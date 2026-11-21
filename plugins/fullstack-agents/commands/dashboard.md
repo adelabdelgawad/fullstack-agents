@@ -18,6 +18,13 @@ within 30 s, keeping its URL; open pages reload.
 Valid arguments: `start` (prints the URL), `stop`, `status` (URL or "not running").
 Any other argument is refused; do not pass `serve` or `state`.
 
+The Office view draws one company building with an office per department (CTO, Testers Team, DevOps, VOIP
+Engineering, Network Engineers, Platform / Agents, Fullstack Engineers, and General for no match) and a Break Room.
+A session (with its workers) joins the first department whose keyword starts a word in its name, branch or repository;
+override the departments in `~/.config/fullstack-agents/teams.json` (or `FSA_TEAMS`) as
+`[{"name": "DevOps", "match": ["deploy", "docker"]}]`. Working and waiting agents sit at a running computer;
+idle and sleeping agents leave an empty desk and play table tennis or drink coffee in the Break Room.
+
 The session Information view includes a **Tasks** section when the lead registers a task
 Markdown file with `scripts/fsa-task`. It updates from that file and links to its source;
 see the task-flow skill task-tracking reference.

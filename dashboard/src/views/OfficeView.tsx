@@ -13,7 +13,7 @@ import { esc, fmtCost, fmtTokens } from "../lib/format";
 import { openCard, toast, useStore } from "../store";
 import "../styles/office.css";
 import { drawOffice, hitTest } from "./office/draw";
-import { layoutOffice, officeOf, type Office, type OfficeEmployee, type OfficeLayout } from "./office/model";
+import { layoutOffice, officeOf, teamOfEmployee, type Office, type OfficeEmployee, type OfficeLayout } from "./office/model";
 
 interface SendResult {
   ok?: boolean;
@@ -26,11 +26,11 @@ function redraw(
   selectedId: string | null,
   placed: MutableRefObject<OfficeLayout>,
 ): void {
+  const available = canvas.parentElement?.clientHeight || canvas.getBoundingClientRect().height;
   const initialBounds = canvas.getBoundingClientRect();
   const scale = initialBounds.width < 520 ? 1 : 2;
-  placed.current = layoutOffice(office, initialBounds.width, scale);
-  const contentHeight = placed.current.height;
-  canvas.style.height = `${Math.max(canvas.parentElement?.clientHeight || 0, contentHeight)}px`;
+  placed.current = layoutOffice(office, initialBounds.width, available, scale);
+  canvas.style.height = `${Math.max(available, placed.current.height)}px`;
   const bounds = canvas.getBoundingClientRect();
   const ratio = window.devicePixelRatio || 1;
   const width = Math.max(1, Math.round(bounds.width * ratio));
@@ -87,7 +87,7 @@ function useOfficeCanvas(
 }
 
 function teamLabel(office: Office, employee: OfficeEmployee): string {
-  return office.teams.find((team) => team.key === employee.cardKey)?.label || employee.cardKey;
+  return teamOfEmployee(office, employee.id)?.label || employee.cardKey;
 }
 
 function usePrompt(employee: OfficeEmployee) {
@@ -194,7 +194,7 @@ export function OfficeView() {
   const state = useStore((storeState) => storeState.state);
   const office = useMemo(() => officeOf(state), [state]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const placed = useRef<OfficeLayout>({ building: null, rooms: [], desks: [], height: 0 });
+  const placed = useRef<OfficeLayout>({ building: null, rooms: [], desks: [], spots: [], height: 0 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const employees = useMemo(() => office.teams.flatMap((team) => team.employees), [office]);
   const selected = employees.find((employee) => employee.id === selectedId) || null;
@@ -204,11 +204,11 @@ export function OfficeView() {
   }, [selected, selectedId]);
   const clickCanvas = (event: MouseEvent<HTMLCanvasElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
-    setSelectedId(hitTest(placed.current.desks, event.clientX - bounds.left, event.clientY - bounds.top));
+    setSelectedId(hitTest(placed.current, event.clientX - bounds.left, event.clientY - bounds.top));
   };
   if (!employees.length) return <div className="office-empty">No live sessions</div>;
   return (
-    <section className="office-view" aria-label="Live session office">
+    <section className={selected ? "office-view has-selection" : "office-view"} aria-label="Live session office">
       <div className="office-canvas-wrap">
         <canvas ref={canvasRef} className="office-canvas" onClick={clickCanvas} aria-hidden="true" />
       </div>

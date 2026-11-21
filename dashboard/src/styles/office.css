@@ -1,9 +1,13 @@
 .office-view {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   min-height: calc(100vh - 92px);
   padding: 16px;
+}
+
+.office-view.has-selection {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
 }
 
 .office-canvas-wrap {
@@ -169,7 +173,8 @@
 }
 
 @media (max-width: 680px) {
-  .office-view {
+  .office-view,
+  .office-view.has-selection {
     grid-template-columns: minmax(0, 1fr);
     padding: 8px;
   }

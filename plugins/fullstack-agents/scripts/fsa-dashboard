@@ -463,6 +463,36 @@ def start_session(created, name, engine="claude"):
     return run_herdr("pane", "send-keys", pane, "enter") if typed is not None and typed.returncode == 0 else typed
 
 
+# Office departments: a session's card joins the first team whose keyword starts a word in its name, branch or repository.
+DEFAULT_OFFICE_TEAMS = [
+    {"name": "CTO", "match": ["cto", "architecture", "strategy", "roadmap", "plan"]},
+    {"name": "Testers Team", "match": ["test", "qa", "e2e", "playwright", "vitest", "pytest", "regression"]},
+    {"name": "DevOps", "match": ["deploy", "docker", "compose", "nginx", "ssl", "ci", "infra", "server", "k8s"]},
+    {"name": "VOIP Engineering", "match": ["ivr", "voip", "sip", "webrtc", "tts", "asr", "call", "telephony",
+                                           "asterisk", "freeswitch", "softphone", "audio"]},
+    {"name": "Network Engineers", "match": ["network", "firewall", "vpn", "dns", "router", "vlan", "fortigate",
+                                            "mikrotik", "zabbix"]},
+    {"name": "Platform / Agents", "match": ["fullstack-agents", "plugin", "dashboard", "agent", "skill", "hook",
+                                            "codex", "herdr", "office"]},
+    {"name": "Fullstack Engineers", "match": ["ucm", "nextjs", "fastapi", "rust", "frontend", "backend", "api",
+                                              "contacts", "page", "ui"]},
+]
+
+
+def office_teams():
+    """Departments for the Office view from ~/.config/fullstack-agents/teams.json (or FSA_TEAMS), else the defaults."""
+    path = Path(os.environ.get("FSA_TEAMS") or "~/.config/fullstack-agents/teams.json").expanduser()
+    data = load_json(path)
+    rows = data if isinstance(data, list) else DEFAULT_OFFICE_TEAMS
+    teams = []
+    for row in rows:
+        name = str(row.get("name") or "").strip() if isinstance(row, dict) else ""
+        words = row.get("match") if name else None
+        if name and isinstance(words, list):
+            teams.append({"name": name, "match": [str(w).strip().lower() for w in words if str(w).strip()]})
+    return teams
+
+
 def load_json(path):
     try:
         return json.loads(Path(path).read_text())
@@ -2120,7 +2150,7 @@ def merge_states(home, parts, now):
     board = load_json(home.board) or {}
     st = {"generated": now, "ui": ui_stamp(), "repo": str(home.root), "main": home.main,
           "cards": [], "waiting": [], "still_open": [], "_sources": {}, "_docs": {}, "_scopes": {},
-          "session_panes": {}, "abandoned": [],
+          "session_panes": {}, "abandoned": [], "office_teams": office_teams(),
           "locks": board.get("locks") or {}, "events": (board.get("events") or [])[-12:],
           "totals": totals([], [], [], now), "history": []}
     for p in parts:
@@ -2441,7 +2471,7 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
                    and not s["task_tracking"].get("error") else set()) for s in sessions},
         "_scopes": scopes,
         "session_panes": {**session_panes(repo), **{s["id"]: s["pane"] for s in sessions if s.get("pane")}},
-        "abandoned": sorted(old, key=lambda r: -r["updated"])[:30],
+        "abandoned": sorted(old, key=lambda r: -r["updated"])[:30], "office_teams": office_teams(),
         "locks": board.get("locks") or {}, "events": (board.get("events") or [])[-12:],
         "totals": totals(sessions, every, runs, now), "history": history_rows(every),
     }
