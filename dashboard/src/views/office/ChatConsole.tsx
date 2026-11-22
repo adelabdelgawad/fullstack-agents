@@ -26,15 +26,17 @@ function sessionTitle(card: Card): string {
   return card.sessions[0]?.name || card.title || card.label || card.key;
 }
 
-/** The lead session's chat, refreshed while open; empty until the first answer arrives. */
-function useConversation(sid: string | undefined): Message[] {
+/** A session's chat (or, with workerId, one of its subagents'), refreshed while open; empty until the first answer. */
+function useConversation(sid: string | undefined, workerId?: string): Message[] {
   const [messages, setMessages] = useState<Message[]>([]);
   useEffect(() => {
     setMessages([]);
     if (!sid) return;
     let live = true;
     const load = () =>
-      getJson<{ messages: Message[] }>(`/api/conversation?sid=${encodeURIComponent(sid)}`)
+      getJson<{ messages: Message[] }>(
+        `/api/conversation?sid=${encodeURIComponent(sid)}${workerId ? `&id=${encodeURIComponent(workerId)}` : ""}`,
+      )
         .then((data) => live && setMessages(data.messages || []))
         .catch(() => undefined);
     void load();
@@ -43,7 +45,7 @@ function useConversation(sid: string | undefined): Message[] {
       live = false;
       clearInterval(timer);
     };
-  }, [sid]);
+  }, [sid, workerId]);
   return messages;
 }
 
@@ -186,7 +188,13 @@ function Sidebar({
   );
 }
 
-/** A subagent's transcript or a shell's output, refreshed while shown. */
+/** A subagent's conversation, like a session's: the team leader's prompt, then its replies and tool steps. */
+function SubagentThread({ worker }: { worker: Worker }) {
+  const messages = useConversation(worker.sid, worker.id);
+  return <Thread messages={messages} working={worker.state === "running" ? "Working…" : ""} userLabel="Team leader" />;
+}
+
+/** A shell's output, refreshed while shown. */
 function WorkerOutput({ worker }: { worker: Worker }) {
   const [text, setText] = useState("");
   const end = useRef<HTMLDivElement>(null);
@@ -240,7 +248,7 @@ export function workingLine(session: Card["sessions"][number] | undefined): stri
   return action ? `Working · ${action}` : "Working…";
 }
 
-function Thread({ messages, working }: { messages: Message[]; working: string }) {
+function Thread({ messages, working, userLabel }: { messages: Message[]; working: string; userLabel?: string }) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     // Newer browsers return a Promise here; an effect must return nothing or a cleanup function.
@@ -255,6 +263,7 @@ function Thread({ messages, working }: { messages: Message[]; working: string })
         ) : (
           <div key={`${message.at}-${index}`} className={`chat-message ${message.role}`}>
             <div className="chat-bubble">
+              {userLabel && message.role === "user" && <div className="chat-from">{userLabel}</div>}
               {message.role === "assistant" ? <Markdown text={message.text} /> : inline(message.text)}
             </div>
           </div>
@@ -462,7 +471,11 @@ export function ChatConsole({
                 </div>
               </header>
               {worker ? (
-                <WorkerOutput key={worker.id} worker={worker} />
+                worker.shell ? (
+                  <WorkerOutput key={worker.id} worker={worker} />
+                ) : (
+                  <SubagentThread key={worker.id} worker={worker} />
+                )
               ) : terminal ? (
                 <CardTerminal key={current.key} card={current} />
               ) : (

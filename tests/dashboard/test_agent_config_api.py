@@ -27,7 +27,11 @@ class StubServer(http.server.ThreadingHTTPServer):
         super().__init__(("127.0.0.1", 0), dash.Handler)
         self.token = TOKEN
 
+    sources = {}
+
     def source(self, key):
+        if key in self.sources:
+            return self.sources[key]
         return "/tmp/transcript.jsonl" if key == f"{KNOWN}/{KNOWN}" else None
 
 
@@ -112,6 +116,25 @@ class AgentConfigApiTests(unittest.TestCase):
         self.assertEqual(self.call("POST", "/api/agent-config", bad_model)[0], 400)
         self.assertEqual(self.call("POST", "/api/agent-config", ["not", "a", "dict"])[0], 400)
         self.assertFalse((self.agents / "default.json").exists())
+
+    def test_subagent_conversation_starts_with_the_team_leaders_prompt(self):
+        rows = [{"type": "user", "isSidechain": True, "timestamp": "2026-11-22T07:00:00Z",
+                 "message": {"role": "user", "content": "Review the saved diff\nLENS: code"}},
+                {"type": "assistant", "isSidechain": True, "timestamp": "2026-11-22T07:00:05Z",
+                 "message": {"role": "assistant", "content": [{"type": "text", "text": "VERDICT: ok"}]}}]
+        sub = Path(self.scratch.name) / "agent-a1.jsonl"
+        sub.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+        shell = Path(self.scratch.name) / "b1.output"
+        shell.write_text("log")
+        self.server.sources = {f"{KNOWN}/a1": str(sub), f"{KNOWN}/b1": str(shell)}
+        status, raw = self.call("GET", f"/api/conversation?sid={KNOWN}&id=a1")
+        self.assertEqual(status, 200, raw)
+        messages = json.loads(raw)["messages"]
+        self.assertEqual([(m["role"], m["text"]) for m in messages],
+                         [("user", "Review the saved diff\nLENS: code"), ("assistant", "VERDICT: ok")])
+        self.assertEqual(self.call("GET", f"/api/conversation?sid={KNOWN}&id=b1")[0], 404)
+        self.assertEqual(self.call("GET", f"/api/conversation?sid={KNOWN}&id=zz")[0], 404)
+        self.assertEqual(self.call("GET", f"/api/conversation?sid={KNOWN}&id=../x")[0], 400)
 
     def test_requires_token(self):
         self.assertEqual(self.call("GET", "/api/agent-config", token="wrong")[0], 403)

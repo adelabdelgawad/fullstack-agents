@@ -1124,3 +1124,11 @@ html.office-page aside#panel {
 .agent-settings-actions button {
   cursor: pointer;
 }
+
+/* Who wrote a message in a subagent's conversation (its prompt comes from the team leader). */
+.chat-from {
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.75;
+}

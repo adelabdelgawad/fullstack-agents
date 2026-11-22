@@ -3198,11 +3198,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(200, json.dumps({"commands": slash_commands.discover(str(self.server.repo.root))}).encode(),
                              "application/json")
         if url.path == "/api/conversation":
+            # id names one of the session's subagents: its transcript is a conversation too (the team leader's prompt,
+            # then its replies and tool steps). A shell has only output, never a conversation.
             sid = (q.get("sid") or [""])[0]
-            if not SOURCE_ID_RE.match(sid):
+            aid = (q.get("id") or [""])[0] or sid
+            if not SOURCE_ID_RE.match(sid) or not SOURCE_ID_RE.match(aid):
                 return self.send(400, b"bad session id", "text/plain")
-            path = self.server.source(f"{sid}/{sid}")
-            if not path:
+            path = self.server.source(f"{sid}/{aid}")
+            if not path or path.endswith(".output"):
                 return self.send(404, b"unknown session", "text/plain")
             return self.send(200, json.dumps({"messages": conversation(path)}).encode(), "application/json")
         if url.path == "/api/agent-config":
