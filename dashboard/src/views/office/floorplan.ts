@@ -1,10 +1,6 @@
 import { drawBackWall, drawPlant, rect, text } from "./draw";
 import { BUILDING, type PlacedBuilding, type PlacedRoom, type Rect } from "./model";
 
-const CARPET = "#3b4456";
-const RUNNER = "#414c63";
-const PARTITION = "#8b5a32";
-const SIGN = "#1d2433";
 const LOBBY_A = "#cfc8b8";
 const LOBBY_B = "#c2baa8";
 
@@ -107,19 +103,4 @@ export function drawExecutiveRoom(ctx: CanvasRenderingContext2D, room: PlacedRoo
   }
   drawPlant(ctx, x + 2 * s, y + height - 15 * s, s);
   drawPlant(ctx, x + 14 * s, y + height - 15 * s, s);
-}
-
-/** A session's space on the Sessions office floor: a carpet bordered by a low partition, with the session's name on a
- * sign along its top. */
-export function drawSpace(ctx: CanvasRenderingContext2D, space: PlacedRoom): void {
-  const { x, y, width, height, band, scale: s } = space;
-  rect(ctx, x, y, width, height, PARTITION);
-  rect(ctx, x + s, y + s, width - 2 * s, height - 2 * s, CARPET);
-  for (let row = 0; row * 8 * s < height - band; row += 2) {
-    rect(ctx, x + s, y + band + row * 8 * s, width - 2 * s, 4 * s, RUNNER);
-  }
-  rect(ctx, x + s, y + s, width - 2 * s, band - s, SIGN);
-  rect(ctx, x + s, y + band - s, width - 2 * s, s, PARTITION);
-  ctx.fillStyle = "#f2b24c";
-  text(ctx, space.label, x + width / 2, y + band / 2 + s / 2, 5.5 * s, width - 32 * s);
 }

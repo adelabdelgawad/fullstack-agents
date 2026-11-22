@@ -1,5 +1,5 @@
 import type { Walker } from "./walk";
-import { drawDoor, drawExecutiveRoom, drawLobby, drawSpace } from "./floorplan";
+import { drawDoor, drawExecutiveRoom, drawLobby } from "./floorplan";
 import { drawWalking } from "./sprites";
 import {
   BUILDING,
@@ -358,10 +358,8 @@ export function drawOffice(
     else drawHall(ctx, hall);
     drawDoor(ctx, hall);
   }
-  for (const room of layout.rooms) {
-    if (room.key !== CTO_TEAM) drawSpace(ctx, room);
-    drawZoomIcon(ctx, room, layout.rooms.length === 1);
-  }
+  // Sessions share one open floor, so only the CTO office carries a magnifier; the team bar zooms to a session.
+  for (const room of layout.rooms) if (room.key === CTO_TEAM) drawZoomIcon(ctx, room, layout.rooms.length === 1);
   const frame = Math.floor(tMs / 375) % 2;
   for (const desk of layout.desks) {
     const walker = walkers.get(desk.employee.id);
@@ -383,12 +381,24 @@ export function drawOffice(
   }
 }
 
-/** Spaces whose session has finished: the lights are out, so the whole space is dimmed (labels stay readable). */
+/** Sessions that have finished: the lights over their desks are out, a shadow fading into the shared floor around
+ * them (labels stay readable). */
 function drawLightsOut(ctx: CanvasRenderingContext2D, layout: OfficeLayout): void {
   const dark = new Set(layout.desks.filter((desk) => finished(desk.employee)).map((desk) => desk.employee.cardKey));
   ctx.save();
-  ctx.fillStyle = "rgba(3, 5, 10, 0.62)";
-  for (const room of layout.rooms) if (dark.has(room.key)) ctx.fillRect(room.x, room.y, room.width, room.height);
+  for (const room of layout.rooms) {
+    if (!dark.has(room.key)) continue;
+    // An elliptical pool of shadow that fades to nothing before the group's edges.
+    const shade = ctx.createRadialGradient(0, 0, 0.2, 0, 0, 1);
+    shade.addColorStop(0, "rgba(3, 5, 10, 0.62)");
+    shade.addColorStop(1, "rgba(3, 5, 10, 0)");
+    ctx.save();
+    ctx.translate(room.x + room.width / 2, room.y + room.height / 2);
+    ctx.scale(room.width / 2, room.height / 2);
+    ctx.fillStyle = shade;
+    ctx.fillRect(-1, -1, 2, 2);
+    ctx.restore();
+  }
   ctx.restore();
 }
 
@@ -414,6 +424,7 @@ export function pcHit(layout: OfficeLayout, x: number, y: number): string | null
 export function zoomIconHit(layout: OfficeLayout, x: number, y: number): string | null {
   const room = layout.rooms.find(
     (item) =>
+      item.key === CTO_TEAM &&
       Math.abs(x - (item.x + item.width - 9 * item.scale)) <= 7 * item.scale &&
       Math.abs(y - (item.y + 7 * item.scale)) <= 6 * item.scale,
   );

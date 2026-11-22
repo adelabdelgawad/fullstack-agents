@@ -247,7 +247,7 @@ export interface PlacedRoom extends Rect {
   key: string;
   label: string;
   scale: number;
-  /** Height of the band along the top that carries the name plate: an office's back wall, a session space's sign. */
+  /** Height of the band along the top that carries the name plate: an office's back wall, a session group's top margin. */
   band: number;
   /** The door gap in an office's bottom wall, opening onto the lobby below. */
   door?: { x: number; width: number; depth: number };
@@ -259,7 +259,7 @@ export interface OfficeLayout {
   building: PlacedBuilding | null;
   /** The walled offices above the lobby: the CTO's and the one Sessions office every session shares. */
   halls: PlacedRoom[];
-  /** Each team's space: the CTO's office, and one marked area per session on the Sessions office floor. */
+  /** Each team's place: the CTO's office, and one unmarked group of desks per session on the shared Sessions floor. */
   rooms: PlacedRoom[];
   desks: PlacedDesk[];
   lobby: Rect | null;
@@ -274,8 +274,8 @@ const DESK_H = 58;
 /** The wall art may grow to 1.5x the chrome scale when the room has space. */
 const decorCap = (chrome: number) => chrome * 1.5;
 
-/** Floor-plan geometry in chrome units: walls, sign band, lobby, office back wall, a session space's sign and padding. */
-export const BUILDING = { wall: 6, wallT: 4, sign: 18, lobby: 44, pad: 6, header: 26, space: 12 };
+/** Floor-plan geometry in chrome units: walls, sign band, lobby, office back wall, a session group's top margin and padding. */
+export const BUILDING = { wall: 6, wallT: 4, sign: 18, lobby: 44, pad: 6, header: 26, space: 4 };
 
 interface Fit {
   scale: number;
