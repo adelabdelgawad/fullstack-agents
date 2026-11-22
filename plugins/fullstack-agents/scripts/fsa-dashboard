@@ -1217,6 +1217,51 @@ def foreign_task_logs(tasks, launched):
     return found
 
 
+SHELL_HISTORY = {}
+SHELL_MARKS = (b'"run_in_background":true', b'"backgroundTaskId"', b"<task-id>")
+
+
+def shell_history(path):
+    """Background-shell launches and endings from the whole transcript, read incrementally per file.
+    The session view reads only a byte tail, so a shell still running loses its launch record (and drops
+    off the Office) once later records fill that tail. Only lines carrying a shell marker are parsed."""
+    offset, bg, ended = SHELL_HISTORY.get(str(path)) or (0, {"labels": {}, "tasks": {}, "exit": {}, "bash": {}}, {})
+    try:
+        with open(path, "rb") as f:
+            if f.seek(0, os.SEEK_END) < offset:
+                offset, bg, ended = 0, {"labels": {}, "tasks": {}, "exit": {}, "bash": {}}, {}
+            f.seek(offset)
+            data = f.read()
+    except OSError:
+        return bg, ended
+    cut = data.rfind(b"\n") + 1  # a partial last line is read again next time
+    for raw in data[:cut].splitlines():
+        if any(mark in raw for mark in SHELL_MARKS):
+            note_shell_line(raw.decode("utf-8", "replace"), bg, ended)
+    SHELL_HISTORY[str(path)] = (offset + cut, bg, ended)
+    return bg, ended
+
+
+def note_shell_line(line, bg, ended):
+    for m in NOTE_RE.finditer(line):
+        ended[m.group(1)] = m.group(2)
+    for m in SHELL_EXIT_RE.finditer(line):
+        bg["exit"][m.group(1)] = int(m.group(2))
+    try:
+        d = json.loads(line)
+    except ValueError:
+        return
+    if isinstance(d, dict) and not d.get("isSidechain") and d.get("type") in ("user", "assistant"):
+        note_background(d, d.get("message") or {}, bg)
+
+
+def with_shell_history(path, bg, finished):
+    """The tail's shell facts over the whole transcript's: the tail is newer where both know a shell."""
+    hist, ended = shell_history(path)
+    merged = {**bg, **{k: {**hist[k], **bg[k]} for k in ("labels", "tasks", "exit")}}
+    return merged, {**ended, **finished}
+
+
 def shell_items(path, bg, ended, now, skip=(), cwd=""):
     launched = bg["tasks"]
     tasks = Path(os.environ.get("CLAUDE_CODE_TMPDIR") or "/tmp") / f"claude-{os.getuid()}" / path.parent.name / path.stem / "tasks"
@@ -1644,7 +1689,7 @@ def read_session(path, now, wt_re, names, waits):
         "title": title,
         "cwd": cwd, "branch": branch, "worktree": worktree, "state": state, "updated": updated,
         "turn_at": iso_epoch(turn_at),
-        "agents": agents + shell_items(path, bg, finished, now, {a["id"] for a in agents}, cwd),
+        "agents": agents + shell_items(path, *with_shell_history(path, bg, finished), now, {a["id"] for a in agents}, cwd),
         "transcript": str(path),
         "idle": idle, "snippet": snippet(text) if state in ("waiting", "still_open", "idle") else "",
         "briefs": sorted(briefs), "chips": chips,

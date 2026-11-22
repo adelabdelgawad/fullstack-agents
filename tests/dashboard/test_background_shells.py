@@ -1,4 +1,5 @@
 """Claude background shells appear as session agents, read from the transcript and its tasks directory."""
+import json
 import os
 import tempfile
 import time
@@ -86,6 +87,30 @@ class BackgroundShellTests(unittest.TestCase):
         os.utime(out, (old, old))
         self.assertEqual([], self.items([]))
         self.assertEqual(["running"], [x["state"] for x in self.items(launch("toolu_3", "bx3", "Long build"))])
+
+    def write_transcript(self, records):
+        compact = {"separators": (",", ":")}  # Claude Code writes transcripts without spaces
+        filler = json.dumps({"type": "api-request-blob", "blob": "x" * 4096}, **compact)
+        lines = [json.dumps(d, **compact) for d in records] + [filler] * (dash.TAIL_BYTES // 4096 + 8)
+        with self.transcript.open("a") as f:
+            f.write("\n".join(lines) + "\n")
+
+    def session_shells(self):
+        bg = {"labels": {}, "tasks": {}, "exit": {}, "bash": {}, "pending": []}
+        for line in dash.tail_lines(self.transcript):
+            d = json.loads(line)
+            dash.note_background(d, d.get("message") or {}, bg)
+        merged, ended = dash.with_shell_history(self.transcript, bg, {})
+        return [(x["label"], x["state"]) for x in dash.shell_items(self.transcript, merged, ended, time.time())]
+
+    def test_shell_launched_before_the_tail_stays_listed_until_it_ends(self):
+        (self.tasks / "bx6.output").write_text("checking\n")
+        self.write_transcript(launch("toolu_6", "bx6", "Run checks"))
+        self.assertEqual([("shell · Run checks", "running")], self.session_shells())
+        note = {"type": "user", "message": {"content": "<task-notification><task-id>bx6</task-id>"
+                "<status>completed</status><summary>done (exit code 0)</summary></task-notification>"}}
+        self.write_transcript([note])
+        self.assertEqual([("shell · Run checks", "completed")], self.session_shells())
 
 
 if __name__ == "__main__":
