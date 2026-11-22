@@ -5,6 +5,7 @@ import type { Card, DashState } from "../lib/types";
 import { closePanel, openCard, store, useStore } from "../store";
 import { CardTerminal } from "../terminal/CardTerminal";
 import { GitTab, resetGit } from "./GitTab";
+import { HistoryTab } from "./HistoryTab";
 import { consumePreparedRun, InfoTab, prepareRunLog, repollLog, resetRunEffects } from "./InfoTab";
 import { PanelHead } from "./PanelHead";
 
@@ -45,6 +46,16 @@ function PanelTabs({ tab, card }: { tab: string; card: Card }) {
       <RetroButton
         className="tab2"
         role="tab"
+        data-t="history"
+        aria-selected={tab === "history"}
+        disabled={!card.sessions.length}
+        onClick={() => store.set({ tab2: "history" })}
+      >
+        History
+      </RetroButton>
+      <RetroButton
+        className="tab2"
+        role="tab"
         data-t="terminal"
         aria-selected={tab === "terminal"}
         onClick={() => store.set({ tab2: "terminal" })}
@@ -80,6 +91,8 @@ function PanelContent({
           <CardTerminal card={card} />
         ) : tab === "git" && card.tree ? (
           <GitTab card={card} />
+        ) : tab === "history" && card.sessions.length ? (
+          <HistoryTab card={card} />
         ) : (
           <InfoTab card={card} state={state} openRun={openRun} />
         )}

@@ -430,6 +430,15 @@ html.agents-page body {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+.session-history {
+  padding: 0 16px 24px;
+}
+.session-history .history {
+  padding: 12px 0 0;
+}
+.session-history .history td.turn-prompt {
+  max-width: 280px;
+}
 .history tr[data-hsid] {
   cursor: pointer;
 }

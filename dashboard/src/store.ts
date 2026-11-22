@@ -23,7 +23,7 @@ const ls = {
 };
 
 export type View = "agents" | "herdr" | "history" | "office" | "goals";
-export type Tab2 = "info" | "git" | "terminal";
+export type Tab2 = "info" | "git" | "history" | "terminal";
 
 export interface FleetSlice {
   filter: string;

@@ -34,7 +34,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "lib"))
 import task_rules
 from task_tracking import load_tasks
-from usage import redact, session_usage, transcript_usage
+from usage import models_cost, new_tally, redact, session_usage, tally_line, transcript_usage, window_of
 from activity import ActivityFeed, card_usage, history_rows, run_cause, totals
 from plan_usage import plan_usage
 from runs_dir import read_dirs, runs_dir
@@ -1334,6 +1334,122 @@ def conversation(path):
                 elif isinstance(b, dict) and b.get("type") == "tool_use":
                     add("tool", tool_action({"content": [b]})[0], at)
     return out[-CONVERSATION_MAX:]
+
+
+SESSION_TURNS_MAX = 300
+SESSION_TURN_TEXT = 2000
+_TURNS_CACHE, _TURNS_LOCK = {}, threading.Lock()
+
+
+def _turn_outcome(turn, last):
+    if turn["interrupted"]:
+        return "interrupted"
+    if turn["asks"]:
+        return "asked"
+    if turn["done"]:
+        return "answered"
+    return "working" if last else "interrupted"
+
+
+def _turn_row(turn, st, start_models, last):
+    delta = {}
+    for model, t in st["models"].items():
+        before = start_models.get(model, {})
+        d = {k: v - before.get(k, 0) for k, v in t.items()}
+        if any(d.values()):
+            delta[model] = d
+    window = st["window"] or window_of(st["model"], st["context"])
+    return {"prompt": turn["prompt"][:SESSION_TURN_TEXT], "model": max(delta, key=lambda m: sum(delta[m].values()), default=st["model"]),
+            "state": _turn_outcome(turn, last), "tokens": sum(sum(t.values()) for t in delta.values()),
+            "cost": models_cost(delta), "fill": round(min(st["context"] / window, 1.0), 4) if window else 0,
+            "compactions": st["compactions"] - turn["compactions"], "started": turn["started"], "updated": turn["updated"]}
+
+
+def _turn_line(d, st, turn):
+    """Update the open turn's outcome (done, asked, interrupted) from one line that is not a prompt."""
+    kind = d.get("type")
+    if kind == "event_msg":
+        p = d.get("payload") or {}
+        turn["done"] = turn["done"] or p.get("type") == "task_complete"
+        turn["interrupted"] = turn["interrupted"] or p.get("type") == "turn_aborted"
+    elif kind == "user":
+        content = (d.get("message") or {}).get("content")
+        raw = content if isinstance(content, str) else " ".join(
+            b.get("text", "") for b in content or [] if isinstance(b, dict) and b.get("type") == "text")
+        turn["interrupted"] = turn["interrupted"] or raw.lstrip().startswith("[Request interrupted")
+    elif kind == "assistant":
+        msg = d.get("message") or {}
+        blocks = msg.get("content") if isinstance(msg.get("content"), list) else []
+        tools = [b.get("name", "") for b in blocks if isinstance(b, dict) and b.get("type") == "tool_use"]
+        texts = [b.get("text", "") for b in blocks if isinstance(b, dict) and b.get("type") == "text" and b.get("text", "").strip()]
+        if tools:
+            turn["done"], turn["asks"] = False, tools[-1] == "AskUserQuestion"
+        if msg.get("stop_reason") == "end_turn":
+            said = (texts[-1] if texts else "").strip()
+            turn["done"] = True
+            turn["asks"] = turn["asks"] or said.endswith("?") or "Waiting on: you" in said
+        elif texts and not tools:
+            turn["done"] = False
+
+
+def _turn_prompt(d):
+    if d.get("type") == "response_item":
+        p = d.get("payload") or {}
+        if p.get("type") == "message" and p.get("role") == "user":
+            text = codex_text(p)
+            return "" if text.startswith("<") else text
+        return ""
+    return chat_prompt(d, d.get("message") or {}) if d.get("type") == "user" else ""
+
+
+def session_turns(path):
+    """One row per prompt of one session, oldest first: prompt, model, outcome, tokens, est. cost, context fill at
+    the end of the turn, compactions and times, plus session totals. Cached by path, size and mtime."""
+    try:
+        info = os.stat(path)
+    except OSError:
+        return {"turns": [], "totals": {}}
+    key = (info.st_size, info.st_mtime_ns)
+    with _TURNS_LOCK:
+        hit = _TURNS_CACHE.get(path)
+        if hit and hit[0] == key:
+            return hit[1]
+    engine = "claude"
+    st, rows, turn, start_models = new_tally(), [], None, {}
+    with open(path, "rb") as fh:
+        for raw in fh:
+            try:
+                d = json.loads(raw)
+            except ValueError:
+                continue
+            if not isinstance(d, dict):
+                continue
+            if d.get("type") in ("response_item", "event_msg", "turn_context", "session_meta"):
+                engine = "codex"
+            at = iso_epoch(d.get("timestamp") or "")
+            prompt = _turn_prompt(d)
+            if prompt:
+                if turn:
+                    rows.append(_turn_row(turn, st, start_models, False))
+                start_models = {m: dict(t) for m, t in st["models"].items()}
+                turn = {"prompt": prompt, "started": at, "updated": at, "done": False, "asks": False,
+                        "interrupted": False, "compactions": st["compactions"]}
+            tally_line(st, d, engine)
+            if turn and not prompt:
+                _turn_line(d, st, turn)
+                turn["updated"] = max(at, turn["updated"])
+    if turn:
+        rows.append(_turn_row(turn, st, start_models, True))
+    total_tokens = sum(sum(t.values()) for t in st["models"].values())
+    totals = {"turns": len(rows), "tokens": total_tokens, "cost": models_cost(st["models"]),
+              "compactions": st["compactions"], "model": st["model"],
+              "interrupted": sum(r["state"] == "interrupted" for r in rows)}
+    result = {"turns": rows[-SESSION_TURNS_MAX:], "totals": totals}
+    with _TURNS_LOCK:
+        if len(_TURNS_CACHE) > 16:
+            _TURNS_CACHE.clear()
+        _TURNS_CACHE[path] = (key, result)
+    return result
 
 
 def render_transcript(path):
@@ -3077,6 +3193,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not path:
                 return self.send(404, b"unknown session", "text/plain")
             return self.send(200, json.dumps({"messages": conversation(path)}).encode(), "application/json")
+        if url.path == "/api/session-history":
+            sid = (q.get("sid") or [""])[0]
+            if not SOURCE_ID_RE.match(sid):
+                return self.send(400, b"bad session id", "text/plain")
+            path = self.server.source(f"{sid}/{sid}")
+            if not path:
+                return self.send(404, b"unknown session", "text/plain")
+            return self.send(200, json.dumps(session_turns(path)).encode(), "application/json")
         if url.path == "/api/output":
             sid, aid = ((q.get(k) or [""])[0] for k in ("sid", "id"))
             if not SOURCE_ID_RE.match(sid) or not SOURCE_ID_RE.match(aid):

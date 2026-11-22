@@ -181,6 +181,24 @@ def _codex_line(st, d):
         _add(st, st["model"], _iso(d.get("timestamp")), delta)
 
 
+def new_tally():
+    """Empty usage state for a caller that feeds transcript lines itself (tally_line)."""
+    return _blank()
+
+
+def tally_line(st, d, engine="claude"):
+    """Account one parsed transcript line into a new_tally() state, deduping usage by message id."""
+    try:
+        (_codex_line if engine == "codex" else _claude_line)(st, d)
+    except (AttributeError, TypeError):
+        pass
+
+
+def models_cost(models):
+    """Estimated cost of per-model token totals; None when no model has a known price."""
+    return _sum_costs([cost_of(m, t) for m, t in models.items()])
+
+
 def _scan(path, engine):
     try:
         info = os.stat(path)
