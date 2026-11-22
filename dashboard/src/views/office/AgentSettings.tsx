@@ -40,6 +40,11 @@ export function withSetting(
   return { ...draft, [group]: next };
 }
 
+/** The model settings of one engine: their keys start with the engine's name (claude_implement, codex_plan...). */
+export function engineModelKeys(models: Record<string, string>, engine: string): string[] {
+  return Object.keys(models).filter((key) => key.startsWith(`${engine}_`));
+}
+
 function configUrl(sid?: string) {
   return sid ? `/api/agent-config?sid=${encodeURIComponent(sid)}` : "/api/agent-config";
 }
@@ -52,6 +57,7 @@ interface FormProps {
 
 function EngineFields({ reply, draft, setDraft }: FormProps) {
   const { builtin } = reply;
+  const engine = draft.implementer || builtin.implementer;
   return (
     <fieldset className="agent-settings-group">
       <legend>Implementer</legend>
@@ -69,7 +75,7 @@ function EngineFields({ reply, draft, setDraft }: FormProps) {
           ))}
         </select>
       </label>
-      {Object.keys(builtin.models).map((key) => (
+      {engineModelKeys(builtin.models, engine).map((key) => (
         <label key={key}>
           {MODEL_LABELS[key] || key}
           <input

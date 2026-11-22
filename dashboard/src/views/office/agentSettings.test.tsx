@@ -3,7 +3,7 @@ import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AgentSettings, AgentSettingsForm, withSetting, type AgentConfigReply } from "./AgentSettings";
+import { AgentSettings, AgentSettingsForm, engineModelKeys, withSetting, type AgentConfigReply } from "./AgentSettings";
 
 const builtin = {
   implementer: "claude",
@@ -28,6 +28,14 @@ describe("agent settings form", () => {
     expect(html).toContain('placeholder="claude-sonnet-5"');
     expect(html).toContain("default (claude)");
     expect(html).toContain("default (haiku)");
+  });
+
+  it("shows only the chosen implementer's model fields", () => {
+    expect(render(reply("default", null))).not.toContain("gpt-5.6-sol");
+    const codex = render(reply("session", { implementer: "codex" }));
+    expect(codex).toContain('placeholder="gpt-5.6-sol"');
+    expect(codex).not.toContain("claude-sonnet-5");
+    expect(engineModelKeys(builtin.models, "codex")).toEqual(["codex_implement"]);
   });
 
   it("tells a pre-feature session that saving creates its file", () => {
