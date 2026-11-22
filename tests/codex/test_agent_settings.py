@@ -1,0 +1,95 @@
+"""Agent settings per session: the CTO default is copied at session start, the dispatcher and the Agent hook
+read the session's own copy, and a later change to the default never reaches a running session."""
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+from dispatch_support import SCRIPTS, DispatchCase
+
+sys.path.insert(0, str(SCRIPTS / "lib"))
+import agent_config  # noqa: E402
+
+HOOK = SCRIPTS.parent / "hooks" / "agent-model"
+
+
+class StoreTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.old = os.environ.get("CLAUDE_CONFIG_DIR")
+        os.environ["CLAUDE_CONFIG_DIR"] = self.tmp.name
+        self.addCleanup(lambda: os.environ.pop("CLAUDE_CONFIG_DIR") if self.old is None
+                        else os.environ.__setitem__("CLAUDE_CONFIG_DIR", self.old))
+
+    def test_snapshot_copies_the_default_once_and_later_default_changes_do_not_reach_it(self):
+        agent_config.save(None, {"implementer": "codex", "subagents": {"test-runner": "haiku"}})
+        self.assertEqual(agent_config.snapshot("s1")["implementer"], "codex")
+        agent_config.save(None, {"implementer": "grok"})
+        self.assertEqual(agent_config.snapshot("s1")["implementer"], "codex")
+        self.assertEqual(agent_config.snapshot("s2"), {"implementer": "grok"})
+
+    def test_a_session_without_a_file_has_no_settings(self):
+        agent_config.save(None, {"implementer": "codex"})
+        self.assertIsNone(agent_config.load("old-session"))
+
+    def test_validation_drops_empty_values_and_refuses_bad_ones(self):
+        self.assertEqual(agent_config.validate({"implementer": "", "models": {"codex_plan": ""}, "subagents": {}}), {})
+        for bad in ({"implementer": "gpt"}, {"models": {"codex_plan": "x; rm -rf /"}}, {"models": {"nope": "m"}},
+                    {"subagents": {"test-runner": "gpt-5"}}, {"subagents": {"evil": "haiku"}}, []):
+            with self.assertRaises(ValueError):
+                agent_config.validate(bad)
+        with self.assertRaises(ValueError):
+            agent_config.path_of("../escape")
+
+    def test_env_lines_name_only_what_the_session_sets(self):
+        cfg = {"implementer": "grok", "models": {"grok_implement": "xai/grok-5"}, "grok_scan": True}
+        self.assertEqual(agent_config.env_lines(cfg),
+                         ["FSA_IMPLEMENTER=grok", "FSA_GROK_MODEL_IMPLEMENT=xai/grok-5", "FSA_GROK_INVESTIGATE=1"])
+
+    def test_hook_sets_the_configured_subagent_model(self):
+        agent_config.save("s1", {"subagents": {"bounded-extractor": "sonnet"}})
+        event = {"session_id": "s1", "tool_input": {"subagent_type": "fullstack-agents:bounded-extractor", "prompt": "p"}}
+        run = subprocess.run(["bash", str(HOOK)], input=json.dumps(event), capture_output=True, text=True,
+                             env={**os.environ}, timeout=30)
+        out = json.loads(run.stdout)["hookSpecificOutput"]
+        self.assertEqual(out["updatedInput"], {**event["tool_input"], "model": "sonnet"})
+        other = {"session_id": "s1", "tool_input": {"subagent_type": "Explore", "prompt": "p"}}
+        run = subprocess.run(["bash", str(HOOK)], input=json.dumps(other), capture_output=True, text=True,
+                             env={**os.environ}, timeout=30)
+        self.assertEqual(run.stdout.strip(), "")
+
+
+class DispatchTests(unittest.TestCase):
+    def setUp(self):
+        self.case = DispatchCase("codex")
+        self.addCleanup(self.case.cleanup)
+        self.config = self.case.base / "claude-config"
+        self.case.brief.write_text("PLAN: none: test\nALLOWED_PATHS:\napp.py\n\nGOAL: x\n")
+
+    def dispatch(self, cfg, **env):
+        sessions = self.config / "fullstack-agents" / "agents"
+        sessions.mkdir(parents=True, exist_ok=True)
+        (sessions / "session-s1.json").write_text(json.dumps(cfg))
+        pin = str(self.config / "fullstack-agents" / "pins" / "session-s1.json")
+        result = self.case.dispatch(env={"CLAUDE_CONFIG_DIR": str(self.config), "FSA_SESSION_PIN": pin, **env})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        runs = Path(self.case.manifest(result)["log"]).parent
+        return json.loads((runs / f"{self.case.manifest(result)['run']}.meta.json").read_text())
+
+    def test_session_settings_win_over_the_environment(self):
+        meta = self.dispatch({"implementer": "codex", "models": {"codex_implement": "gpt-test-1"}},
+                             FSA_IMPLEMENTER="claude", FSA_CODEX_MODEL_IMPLEMENT="gpt-env")
+        self.assertEqual((meta["engine"], meta["model"], meta["requested"]["engine_source"]),
+                         ("codex", "gpt-test-1", "session"))
+
+    def test_without_session_settings_the_environment_still_applies(self):
+        meta = self.dispatch({}, FSA_IMPLEMENTER="codex")
+        self.assertEqual((meta["engine"], meta["requested"]["engine_source"]), ("codex", "env"))
+
+
+if __name__ == "__main__":
+    unittest.main()

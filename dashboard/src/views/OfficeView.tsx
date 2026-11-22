@@ -17,6 +17,7 @@ import "../styles/office.css";
 import { drawOffice, hitTest, pcHit, roomHit, zoomIconHit } from "./office/draw";
 import { ChatConsole, endSession } from "./office/ChatConsole";
 import { HistoryView } from "./HistoryView";
+import { AgentSettings } from "./office/AgentSettings";
 import { UsagePanel } from "./office/UsagePanel";
 import { Walks } from "./office/walk";
 import {
@@ -217,12 +218,14 @@ function CtoMenu({
   chat,
   usage,
   history,
+  settings,
 }: {
   at: { x: number; y: number };
   close: () => void;
   chat: () => void;
   usage: () => void;
   history: () => void;
+  settings: () => void;
 }) {
   const ref = useMenu(close);
   const run = (action: () => void) => () => {
@@ -253,6 +256,9 @@ function CtoMenu({
       </button>
       <button type="button" role="menuitem" onClick={run(history)}>
         History
+      </button>
+      <button type="button" role="menuitem" onClick={run(settings)} title="Applies to new sessions only">
+        Default agent settings
       </button>
     </div>
   );
@@ -292,16 +298,19 @@ function OfficeMenu({
   pane,
   close,
   chat,
+  settings,
 }: {
   menu: { key: string; x: number; y: number };
   card: Card | undefined;
   pane: Record<string, string>;
   close: () => void;
   chat: (key: string) => void;
+  settings: (sid: string) => void;
 }) {
   const ref = useMenu(close);
   if (!card) return null;
-  const sessionPane = pane[card.sessions[0]?.id || ""];
+  const sid = card.sessions[0]?.id;
+  const sessionPane = pane[sid || ""];
   const run = (action: () => void) => () => {
     close();
     action();
@@ -316,6 +325,9 @@ function OfficeMenu({
       </button>
       <button type="button" role="menuitem" onClick={run(() => openConsole(card.key))}>
         Open console
+      </button>
+      <button type="button" role="menuitem" disabled={!sid} onClick={run(() => sid && settings(sid))}>
+        Agent settings
       </button>
       <button
         type="button"
@@ -346,6 +358,8 @@ export function OfficeView() {
   const [chatKey, setChatKey] = useState<string | undefined>(undefined);
   const [usage, setUsage] = useState(false);
   const [history, setHistory] = useState(false);
+  /** Whose agent settings are open: "" for the CTO default, a session id, or null when closed. */
+  const [agentSettings, setAgentSettings] = useState<string | null>(null);
   const [chatWorker, setChatWorker] = useState<string | undefined>(undefined);
   const [menu, setMenu] = useState<{ key: string; x: number; y: number } | null>(null);
   const cards = useStore((storeState) => storeState.state?.cards) || NO_CARDS;
@@ -420,6 +434,7 @@ export function OfficeView() {
             }}
             usage={() => setUsage(true)}
             history={() => setHistory(true)}
+            settings={() => setAgentSettings("")}
           />
         )}
         {menu && menu.key !== CTO_TEAM && (
@@ -433,6 +448,7 @@ export function OfficeView() {
               setChatWorker(undefined);
               setConsoleId(CTO_ID);
             }}
+            settings={setAgentSettings}
           />
         )}
       </div>
@@ -458,6 +474,18 @@ export function OfficeView() {
       {history && (
         <OfficeModal title="History" close={() => setHistory(false)}>
           <HistoryView />
+        </OfficeModal>
+      )}
+      {agentSettings !== null && (
+        <OfficeModal
+          title={agentSettings ? "Agent settings" : "Default agent settings"}
+          close={() => setAgentSettings(null)}
+        >
+          <AgentSettings
+            key={agentSettings}
+            sid={agentSettings || undefined}
+            close={() => setAgentSettings(null)}
+          />
         </OfficeModal>
       )}
     </section>

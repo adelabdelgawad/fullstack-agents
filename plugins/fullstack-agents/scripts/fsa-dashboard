@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "lib"))
+import agent_config
 import task_rules
 from task_tracking import load_tasks
 from usage import models_cost, new_tally, redact, session_usage, tally_line, transcript_usage, window_of
@@ -1334,6 +1335,13 @@ def conversation(path):
                 elif isinstance(b, dict) and b.get("type") == "tool_use":
                     add("tool", tool_action({"content": [b]})[0], at)
     return out[-CONVERSATION_MAX:]
+
+
+def agent_settings_reply(sid):
+    """A session's agent settings (or the CTO default when sid is None) with the built-in defaults beside them.
+    settings is null for a session that started before agent settings existed: it keeps the environment's choice."""
+    return {"scope": "session" if sid else "default", "settings": agent_config.load(sid), "builtin": agent_config.BUILTIN,
+            "engines": agent_config.ENGINES, "subagent_models": agent_config.SUBAGENT_MODELS}
 
 
 SESSION_TURNS_MAX = 300
@@ -2879,6 +2887,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except ConnectionError:
             pass
 
+    def agent_session_known(self, sid):
+        return isinstance(sid, str) and bool(SOURCE_ID_RE.match(sid)) and bool(self.server.source(f"{sid}/{sid}"))
+
     def herdr_json_body(self):
         length_header = self.headers.get("Content-Length")
         if length_header is None or not re.fullmatch(r"\d+", length_header):
@@ -3193,6 +3204,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not path:
                 return self.send(404, b"unknown session", "text/plain")
             return self.send(200, json.dumps({"messages": conversation(path)}).encode(), "application/json")
+        if url.path == "/api/agent-config":
+            sid = (q.get("sid") or [""])[0] or None
+            if sid and not self.agent_session_known(sid):
+                return self.send(404, b"unknown session", "text/plain")
+            return self.send(200, json.dumps(agent_settings_reply(sid)).encode(), "application/json")
         if url.path == "/api/session-history":
             sid = (q.get("sid") or [""])[0]
             if not SOURCE_ID_RE.match(sid):
@@ -3251,7 +3267,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         self.body_read = False
         url = urllib.parse.urlparse(self.path)
-        if not self.authorised({}) or url.path not in ("/api/favourite", "/api/herdr/send", "/api/herdr/action",
+        if not self.authorised({}) or url.path not in ("/api/favourite", "/api/agent-config", "/api/herdr/send", "/api/herdr/action",
                                                           "/api/herdr/live/input", "/api/herdr/live/file", "/api/herdr/file"):
             return self.send(403, b"forbidden", "text/plain")
         if url.path in ("/api/herdr/live/file", "/api/herdr/file"):
@@ -3270,6 +3286,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except OSError:
                 return self.send(500, b"failed to stage file", "text/plain")
             return self.send(200, json.dumps({"ok": True, "path": str(path)}).encode())
+        if url.path == "/api/agent-config":
+            valid, body = self.herdr_json_body()
+            if not valid:
+                return
+            if not isinstance(body, dict):
+                return self.send(400, b"bad request", "text/plain")
+            sid = body.get("sid") or None
+            if sid and not self.agent_session_known(sid):
+                return self.send(404, b"unknown session", "text/plain")
+            try:
+                agent_config.save(sid, body.get("settings"))
+            except (ValueError, OSError) as exc:
+                return self.send(400, str(exc).encode(), "text/plain")
+            return self.send(200, json.dumps(agent_settings_reply(sid)).encode(), "application/json")
         if url.path in ("/api/herdr/send", "/api/herdr/action", "/api/herdr/live/input"):
             valid, body = self.herdr_json_body()
             if not valid:

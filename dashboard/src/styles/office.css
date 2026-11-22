@@ -1049,3 +1049,78 @@ html.office-page aside#panel {
   font-size: 12px;
   color: var(--muted, #a6b0c2);
 }
+
+/* Agent settings dialog (CTO default and per session). */
+.agent-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 640px;
+}
+
+.agent-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agent-settings-note {
+  margin: 0;
+  color: var(--muted, #a6b0c2);
+}
+
+.agent-settings-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.agent-settings-group legend {
+  padding: 0 4px;
+  font-weight: 600;
+}
+
+.agent-settings-group label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.agent-settings-group label.agent-settings-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-settings-group input[type="text"],
+.agent-settings-group select,
+.agent-settings-actions button {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+}
+
+.agent-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.agent-settings-actions [role="status"] {
+  margin-right: auto;
+  color: var(--muted, #a6b0c2);
+}
+
+.agent-settings-actions button {
+  cursor: pointer;
+}

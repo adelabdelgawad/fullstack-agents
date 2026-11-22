@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Dispatch one implementer unit (headless Claude Sonnet by default; FSA_IMPLEMENTER=grok|codex swaps the engine); prints only the manifest.
+# Dispatch one implementer unit (headless Claude Sonnet by default); prints only the manifest.
+# Engine: the brief's IMPLEMENTER: line, then the session's agent settings (Office; lib/agent_config.py), then
+# FSA_IMPLEMENTER=grok|codex, then claude. The session settings also override the FSA_*_MODEL_* environment.
 set -euo pipefail
 
 # `release <run-id> [--confirm]`: free a run's paths only when no process can still edit for it (lib/liveness.py).
@@ -99,9 +101,24 @@ if [ "$herdr_mode" = 1 ]; then
   [ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_PANE_ID:-}" ] || { echo "--herdr needs a Herdr-managed pane (HERDR_ENV=1)" >&2; exit 2; }
 fi
 
-# Engine precedence: the brief's IMPLEMENTER: line (per task), then FSA_IMPLEMENTER (per session), then claude.
+# The session's agent settings (set from the Office, copied from the CTO default at session start) win over
+# FSA_IMPLEMENTER and FSA_*_MODEL_* from the environment. Lines are validated KEY=value pairs, never evaluated.
+session_cfg=0
+case "${FSA_SESSION_PIN:-}" in
+  */session-*.json)
+    cfg_sid=$(basename "$FSA_SESSION_PIN" .json); cfg_sid=${cfg_sid#session-}
+    while IFS='=' read -r cfg_key cfg_val; do
+      case "$cfg_key" in
+        FSA_IMPLEMENTER) export FSA_IMPLEMENTER="$cfg_val"; session_cfg=1 ;;
+        FSA_GROK_INVESTIGATE|FSA_CLAUDE_MODEL_IMPLEMENT|FSA_CODEX_MODEL_INVESTIGATE|FSA_CODEX_MODEL_PLAN|FSA_CODEX_MODEL_IMPLEMENT|FSA_GROK_MODEL_INVESTIGATE|FSA_GROK_MODEL_IMPLEMENT)
+          export "$cfg_key=$cfg_val" ;;
+      esac
+    done < <(python3 -I "$(dirname "${BASH_SOURCE[0]}")/lib/agent_config.py" env "$cfg_sid" 2> /dev/null) ;;
+esac
+# Engine precedence: the brief's IMPLEMENTER: line (per task), then the session's settings, then FSA_IMPLEMENTER, then claude.
 engine=$(sed -nE 's/^IMPLEMENTER:[[:space:]]*([a-z]+).*/\1/p' "$brief" | head -1)
-engine_source=brief; [ -n "$engine" ] || { [ -n "${FSA_IMPLEMENTER:-}" ] && engine_source=env || engine_source=default; }
+engine_source=brief
+[ -n "$engine" ] || { [ "$session_cfg" = 1 ] && engine_source=session || { [ -n "${FSA_IMPLEMENTER:-}" ] && engine_source=env || engine_source=default; }; }
 engine=${engine:-${FSA_IMPLEMENTER:-claude}}
 # Grok reasoning effort: the brief's EFFORT: line, then FSA_GROK_VARIANT; empty keeps the model default.
 variant=$(sed -nE 's/^EFFORT:[[:space:]]*([a-z]+).*/\1/p' "$brief" | head -1)

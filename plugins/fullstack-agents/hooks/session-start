@@ -143,6 +143,12 @@ if [ -n "$board_session" ] && command -v jq > /dev/null 2>&1; then
     fi
 fi
 
+# Agent settings: a new session (startup or /clear) gets its own copy of the CTO default from the Office; resume and
+# compact keep the session's file, and a later change to the default never reaches a session already running.
+if [ -n "$board_session" ] && [ -n "$PYTHON_BIN" ] && { [ "$session_source" = "startup" ] || [ "$session_source" = "clear" ]; }; then
+    "$PYTHON_BIN" -I "${PLUGIN_ROOT}/scripts/lib/agent_config.py" snapshot "$board_session" > /dev/null 2>&1 || true
+fi
+
 if [ -n "$PYTHON_BIN" ]; then
     printf '%s' "$session_context" | "$PYTHON_BIN" -I "${PLUGIN_ROOT}/scripts/lib/hook_context.py" emit \
         --event SessionStart --name session-start --session="${board_session:-}" --keep "${#essential}"
