@@ -247,7 +247,9 @@ export interface PlacedRoom extends Rect {
   key: string;
   label: string;
   scale: number;
-  /** The door gap in the room's bottom wall, opening onto the corridor or lobby below. */
+  /** Height of the band along the top that carries the name plate: an office's back wall, a session space's sign. */
+  band: number;
+  /** The door gap in an office's bottom wall, opening onto the lobby below. */
   door?: { x: number; width: number; depth: number };
 }
 
@@ -255,14 +257,16 @@ export type PlacedBuilding = PlacedRoom;
 
 export interface OfficeLayout {
   building: PlacedBuilding | null;
+  /** The walled offices above the lobby: the CTO's and the one Sessions office every session shares. */
+  halls: PlacedRoom[];
+  /** Each team's space: the CTO's office, and one marked area per session on the Sessions office floor. */
   rooms: PlacedRoom[];
   desks: PlacedDesk[];
-  /** The small assets warehouse at the right end of the lobby: spare desks that subagents fetch and return. */
-  warehouse: Rect | null;
-  corridors: Rect[];
   lobby: Rect | null;
   height: number;
 }
+
+export const SESSIONS_HALL = "sessions";
 
 const MARGIN = 8;
 const DESK_W = 56;
@@ -270,8 +274,8 @@ const DESK_H = 58;
 /** The wall art may grow to 1.5x the chrome scale when the room has space. */
 const decorCap = (chrome: number) => chrome * 1.5;
 
-/** Floor-plan geometry in chrome units: walls, sign band, corridors, spine corridor, lobby, room header and padding. */
-export const BUILDING = { wall: 6, wallT: 4, sign: 18, corridor: 22, spine: 26, lobby: 44, pad: 6, header: 26 };
+/** Floor-plan geometry in chrome units: walls, sign band, lobby, office back wall, a session space's sign and padding. */
+export const BUILDING = { wall: 6, wallT: 4, sign: 18, lobby: 44, pad: 6, header: 26, space: 12 };
 
 interface Fit {
   scale: number;
@@ -288,99 +292,53 @@ function deskFit(count: number, width: number, height: number): Fit {
   return best;
 }
 
-interface Plan {
-  columns: number;
-  rows: number;
-  roomW: number;
-  roomH: number;
-  scale: number;
-}
-
-/** Desk size counts up to the 3x cap; past it, rooms shaped like real offices (about 1.4:1) win over long strips. */
+/** Desk size counts up to the 3x cap; past it, spaces shaped like real offices (about 1.4:1) win over long strips. */
 function roomScore(scale: number, roomW: number, roomH: number): number {
   const shape = Math.abs(Math.log(Math.max(roomW, 1) / Math.max(roomH, 1) / 1.4));
   return Math.min(scale, 3) - shape * 0.6;
 }
 
-/** Rows of rooms, a corridor under every row but the last (which opens onto the lobby), a spine corridor on the right. */
-function planGrid(counts: number[], innerW: number, innerH: number, chrome: number): Plan {
-  const b = (key: keyof typeof BUILDING) => BUILDING[key] * chrome;
-  const cap = decorCap(chrome);
-  const inset = { x: 2 * BUILDING.pad * cap, y: (BUILDING.header + BUILDING.pad) * cap };
-  let best: Plan = { columns: 1, rows: 1, roomW: 0, roomH: 0, scale: -1 };
+/** A session space has room for its leader and two subagents before it grows. */
+export const OFFICE_DESKS = 3;
+
+interface Grid {
+  columns: number;
+  rows: number;
+  width: number;
+  height: number;
+  scale: number;
+}
+
+/** Session spaces in rows across the Sessions office floor: the column count giving the largest desks in
+ * office-shaped spaces. */
+function planSpaces(counts: number[], width: number, height: number, gap: number, cap: number): Grid {
+  const inset = { x: 2 * BUILDING.pad * cap, y: (BUILDING.space + BUILDING.pad) * cap };
+  let best: Grid = { columns: 1, rows: counts.length, width, height: height / counts.length, scale: 0 };
   let bestScore = -Infinity;
   for (let columns = 1; columns <= counts.length; columns += 1) {
     const rows = Math.ceil(counts.length / columns);
-    const spine = rows > 1 ? b("spine") + b("wallT") : 0;
-    const roomW = (innerW - spine - (columns - 1) * b("wall")) / columns;
-    const roomH = (innerH - b("lobby") - rows * b("wallT") - (rows - 1) * b("corridor")) / rows;
-    const scale = Math.min(...counts.map((count) => deskFit(count, roomW - inset.x, roomH - inset.y).scale));
-    const score = roomScore(scale, roomW, roomH);
+    const w = (width - (columns - 1) * gap) / columns;
+    const h = (height - (rows - 1) * gap) / rows;
+    const scale = Math.min(...counts.map((count) => deskFit(count, w - inset.x, h - inset.y).scale));
+    const score = roomScore(scale, w, h);
     if (scale > 0 && score > bestScore) {
       bestScore = score;
-      best = { columns, rows, roomW, roomH, scale };
+      best = { columns, rows, width: w, height: h, scale };
     }
   }
-  if (best.scale < 0)
-    best = { columns: 1, rows: counts.length, roomW: innerW, roomH: innerH / counts.length, scale: 0.5 };
-  return { ...best, scale: Math.max(0.5, Math.min(3, Math.floor(best.scale * 4) / 4)) };
-}
-
-/** A session office has room for its leader and two subagents before it grows. */
-export const OFFICE_DESKS = 3;
-
-function deskCount(team: OfficeTeam): number {
-  return team.key === CTO_TEAM ? 1 : Math.max(OFFICE_DESKS, team.employees.length);
-}
-
-interface Spec {
-  key: string;
-  label: string;
-  count: number;
-}
-
-function placeRooms(specs: Spec[], plan: Plan, origin: { x: number; y: number }, chrome: number): PlacedRoom[] {
-  const b = (key: keyof typeof BUILDING) => BUILDING[key] * chrome;
-  const decor = Math.max(chrome, Math.min(decorCap(chrome), plan.scale));
-  const rowWidth = plan.columns * plan.roomW + (plan.columns - 1) * b("wall");
-  const lastRow = Math.floor((specs.length - 1) / plan.columns);
-  const lastCount = specs.length - lastRow * plan.columns;
-  return specs.map((spec, index) => {
-    const row = Math.floor(index / plan.columns);
-    const width = row === lastRow ? (rowWidth - (lastCount - 1) * b("wall")) / lastCount : plan.roomW;
-    const x = origin.x + (index % plan.columns) * (width + b("wall"));
-    const y = origin.y + row * (plan.roomH + b("wallT") + b("corridor"));
-    const room: PlacedRoom = { key: spec.key, label: spec.label, x, y, width, height: plan.roomH, scale: decor };
-    room.door = { x: x + 10 * decor, width: Math.min(20 * decor, width / 3), depth: b("wallT") };
-    return room;
-  });
-}
-
-function circulation(plan: Plan, inner: Rect, chrome: number): { corridors: Rect[]; lobby: Rect } {
-  const b = (key: keyof typeof BUILDING) => BUILDING[key] * chrome;
-  const lobby = { x: inner.x, y: inner.y + inner.height - b("lobby"), width: inner.width, height: b("lobby") };
-  const corridors: Rect[] = [];
-  for (let row = 0; row < plan.rows - 1; row += 1) {
-    const y = inner.y + (row + 1) * (plan.roomH + b("wallT")) + row * b("corridor");
-    corridors.push({ x: inner.x, y, width: inner.width, height: b("corridor") });
-  }
-  if (corridors.length) {
-    const top = inner.y;
-    corridors.push({ x: inner.x + inner.width - b("spine"), y: top, width: b("spine"), height: lobby.y - top });
-  }
-  return { corridors, lobby };
+  return best;
 }
 
 /** Subagent desks are smaller than the leader's. */
 export const SUBAGENT_SCALE = 0.6;
 
-/** A session office: the leader's desk in the middle, its subagents at smaller desks along the side walls, the first on
- * the right wall, then the left, alternating, each wall filling top to bottom (then a second row inwards). */
-function placeTeam(team: OfficeTeam, room: PlacedRoom, scale: number): PlacedDesk[] {
+/** A team's space: the leader's desk in the middle, its subagents at smaller desks along the side walls, the first on
+ * the right, then the left, alternating, each side filling top to bottom (then a second row inwards). */
+function placeTeam(team: OfficeTeam, room: PlacedRoom | undefined, scale: number): PlacedDesk[] {
   const [leader, ...workers] = team.employees;
-  if (!leader) return [];
+  if (!leader || !room) return [];
   const d = room.scale;
-  const floorTop = room.y + BUILDING.header * d;
+  const floorTop = room.y + room.band;
   const floorH = room.y + room.height - floorTop;
   const lead = {
     x: room.x + (room.width - DESK_W * scale) / 2,
@@ -402,66 +360,143 @@ function placeTeam(team: OfficeTeam, room: PlacedRoom, scale: number): PlacedDes
   return [lead, ...placed];
 }
 
-/** The assets warehouse: a small storeroom at the right end of the lobby. */
-function warehouseOf(lobby: Rect, chrome: number): Rect {
-  const width = Math.min(90 * chrome, lobby.width / 4);
+export const EMPTY_LAYOUT: OfficeLayout = { building: null, halls: [], rooms: [], desks: [], lobby: null, height: 0 };
+
+const quantise = (scale: number) => Math.max(0.5, Math.min(3, Math.floor(scale * 4) / 4));
+
+function hallOf(key: string, label: string, rect: Rect, decor: number, chrome: number, centred: boolean): PlacedRoom {
+  const width = Math.min(20 * decor, rect.width / 3);
+  const x = centred ? rect.x + (rect.width - width) / 2 : rect.x + 10 * decor;
   return {
-    x: lobby.x + lobby.width - width - 6 * chrome,
-    y: lobby.y + 4 * chrome,
-    width,
-    height: lobby.height - 8 * chrome,
+    key,
+    label,
+    ...rect,
+    scale: decor,
+    band: BUILDING.header * decor,
+    door: { x, width, depth: BUILDING.wallT * chrome },
   };
 }
 
-export const EMPTY_LAYOUT: OfficeLayout = {
-  building: null,
-  rooms: [],
-  desks: [],
-  warehouse: null,
-  corridors: [],
-  lobby: null,
-  height: 0,
-};
+/** The session spaces on the Sessions office floor, row by row; the last row's spaces share the full width. */
+function placeSpaces(teams: OfficeTeam[], grid: Grid, floor: Rect, gap: number, decor: number): PlacedRoom[] {
+  const lastRow = Math.floor((teams.length - 1) / grid.columns);
+  const lastCount = teams.length - lastRow * grid.columns;
+  return teams.map((team, index) => {
+    const row = Math.floor(index / grid.columns);
+    const width = row === lastRow ? (floor.width - (lastCount - 1) * gap) / lastCount : grid.width;
+    return {
+      key: team.key,
+      label: team.label,
+      x: floor.x + (index % grid.columns) * (width + gap),
+      y: floor.y + row * (grid.height + gap),
+      width,
+      height: grid.height,
+      scale: decor,
+      band: BUILDING.space * decor,
+    };
+  });
+}
 
-/** Fit the floor plan to the canvas: the CTO office and one office per session along corridors, the lobby below. */
+/** Where the two offices go above the lobby: side by side, or stacked on a narrow canvas. */
+interface Split {
+  side: boolean;
+  stacked: boolean;
+  cto: Rect | null;
+  hall: Rect;
+}
+
+function splitFloor(inner: Rect, areaH: number, chrome: number, cto: boolean, sessions: boolean): Split {
+  const wall = BUILDING.wall * chrome;
+  const side = cto && sessions && inner.width >= 320 * chrome;
+  const stacked = cto && sessions && !side;
+  const ctoW = side ? Math.round(Math.min(inner.width * 0.3, Math.max(inner.width * 0.2, 140 * chrome))) : inner.width;
+  const ctoH = stacked ? Math.max(areaH * 0.3, (BUILDING.header + BUILDING.pad) * decorCap(chrome) + DESK_H) : areaH;
+  const offset = { x: side ? ctoW + wall : 0, y: stacked ? ctoH + wall : 0 };
+  return {
+    side,
+    stacked,
+    cto: cto ? { x: inner.x, y: inner.y, width: ctoW, height: ctoH } : null,
+    hall: { x: inner.x + offset.x, y: inner.y + offset.y, width: inner.width - offset.x, height: areaH - offset.y },
+  };
+}
+
+/** One desk scale for the whole floor: the largest that fits every session space and the CTO office. */
+function floorScale(split: Split, grid: Grid | null, chrome: number): number {
+  const cap = decorCap(chrome);
+  const cto = split.cto
+    ? deskFit(1, split.cto.width - 2 * BUILDING.pad * cap, split.cto.height - (BUILDING.header + BUILDING.pad) * cap)
+        .scale
+    : 3;
+  return quantise(Math.min(grid ? grid.scale : 3, cto));
+}
+
+/** Grow the offices to fit their desks at the chosen scale, keeping side-by-side offices the same height. */
+function growOffices(split: Split, grid: Grid | null, scale: number, decor: number, gap: number, wall: number): void {
+  const { cto, hall } = split;
+  if (cto) cto.height = Math.max(cto.height, (BUILDING.header + BUILDING.pad) * decor + DESK_H * scale);
+  if (!grid) return;
+  grid.height = Math.max(grid.height, (BUILDING.space + BUILDING.pad) * decor + DESK_H * scale);
+  const needed = BUILDING.header * decor + 1.5 * gap + grid.rows * grid.height + (grid.rows - 1) * gap;
+  hall.height = Math.max(hall.height, needed);
+  if (split.stacked && cto) hall.y = cto.y + cto.height + wall;
+  if (split.side && cto) hall.height = cto.height = Math.max(cto.height, hall.height);
+}
+
+/** The lobby under the offices and the building around everything. */
+function shellOf(name: string, inner: Rect, halls: PlacedRoom[], width: number, chrome: number) {
+  const bottom = Math.max(...halls.map((hall) => hall.y + hall.height));
+  const lobby = {
+    x: inner.x,
+    y: bottom + BUILDING.wallT * chrome,
+    width: inner.width,
+    height: BUILDING.lobby * chrome,
+  };
+  const end = lobby.y + lobby.height + BUILDING.wall * chrome;
+  const building = { key: "building", label: name, x: MARGIN, y: MARGIN, width, height: end - MARGIN, scale: chrome };
+  return { building: { ...building, band: BUILDING.sign * chrome }, lobby, height: end + MARGIN };
+}
+
+/** Fit the floor plan to the canvas: the CTO office and the shared Sessions office (one space per session) above the
+ * lobby. Grows past the canvas when desks cannot shrink further. */
 export function layoutOffice(office: Office, width: number, height: number, chrome = 2): OfficeLayout {
   if (!office.teams.length) return EMPTY_LAYOUT;
-  const specs: Spec[] = office.teams.map((team) => ({ key: team.key, label: team.label, count: deskCount(team) }));
-  const edge = BUILDING.wall * chrome;
+  const b = (key: keyof typeof BUILDING) => BUILDING[key] * chrome;
   const bw = Math.max(width, 240) - 2 * MARGIN;
   const bh = Math.max(height, 240) - 2 * MARGIN;
   const inner = {
-    x: MARGIN + edge,
-    y: MARGIN + BUILDING.sign * chrome,
-    width: bw - 2 * edge,
-    height: bh - BUILDING.sign * chrome - edge,
+    x: MARGIN + b("wall"),
+    y: MARGIN + b("sign"),
+    width: bw - 2 * b("wall"),
+    height: bh - b("sign") - b("wall"),
   };
-  const plan = planGrid(
-    specs.map((spec) => spec.count),
-    inner.width,
-    inner.height,
-    chrome,
-  );
-  plan.roomH = Math.max(plan.roomH, (BUILDING.header + BUILDING.pad) * decorCap(chrome) + DESK_H * plan.scale);
-  const rooms = placeRooms(specs, plan, inner, chrome);
-  const desks = office.teams.flatMap((team, index) => placeTeam(team, rooms[index], plan.scale));
-  const used = {
-    ...inner,
-    height: Math.max(
-      inner.height,
-      rooms[rooms.length - 1].y + plan.roomH + BUILDING.wallT * chrome + BUILDING.lobby * chrome - inner.y,
+  const cto = office.teams.find((team) => team.key === CTO_TEAM);
+  const sessions = office.teams.filter((team) => team.key !== CTO_TEAM);
+  const split = splitFloor(inner, inner.height - b("lobby") - b("wallT"), chrome, Boolean(cto), sessions.length > 0);
+  const gap = 2 * BUILDING.pad * chrome;
+  const floorH = split.hall.height - BUILDING.header * decorCap(chrome) - 1.5 * gap;
+  const counts = sessions.map((team) => Math.max(OFFICE_DESKS, team.employees.length));
+  const grid = sessions.length ? planSpaces(counts, split.hall.width - 2 * gap, floorH, gap, decorCap(chrome)) : null;
+  const scale = floorScale(split, grid, chrome);
+  const decor = Math.max(chrome, Math.min(decorCap(chrome), scale));
+  growOffices(split, grid, scale, decor, gap, b("wall"));
+  const halls: PlacedRoom[] = [];
+  if (split.cto) halls.push(hallOf(CTO_TEAM, CTO_TEAM, split.cto, decor, chrome, false));
+  const floor = {
+    x: split.hall.x + gap,
+    y: split.hall.y + BUILDING.header * decor + gap / 2,
+    width: split.hall.width - 2 * gap,
+    height: 0,
+  };
+  const spaces = grid ? placeSpaces(sessions, grid, floor, gap, decor) : [];
+  if (grid) halls.push(hallOf(SESSIONS_HALL, "Sessions", split.hall, decor, chrome, true));
+  const rooms = [...halls.filter((hall) => hall.key === CTO_TEAM), ...spaces];
+  const desks = office.teams.flatMap((team) =>
+    placeTeam(
+      team,
+      rooms.find((item) => item.key === team.key),
+      scale,
     ),
-  };
-  const { corridors, lobby } = circulation(plan, used, chrome);
-  const bottom = used.y + used.height + edge;
-  const building = {
-    key: "building",
-    label: office.name,
-    x: MARGIN,
-    y: MARGIN,
-    width: bw,
-    height: bottom - MARGIN,
-    scale: chrome,
-  };
-  return { building, rooms, desks, warehouse: warehouseOf(lobby, chrome), corridors, lobby, height: bottom + MARGIN };
+  );
+  const { building, lobby, height: total } = shellOf(office.name, inner, halls, bw, chrome);
+  return { building, halls, rooms, desks, lobby, height: total };
 }

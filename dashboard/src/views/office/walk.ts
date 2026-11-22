@@ -21,9 +21,9 @@ interface Walk {
   duration: number;
   employee: OfficeEmployee;
   scale: number;
-  /** Path segments [from, to) during which the agent carries a desk. */
+  /** Path segments [from, to) during which the agent carries its desk. */
   carry: [number, number];
-  /** A subagent on its way in: its desk is not in the office until it arrives with it. */
+  /** An agent on its way in: its desk is not in the office until it arrives with it. */
   arriving: boolean;
 }
 
@@ -59,46 +59,63 @@ function inside(rect: Rect, point: Point): boolean {
   return point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height;
 }
 
-function roomAt(layout: OfficeLayout, point: Point): PlacedRoom | undefined {
+/** The team space a point is in (CTO office or a session's area), for anchors that survive a re-layout. */
+function spaceAt(layout: OfficeLayout, point: Point): PlacedRoom | undefined {
   return layout.rooms.find((room) => inside(room, point));
 }
 
-/** The walkway in front of a room's door: the corridor or lobby just below its bottom wall. */
+/** The walled office a point is in. */
+function hallAt(layout: OfficeLayout, point: Point): PlacedRoom | undefined {
+  return layout.halls.find((hall) => inside(hall, point));
+}
+
+/** The walkway across the lobby, just below the offices' doors. */
 function walkwayY(layout: OfficeLayout, bottom: number): number {
-  const ways = [...layout.corridors.filter((c) => c.width > c.height), ...(layout.lobby ? [layout.lobby] : [])]
-    .filter((way) => way.y >= bottom - 2)
-    .sort((a, b) => a.y - b.y);
-  const way = ways[0];
-  return way ? way.y + Math.min(way.height / 2, 14) : bottom + 10;
+  return layout.lobby ? layout.lobby.y + Math.min(layout.lobby.height / 2, 14) : bottom + 10;
 }
 
-/** Points from a place to its walkway: out through the room's door. A place outside any room is already there. */
+/**
+ * A walk between two points in one office. In the Sessions office it keeps to the aisles: down out of the session space
+ * to the aisle below it, along the aisle (by the left wall to change rows) and up into the other space.
+ */
+function withinHall(layout: OfficeLayout, hall: PlacedRoom, from: Point, to: Point): Point[] {
+  const spaces = layout.rooms.filter((room) => room.key !== hall.key && inside(hall, room));
+  const a = spaces.find((space) => inside(space, from));
+  const b = spaces.find((space) => inside(space, to));
+  if (!spaces.length || (a && a === b)) return [from, to];
+  const margin = Math.min(...spaces.map((space) => space.x)) - hall.x;
+  const lane = (space: PlacedRoom | undefined, point: Point) => (space ? space.y + space.height + margin / 2 : point.y);
+  const [ya, yb] = [lane(a, from), lane(b, to)];
+  const x = hall.x + margin / 2;
+  const turn =
+    Math.abs(ya - yb) > 1
+      ? [
+          { x, y: ya },
+          { x, y: yb },
+        ]
+      : [];
+  return [from, { x: from.x, y: ya }, ...turn, { x: to.x, y: yb }, to];
+}
+
+/** Points from a place out through its office's door onto the lobby walkway. A place in the lobby is already there. */
 function exit(layout: OfficeLayout, point: Point): { path: Point[]; out: Point } {
-  const room = roomAt(layout, point);
-  if (!room?.door) return { path: [point], out: point };
-  const doorX = room.door.x + room.door.width / 2;
-  const bottom = room.y + room.height;
-  return { path: [point, { x: doorX, y: bottom - 4 }], out: { x: doorX, y: walkwayY(layout, bottom) } };
+  const hall = hallAt(layout, point);
+  if (!hall?.door) return { path: [point], out: point };
+  const doorX = hall.door.x + hall.door.width / 2;
+  const bottom = hall.y + hall.height;
+  return {
+    path: withinHall(layout, hall, point, { x: doorX, y: bottom - 4 }),
+    out: { x: doorX, y: walkwayY(layout, bottom) },
+  };
 }
 
-/** A walking route through doors and corridors; between floors of rooms it takes the side corridor. */
+/** A walking route: along the aisles within one office, otherwise out of its door, along the lobby and in. */
 export function route(layout: OfficeLayout, from: Point, to: Point): Point[] {
+  const hall = hallAt(layout, from);
+  if (hall && hall === hallAt(layout, to)) return withinHall(layout, hall, from, to);
   const a = exit(layout, from);
   const b = exit(layout, to);
-  if (roomAt(layout, from) === roomAt(layout, to) && roomAt(layout, from)) return [from, to];
-  const middle: Point[] = [a.out];
-  if (Math.abs(a.out.y - b.out.y) > 2) {
-    const spine = layout.corridors.find((c) => c.height > c.width);
-    const x = spine ? spine.x + spine.width / 2 : a.out.x;
-    middle.push({ x, y: a.out.y }, { x, y: b.out.y });
-  }
-  middle.push(b.out);
-  return [...a.path, ...middle, ...b.path.slice().reverse()];
-}
-
-/** Two routes walked one after the other; returns the joined path and where the second one starts. */
-function join(first: Point[], second: Point[]): [Point[], number] {
-  return [[...first, ...second.slice(1)], first.length - 1];
+  return [...a.path, a.out, b.out, ...b.path.slice().reverse()];
 }
 
 export function entranceOf(layout: OfficeLayout): Point | null {
@@ -107,13 +124,8 @@ export function entranceOf(layout: OfficeLayout): Point | null {
     : null;
 }
 
-export function warehouseDoor(layout: OfficeLayout): Point | null {
-  const w = layout.warehouse;
-  return w ? { x: w.x + w.width / 2, y: w.y + w.height } : null;
-}
-
 function anchorOf(layout: OfficeLayout, point: Point): Anchor | null {
-  const room = roomAt(layout, point);
+  const room = spaceAt(layout, point);
   return room ? { room: room.key, fx: (point.x - room.x) / room.width, fy: (point.y - room.y) / room.height } : null;
 }
 
@@ -165,13 +177,13 @@ function along(walk: Walk, now: number): Point & { segment: number } {
 }
 
 /**
- * Remembers where every agent was and walks it when that changes. A new subagent comes in from the lobby, collects a
- * desk at the warehouse and carries it to its session's office; a finished one carries its desk back and leaves. A new
- * session's leader walks in from the lobby. A new view (zoom or resize) starts fresh, without walks.
+ * Remembers where every agent was and walks it when that changes. A new agent (a session's leader or a subagent) comes
+ * in from the lobby entrance carrying its desk and sets it down at its place; one that leaves picks its desk up and
+ * carries it out. The CTO never moves. A new view (zoom or resize) starts fresh, without walks.
  */
 export class Walks {
   private anchors = new Map<string, Anchor>();
-  private people = new Map<string, { employee: OfficeEmployee; scale: number }>();
+  private people = new Map<string, { employee: OfficeEmployee; scale: number; point: Point }>();
   private walks = new Map<string, Walk>();
   private view = "";
 
@@ -181,19 +193,15 @@ export class Walks {
     if (fresh) this.walks.clear();
     const places = placesOf(layout);
     const entrance = entranceOf(layout);
-    const store = warehouseDoor(layout);
     for (const [id, place] of places) {
       const anchor = anchorOf(layout, place);
       const before = this.anchors.get(id);
       if (anchor) this.anchors.set(id, anchor);
-      this.people.set(id, { employee: place.employee, scale: place.scale });
-      if (fresh || !animate || !anchor || !entrance) continue;
+      this.people.set(id, { employee: place.employee, scale: place.scale, point: { x: place.x, y: place.y } });
+      if (fresh || !animate || !anchor || !entrance || place.employee.fixed) continue;
       if (!before) {
-        const subagent = place.employee.role !== "lead";
-        if (subagent && store) {
-          const [path, from] = join(route(layout, entrance, store), route(layout, store, place));
-          this.walks.set(id, walkOf(path, now, place, { carry: [from, path.length], arriving: true }));
-        } else this.walks.set(id, walkOf(route(layout, entrance, place), now, place));
+        const path = route(layout, entrance, place);
+        this.walks.set(id, walkOf(path, now, place, { carry: [0, path.length], arriving: true }));
         continue;
       }
       if (before.room === anchor.room && Math.abs(before.fx - anchor.fx) + Math.abs(before.fy - anchor.fy) < 0.01)
@@ -207,13 +215,11 @@ export class Walks {
       this.anchors.delete(id);
       const person = this.people.get(id);
       this.people.delete(id);
-      const from = pointOf(layout, anchor);
-      if (fresh || !animate || !person || !from || !entrance || person.employee.role === "lead") continue;
-      // A finished subagent takes its desk back to the warehouse, then goes home.
-      const [path, from2] = store
-        ? join(route(layout, from, store), route(layout, store, entrance))
-        : [route(layout, from, entrance), 0];
-      this.walks.set(id, walkOf(path, now, person, { carry: [0, store ? from2 : 0] }));
+      // A session that ended took its space with it: start from where the agent last sat.
+      const from = pointOf(layout, anchor) || person?.point;
+      if (fresh || !animate || !person || !from || !entrance || person.employee.fixed) continue;
+      const path = route(layout, from, entrance);
+      this.walks.set(id, walkOf(path, now, person, { carry: [0, path.length] }));
     }
   }
 

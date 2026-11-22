@@ -2,18 +2,11 @@ import { drawBackWall, drawPlant, rect, text } from "./draw";
 import { BUILDING, type PlacedBuilding, type PlacedRoom, type Rect } from "./model";
 
 const CARPET = "#3b4456";
-const RUNNER = "#46516a";
+const RUNNER = "#414c63";
+const PARTITION = "#8b5a32";
+const SIGN = "#1d2433";
 const LOBBY_A = "#cfc8b8";
 const LOBBY_B = "#c2baa8";
-
-/** A corridor: grey carpet with a lighter runner down its length and a plant at the far end. */
-export function drawCorridor(ctx: CanvasRenderingContext2D, corridor: Rect, s: number): void {
-  const { x, y, width, height } = corridor;
-  rect(ctx, x, y, width, height, CARPET);
-  if (width >= height) rect(ctx, x, y + height / 2 - 2 * s, width, 4 * s, RUNNER);
-  else rect(ctx, x + width / 2 - 2 * s, y, 4 * s, height, RUNNER);
-  if (width >= height && width > 60 * s) drawPlant(ctx, x + 4 * s, y + height / 2 - 8 * s, s * 0.8);
-}
 
 function drawReception(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
   rect(ctx, x, y, 60 * s, 10 * s, "#8b5a32");
@@ -116,29 +109,17 @@ export function drawExecutiveRoom(ctx: CanvasRenderingContext2D, room: PlacedRoo
   drawPlant(ctx, x + 14 * s, y + height - 15 * s, s);
 }
 
-/** The assets warehouse: a small storeroom in the lobby with spare desks stacked on shelves. Subagents collect a desk
- * here when they start and bring it back when they finish. */
-export function drawWarehouse(ctx: CanvasRenderingContext2D, store: Rect, s: number): void {
-  const { x, y, width, height } = store;
-  rect(ctx, x - s, y - s, width + 2 * s, height + 2 * s, "#3b2f24");
-  rect(ctx, x, y, width, height, "#6b5a45");
-  for (let row = 0; row * 6 * s < height; row += 1) rect(ctx, x, y + row * 6 * s, width, Math.max(1, s / 2), "#5e4e3b");
-  const door = width / 2;
-  rect(ctx, x + door - 8 * s, y + height - s, 16 * s, 2 * s, "#cfc8b8");
-  const plate = Math.min(width - 4 * s, 52 * s);
-  rect(ctx, x + (width - plate) / 2, y + 2 * s, plate, 8 * s, "#151b26");
-  ctx.fillStyle = "#f2b24c";
-  text(ctx, "Warehouse", x + width / 2, y + 6 * s, 4.5 * s, plate - 4 * s);
-  // Spare desks stacked in two piles.
-  const deskW = 18 * s;
-  const piles = Math.max(1, Math.floor((width - 8 * s) / (deskW + 6 * s)));
-  for (let pile = 0; pile < Math.min(piles, 3); pile += 1) {
-    const px = x + 4 * s + pile * (deskW + 6 * s);
-    for (let level = 0; level < 3; level += 1) {
-      const py = y + height - 8 * s - level * 6 * s;
-      if (py < y + 12 * s) break;
-      rect(ctx, px, py, deskW, 4 * s, "#c8955a");
-      rect(ctx, px, py + 4 * s, deskW, s, "#9a6b3c");
-    }
+/** A session's space on the Sessions office floor: a carpet bordered by a low partition, with the session's name on a
+ * sign along its top. */
+export function drawSpace(ctx: CanvasRenderingContext2D, space: PlacedRoom): void {
+  const { x, y, width, height, band, scale: s } = space;
+  rect(ctx, x, y, width, height, PARTITION);
+  rect(ctx, x + s, y + s, width - 2 * s, height - 2 * s, CARPET);
+  for (let row = 0; row * 8 * s < height - band; row += 2) {
+    rect(ctx, x + s, y + band + row * 8 * s, width - 2 * s, 4 * s, RUNNER);
   }
+  rect(ctx, x + s, y + s, width - 2 * s, band - s, SIGN);
+  rect(ctx, x + s, y + band - s, width - 2 * s, s, PARTITION);
+  ctx.fillStyle = "#f2b24c";
+  text(ctx, space.label, x + width / 2, y + band / 2 + s / 2, 5.5 * s, width - 32 * s);
 }

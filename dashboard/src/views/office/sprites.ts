@@ -19,7 +19,7 @@ function drawFigure(ctx: CanvasRenderingContext2D, x: number, y: number, s: numb
   rect(ctx, x + 7 * s, y + (33 + Math.min(0, step) * 2) * s, 4 * s, (10 + Math.min(0, step) * 2) * s, "#273348");
 }
 
-/** A small desk held in front of the body while it is carried to or from the warehouse. */
+/** A small desk held in front of the body while it is carried in or out of the office. */
 function drawCarriedDesk(ctx: CanvasRenderingContext2D, fx: number, fy: number, s: number): void {
   rect(ctx, fx - 13 * s, fy - 26 * s, 26 * s, 7 * s, "#c8955a");
   rect(ctx, fx - 13 * s, fy - 19 * s, 26 * s, 2 * s, "#9a6b3c");

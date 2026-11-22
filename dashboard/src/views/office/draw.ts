@@ -1,5 +1,5 @@
 import type { Walker } from "./walk";
-import { drawCorridor, drawDoor, drawExecutiveRoom, drawLobby, drawWarehouse } from "./floorplan";
+import { drawDoor, drawExecutiveRoom, drawLobby, drawSpace } from "./floorplan";
 import { drawWalking } from "./sprites";
 import {
   BUILDING,
@@ -144,22 +144,11 @@ export function drawBackWall(ctx: CanvasRenderingContext2D, room: PlacedRoom): v
   drawPlant(ctx, x + width - 12 * s, y + band - 12 * s, s);
 }
 
-function drawRoom(ctx: CanvasRenderingContext2D, room: PlacedRoom): void {
-  const { x, y, width, height, scale: s } = room;
-  const band = BUILDING.header * s;
-  drawFloor(ctx, x, y + band, width, height - band, s);
-  drawBackWall(ctx, room);
-  drawPlant(ctx, x + 2 * s, y + height - 15 * s, s);
-  drawSideTable(ctx, x + width - 22 * s, y + height - 14 * s, s);
-}
-
-function drawSideTable(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
-  rect(ctx, x, y + 4 * s, 20 * s, 8 * s, C.desk);
-  rect(ctx, x, y + 10 * s, 20 * s, 2 * s, C.deskFront);
-  rect(ctx, x + 4 * s, y + s, 4 * s, 4 * s, "#e5e7eb");
-  rect(ctx, x + 8 * s, y + 2 * s, s, 2 * s, "#e5e7eb");
-  rect(ctx, x + 12 * s, y - 2 * s, 5 * s, 7 * s, "#9ad1f5");
-  rect(ctx, x + 12 * s, y - 3 * s, 5 * s, s, "#e5e7eb");
+/** The shared Sessions office: a wooden floor under a back wall with its name plate. */
+function drawHall(ctx: CanvasRenderingContext2D, hall: PlacedRoom): void {
+  const { x, y, width, height, band } = hall;
+  drawFloor(ctx, x, y + band, width, height - band, hall.scale);
+  drawBackWall(ctx, hall);
 }
 
 function screenColour(desk: PlacedDesk, frame: number): string {
@@ -363,19 +352,20 @@ export function drawOffice(
   ctx.imageSmoothingEnabled = false;
   drawOutside(ctx);
   if (layout.building) drawBuilding(ctx, layout.building);
-  for (const corridor of layout.corridors) drawCorridor(ctx, corridor, layout.building?.scale || 2);
   if (layout.lobby && layout.building) drawLobby(ctx, layout.lobby, layout.building);
-  if (layout.warehouse) drawWarehouse(ctx, layout.warehouse, layout.building?.scale || 2);
+  for (const hall of layout.halls) {
+    if (hall.key === CTO_TEAM) drawExecutiveRoom(ctx, hall);
+    else drawHall(ctx, hall);
+    drawDoor(ctx, hall);
+  }
   for (const room of layout.rooms) {
-    if (room.key === CTO_TEAM) drawExecutiveRoom(ctx, room);
-    else drawRoom(ctx, room);
-    drawDoor(ctx, room);
+    if (room.key !== CTO_TEAM) drawSpace(ctx, room);
     drawZoomIcon(ctx, room, layout.rooms.length === 1);
   }
   const frame = Math.floor(tMs / 375) % 2;
   for (const desk of layout.desks) {
     const walker = walkers.get(desk.employee.id);
-    // A subagent still on its way in is carrying its desk; it appears here when it arrives.
+    // An agent still on its way in is carrying its desk; it appears here when it arrives.
     if (walker?.arriving) continue;
     drawDesk(ctx, desk, frame);
     if (desk.employee.role === "lead" && !desk.employee.fixed) drawLamp(ctx, desk);
@@ -393,7 +383,7 @@ export function drawOffice(
   }
 }
 
-/** Offices whose session has finished: the lights are out, so the whole room is dimmed (labels stay readable). */
+/** Spaces whose session has finished: the lights are out, so the whole space is dimmed (labels stay readable). */
 function drawLightsOut(ctx: CanvasRenderingContext2D, layout: OfficeLayout): void {
   const dark = new Set(layout.desks.filter((desk) => finished(desk.employee)).map((desk) => desk.employee.cardKey));
   ctx.save();
@@ -402,7 +392,7 @@ function drawLightsOut(ctx: CanvasRenderingContext2D, layout: OfficeLayout): voi
   ctx.restore();
 }
 
-/** Agents on their way: subagents carrying a desk to or from the warehouse, leaders walking in from the lobby. */
+/** Agents on their way in or out, carrying their desks. */
 function drawWalkers(ctx: CanvasRenderingContext2D, walkers: Map<string, Walker>): void {
   for (const walker of walkers.values()) {
     const s = walker.scale;

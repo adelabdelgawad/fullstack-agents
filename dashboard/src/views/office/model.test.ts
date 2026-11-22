@@ -184,26 +184,28 @@ describe("layoutOffice", () => {
       ]),
     );
 
-  it("fills the canvas with the CTO office, one office per session, corridors, a lobby and a small warehouse", () => {
+  it("has the CTO office and one Sessions office with a space per session, above the lobby", () => {
     const layout = layoutOffice(office(), 1400, 800);
     expect(layout).toEqual(layoutOffice(office(), 1400, 800));
+    expect(layout.halls.map((hall) => hall.label)).toEqual(["CTO", "Sessions"]);
     expect(layout.rooms.map((room) => room.label)).toEqual(["CTO", "alpha", "beta"]);
-    const { lobby, warehouse } = layout;
-    expect(warehouse!.x).toBeGreaterThanOrEqual(lobby!.x);
-    expect(warehouse!.x + warehouse!.width).toBeLessThanOrEqual(lobby!.x + lobby!.width);
-    expect(warehouse!.width).toBeLessThan(lobby!.width / 3);
+    const hall = layout.halls[1];
+    for (const space of layout.rooms.slice(1)) {
+      expect(space.x).toBeGreaterThanOrEqual(hall.x);
+      expect(space.x + space.width).toBeLessThanOrEqual(hall.x + hall.width + 0.01);
+      expect(space.y).toBeGreaterThanOrEqual(hall.y + hall.band);
+      expect(space.y + space.height).toBeLessThanOrEqual(hall.y + hall.height + 0.01);
+    }
   });
 
-  it("opens every office's door onto a corridor or the lobby", () => {
+  it("opens both offices' doors onto the lobby", () => {
     const layout = layoutOffice(office(), 1400, 800);
-    const halls = [...layout.corridors, layout.lobby!];
-    for (const room of layout.rooms) {
-      const sill = room.y + room.height + room.door!.depth;
-      const doorMid = room.door!.x + room.door!.width / 2;
-      const hall = halls.find(
-        (rect) => Math.abs(rect.y - sill) < 0.01 && doorMid >= rect.x && doorMid <= rect.x + rect.width,
-      );
-      expect(hall, room.label).toBeDefined();
+    const lobby = layout.lobby!;
+    for (const hall of layout.halls) {
+      expect(Math.abs(hall.y + hall.height + hall.door!.depth - lobby.y), hall.label).toBeLessThan(0.01);
+      const doorMid = hall.door!.x + hall.door!.width / 2;
+      expect(doorMid).toBeGreaterThan(hall.x);
+      expect(doorMid).toBeLessThan(hall.x + hall.width);
     }
   });
 
@@ -217,9 +219,10 @@ describe("layoutOffice", () => {
     expect(layout.desks.map((desk) => desk.employee.id)).toEqual([CTO_ID, "a", "h1", "b"]);
   });
 
-  it("stacks rooms on a narrow canvas and grows past the viewport when desks cannot shrink further", () => {
+  it("stacks the offices on a narrow canvas and grows past the viewport when desks cannot shrink further", () => {
     const tall = layoutOffice(office(), 200, 1600, 1);
-    expect(new Set(tall.rooms.map((room) => room.x)).size).toBe(1);
+    expect(new Set(tall.halls.map((hall) => hall.x)).size).toBe(1);
+    expect(tall.halls[1].y).toBeGreaterThan(tall.halls[0].y + tall.halls[0].height);
     expect(layoutOffice(office(), 240, 120, 1).height).toBeGreaterThanOrEqual(240);
   });
 
