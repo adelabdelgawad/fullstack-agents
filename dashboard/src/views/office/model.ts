@@ -33,6 +33,8 @@ export interface OfficeEmployee {
 /** One office: the CTO's, or a session's, titled with the session and holding its leader and subagents. */
 export interface OfficeTeam {
   key: string;
+  /** Who the office belongs to across context handoffs: the herdr pane when known, else the card key. */
+  place?: string;
   label: string;
   employees: OfficeEmployee[];
 }
@@ -110,9 +112,16 @@ function baseEmployee(card: Card, item: Record<string, unknown>, role: OfficeRol
   };
 }
 
+/** A context handoff starts a new session id in the same herdr pane; the leader is the pane, so it stays the same
+ * person (name, colour, desk) instead of one leader leaving and another arriving. */
+function leaderId(lead: Session, panes: Record<string, string>): string {
+  const pane = panes[lead.id];
+  return pane ? `pane:${pane}` : lead.id;
+}
+
 function leadEmployee(card: Card, lead: Session, panes: Record<string, string>): OfficeEmployee {
   return {
-    ...baseEmployee(card, lead, "lead", lead.id),
+    ...baseEmployee(card, lead, "lead", leaderId(lead, panes)),
     name: lead.name || lead.id,
     cost: card.usage?.cost ?? null,
     tokens: Number(card.usage?.tokens || 0),
@@ -188,7 +197,7 @@ function sessionOffice(card: Card, panes: Record<string, string>): OfficeTeam | 
     total: 1 + workers.length,
     reports: workers,
   };
-  return { key: card.key, label, employees: [leader, ...workers] };
+  return { key: card.key, place: lead.pane ? lead.id : card.key, label, employees: [leader, ...workers] };
 }
 
 /** The CTO runs every session: his desk counts them all; he waits while any needs a decision, else works while any does. */
@@ -218,12 +227,28 @@ function baseName(path: string): string {
   return path.split("/").filter(Boolean).pop() || "";
 }
 
+/** Two sessions listed in one pane (an old one not yet gone): the first keeps the pane, the other its own session. */
+function uniquePlaces(teams: OfficeTeam[]): OfficeTeam[] {
+  const seen = new Set<string>();
+  return teams.map((team) => {
+    const place = team.place || team.key;
+    if (!seen.has(place)) {
+      seen.add(place);
+      return team;
+    }
+    const [leader, ...workers] = team.employees;
+    return { ...team, place: team.key, employees: [{ ...leader, id: team.key, colour: colourOf(team.key) }, ...workers] };
+  });
+}
+
 /** The floor: the CTO's office first, then one office per session. The CTO's name comes from the CTO team's members. */
 export function officeOf(state: DashState | null): Office {
   if (!state) return { name: "", teams: [] };
-  const sessions = state.cards
-    .map((card) => sessionOffice(card, state.session_panes))
-    .filter((team): team is OfficeTeam => Boolean(team));
+  const sessions = uniquePlaces(
+    state.cards
+      .map((card) => sessionOffice(card, state.session_panes))
+      .filter((team): team is OfficeTeam => Boolean(team)),
+  );
   const name = (state.office_teams || []).find((rule) => rule.name === CTO_TEAM)?.members?.[0];
   const cto = {
     key: CTO_TEAM,
@@ -259,6 +284,8 @@ export function assignSeats(previous: Map<string, number>, ids: string[]): Map<s
   return seats;
 }
 
+const placeOf = (team: OfficeTeam) => team.place || team.key;
+
 /**
  * Keeps the floor still while agents work. The state lists sessions by last activity, so laying them out in that order
  * moved every desk whenever another session spoke; a subagent's desk likewise followed its position in the list.
@@ -269,10 +296,10 @@ export class Seating {
   private seats = new Map<string, Map<string, number>>();
 
   apply(office: Office): Office {
-    const byKey = new Map(office.teams.map((team) => [team.key, team]));
+    const byKey = new Map(office.teams.map((team) => [placeOf(team), team]));
     this.order = keepOrder(
       this.order,
-      office.teams.map((team) => team.key),
+      office.teams.map((team) => placeOf(team)),
     );
     const teams = this.order.map((key) => byKey.get(key)!).map((team) => this.seat(team));
     for (const key of this.seats.keys()) if (!byKey.has(key)) this.seats.delete(key);
@@ -283,10 +310,10 @@ export class Seating {
     const [leader, ...workers] = team.employees;
     if (!leader) return team;
     const seats = assignSeats(
-      this.seats.get(team.key) || new Map(),
+      this.seats.get(placeOf(team)) || new Map(),
       workers.map((worker) => worker.id),
     );
-    this.seats.set(team.key, seats);
+    this.seats.set(placeOf(team), seats);
     return { ...team, employees: [leader, ...workers.map((worker) => ({ ...worker, seat: seats.get(worker.id) }))] };
   }
 }

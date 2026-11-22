@@ -32,6 +32,14 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(agent_config.snapshot("s1")["implementer"], "codex")
         self.assertEqual(agent_config.snapshot("s2"), {"implementer": "grok"})
 
+    def test_inherit_copies_the_old_session_over_the_new_one(self):
+        agent_config.save("old", {"implementer": "codex"})
+        agent_config.save("new", {})
+        self.assertEqual(agent_config.inherit("new", "old"), {"implementer": "codex"})
+        self.assertEqual(agent_config.load("new"), {"implementer": "codex"})
+        self.assertIsNone(agent_config.inherit("new", "never-had-settings"))
+        self.assertEqual(agent_config.load("new"), {"implementer": "codex"})
+
     def test_a_session_without_a_file_has_no_settings(self):
         agent_config.save(None, {"implementer": "codex"})
         self.assertIsNone(agent_config.load("old-session"))

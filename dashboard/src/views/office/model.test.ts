@@ -68,7 +68,7 @@ describe("cardMembers", () => {
     });
     const list = members(source, { lead: "w:p1" });
     expect(list.map(({ id, role }) => [id, role])).toEqual([
-      ["lead", "lead"],
+      ["pane:w:p1", "lead"],
       ["running", "worker"],
       ["helper", "helper"],
     ]);
@@ -294,6 +294,20 @@ describe("seating", () => {
     const seating = new Seating();
     seating.apply(make(["a", "b"]));
     expect(seating.apply(make(["b", "a"])).teams.map((team) => team.key)).toEqual(["CTO", "a", "b"]);
+  });
+
+  it("a context handoff in the same herdr pane keeps the same leader, colour and place", async () => {
+    const { Seating } = await import("./model");
+    const team = (sid: string) => card({ key: `session:${sid}`, sessions: [session({ id: sid })] });
+    const seating = new Seating();
+    const before = seating.apply(officeOf(dash([team("other"), team("old")], { old: "p7", other: "p2" })));
+    const after = seating.apply(officeOf(dash([team("new"), team("other")], { new: "p7", other: "p2" })));
+    const leader = (office: Office, key: string) => office.teams.find((item) => item.key === key)!.employees[0];
+    expect(leader(after, "session:new").id).toBe(leader(before, "session:old").id);
+    expect(leader(after, "session:new").colour).toBe(leader(before, "session:old").colour);
+    expect(after.teams.map((item) => item.key)).toEqual(["CTO", "session:other", "session:new"]);
+    const both = officeOf(dash([team("new"), team("old")], { new: "p7", old: "p7" }));
+    expect(new Set(both.teams.map((item) => item.employees[0].id)).size).toBe(3);
   });
 
   it("subagent desks stand right beside their leader's", () => {

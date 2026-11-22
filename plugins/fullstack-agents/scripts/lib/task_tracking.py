@@ -466,8 +466,20 @@ def _cmd_adopt(args, root, path):
         _parse(text)
         _atomic(path, text)
     _delete_parked_matching(lambda record: record.get("old_session") == args.from_session)
+    settings = _inherit_agent_settings(args.session, args.from_session)
     recovery = task_recovery.render(task_recovery.collect(args.session, str(root)))
-    return {"file": str(path), "adopted_from": args.from_session, "session_id": args.session, "recovery": recovery}
+    return {"file": str(path), "adopted_from": args.from_session, "session_id": args.session,
+            "agent_settings": settings, "recovery": recovery}
+
+
+def _inherit_agent_settings(session, from_session):
+    """The handoff continues the old session, so it keeps that session's agent settings (decision D5)."""
+    import agent_config
+    try:
+        cfg = agent_config.inherit(session, from_session)
+    except (OSError, ValueError) as exc:
+        return f"not copied: {exc}"
+    return "kept from " + from_session if cfg is not None else "unchanged: the old session had none"
 
 
 def _cmd_close(args, root, path):

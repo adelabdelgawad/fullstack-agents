@@ -172,7 +172,8 @@ class RepoTestCase(unittest.TestCase):
         subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=self.root, check=True)
         subprocess.run(["git", "config", "user.name", "T"], cwd=self.root, check=True)
         self.state = self.base / "state"
-        self.env = patch.dict(os.environ, {"FSA_TASKS_DIR": str(self.state), "CLAUDE_PID": str(os.getpid())})
+        self.env = patch.dict(os.environ, {"FSA_TASKS_DIR": str(self.state), "CLAUDE_PID": str(os.getpid()),
+                                             "CLAUDE_CONFIG_DIR": str(self.base / "claude")})
         self.env.start()
         self.path = self.root / "TASKS.md"
         self.path.write_text("# T\n\n" + tasks.START + tasks._render([tasks._item("T1", "pending", "Task", "")]) + tasks.END + "\n")
@@ -317,6 +318,20 @@ class CliAdoptCloseTests(RepoTestCase):
         self.assertFalse(parked.exists())
         self.assertIn("## Ownership log", self.path.read_text())
         self.assertIn("adopted by new-session from old-session", self.path.read_text())
+
+    def test_adopt_keeps_the_old_sessions_agent_settings(self):
+        agents = self.base / "claude" / "fullstack-agents" / "agents"
+        agents.mkdir(parents=True)
+        (agents / "session-old-session.json").write_text(json.dumps({"models": {"claude_implement": "claude-sonnet-5-5"}}))
+        (agents / "session-new-session.json").write_text("{}")
+        self.bind("old-session")
+        ownership.release("old-session", self.root, self.path)
+        adopted = self.invoke("adopt", "--root", str(self.root), "--file", "TASKS.md",
+                               "--session", "new-session", "--from", "old-session")
+        self.assertEqual(adopted.returncode, 0, adopted.stderr)
+        self.assertEqual(json.loads(adopted.stdout)["agent_settings"], "kept from old-session")
+        self.assertEqual(json.loads((agents / "session-new-session.json").read_text()),
+                         {"models": {"claude_implement": "claude-sonnet-5-5"}})
 
     def test_adopt_refused_when_from_session_not_bound_to_this_file(self):
         result = self.invoke("adopt", "--root", str(self.root), "--file", "TASKS.md",

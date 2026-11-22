@@ -6,6 +6,7 @@ every read and write; nothing here is ever evaluated as shell.
 
 CLI (hooks and the dispatcher):
   agent_config.py snapshot <sid>        copy the default into the session file unless it exists
+  agent_config.py inherit <sid> <old>   copy the old session's settings over <sid> (a context handoff)
   agent_config.py env <sid>             KEY=value lines for codex-task.sh (only keys the session sets)
   agent_config.py hook                  PreToolUse Agent|Task: set the configured subagent model
 """
@@ -133,6 +134,16 @@ def snapshot(sid):
     return save(sid, load() or {})
 
 
+def inherit(sid, from_sid):
+    """A handoff session continues its predecessor: copy the predecessor's settings over the new session's.
+
+    Returns the copied settings, or None (nothing changed) when the predecessor has no settings file."""
+    cfg = load(from_sid)
+    if cfg is None:
+        return None
+    return save(sid, cfg)
+
+
 def env_lines(cfg):
     lines = []
     if cfg.get("implementer"):
@@ -165,6 +176,14 @@ def main(argv):
             return 0
         if out:
             print(json.dumps(out))
+        return 0
+    if len(argv) == 3 and argv[0] == "inherit":
+        try:
+            cfg = inherit(argv[1], argv[2])
+        except (OSError, ValueError) as exc:
+            print(f"agent_config: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(cfg))
         return 0
     if len(argv) == 2 and argv[0] in ("snapshot", "env"):
         try:
