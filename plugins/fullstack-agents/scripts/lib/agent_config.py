@@ -30,12 +30,37 @@ MODELS = {
 SUBAGENTS = {"bounded-extractor": "haiku", "test-runner": "sonnet", "diff-reviewer": "sonnet", "web-researcher": "sonnet"}
 BUILTIN = {"implementer": "claude", "models": {k: v[1] for k, v in MODELS.items()}, "grok_scan": False,
            "subagents": dict(SUBAGENTS)}
+# Models offered in the Office per engine. Codex's own visible models (its model cache) replace the Codex list.
+MODEL_CHOICES = {
+    "claude": ["claude-sonnet-5", "claude-sonnet-5-5", "claude-opus-5", "claude-opus-5-5", "claude-haiku-5-5",
+               "claude-fable-5-1"],
+    "codex": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
+    "grok": ["xai/grok-4.7", "xai/grok-4.6", "xai/grok-4.5", "xai/grok-4.3"],
+}
 MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:\[\]-]{0,79}$")
 SID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 
 def config_dir():
     return Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "fullstack-agents" / "agents"
+
+
+def codex_models():
+    """Model slugs Codex lists in its picker (~/.codex/models_cache.json), or [] when the cache is missing."""
+    cache = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex") / "models_cache.json"
+    try:
+        data = json.loads(cache.read_text())
+    except (OSError, ValueError):
+        return []
+    models = data.get("models", data) if isinstance(data, dict) else data
+    if not isinstance(models, list):
+        return []
+    return [m["slug"] for m in models if isinstance(m, dict) and m.get("visibility") == "list"
+            and isinstance(m.get("slug"), str) and MODEL_RE.match(m["slug"])]
+
+
+def model_choices():
+    return {**MODEL_CHOICES, "codex": codex_models() or MODEL_CHOICES["codex"]}
 
 
 def path_of(sid=None):

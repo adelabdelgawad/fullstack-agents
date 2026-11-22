@@ -68,6 +68,17 @@ class AgentConfigApiTests(unittest.TestCase):
         self.assertEqual(reply["builtin"]["implementer"], "claude")
         self.assertIn("codex", reply["engines"])
         self.assertIn("haiku", reply["subagent_models"])
+        self.assertEqual(set(reply["model_choices"]), {"claude", "codex", "grok"})
+
+    def test_codex_choices_come_from_its_visible_models(self):
+        (Path(self.scratch.name) / "models_cache.json").write_text(json.dumps({"models": [
+            {"slug": "gpt-6-sol", "visibility": "list"}, {"slug": "gpt-reserve", "visibility": "hide"}]}))
+        with patch.dict(os.environ, {"CODEX_HOME": self.scratch.name}):
+            reply = json.loads(self.call("GET", "/api/agent-config")[1])
+        self.assertEqual(reply["model_choices"]["codex"], ["gpt-6-sol"])
+        with patch.dict(os.environ, {"CODEX_HOME": str(Path(self.scratch.name) / "none")}):
+            reply = json.loads(self.call("GET", "/api/agent-config")[1])
+        self.assertIn("gpt-5.6-sol", reply["model_choices"]["codex"])
 
     def test_save_default_then_read_back(self):
         settings = {"implementer": "codex", "models": {"codex_implement": "gpt-x", "codex_plan": ""},

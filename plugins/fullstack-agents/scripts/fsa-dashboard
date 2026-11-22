@@ -1341,7 +1341,8 @@ def agent_settings_reply(sid):
     """A session's agent settings (or the CTO default when sid is None) with the built-in defaults beside them.
     settings is null for a session that started before agent settings existed: it keeps the environment's choice."""
     return {"scope": "session" if sid else "default", "settings": agent_config.load(sid), "builtin": agent_config.BUILTIN,
-            "engines": agent_config.ENGINES, "subagent_models": agent_config.SUBAGENT_MODELS}
+            "engines": agent_config.ENGINES, "subagent_models": agent_config.SUBAGENT_MODELS,
+            "model_choices": agent_config.model_choices()}
 
 
 SESSION_TURNS_MAX = 300

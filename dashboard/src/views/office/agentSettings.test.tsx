@@ -3,7 +3,7 @@ import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AgentSettings, AgentSettingsForm, engineModelKeys, withSetting, type AgentConfigReply } from "./AgentSettings";
+import { AgentSettings, AgentSettingsForm, engineModelKeys, modelOptions, withSetting, type AgentConfigReply } from "./AgentSettings";
 
 const builtin = {
   implementer: "claude",
@@ -25,7 +25,8 @@ describe("agent settings form", () => {
   it("shows built-in defaults as placeholders and default options", () => {
     const html = render(reply("default", null));
     expect(html).toContain("Applies to new sessions only");
-    expect(html).toContain('placeholder="claude-sonnet-5"');
+    expect(html).toContain("default (claude-sonnet-5)");
+    expect(html).not.toContain('type="text"');
     expect(html).toContain("default (claude)");
     expect(html).toContain("default (haiku)");
   });
@@ -33,9 +34,18 @@ describe("agent settings form", () => {
   it("shows only the chosen implementer's model fields", () => {
     expect(render(reply("default", null))).not.toContain("gpt-5.6-sol");
     const codex = render(reply("session", { implementer: "codex" }));
-    expect(codex).toContain('placeholder="gpt-5.6-sol"');
+    expect(codex).toContain("default (gpt-5.6-sol)");
     expect(codex).not.toContain("claude-sonnet-5");
     expect(engineModelKeys(builtin.models, "codex")).toEqual(["codex_implement"]);
+  });
+
+  it("offers the engine's models, keeping the built-in and a saved custom value", () => {
+    expect(modelOptions(["a", "b"], "b", "custom")).toEqual(["a", "b", "custom"]);
+    const r = { ...reply("session", { implementer: "codex", models: { codex_implement: "gpt-6-sol" } }),
+      model_choices: { codex: ["gpt-6-sol", "gpt-6-luna"] } };
+    const html = render(r);
+    expect(html).toContain('<option value="gpt-6-luna">gpt-6-luna</option>');
+    expect(html).toContain('<option value="gpt-6-sol" selected="">gpt-6-sol</option>');
   });
 
   it("tells a pre-feature session that saving creates its file", () => {

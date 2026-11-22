@@ -16,6 +16,8 @@ export interface AgentConfigReply {
   builtin: Required<AgentSettingsValue>;
   engines: string[];
   subagent_models: string[];
+  /** Models offered per engine (claude, codex, grok). */
+  model_choices?: Record<string, string[]>;
 }
 
 const MODEL_LABELS: Record<string, string> = {
@@ -43,6 +45,11 @@ export function withSetting(
 /** The model settings of one engine: their keys start with the engine's name (claude_implement, codex_plan...). */
 export function engineModelKeys(models: Record<string, string>, engine: string): string[] {
   return Object.keys(models).filter((key) => key.startsWith(`${engine}_`));
+}
+
+/** The engine's offered models with the built-in default and a saved value kept, without duplicates. */
+export function modelOptions(choices: string[] | undefined, builtin: string, saved: string | undefined): string[] {
+  return [...new Set([...(choices || []), builtin, ...(saved ? [saved] : [])])];
 }
 
 function configUrl(sid?: string) {
@@ -78,13 +85,17 @@ function EngineFields({ reply, draft, setDraft }: FormProps) {
       {engineModelKeys(builtin.models, engine).map((key) => (
         <label key={key}>
           {MODEL_LABELS[key] || key}
-          <input
-            type="text"
+          <select
             value={draft.models?.[key] || ""}
-            placeholder={builtin.models[key]}
-            spellCheck={false}
-            onChange={(event) => setDraft(withSetting(draft, "models", key, event.target.value.trim()))}
-          />
+            onChange={(event) => setDraft(withSetting(draft, "models", key, event.target.value))}
+          >
+            <option value="">default ({builtin.models[key]})</option>
+            {modelOptions(reply.model_choices?.[engine], builtin.models[key], draft.models?.[key]).map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
         </label>
       ))}
       <label className="agent-settings-check">
