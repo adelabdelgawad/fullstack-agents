@@ -3,6 +3,7 @@ import { getJson, postJson } from "../../lib/api";
 import { cardAgents, needsHuman, STATE_TEXT } from "../../lib/cards";
 import { esc } from "../../lib/format";
 import type { Card } from "../../lib/types";
+import { keepOrder } from "./model";
 import { load, openCard, toast, useStore } from "../../store";
 import { openHerdrConfirm, openNewSession } from "../../terminal/HerdrOverlay";
 import { filesFromPaste, LIVE_UPLOAD_MAX_BYTES, uploadFiles } from "../../terminal/files";
@@ -98,9 +99,10 @@ function Workers({ workers, picked, pick }: { workers: Worker[]; picked: string 
 /** Sessions in a fixed order: each keeps the place it first appeared in, new ones join at the end, so the list never
  * reshuffles while you work in it. Sessions that need a decision are marked red instead of moved. */
 export function stableOrder(previous: string[], cards: Card[]): string[] {
-  const live = new Set(cards.map((card) => card.key));
-  const kept = previous.filter((key) => live.has(key));
-  return [...kept, ...cards.map((card) => card.key).filter((key) => !kept.includes(key))];
+  return keepOrder(
+    previous,
+    cards.map((card) => card.key),
+  );
 }
 
 function useStableCards(cards: Card[]): Card[] {

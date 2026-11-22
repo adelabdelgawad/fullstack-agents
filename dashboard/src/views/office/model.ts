@@ -26,6 +26,8 @@ export interface OfficeEmployee {
   fixed?: boolean;
   /** Who this agent delegates to: the session's workers and subagents (the CTO: every session leader). */
   reports?: OfficeEmployee[];
+  /** A subagent's desk slot along the walls; it keeps it while others come and go (see Seating). */
+  seat?: number;
 }
 
 /** One office: the CTO's, or a session's, titled with the session and holding its leader and subagents. */
@@ -236,6 +238,59 @@ export function officeOf(state: DashState | null): Office {
   return { name: baseName(textOf(state.repo)) || "Company", teams: [cto, ...sessions] };
 }
 
+/** Keys in the order first seen: known ones keep their place, new ones join at the end, gone ones drop out. */
+export function keepOrder(previous: string[], keys: string[]): string[] {
+  const live = new Set(keys);
+  const kept = previous.filter((key) => live.has(key));
+  return [...kept, ...keys.filter((key) => !kept.includes(key))];
+}
+
+/** Seats by id: everyone keeps the seat they had; a newcomer takes the lowest free one. */
+export function assignSeats(previous: Map<string, number>, ids: string[]): Map<string, number> {
+  const seats = new Map([...previous].filter(([id]) => ids.includes(id)));
+  const taken = new Set(seats.values());
+  let free = 0;
+  for (const id of ids) {
+    if (seats.has(id)) continue;
+    while (taken.has(free)) free += 1;
+    seats.set(id, free);
+    taken.add(free);
+  }
+  return seats;
+}
+
+/**
+ * Keeps the floor still while agents work. The state lists sessions by last activity, so laying them out in that order
+ * moved every desk whenever another session spoke; a subagent's desk likewise followed its position in the list.
+ * Seating remembers the session order and each subagent's seat, so desks move only when someone arrives or leaves.
+ */
+export class Seating {
+  private order: string[] = [];
+  private seats = new Map<string, Map<string, number>>();
+
+  apply(office: Office): Office {
+    const byKey = new Map(office.teams.map((team) => [team.key, team]));
+    this.order = keepOrder(
+      this.order,
+      office.teams.map((team) => team.key),
+    );
+    const teams = this.order.map((key) => byKey.get(key)!).map((team) => this.seat(team));
+    for (const key of this.seats.keys()) if (!byKey.has(key)) this.seats.delete(key);
+    return { ...office, teams };
+  }
+
+  private seat(team: OfficeTeam): OfficeTeam {
+    const [leader, ...workers] = team.employees;
+    if (!leader) return team;
+    const seats = assignSeats(
+      this.seats.get(team.key) || new Map(),
+      workers.map((worker) => worker.id),
+    );
+    this.seats.set(team.key, seats);
+    return { ...team, employees: [leader, ...workers.map((worker) => ({ ...worker, seat: seats.get(worker.id) }))] };
+  }
+}
+
 export interface Rect {
   x: number;
   y: number;
@@ -332,8 +387,8 @@ function planSpaces(counts: number[], width: number, height: number, gap: number
 /** Subagent desks are smaller than the leader's. */
 export const SUBAGENT_SCALE = 0.6;
 
-/** A team's space: the leader's desk in the middle, its subagents at smaller desks along the side walls, the first on
- * the right, then the left, alternating, each side filling top to bottom (then a second row inwards). */
+/** A team's space: the leader's desk in the middle, its subagents at smaller desks right beside it, the first on the
+ * right, then the left, alternating, each side filling a column top to bottom (then the next column outwards). */
 function placeTeam(team: OfficeTeam, room: PlacedRoom | undefined, scale: number): PlacedDesk[] {
   const [leader, ...workers] = team.employees;
   if (!leader || !room) return [];
@@ -348,14 +403,16 @@ function placeTeam(team: OfficeTeam, room: PlacedRoom | undefined, scale: number
   };
   const small = scale * SUBAGENT_SCALE;
   const pad = BUILDING.pad * d;
-  const perWall = Math.max(1, Math.floor((floorH - pad) / (DESK_H * small)));
-  const placed = workers.map((employee, index) => {
-    const right = index % 2 === 0;
+  const perColumn = Math.max(1, Math.floor((floorH - pad) / (DESK_H * small)));
+  // Columns start level with the leader's desk, moved up only as far as needed to keep a full column on the floor.
+  const top = Math.max(floorTop + pad / 2, Math.min(lead.y, room.y + room.height - perColumn * DESK_H * small));
+  const placed = workers.map((employee, position) => {
+    const index = employee.seat ?? position;
     const slot = Math.floor(index / 2);
-    const row = slot % perWall;
-    const inward = Math.floor(slot / perWall) * DESK_W * small;
-    const x = right ? room.x + room.width - pad - DESK_W * small - inward : room.x + pad + inward;
-    return { x, y: floorTop + pad / 2 + row * DESK_H * small, scale: small, employee };
+    const column = Math.floor(slot / perColumn);
+    const x =
+      index % 2 === 0 ? lead.x + DESK_W * scale + column * DESK_W * small : lead.x - (column + 1) * DESK_W * small;
+    return { x, y: top + (slot % perColumn) * DESK_H * small, scale: small, employee };
   });
   return [lead, ...placed];
 }

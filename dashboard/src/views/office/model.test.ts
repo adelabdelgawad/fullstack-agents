@@ -273,3 +273,39 @@ describe("office seating", () => {
     expect(office.teams[0].employees[0]).toMatchObject({ sessions: 2, total: 2 });
   });
 });
+
+describe("seating", () => {
+  it("keeps sessions in arrival order and subagents in their seats while others come and go", async () => {
+    const { Seating, assignSeats, keepOrder } = await import("./model");
+    expect(keepOrder(["b", "a"], ["a", "c", "b"])).toEqual(["b", "a", "c"]);
+    expect([
+      ...assignSeats(
+        new Map([
+          ["x", 0],
+          ["y", 1],
+        ]),
+        ["y", "z"],
+      ),
+    ]).toEqual([
+      ["y", 1],
+      ["z", 0],
+    ]);
+    const make = (keys: string[]) => officeOf(dash(keys.map((key) => card({ key, sessions: [session({ id: key })] }))));
+    const seating = new Seating();
+    seating.apply(make(["a", "b"]));
+    expect(seating.apply(make(["b", "a"])).teams.map((team) => team.key)).toEqual(["CTO", "a", "b"]);
+  });
+
+  it("subagent desks stand right beside their leader's", () => {
+    const source = card({
+      key: "a",
+      sessions: [session({ id: "a" })],
+      now: [session({ id: "a", agents: [helper("h1", "running"), helper("h2", "running")] })],
+    });
+    const layout = layoutOffice(officeOf(dash([source])), 1400, 800);
+    const desk = (id: string) => layout.desks.find((item) => item.employee.id === id)!;
+    const lead = desk("a");
+    expect(desk("h1").x).toBeCloseTo(lead.x + 56 * lead.scale);
+    expect(desk("h2").x + 56 * desk("h2").scale).toBeCloseTo(lead.x);
+  });
+});

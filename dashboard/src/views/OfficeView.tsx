@@ -19,7 +19,16 @@ import { ChatConsole, endSession } from "./office/ChatConsole";
 import { HistoryView } from "./HistoryView";
 import { UsagePanel } from "./office/UsagePanel";
 import { Walks } from "./office/walk";
-import { CTO_ID, CTO_TEAM, EMPTY_LAYOUT, layoutOffice, officeOf, type Office, type OfficeLayout } from "./office/model";
+import {
+  CTO_ID,
+  CTO_TEAM,
+  EMPTY_LAYOUT,
+  layoutOffice,
+  officeOf,
+  Seating,
+  type Office,
+  type OfficeLayout,
+} from "./office/model";
 
 function redraw(
   canvas: HTMLCanvasElement,
@@ -328,7 +337,9 @@ function OfficeMenu({
 
 export function OfficeView() {
   const state = useStore((storeState) => storeState.state);
-  const office = useMemo(() => officeOf(state), [state]);
+  // Desks stay put while agents work: sessions keep the order they arrived in and subagents keep their seats.
+  const seating = useRef(new Seating());
+  const office = useMemo(() => seating.current.apply(officeOf(state)), [state]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const placed = useRef<OfficeLayout>(EMPTY_LAYOUT);
   const [consoleId, setConsoleId] = useState<string | null>(null);

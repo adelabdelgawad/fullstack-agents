@@ -1437,12 +1437,15 @@ def first_prompt(path):
     return FIRST_PROMPTS[key]
 
 
+TITLE_KEYS = {"custom-title": "customTitle", "agent-name": "agentName", "ai-title": "aiTitle"}
+
+
 def read_session(path, now, wt_re, names, waits):
     mtime = path.stat().st_mtime
     sid = path.stem
     last, cwd, branch, title, text = None, "", "", "", ""
     action, action_at, action_id, said_at, seen_at, turn_at = "", "", "", "", "", ""
-    mentions, briefs, answered = {}, set(), set()
+    mentions, briefs, answered, titles = {}, set(), set(), {}
     finished, bg = {}, {"labels": {}, "tasks": {}, "exit": {}, "bash": {}, "pending": []}
     for line in message_tail(path):
         for m in NOTE_RE.finditer(line):
@@ -1453,8 +1456,9 @@ def read_session(path, now, wt_re, names, waits):
             d = json.loads(line)
         except ValueError:
             continue
-        if d.get("type") == "custom-title":
-            title = d.get("customTitle") or title
+        kind = d.get("type")
+        if kind in TITLE_KEYS:
+            titles[kind] = d.get(TITLE_KEYS[kind]) or titles.get(kind, "")
         seen_at = d.get("timestamp") or seen_at
         if d.get("isSidechain") or d.get("type") not in ("user", "assistant"):
             continue
@@ -1478,6 +1482,8 @@ def read_session(path, now, wt_re, names, waits):
         briefs.update(BRIEF_RE.findall(line))
     if not last:
         return None
+    # Claude Code's own session name: the /rename title, else the name it shows, else the title it generated.
+    title = next((titles[k] for k in TITLE_KEYS if titles.get(k)), "")
     chips, busy = subagent_chips(path.with_suffix(""), now)
     # A tool call still waiting for its result is work in progress, not a stall: Claude Code writes nothing until a
     # long foreground command (a build, clippy, a test run) returns. A pending question waits on the user instead.

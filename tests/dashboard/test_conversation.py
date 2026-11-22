@@ -62,5 +62,10 @@ class ConversationTests(unittest.TestCase):
         self.assertEqual(messages[-1]["text"], f"answer {dash.CONVERSATION_MAX + 4}")
 
 
+class SessionNameTests(unittest.TestCase):
+    def test_claude_session_name_wins_in_rename_then_shown_then_generated_order(self):
+        self.assertEqual(list(dash.TITLE_KEYS), ["custom-title", "agent-name", "ai-title"])
+
+
 if __name__ == "__main__":
     unittest.main()
