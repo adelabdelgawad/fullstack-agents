@@ -48,3 +48,45 @@ describe("working line", () => {
     expect(workingLine({ id: "a", state: "idle", action: "Bash: x", action_running: true } as never)).toBe("");
   });
 });
+
+describe("subagent conversations", () => {
+  it("lists the session's implementer runs as subagents, running ones first", async () => {
+    const { workersOf } = await import("./ChatConsole");
+    const card = {
+      key: "session:s1",
+      sessions: [{ id: "s1", state: "working" }],
+      now: [
+        { id: "s1", state: "working", agents: [{ id: "h1", label: "bounded-extractor", state: "running", at: 2 }] },
+      ],
+      runs: [
+        { id: "implement-20261123-084530-1", mode: "implement", unit: "w10b", state: "done" },
+        { id: "implement-20261123-090000-2", mode: "implement", unit: "w11", state: "running" },
+      ],
+    } as never;
+    const list = workersOf(card);
+    expect(list.map((worker) => [worker.id, Boolean(worker.run)])).toEqual([
+      ["implement-20261123-090000-2", true],
+      ["h1", false],
+      ["implement-20261123-084530-1", true],
+    ]);
+    expect(list[0].label).toBe("implement w11");
+  });
+
+  it("marks the report and the hand-back once the subagent has ended", async () => {
+    const { Thread } = await import("./ChatConsole");
+    const html = renderToStaticMarkup(
+      <Thread
+        messages={[
+          { role: "user", text: "GOAL: fix", at: 1 },
+          { role: "assistant", text: "Fixed.", at: 2, report: true },
+        ]}
+        working=""
+        userLabel="Team leader"
+        ended="Report handed to the team leader · done"
+      />,
+    );
+    expect(html).toContain("Team leader");
+    expect(html).toContain("Report to the team leader");
+    expect(html).toContain("Report handed to the team leader · done");
+  });
+});

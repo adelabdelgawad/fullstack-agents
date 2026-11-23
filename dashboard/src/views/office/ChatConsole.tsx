@@ -15,7 +15,12 @@ interface Message {
   role: "user" | "assistant" | "tool";
   text: string;
   at: number;
+  /** The report an implementer run handed back to the team leader. */
+  report?: boolean;
 }
+
+/** An implementer run (Codex or Claude) the team leader dispatched: it opens as a conversation like a subagent. */
+export const RUN_ID = /^[a-z]+-\d{8}-\d{6}-\d+$/;
 
 const REFRESH_MS = 4000;
 // Stable empty values: a selector returning a fresh [] or {} on every read makes React re-render forever.
@@ -26,8 +31,8 @@ function sessionTitle(card: Card): string {
   return card.sessions[0]?.name || card.title || card.label || card.key;
 }
 
-/** A session's chat (or, with workerId, one of its subagents'), refreshed while open; empty until the first answer. */
-function useConversation(sid: string | undefined, workerId?: string): Message[] {
+/** A session's chat (or, with workerId, one of its subagents' or implementer runs'), refreshed while open. */
+function useConversation(sid: string | undefined, workerId?: string, run = false): Message[] {
   const [messages, setMessages] = useState<Message[]>([]);
   useEffect(() => {
     setMessages([]);
@@ -35,7 +40,9 @@ function useConversation(sid: string | undefined, workerId?: string): Message[] 
     let live = true;
     const load = () =>
       getJson<{ messages: Message[] }>(
-        `/api/conversation?sid=${encodeURIComponent(sid)}${workerId ? `&id=${encodeURIComponent(workerId)}` : ""}`,
+        run && workerId
+          ? `/api/conversation?run=${encodeURIComponent(workerId)}`
+          : `/api/conversation?sid=${encodeURIComponent(sid)}${workerId ? `&id=${encodeURIComponent(workerId)}` : ""}`,
       )
         .then((data) => live && setMessages(data.messages || []))
         .catch(() => undefined);
@@ -45,7 +52,7 @@ function useConversation(sid: string | undefined, workerId?: string): Message[] 
       live = false;
       clearInterval(timer);
     };
-  }, [sid, workerId]);
+  }, [sid, workerId, run]);
   return messages;
 }
 
@@ -56,14 +63,31 @@ interface Worker {
   label: string;
   state: string;
   shell: boolean;
+  run?: boolean;
 }
 
-function workersOf(card: Card | null): Worker[] {
-  return (card ? cardAgents(card) : []).map((agent) => {
+export function workersOf(card: Card | null): Worker[] {
+  if (!card) return [];
+  const runs = card.runs
+    .filter((run) => RUN_ID.test(run.id))
+    .map((run) => ({
+      id: run.id,
+      sid: card.sessions[0]?.id || "",
+      state: run.state,
+      shell: false,
+      run: true,
+      label: [run.mode, run.unit || run.id].filter(Boolean).join(" "),
+    }));
+  const agents = cardAgents(card).map((agent) => {
     const label = String(agent.label || agent.id);
     const shell = Boolean(agent.shell) || label.startsWith("shell · ");
     return { id: agent.id, sid: agent.sid, state: agent.state, shell, label: label.replace(/^shell · /, "") };
   });
+  return [
+    ...runs.filter((run) => run.state === "running"),
+    ...agents,
+    ...runs.filter((run) => run.state !== "running"),
+  ];
 }
 
 /** The selected session's subagents and shells, grouped under it; picking one shows its output. */
@@ -188,10 +212,19 @@ function Sidebar({
   );
 }
 
-/** A subagent's conversation, like a session's: the team leader's prompt, then its replies and tool steps. */
+/** A subagent's or implementer run's conversation, live like a session's: the team leader's prompt, its replies and
+ * tool steps as they happen, then the report it handed back when it ended. */
 function SubagentThread({ worker }: { worker: Worker }) {
-  const messages = useConversation(worker.sid, worker.id);
-  return <Thread messages={messages} working={worker.state === "running" ? "Working…" : ""} userLabel="Team leader" />;
+  const messages = useConversation(worker.sid, worker.id, worker.run);
+  const running = worker.state === "running";
+  return (
+    <Thread
+      messages={messages}
+      working={running ? "Working…" : ""}
+      userLabel="Team leader"
+      ended={running ? "" : `Report handed to the team leader · ${STATE_TEXT[worker.state] || worker.state}`}
+    />
+  );
 }
 
 /** A shell's output, refreshed while shown. */
@@ -248,7 +281,17 @@ export function workingLine(session: Card["sessions"][number] | undefined): stri
   return action ? `Working · ${action}` : "Working…";
 }
 
-function Thread({ messages, working, userLabel }: { messages: Message[]; working: string; userLabel?: string }) {
+export function Thread({
+  messages,
+  working,
+  userLabel,
+  ended,
+}: {
+  messages: Message[];
+  working: string;
+  userLabel?: string;
+  ended?: string;
+}) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     // Newer browsers return a Promise here; an effect must return nothing or a cleanup function.
@@ -264,6 +307,7 @@ function Thread({ messages, working, userLabel }: { messages: Message[]; working
           <div key={`${message.at}-${index}`} className={`chat-message ${message.role}`}>
             <div className="chat-bubble">
               {userLabel && message.role === "user" && <div className="chat-from">{userLabel}</div>}
+              {message.report && <div className="chat-from">Report to the team leader</div>}
               {message.role === "assistant" ? <Markdown text={message.text} /> : inline(message.text)}
             </div>
           </div>
@@ -273,6 +317,11 @@ function Thread({ messages, working, userLabel }: { messages: Message[]; working
         <div className="chat-working" role="status">
           <span className="chat-pulse" aria-hidden="true" />
           {working}
+        </div>
+      )}
+      {ended && messages.length > 0 && (
+        <div className="chat-ended" role="status">
+          {ended}
         </div>
       )}
       <div ref={end} />

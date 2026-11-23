@@ -15,7 +15,7 @@ import { openCard, setView, store, useStore } from "../store";
 import { openNewSession } from "../terminal/HerdrOverlay";
 import "../styles/office.css";
 import { drawOffice, hitTest, pcHit, roomHit, zoomIconHit } from "./office/draw";
-import { ChatConsole, endSession } from "./office/ChatConsole";
+import { ChatConsole, endSession, RUN_ID } from "./office/ChatConsole";
 import { HistoryView } from "./HistoryView";
 import { AgentSettings } from "./office/AgentSettings";
 import { UsagePanel } from "./office/UsagePanel";
@@ -389,9 +389,9 @@ export function OfficeView() {
     }
     const agent = employees.find((employee) => employee.id === id);
     if (!agent?.cardKey) return false;
-    // A subagent or shell opens its own live output in the chat console, a Codex worker its run log; a leader its console.
-    if (agent.role === "worker") openRunLog(agent.cardKey, agent.id);
-    else if (agent.role === "helper") {
+    // A subagent, implementer run or shell opens live in the chat console (an older worker record its run log); a leader its console.
+    if (agent.role === "worker" && !RUN_ID.test(agent.id)) openRunLog(agent.cardKey, agent.id);
+    else if (agent.role !== "lead") {
       setChatKey(agent.cardKey);
       setChatWorker(agent.id);
       setConsoleId(CTO_ID);

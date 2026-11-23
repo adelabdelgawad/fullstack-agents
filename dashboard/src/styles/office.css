@@ -697,6 +697,14 @@ html.office-page aside#panel {
   color: #f2b24c;
 }
 
+.chat-ended {
+  align-self: center;
+  padding: 4px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  font-size: 13px;
+  color: #9fb3c8;
+}
+
 .chat-pulse {
   width: 10px;
   height: 10px;

@@ -61,6 +61,42 @@ class ConversationTests(unittest.TestCase):
         self.assertEqual(len(messages), dash.CONVERSATION_MAX)
         self.assertEqual(messages[-1]["text"], f"answer {dash.CONVERSATION_MAX + 4}")
 
+    def test_an_agent_team_members_prompt_is_the_text_inside_the_teammate_tag(self):
+        messages = self.read([
+            user('<teammate-message teammate_id="team-lead" summary="s">Draw the phone screens\n\nDesign only</teammate-message>'),
+            assistant({"type": "text", "text": "Done."}),
+        ])
+        self.assertEqual(messages[0], {"role": "user", "text": "Draw the phone screens\n\nDesign only",
+                                       "at": messages[0]["at"]})
+
+    def test_a_long_message_keeps_its_start_and_its_end(self):
+        brief = "GOAL: fix it\n" + "x" * 9000 + "\nEND"
+        report = "Summary first. " + "y" * 9000 + " last line"
+        messages = self.read([user(brief), assistant({"type": "text", "text": report})])
+        self.assertTrue(messages[0]["text"].startswith("GOAL: fix it"))
+        self.assertTrue(messages[0]["text"].endswith("END"))
+        self.assertTrue(messages[1]["text"].startswith("Summary first."))
+        self.assertTrue(messages[1]["text"].endswith("last line"))
+
+    def test_an_implementer_run_reads_as_brief_then_its_work_then_its_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runs, rid = Path(tmp), "implement-20261123-084530-1"
+            brief = runs / "brief.md"
+            brief.write_text("GOAL: repair the swipe track")
+            (runs / f"{rid}.meta.json").write_text(json.dumps({"engine": "claude", "brief": str(brief),
+                                                                "started": "2026-11-23T08:45:31Z"}))
+            (runs / f"{rid}.log").write_text("\n".join(json.dumps(row) for row in [
+                user("ROLE: you are the implementer ... the whole prompt"),
+                assistant({"type": "text", "text": "Reading the track."}, {"type": "tool_use", "name": "Read", "input": {}}),
+            ]) + "\n")
+            working = dash.run_conversation(runs, rid)
+            self.assertEqual([m["role"] for m in working], ["user", "assistant", "tool"])
+            self.assertEqual(working[0]["text"], "GOAL: repair the swipe track")
+            (runs / f"{rid}.last.txt").write_text(json.dumps({"summary": "Repaired.", "files": ["a.tsx"], "tests": ["PASS: tsc"]}))
+            done = dash.run_conversation(runs, rid)
+            self.assertTrue(done[-1]["report"])
+            self.assertEqual(done[-1]["text"], "Repaired.\n\n**Files**\n- a.tsx\n\n**Checks**\n- PASS: tsc")
+
 
 class SessionNameTests(unittest.TestCase):
     def test_claude_session_name_wins_in_rename_then_shown_then_generated_order(self):

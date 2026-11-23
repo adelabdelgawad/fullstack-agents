@@ -28,7 +28,7 @@ import unicodedata
 import urllib.parse
 from collections import Counter
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "lib"))
@@ -1336,7 +1336,18 @@ CONVERSATION_TOOLS = 12
 CONVERSATION_TEXT = 6000
 
 
-def conversation(path):
+TEAMMATE_RE = re.compile(r"^<teammate-message\b[^>]*>(.*?)(?:</teammate-message>)?\s*$", re.S)
+
+
+def clip(text, limit=CONVERSATION_TEXT):
+    """A long message keeps its start (a brief's goal and scope, a report's opening) and its end."""
+    if len(text) <= limit:
+        return text
+    half = limit // 2
+    return text[:half].rstrip() + "\n\n…\n\n" + text[-half:].lstrip()
+
+
+def conversation(path, prompts=True):
     """The chat of one session, oldest first: the user's prompts, the agent's text replies, and its tool steps
     (role "tool", one line each, consecutive steps grouped, the last CONVERSATION_TOOLS kept per group).
     At most the last CONVERSATION_MAX messages."""
@@ -1350,9 +1361,12 @@ def conversation(path):
             out[-1]["text"] = "\n".join((out[-1]["text"] + "\n" + text).split("\n")[-CONVERSATION_TOOLS:])
             return
         if out and out[-1]["role"] == role == "assistant":
-            out[-1]["text"] = (out[-1]["text"] + "\n\n" + text)[-CONVERSATION_TEXT:].strip()
+            out[-1]["full"] = out[-1].get("full", out[-1]["text"]) + "\n\n" + text
+            out[-1]["text"] = clip(out[-1]["full"])
             return
-        out.append({"role": role, "text": text[-CONVERSATION_TEXT:], "at": at})
+        if role == "user" and not prompts:
+            return
+        out.append({"role": role, "text": clip(text), "at": at})
 
     for line in tail_lines(path, 3000000):
         try:
@@ -1371,7 +1385,7 @@ def conversation(path):
             continue
         msg = d.get("message") or {}
         if d.get("type") == "user":
-            add("user", chat_prompt(d, msg), at)
+            add("user", chat_prompt(d, msg) or teammate_prompt(msg), at)
         elif d.get("type") == "assistant":
             blocks = msg.get("content") if isinstance(msg.get("content"), list) else []
             for b in blocks:
@@ -1379,6 +1393,89 @@ def conversation(path):
                     add("assistant", b.get("text", ""), at)
                 elif isinstance(b, dict) and b.get("type") == "tool_use":
                     add("tool", tool_action({"content": [b]})[0], at)
+    for message in out:
+        message.pop("full", None)
+    return out[-CONVERSATION_MAX:]
+
+
+def teammate_prompt(msg):
+    """An agent-team member's task arrives wrapped in a <teammate-message> tag: the text inside is the lead's prompt."""
+    content = msg.get("content")
+    text = content if isinstance(content, str) else " ".join(
+        b.get("text", "") for b in content or [] if isinstance(b, dict) and b.get("type") == "text")
+    m = TEAMMATE_RE.match(text.strip())
+    return m.group(1).strip() if m else ""
+
+
+def run_transcript(runs, rid, meta):
+    """The engine's own transcript of an implementer run: Claude streams its chat into the run log; Codex writes a
+    rollout named by the session id it prints at the top of the log."""
+    log = runs / f"{rid}.log"
+    if meta.get("engine") == "claude":
+        return log
+    sid = meta.get("engine_session_id") or ""
+    if not sid:
+        for line in tail_lines(log, 20000)[:60] if log.exists() else []:
+            m = re.match(r"^session id:\s*([0-9a-f-]{36})", line)
+            if m:
+                sid = m.group(1)
+                break
+    if not re.fullmatch(r"[0-9a-f-]{36}", sid):
+        return None
+    try:
+        day = datetime.strptime(rid.split("-")[1], "%Y%m%d")
+    except ValueError:
+        return None
+    for offset in (0, -1, 1):
+        d = day + timedelta(days=offset)
+        found = list((CODEX_HOME / "sessions" / f"{d:%Y}" / f"{d:%m}" / f"{d:%d}").glob(f"rollout-*-{sid}.jsonl"))
+        if found:
+            return found[0]
+    return None
+
+
+def run_report(runs, rid):
+    """What the run handed back to the team leader: its summary, files and checks, or None while it works."""
+    last = runs / f"{rid}.last.txt"
+    try:
+        raw = last.read_text(errors="replace") if last.stat().st_size else ""
+    except OSError:
+        return None
+    if not raw:
+        return None
+    data = load_json(last)
+    if not isinstance(data, dict):
+        return raw.strip()[:CONVERSATION_TEXT]
+    parts = [str(data.get("summary") or "").strip()]
+    for title, key in (("Files", "files"), ("Checks", "tests"), ("Open risks", "open_risks")):
+        items = [str(x) for x in data.get(key) or [] if x]
+        if items:
+            parts.append(f"**{title}**\n" + "\n".join(f"- {x}" for x in items))
+    return clip("\n\n".join(p for p in parts if p))
+
+
+def run_conversation(runs, rid):
+    """An implementer run as a conversation, like a subagent's: the team leader's brief, the engine's replies and tool
+    steps as they happen, then the report it handed back."""
+    meta = load_json(runs / f"{rid}.meta.json") or {}
+    brief = Path(meta["brief"]) if isinstance(meta.get("brief"), str) and meta["brief"].endswith(".md") else None
+    try:
+        text = brief.read_text(errors="replace") if brief and brief.is_file() else ""
+    except OSError:
+        text = ""
+    if not text:
+        try:
+            text = (runs / f"{rid}.prompt.md").read_text(errors="replace")
+        except OSError:
+            text = ""
+    started = iso_epoch(meta.get("started") or "")
+    out = [{"role": "user", "text": clip(text.strip()), "at": started}] if text.strip() else []
+    transcript = run_transcript(runs, rid, meta)
+    if transcript and transcript.exists():
+        out += conversation(transcript, prompts=False)
+    report = run_report(runs, rid)
+    if report:
+        out.append({"role": "assistant", "text": report, "at": out[-1]["at"] if out else started, "report": True})
     return out[-CONVERSATION_MAX:]
 
 
@@ -2933,6 +3030,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except ConnectionError:
             pass
 
+    def run_dir_of(self, rid):
+        """The registry holding a run: a known repo's run directories, then any ~/.codex/*-runs registry (a session
+        files its workers in the registry of the repo it works on)."""
+        dirs = dict.fromkeys([*(d for r, _ in self.server.roots.values() for d in r.run_dirs),
+                              *sorted(CODEX_HOME.glob("*-runs"))])
+        return next((d for d in dirs if (d / f"{rid}.meta.json").exists() or (d / f"{rid}.log").exists()), None)
+
     def agent_session_known(self, sid):
         return isinstance(sid, str) and bool(SOURCE_ID_RE.match(sid)) and bool(self.server.source(f"{sid}/{sid}"))
 
@@ -3234,8 +3338,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             rid = (q.get("id") or [""])[0]
             if not RUN_ID_RE.match(rid):
                 return self.send(400, b"bad run id", "text/plain")
-            runs = dict.fromkeys(d for r, _ in self.server.roots.values() for d in r.run_dirs)
-            log = next((d / f"{rid}.log" for d in runs if (d / f"{rid}.log").exists()), self.server.repo.runs / f"{rid}.log")
+            log = (self.run_dir_of(rid) or self.server.repo.runs) / f"{rid}.log"
             full = (q.get("full") or [""])[0] == "1"
             lines = tail_lines(log, 400000 if full else 12000)
             return self.send(200, ANSI_RE.sub("", "\n".join(lines[-3000 if full else -120:])).encode(), "text/plain; charset=utf-8")
@@ -3245,6 +3348,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if url.path == "/api/conversation":
             # id names one of the session's subagents: its transcript is a conversation too (the team leader's prompt,
             # then its replies and tool steps). A shell has only output, never a conversation.
+            rid = (q.get("run") or [""])[0]
+            if rid:
+                if not RUN_ID_RE.match(rid):
+                    return self.send(400, b"bad run id", "text/plain")
+                runs = self.run_dir_of(rid)
+                if not runs:
+                    return self.send(404, b"unknown run", "text/plain")
+                return self.send(200, json.dumps({"messages": run_conversation(runs, rid)}).encode(), "application/json")
             sid = (q.get("sid") or [""])[0]
             aid = (q.get("id") or [""])[0] or sid
             if not SOURCE_ID_RE.match(sid) or not SOURCE_ID_RE.match(aid):
