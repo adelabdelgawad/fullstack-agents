@@ -2887,7 +2887,8 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
         "generated": now, "ui": ui_stamp(), "repo": main_root, "main": repo.main, "goals": goal_rows,
         "cards": sorted(cards, key=lambda c: -c["updated"]),
         "waiting": attention("waiting"), "still_open": attention("still_open"),
-        "_sources": output_sources(sessions),
+        # Every session of the last 48 h, not only the live ones: a finished session's History row still opens its prompts.
+        "_sources": {**output_sources(every), **output_sources(sessions)},
         "_docs": {s["id"]: {d["path"] for d in s["docs"]} |
                   ({s["task_tracking"]["file"]} if s.get("task_tracking", {}).get("file")
                    and not s["task_tracking"].get("error") else set()) for s in sessions},

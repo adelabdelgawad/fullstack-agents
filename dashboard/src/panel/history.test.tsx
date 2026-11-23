@@ -20,10 +20,28 @@ const card: Card = {
 
 const payload: SessionHistory = {
   turns: [
-    { prompt: "Fix the login page", model: "claude-opus-5-5", state: "answered", tokens: 2200, cost: 0.012,
-      fill: 0.1, compactions: 0, started: now - 600, updated: now - 540 },
-    { prompt: "Long refactor", model: "claude-opus-5-5", state: "interrupted", tokens: 5000, cost: 0.03,
-      fill: 0.3, compactions: 1, started: now - 300, updated: now - 120 },
+    {
+      prompt: "Fix the login page",
+      model: "claude-opus-5-5",
+      state: "answered",
+      tokens: 2200,
+      cost: 0.012,
+      fill: 0.1,
+      compactions: 0,
+      started: now - 600,
+      updated: now - 540,
+    },
+    {
+      prompt: "Long refactor",
+      model: "claude-opus-5-5",
+      state: "interrupted",
+      tokens: 5000,
+      cost: 0.03,
+      fill: 0.3,
+      compactions: 1,
+      started: now - 300,
+      updated: now - 120,
+    },
   ],
   totals: { turns: 2, tokens: 7200, cost: 0.042, compactions: 1, interrupted: 1 },
 };
@@ -75,5 +93,45 @@ describe("session History tab", () => {
   it("says so when the server cannot read the session", async () => {
     await renderWith(Promise.resolve(new Response("unknown session", { status: 404 })));
     expect(host.textContent).toContain("History is not available");
+  });
+});
+
+describe("History list", () => {
+  it("opens a finished session's prompts under its row when it has no live card", async () => {
+    const { store } = await import("../store");
+    const { HistoryView } = await import("../views/HistoryView");
+    const fetchMock = vi.fn((_url: string) => Promise.resolve(new Response(JSON.stringify(payload))));
+    vi.stubGlobal("fetch", fetchMock);
+    store.set({
+      state: {
+        cards: [],
+        history: [
+          {
+            id: "done-1",
+            name: "ivr-resource-model-handoff",
+            model: "claude-opus-5-5",
+            state: "quiet",
+            branch: "dev",
+            tokens: 1,
+            cost: 1,
+            fill: 0.2,
+            compactions: 0,
+            updated: now,
+          },
+        ],
+      },
+    } as never);
+    await act(async () => {
+      root.render(<HistoryView />);
+      await Promise.resolve();
+    });
+    const row = host.querySelector('tr[data-hsid="done-1"]') as HTMLElement;
+    await act(async () => {
+      row.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    expect(fetchMock.mock.calls.some((call) => String(call[0]) === "/api/session-history?sid=done-1")).toBe(true);
+    expect(host.querySelector(".history-turns")?.textContent).toContain("Fix the login page");
   });
 });

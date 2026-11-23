@@ -75,8 +75,7 @@ function Stat({ label, value, cls = "" }: { label: string; value: string | numbe
   );
 }
 
-export function SessionStats({ totals, card }: { totals: TurnTotals; card: Card }) {
-  const fill = card.usage?.fill;
+export function SessionStats({ totals, fill }: { totals: TurnTotals; fill: number | null | undefined }) {
   return (
     <div className="so-tiles" aria-label="Session totals">
       <Stat label="Prompts" value={totals.turns ?? 0} />
@@ -110,13 +109,18 @@ function TurnRow({ t }: { t: Turn }) {
 
 /** The panel's History tab: the dashboard's History table, one row per prompt of this card's lead session. */
 export function HistoryTab({ card }: { card: Card }) {
-  const data = useSessionHistory(card.sessions[0]?.id);
+  return <SessionTurns sid={card.sessions[0]?.id} fill={card.usage?.fill} />;
+}
+
+/** One session's prompts with their usage: a live card's, or a finished session's from the History list. */
+export function SessionTurns({ sid, fill }: { sid: string | undefined; fill: number | null | undefined }) {
+  const data = useSessionHistory(sid);
   if (data === "error") return <p className="empty">History is not available for this session.</p>;
   if (!data) return <p className="empty">Loading history…</p>;
   const turns = [...data.turns].reverse();
   return (
     <div className="session-history">
-      <SessionStats totals={data.totals} card={card} />
+      <SessionStats totals={data.totals} fill={fill} />
       <div className="history">
         <table>
           <thead>
