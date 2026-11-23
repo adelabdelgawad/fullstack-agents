@@ -697,6 +697,10 @@ html.office-page aside#panel {
   color: #f2b24c;
 }
 
+.chat-shell-head {
+  margin-bottom: 10px;
+}
+
 .chat-ended {
   align-self: center;
   padding: 4px 12px;

@@ -1280,10 +1280,28 @@ def shell_items(path, bg, ended, now, skip=(), cwd=""):
         if state == "running" and (now - at > AGENT_STALE_S or tid not in launched):
             continue
         if state == "running" or now - at <= ACTIVITY_KEEP_S:
-            out.append({"id": tid, "label": "shell · " + (launched.get(tid, {}).get("description") or tid),
+            out.append({"id": tid, "label": "shell · " + shell_label(launched.get(tid, {}), tid),
                         "state": state, "at": at, "path": str(log),
                         "shell": shell_facts(log, launched.get(tid, {}), bg["exit"].get(tid), cwd)})
     return sorted(out, key=lambda x: (x["state"] != "running", -x["at"]))[:ACTIVITY_MAX]
+
+
+SHELL_PREFIX_RE = re.compile(r"^\s*(?:(?:export\s+)?\w+=(?:\"[^\"]*\"|'[^']*'|\S*)\s*(?:;|&&)\s*|cd\s+\S+\s*(?:;|&&)\s*)+")
+WAIT_PID_RE = re.compile(r"^while\s+kill\s+-0\s+(\d+)\b.*?done\s*;?\s*(.*)$", re.S)
+
+
+def shell_label(launch, tid):
+    """A background shell's name: its description, else what its command does (setup assignments and cd skipped,
+    a wait loop named as waiting on its process), else its id."""
+    if launch.get("description"):
+        return launch["description"]
+    command = SHELL_PREFIX_RE.sub("", launch.get("command") or "").strip()
+    wait = WAIT_PID_RE.match(command)
+    if wait:
+        then = " ".join(wait.group(2).split())
+        command = f"waits for process {wait.group(1)}" + (f", then {then}" if then else "")
+    command = " ".join(command.split())
+    return (command[:70] + "…" if len(command) > 70 else command) or tid
 
 
 def shell_facts(log, launch, code, cwd):

@@ -68,6 +68,13 @@ class BackgroundShellTests(unittest.TestCase):
         items = self.items([], {"bx2": "completed"})
         self.assertEqual([("shell · bx2", "completed")], [(x["label"], x["state"]) for x in items])
 
+    def test_an_undescribed_shell_is_named_by_what_its_command_does(self):
+        wait = {"command": "S=/tmp/x; while kill -0 1011912 2>/dev/null; do sleep 30; done; grep -E Summary $S/a.log"}
+        self.assertEqual(dash.shell_label(wait, "b8x"), "waits for process 1011912, then grep -E Summary $S/a.log")
+        self.assertEqual(dash.shell_label({"command": "cd /repo && cargo test -p api"}, "b8x"), "cargo test -p api")
+        self.assertEqual(dash.shell_label({"description": "Run checks", "command": "make"}, "b8x"), "Run checks")
+        self.assertEqual(dash.shell_label({}, "b8x"), "b8x")
+
     def test_unannounced_output_shows_only_while_its_bash_call_runs(self):
         (self.tasks / "bx5.output").write_text("committing\n")
         use = launch("toolu_5", "bx5", "Commit")[0]

@@ -89,4 +89,12 @@ describe("subagent conversations", () => {
     expect(html).toContain("Report to the team leader");
     expect(html).toContain("Report handed to the team leader · done");
   });
+
+  it("says how long a shell has run and where", async () => {
+    const { shellSince } = await import("./ChatConsole");
+    expect(shellSince({ state: "running", started: 1000, cwd: "/repo" }, 1000_000 + 12 * 60_000)).toBe(
+      "Running for 12 min in /repo",
+    );
+    expect(shellSince({ state: "running", started: 1000 }, 1000_000 + 10_000)).toBe("Running for under a minute");
+  });
 });

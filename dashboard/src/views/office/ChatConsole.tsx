@@ -64,6 +64,10 @@ interface Worker {
   state: string;
   shell: boolean;
   run?: boolean;
+  /** A background shell's command, folder and start time (epoch seconds). */
+  command?: string;
+  cwd?: string;
+  started?: number;
 }
 
 export function workersOf(card: Card | null): Worker[] {
@@ -81,7 +85,17 @@ export function workersOf(card: Card | null): Worker[] {
   const agents = cardAgents(card).map((agent) => {
     const label = String(agent.label || agent.id);
     const shell = Boolean(agent.shell) || label.startsWith("shell · ");
-    return { id: agent.id, sid: agent.sid, state: agent.state, shell, label: label.replace(/^shell · /, "") };
+    const facts = (agent.shell && typeof agent.shell === "object" ? agent.shell : {}) as Record<string, unknown>;
+    return {
+      id: agent.id,
+      sid: agent.sid,
+      state: agent.state,
+      shell,
+      label: label.replace(/^shell · /, ""),
+      command: typeof facts.command === "string" ? facts.command : undefined,
+      cwd: typeof facts.cwd === "string" ? facts.cwd : undefined,
+      started: typeof facts.started === "number" ? facts.started : undefined,
+    };
   });
   return [
     ...runs.filter((run) => run.state === "running"),
@@ -249,12 +263,37 @@ function WorkerOutput({ worker }: { worker: Worker }) {
   useEffect(() => {
     void end.current?.scrollIntoView({ block: "end" });
   }, [text]);
+  const empty = !text || text === "(no output yet)";
   return (
     <div className="chat-thread">
-      <pre className="chat-output">{text || "No output yet."}</pre>
+      {worker.command && (
+        <div className="chat-shell-head">
+          <div className="chat-from">{shellSince(worker)}</div>
+          <pre className="chat-output">{worker.command}</pre>
+        </div>
+      )}
+      <pre className="chat-output">
+        {empty
+          ? worker.state === "running"
+            ? "No output yet: the command has printed nothing so far (a wait loop prints only when it finishes)."
+            : "No output."
+          : text}
+      </pre>
       <div ref={end} />
     </div>
   );
+}
+
+/** "Running for 12 min in /repo" or "Finished · started 10:42 in /repo". */
+export function shellSince(worker: Pick<Worker, "state" | "started" | "cwd">, now = Date.now()): string {
+  const place = worker.cwd ? ` in ${worker.cwd}` : "";
+  if (!worker.started) return (worker.state === "running" ? "Running" : "Finished") + place;
+  if (worker.state !== "running") {
+    const at = new Date(worker.started * 1000).toTimeString().slice(0, 5);
+    return `Finished · started ${at}${place}`;
+  }
+  const minutes = Math.max(0, Math.round((now / 1000 - worker.started) / 60));
+  return `Running for ${minutes < 1 ? "under a minute" : `${minutes} min`}${place}`;
 }
 
 /** A run of tool steps between messages: the last few, with the rest behind "+N earlier steps". */
