@@ -15,7 +15,7 @@ import { openCard, setView, store, useStore } from "../store";
 import { openNewSession } from "../terminal/HerdrOverlay";
 import "../styles/office.css";
 import { drawOffice, hitTest, pcHit, roomHit, zoomIconHit } from "./office/draw";
-import { ChatConsole, endSession, RUN_ID } from "./office/ChatConsole";
+import { ChatConsole, endSession, renameSession, RUN_ID } from "./office/ChatConsole";
 import { HistoryView } from "./HistoryView";
 import { AgentSettings } from "./office/AgentSettings";
 import { UsagePanel } from "./office/UsagePanel";
@@ -332,6 +332,21 @@ function OfficeMenu({
       <button
         type="button"
         role="menuitem"
+        disabled={!sessionPane}
+        title={
+          sessionPane ? "Renames the herdr tab and sends /rename to the session" : "This session has no herdr pane"
+        }
+        onClick={(event) => {
+          const anchor = event.currentTarget;
+          close();
+          renameSession(card, sessionPane, anchor);
+        }}
+      >
+        Rename
+      </button>
+      <button
+        type="button"
+        role="menuitem"
         className="danger"
         disabled={!sessionPane}
         title={sessionPane ? "" : "This session has no herdr pane"}
@@ -481,11 +496,7 @@ export function OfficeView() {
           title={agentSettings ? "Agent settings" : "Default agent settings"}
           close={() => setAgentSettings(null)}
         >
-          <AgentSettings
-            key={agentSettings}
-            sid={agentSettings || undefined}
-            close={() => setAgentSettings(null)}
-          />
+          <AgentSettings key={agentSettings} sid={agentSettings || undefined} close={() => setAgentSettings(null)} />
         </OfficeModal>
       )}
     </section>

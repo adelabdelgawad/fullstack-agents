@@ -27,6 +27,8 @@ interface ModalState {
   value?: string;
   confirm?: string;
   after?: () => void;
+  /** A prompt's follow-up once its action succeeded, given the name entered. */
+  saved?: (label: string) => void;
   pane?: Record<string, unknown>;
 }
 interface MenuState {
@@ -123,6 +125,30 @@ function openPrompt(
 ): void {
   closeHerdrOverlay(false);
   setOverlay({ kind: "prompt", title, value, action, params, returnFocus });
+}
+
+/** Rename the herdr tab holding a pane, then hand the new name to `saved` (the Office also renames the session). */
+export async function openTabRename(
+  pane: string,
+  value: string,
+  returnFocus: HTMLElement | null,
+  saved: (label: string) => void,
+): Promise<boolean> {
+  if (!store.get().herdrData) await loadHerdr();
+  const panes = (store.get().herdrData?.panes || []) as Record<string, unknown>[];
+  const tab = panes.find((p) => p.pane_id === pane)?.tab_id;
+  if (typeof tab !== "string" || !tab) return false;
+  closeHerdrOverlay(false);
+  setOverlay({
+    kind: "prompt",
+    title: "rename session",
+    value,
+    action: "tab.rename",
+    params: { tab_id: tab },
+    returnFocus,
+    saved,
+  });
+  return true;
 }
 
 export function openHerdrConfirm(
@@ -287,7 +313,9 @@ function PromptModal({ state }: { state: ModalState }) {
       { ...state.params, label: input.value },
       form.closest<HTMLElement>(".herdr-modal-backdrop"),
     );
-    if (result.ok) closeHerdrOverlay(false);
+    if (!result.ok) return;
+    closeHerdrOverlay(false);
+    state.saved?.(input.value);
   };
   return (
     <ModalFrame submit={(form) => void submit(form)}>

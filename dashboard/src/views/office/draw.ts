@@ -5,6 +5,7 @@ import {
   BUILDING,
   CTO_TEAM,
   finished,
+  plateColours,
   type OfficeLayout,
   type PlacedBuilding,
   type PlacedDesk,
@@ -129,17 +130,12 @@ export function drawBackWall(ctx: CanvasRenderingContext2D, room: PlacedRoom): v
   const band = BUILDING.header * s;
   rect(ctx, x, y, width, band, C.backWall);
   rect(ctx, x, y + band - 3 * s, width, 3 * s, C.backWallLow);
-  const plate = Math.min(width - 24 * s, Math.max(60 * s, room.label.length * 4 * s + 16 * s));
-  rect(ctx, x + (width - plate) / 2, y + 3 * s, plate, 9 * s, "#8b5a32");
-  rect(ctx, x + (width - plate) / 2 + s, y + 4 * s, plate - 2 * s, 7 * s, "#151b26");
-  ctx.fillStyle = C.gold;
-  text(ctx, room.label, x + width / 2, y + 7.5 * s, 5 * s, plate - 6 * s);
-  const free = (width - plate) / 2;
-  if (free > 42 * s) {
+  // No name plate: the room's name stays off the wall (the user asked for a clean top); the clock takes the centre.
+  if (width > 84 * s) {
     drawShelf(ctx, x + 14 * s, y + 6 * s, s);
     drawShelf(ctx, x + width - 40 * s, y + 6 * s, s);
   }
-  if (free > 60 * s) drawClock(ctx, x + width / 2 + plate / 2 + (free - 30 * s) / 2, y + 12 * s, s);
+  if (width > 120 * s) drawClock(ctx, x + width / 2, y + 12 * s, s);
   drawPlant(ctx, x + 2 * s, y + band - 12 * s, s);
   drawPlant(ctx, x + width - 12 * s, y + band - 12 * s, s);
 }
@@ -313,14 +309,25 @@ function drawLabel(
   const clip = (value: string) => (value.length > 18 ? `${value.slice(0, 17)}…` : value);
   // A named person shows the name, with the session below; otherwise the session name alone. Bold so it reads at
   // whole-floor zoom.
-  const lines = employee.person ? [employee.person, clip(employee.name)] : [clip(employee.name)];
+  const lead = employee.role === "lead" && !employee.fixed;
+  const p = lead ? employee.progress : undefined;
+  const name = p ? `${clip(employee.name)} ${p.done}/${p.total}` : clip(employee.name);
+  const lines = employee.person ? [employee.person, name] : [name];
   ctx.font = `bold ${7 * s}px monospace`;
   const first = ctx.measureText(lines[0]).width;
   ctx.font = `${6 * s}px monospace`;
   const second = lines[1] ? ctx.measureText(lines[1]).width : 0;
   const width = Math.min(84 * s, Math.max(first, second) + 6 * s);
   const height = lines.length > 1 ? 18 * s : 11 * s;
-  rect(ctx, x + 28 * s - width / 2, y + 47 * s, width, height, C.label);
+  const left = x + 28 * s - width / 2;
+  if (lead) {
+    // A leader's plate is coloured by its state and filled from the left by the share of its tasks done.
+    const { base, band } = plateColours(employee);
+    rect(ctx, left, y + 47 * s, width, height, base);
+    if (p) rect(ctx, left, y + 47 * s, (width * p.done) / p.total, height, band);
+  } else {
+    rect(ctx, left, y + 47 * s, width, height, C.label);
+  }
   ctx.fillStyle = C.text;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";

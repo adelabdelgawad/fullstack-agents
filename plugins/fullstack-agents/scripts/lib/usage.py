@@ -321,9 +321,10 @@ def session_usage(path, now=None):
         u = transcript_usage(log, "claude-agent", now)
         if u:
             u["label"] = _agent_label(log.with_name(log.stem + ".meta.json"))
+            u["updated"] = log.stat().st_mtime
             agents[log.stem.removeprefix("agent-")] = u
     sub_cost = [a["cost"] for a in agents.values() if a["cost"] is not None]
-    lead["agents"] = {k: {f: v[f] for f in ("model", "tokens", "cost", "fill", "compactions", "label")} for k, v in agents.items()}
+    lead["agents"] = {k: {f: v[f] for f in ("model", "tokens", "cost", "fill", "compactions", "label", "updated")} for k, v in agents.items()}
     lead["agent_tokens"] = sum(a["tokens"] for a in agents.values())
     lead["agent_cost"] = sum(sub_cost) if sub_cost else None
     lead["total_cost"] = None if lead["cost"] is None and not sub_cost else (lead["cost"] or 0) + sum(sub_cost)

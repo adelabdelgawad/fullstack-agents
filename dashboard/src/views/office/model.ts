@@ -28,6 +28,39 @@ export interface OfficeEmployee {
   reports?: OfficeEmployee[];
   /** A subagent's desk slot along the walls; it keeps it while others come and go (see Seating). */
   seat?: number;
+  /** A leader's task list: rows done out of the rows that count (skipped and canceled do not), and any blocked. */
+  progress?: { done: number; total: number; blocked: boolean };
+}
+
+/** A leader's task-list progress from its session's ledger; undefined when the session tracks no tasks. */
+export function progressOf(lead: Session): OfficeEmployee["progress"] {
+  const items = (lead.task_tracking as { items?: { status?: string }[] } | undefined)?.items;
+  if (!Array.isArray(items)) return undefined;
+  const counted = items.filter((item) => item.status !== "skipped" && item.status !== "canceled");
+  if (!counted.length) return undefined;
+  return {
+    done: counted.filter((item) => item.status === "done").length,
+    total: counted.length,
+    blocked: counted.some((item) => item.status === "blocked"),
+  };
+}
+
+/** The colours of a leader's name plate: the plate shows its state, a brighter band the share of its tasks done. */
+export function plateColours(employee: Pick<OfficeEmployee, "pose" | "progress">): { base: string; band: string } {
+  const p = employee.progress;
+  if (p?.blocked) return { base: "#4a1d1d", band: "#9b3434" };
+  if (p && p.done === p.total) return { base: "#173d29", band: "#2f8a52" };
+  switch (employee.pose) {
+    case "waiting":
+      return { base: "#4d3a0f", band: "#a67c1c" };
+    case "typing":
+    case "reading":
+      return { base: "#172c4a", band: "#2f63a6" };
+    case "done":
+      return { base: "#173d29", band: "#2f8a52" };
+    default:
+      return { base: "#232a36", band: "#4a5568" };
+  }
 }
 
 /** One office: the CTO's, or a session's, titled with the session and holding its leader and subagents. */
@@ -126,6 +159,7 @@ function leadEmployee(card: Card, lead: Session, panes: Record<string, string>):
     cost: card.usage?.cost ?? null,
     tokens: Number(card.usage?.tokens || 0),
     pane: panes[lead.id] ?? null,
+    progress: progressOf(lead),
   };
 }
 
@@ -237,7 +271,11 @@ function uniquePlaces(teams: OfficeTeam[]): OfficeTeam[] {
       return team;
     }
     const [leader, ...workers] = team.employees;
-    return { ...team, place: team.key, employees: [{ ...leader, id: team.key, colour: colourOf(team.key) }, ...workers] };
+    return {
+      ...team,
+      place: team.key,
+      employees: [{ ...leader, id: team.key, colour: colourOf(team.key) }, ...workers],
+    };
   });
 }
 

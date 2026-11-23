@@ -5,7 +5,7 @@ import { esc } from "../../lib/format";
 import type { Card } from "../../lib/types";
 import { keepOrder } from "./model";
 import { load, openCard, toast, useStore } from "../../store";
-import { openHerdrConfirm, openNewSession } from "../../terminal/HerdrOverlay";
+import { openHerdrConfirm, openNewSession, openTabRename } from "../../terminal/HerdrOverlay";
 import { filesFromPaste, LIVE_UPLOAD_MAX_BYTES, uploadFiles } from "../../terminal/files";
 import { inline, Markdown } from "./markdown";
 import { matchCommands, SlashMenu, useSlashCommands } from "./slash";
@@ -153,6 +153,25 @@ function useStableCards(cards: Card[]): Card[] {
 }
 
 /** Close the session's herdr pane after a confirmation, as the Agents page's "end session" does. */
+/** Rename a session everywhere it shows: its herdr tab, then Claude Code's own title through /rename. */
+export function renameSession(card: Card, pane: string, anchor: HTMLElement): void {
+  void openTabRename(pane, sessionTitle(card), anchor, async (name) => {
+    try {
+      const result = await postJson<{ ok?: boolean; error?: string }>("/api/herdr/send", {
+        pane,
+        kind: "prompt",
+        text: `/rename ${name}`,
+      });
+      if (!result?.ok) throw new Error(result?.error || "not sent");
+      toast(`<b>Renamed</b> ${esc(name)}`, "blue");
+    } catch (error) {
+      toast(`<b>Tab renamed, /rename not sent</b> ${esc(error instanceof Error ? error.message : "")}`, "red");
+    }
+  }).then((opened) => {
+    if (!opened) toast("<b>Rename failed</b> herdr has no tab for this pane", "red");
+  });
+}
+
 export function endSession(card: Card, pane: string, anchor: HTMLElement): void {
   const name = sessionTitle(card);
   openHerdrConfirm(

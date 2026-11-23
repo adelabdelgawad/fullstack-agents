@@ -103,6 +103,10 @@ export interface HistoryEntry {
   fill?: number;
   compactions?: number;
   updated: number;
+  /** Set on a subagent row: the session it worked for. */
+  parent?: string;
+  /** The session this one continued after a context handoff. */
+  previous?: string;
   [key: string]: unknown;
 }
 

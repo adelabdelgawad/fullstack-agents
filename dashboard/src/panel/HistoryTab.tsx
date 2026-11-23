@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { RetroCard } from "../components/RetroControls";
 import { getJson } from "../lib/api";
 import { ago, fmtCost, fmtTokens, modelFamily, modelShort } from "../lib/format";
-import type { Card } from "../lib/types";
+import type { Card, HistoryEntry } from "../lib/types";
+import { useStore } from "../store";
+import { SessionsTable } from "../views/HistoryView";
 
 const REFRESH_MS = 10000;
 
@@ -46,14 +48,16 @@ function duration(seconds: number): string {
 }
 
 /** One session's prompts with their usage, refreshed while the tab is open; null until the first answer. */
-function useSessionHistory(sid: string | undefined): SessionHistory | null | "error" {
+function useSessionHistory(sid: string | undefined, agent?: string): SessionHistory | null | "error" {
   const [data, setData] = useState<SessionHistory | null | "error">(null);
   useEffect(() => {
     setData(null);
     if (!sid) return;
     let live = true;
     const load = () =>
-      getJson<SessionHistory>(`/api/session-history?sid=${encodeURIComponent(sid)}`)
+      getJson<SessionHistory>(
+        `/api/session-history?sid=${encodeURIComponent(sid)}${agent ? `&agent=${encodeURIComponent(agent)}` : ""}`,
+      )
         .then((d) => live && setData(d))
         .catch(() => live && setData((prev) => (prev && prev !== "error" ? prev : "error")));
     void load();
@@ -62,7 +66,7 @@ function useSessionHistory(sid: string | undefined): SessionHistory | null | "er
       live = false;
       clearInterval(timer);
     };
-  }, [sid]);
+  }, [sid, agent]);
   return data;
 }
 
@@ -107,14 +111,57 @@ function TurnRow({ t }: { t: Turn }) {
   );
 }
 
-/** The panel's History tab: the dashboard's History table, one row per prompt of this card's lead session. */
-export function HistoryTab({ card }: { card: Card }) {
-  return <SessionTurns sid={card.sessions[0]?.id} fill={card.usage?.fill} />;
+/** The sessions this lead ran before, newest first: each handoff names the session it continued. */
+function earlierSessions(history: HistoryEntry[], sid: string | undefined): HistoryEntry[] {
+  const byId = new Map(history.filter((h) => !h.parent).map((h) => [h.id, h]));
+  const out: HistoryEntry[] = [];
+  for (let prev = sid && byId.get(sid)?.previous; prev && !out.some((h) => h.id === prev); ) {
+    const h = byId.get(prev);
+    if (!h) break;
+    out.push(h);
+    prev = h.previous;
+  }
+  return out;
 }
 
-/** One session's prompts with their usage: a live card's, or a finished session's from the History list. */
-export function SessionTurns({ sid, fill }: { sid: string | undefined; fill: number | null | undefined }) {
-  const data = useSessionHistory(sid);
+/** The panel's History tab: this lead session's prompts, then its subagents and earlier sessions, each opening its own. */
+export function HistoryTab({ card }: { card: Card }) {
+  const history = useStore((s) => s.state?.history) || [];
+  const sid = card.sessions[0]?.id;
+  const earlier = earlierSessions(history, sid);
+  const leads = new Set([sid, ...earlier.map((h) => h.id)]);
+  const subs = history.filter((h) => h.parent && leads.has(h.parent));
+  const own = subs.filter((h) => h.parent === sid);
+  return (
+    <>
+      <SessionTurns sid={sid} fill={card.usage?.fill} />
+      {own.length > 0 && (
+        <section className="session-history" aria-label="Subagents of this session">
+          <h4>{`Subagents of this session (${own.length})`}</h4>
+          <SessionsTable rows={own} expandOnly />
+        </section>
+      )}
+      {earlier.length > 0 && (
+        <section className="session-history" aria-label="Earlier sessions of this lead">
+          <h4>{`Earlier sessions of this lead (${earlier.length})`}</h4>
+          <SessionsTable rows={[...earlier, ...subs.filter((h) => h.parent !== sid)]} expandOnly />
+        </section>
+      )}
+    </>
+  );
+}
+
+/** One session's or subagent's prompts with their usage: a live card's, or a finished one's from the History list. */
+export function SessionTurns({
+  sid,
+  agent,
+  fill,
+}: {
+  sid: string | undefined;
+  agent?: string;
+  fill: number | null | undefined;
+}) {
+  const data = useSessionHistory(sid, agent);
   if (data === "error") return <p className="empty">History is not available for this session.</p>;
   if (!data) return <p className="empty">Loading history…</p>;
   const turns = [...data.turns].reverse();

@@ -98,5 +98,32 @@ class SessionTurnsTests(unittest.TestCase):
         self.assertEqual(dash.session_turns("/nonexistent/x.jsonl"), {"turns": [], "totals": {}})
 
 
+class HistoryLineageTests(unittest.TestCase):
+    def test_handoff_prompt_names_the_session_it_continues(self):
+        old = "f0b9c55b-2e6f-465f-b94c-2afdd0994746"
+        plan = f"Implement the following plan:\n\n# HANDOFF RESUME\n\nFirst: `fsa-task adopt --root /r --file t.md --from {old}`"
+        with tempfile.TemporaryDirectory() as tmp:
+            handoff, plain = Path(tmp, "a.jsonl"), Path(tmp, "b.jsonl")
+            handoff.write_text("\n".join(json.dumps(r) for r in (user(plan), user("next"))) + "\n")
+            plain.write_text("\n".join(json.dumps(r) for r in (user(f"look at --from {old}"), user("x"))) + "\n")
+            self.assertEqual(dash.handoff_from(handoff), old)
+            self.assertTrue(dash.first_prompt(handoff).startswith("Implement the following plan"))
+            self.assertEqual(dash.handoff_from(plain), "")
+
+    def test_history_lists_each_session_then_its_subagents_newest_first(self):
+        usage = {"model": MODEL, "tokens": 10, "agent_tokens": 5, "agents": {
+            "a1": {"model": "claude-sonnet-5-5", "tokens": 2, "cost": 0.1, "fill": 0.1, "compactions": 0,
+                   "label": "test-runner · Run suite", "updated": 50},
+            "a2": {"model": "claude-haiku-4-5", "tokens": 3, "cost": None, "fill": 0, "compactions": 0,
+                   "label": "", "updated": 90}}}
+        rows = dash.history_rows([{"id": "lead", "name": "lead", "state": "idle", "updated": 100, "branch": "main",
+                                   "usage": usage, "previous": "older"}])
+        self.assertEqual([(r["id"], r.get("parent")) for r in rows], [("lead", None), ("a2", "lead"), ("a1", "lead")])
+        self.assertEqual(rows[0]["previous"], "older")
+        self.assertEqual(rows[0]["tokens"], 15)
+        self.assertEqual(rows[1]["name"], "subagent a2")
+        self.assertEqual(rows[2]["name"], "test-runner · Run suite")
+
+
 if __name__ == "__main__":
     unittest.main()

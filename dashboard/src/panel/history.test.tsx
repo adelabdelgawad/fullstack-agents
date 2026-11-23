@@ -135,3 +135,74 @@ describe("History list", () => {
     expect(host.querySelector(".history-turns")?.textContent).toContain("Fix the login page");
   });
 });
+
+describe("History subagents and earlier sessions", () => {
+  const entry = (id: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    name: id,
+    model: "claude-opus-5-5",
+    state: "idle",
+    branch: "main",
+    tokens: 1,
+    cost: 0,
+    fill: 0,
+    compactions: 0,
+    updated: now,
+    ...extra,
+  });
+
+  it("nests a session's subagents under it and opens a subagent's own prompts", async () => {
+    const { store } = await import("../store");
+    const { HistoryView } = await import("../views/HistoryView");
+    const fetchMock = vi.fn((_url: string) => Promise.resolve(new Response(JSON.stringify(payload))));
+    vi.stubGlobal("fetch", fetchMock);
+    store.set({
+      state: { cards: [], history: [entry("lead-9"), entry("sub-1", { parent: "lead-9", name: "test-runner · Run" })] },
+    } as never);
+    await act(async () => {
+      root.render(<HistoryView />);
+      await Promise.resolve();
+    });
+    expect(host.querySelector('tr[data-hsid="sub-1"]')).toBeNull();
+    const toggle = host.querySelector(".history-subs-toggle") as HTMLElement;
+    expect(toggle.textContent).toBe("▸ 1 subagent");
+    await act(async () => toggle.click());
+    const sub = host.querySelector('tr[data-hsid="sub-1"]') as HTMLElement;
+    expect(sub.className).toBe("history-sub");
+    await act(async () => {
+      sub.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(fetchMock.mock.calls.map((c) => String(c[0]))).toContain("/api/session-history?sid=lead-9&agent=sub-1");
+  });
+
+  it("the card's History tab lists its subagents and the sessions it continued", async () => {
+    const { store } = await import("../store");
+    const fetchMock = vi.fn((_url: string) => Promise.resolve(new Response(JSON.stringify(payload))));
+    vi.stubGlobal("fetch", fetchMock);
+    store.set({
+      state: {
+        cards: [],
+        history: [
+          entry("lead-1", { previous: "lead-0" }),
+          entry("own-sub", { parent: "lead-1" }),
+          entry("lead-0", { previous: "lead-x" }),
+          entry("old-sub", { parent: "lead-0" }),
+          entry("other", {}),
+        ],
+      },
+    } as never);
+    await act(async () => {
+      root.render(<HistoryTab card={card} />);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    const sections = [...host.querySelectorAll("section.session-history")];
+    expect(sections.map((s) => s.querySelector("h4")?.textContent)).toEqual([
+      "Subagents of this session (1)",
+      "Earlier sessions of this lead (1)",
+    ]);
+    expect(sections[0].querySelector('tr[data-hsid="own-sub"]')).not.toBeNull();
+    expect(sections[1].querySelector('tr[data-hsid="lead-0"]')).not.toBeNull();
+    expect(host.querySelector('tr[data-hsid="other"]')).toBeNull();
+  });
+});

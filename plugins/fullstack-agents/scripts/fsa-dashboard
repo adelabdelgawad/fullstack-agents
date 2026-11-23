@@ -1695,10 +1695,14 @@ def subagent_chips(session_dir, now):
     return chips, busy
 
 
-def first_prompt(path):
+HANDOFF_FROM_RE = re.compile(r"HANDOFF RESUME.*?adopt\b.*?--from\s+([0-9a-f-]{36})", re.S)
+
+
+def _first_prompt_facts(path):
+    """The session's first prompt, shortened, and the session it took over from when that prompt is a handoff plan."""
     key = str(path)
     if key not in FIRST_PROMPTS:
-        found = ""
+        found, handoff = "", ""
         try:
             with path.open(encoding="utf-8", errors="replace") as fh:
                 head = fh.read(TAIL_BYTES).splitlines()[:-1]
@@ -1717,9 +1721,20 @@ def first_prompt(path):
             text = " ".join(str(content or "").split())
             if text and not text.startswith(("<", "Caveat:", "[Request interrupted")):
                 found = text[:60] + ("…" if len(text) > 60 else "")
+                m = HANDOFF_FROM_RE.search(text)
+                handoff = m.group(1) if m else ""
                 break
-        FIRST_PROMPTS[key] = found
+        FIRST_PROMPTS[key] = (found, handoff)
     return FIRST_PROMPTS[key]
+
+
+def first_prompt(path):
+    return _first_prompt_facts(path)[0]
+
+
+def handoff_from(path):
+    """The session this one continues after a context handoff, else ""."""
+    return _first_prompt_facts(path)[1]
 
 
 TITLE_KEYS = {"custom-title": "customTitle", "agent-name": "agentName", "ai-title": "aiTitle"}
@@ -1796,7 +1811,7 @@ def read_session(path, now, wt_re, names, waits):
     agents = agent_items(path.with_suffix(""), finished, now)
     use = session_usage(path, now)
     for a in agents:
-        a.update({k: v for k, v in (use or {}).get("agents", {}).get(a["id"], {}).items() if k != "label"})
+        a.update({k: v for k, v in (use or {}).get("agents", {}).get(a["id"], {}).items() if k not in ("label", "updated")})
     bg["pending"] = [f for u, f in bg["bash"].items() if u not in answered and u not in bg["labels"]]
     return {
         "id": sid, "name": title or names.get(sid) or first_prompt(path) or f"{Path(cwd).name or 'session'} {sid[:8]}",
@@ -1805,7 +1820,7 @@ def read_session(path, now, wt_re, names, waits):
         "cwd": cwd, "branch": branch, "worktree": worktree, "state": state, "updated": updated,
         "turn_at": iso_epoch(turn_at),
         "agents": agents + shell_items(path, *with_shell_history(path, bg, finished), now, {a["id"] for a in agents}, cwd),
-        "transcript": str(path),
+        "transcript": str(path), "previous": handoff_from(path),
         "idle": idle, "snippet": snippet(text) if state in ("waiting", "still_open", "idle") else "",
         "briefs": sorted(briefs), "chips": chips,
         "ask": snippet(ask, 600), "need": need, "action": action, "action_at": iso_epoch(action_at),
@@ -3392,8 +3407,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             sid = (q.get("sid") or [""])[0]
             if not SOURCE_ID_RE.match(sid):
                 return self.send(400, b"bad session id", "text/plain")
+            aid = (q.get("agent") or [""])[0]
+            if aid and not SOURCE_ID_RE.match(aid):
+                return self.send(400, b"bad subagent id", "text/plain")
             path = self.server.source(f"{sid}/{sid}")
-            if not path:
+            if path and aid:
+                # Any subagent of a known session, not only the few its card lists now: History keeps them all.
+                path = str(Path(path).with_suffix("") / "subagents" / f"agent-{aid}.jsonl")
+            if not path or not os.path.isfile(path):
                 return self.send(404, b"unknown session", "text/plain")
             return self.send(200, json.dumps(session_turns(path)).encode(), "application/json")
         if url.path == "/api/output":

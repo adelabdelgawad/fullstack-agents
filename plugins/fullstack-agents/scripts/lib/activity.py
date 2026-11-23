@@ -8,6 +8,7 @@ from collections import deque
 FEED_MAX = 150
 LIVE_S = 3600
 HISTORY_MAX = 80
+HISTORY_AGENTS_MAX = 40
 CAUSE_TAIL = 16384
 CAUSE_RE = re.compile(r"(?i)\b(error|failed|failure|panic|refused|denied|traceback|exception|out_of_scope|timed? ?out)\b")
 STATE_TEXT = {"waiting": ("waiting on you", "warn"), "working": ("working", "ok"), "quiet": ("stale: no output for 5 min", "warn"),
@@ -53,6 +54,7 @@ def totals(shown, every, runs, now):
 
 
 def history_rows(sessions):
+    """The latest sessions, each followed by its subagents (parent set); previous names the session a handoff continued."""
     rows = []
     for s in sorted(sessions, key=lambda s: -(s.get("updated") or 0))[:HISTORY_MAX]:
         u = s.get("usage") or {}
@@ -60,8 +62,17 @@ def history_rows(sessions):
                      "model": u.get("model") or s.get("model", ""), "state": s.get("state", ""),
                      "updated": s.get("updated") or 0, "branch": s.get("branch", ""), "cwd": s.get("cwd", ""),
                      "cost": u.get("total_cost", u.get("cost")), "tokens": u.get("tokens", 0) + u.get("agent_tokens", 0),
-                     "fill": u.get("fill", 0), "compactions": u.get("compactions", 0)})
+                     "fill": u.get("fill", 0), "compactions": u.get("compactions", 0), "previous": s.get("previous", "")})
+        rows += _subagent_rows(s, u)
     return rows
+
+
+def _subagent_rows(s, u):
+    agents = sorted((u.get("agents") or {}).items(), key=lambda kv: -(kv[1].get("updated") or 0))
+    return [{"id": aid, "parent": s["id"], "name": a.get("label") or f"subagent {aid[:8]}", "engine": "claude",
+             "model": a.get("model", ""), "state": "subagent", "updated": a.get("updated") or 0,
+             "branch": s.get("branch", ""), "cost": a.get("cost"), "tokens": a.get("tokens", 0),
+             "fill": a.get("fill", 0), "compactions": a.get("compactions", 0)} for aid, a in agents[:HISTORY_AGENTS_MAX]]
 
 
 def run_cause(log, result):

@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { Card, DashState, Session } from "../../lib/types";
-import { cardMembers, CTO_ID, finished, layoutOffice, officeOf, SUBAGENT_SCALE, type Office } from "./model";
+import {
+  cardMembers,
+  CTO_ID,
+  finished,
+  layoutOffice,
+  officeOf,
+  plateColours,
+  progressOf,
+  SUBAGENT_SCALE,
+  type Office,
+} from "./model";
 
 function session(patch: Partial<Session> = {}): Session {
   return { id: "lead", name: "Lead", state: "working", ...patch };
@@ -321,5 +331,39 @@ describe("seating", () => {
     const lead = desk("a");
     expect(desk("h1").x).toBeCloseTo(lead.x + 56 * lead.scale);
     expect(desk("h2").x + 56 * desk("h2").scale).toBeCloseTo(lead.x);
+  });
+});
+
+describe("leader name plate", () => {
+  const items = (...statuses: string[]) => ({ items: statuses.map((status, i) => ({ id: `T${i}`, status })) });
+
+  it("counts done rows of the session's task list, leaving skipped and canceled out", () => {
+    expect(progressOf(session())).toBeUndefined();
+    expect(progressOf(session({ task_tracking: items("done", "in_progress", "skipped", "canceled") }))).toEqual({
+      done: 1,
+      total: 2,
+      blocked: false,
+    });
+    expect(progressOf(session({ task_tracking: items("blocked") }))?.blocked).toBe(true);
+  });
+
+  it("colours the plate by state: blocked red, all done green, waiting amber, working blue, else slate", () => {
+    const p = (done: number, total: number, blocked = false) => ({ done, total, blocked });
+    expect(plateColours({ pose: "typing", progress: p(0, 2, true) }).base).toBe("#4a1d1d");
+    expect(plateColours({ pose: "typing", progress: p(2, 2) }).base).toBe("#173d29");
+    expect(plateColours({ pose: "waiting", progress: p(1, 2) }).base).toBe("#4d3a0f");
+    expect(plateColours({ pose: "reading" }).base).toBe("#172c4a");
+    expect(plateColours({ pose: "asleep" }).base).toBe("#232a36");
+  });
+
+  it("gives a leader its session's progress", () => {
+    const state = {
+      cards: [card({ sessions: [session({ task_tracking: items("done", "pending") })] })],
+      session_panes: {},
+    } as unknown;
+    const lead = officeOf(state as DashState)
+      .teams.flatMap((t) => t.employees)
+      .find((e) => e.role === "lead" && !e.fixed);
+    expect(lead?.progress).toEqual({ done: 1, total: 2, blocked: false });
   });
 });
