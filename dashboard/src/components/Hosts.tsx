@@ -32,7 +32,7 @@ export function NodeSelect() {
   );
 }
 
-/** Link another host's dashboard (address, port and its URL token), list the links and remove one. */
+/** Link another host's dashboard by its full URL (with ?t= token), list the links and remove one. */
 export function HostsDialog({ close }: { close: () => void }) {
   const nodes = useStore((s) => s.nodes);
   const nodeStates = useStore((s) => s.nodeStates);
@@ -53,9 +53,7 @@ export function HostsDialog({ close }: { close: () => void }) {
     setError("");
     const failed = await postNodes("/api/nodes", {
       label: value("label"),
-      host: value("host"),
-      port: Number(value("port")),
-      token: value("token"),
+      url: value("url"),
     }).catch((err: Error) => err.message);
     setBusy(false);
     if (failed) return setError(failed);
@@ -92,23 +90,22 @@ export function HostsDialog({ close }: { close: () => void }) {
             </ul>
           )}
           <label>
-            name
+            name (optional)
             <input ref={first} name="label" maxLength={40} autoComplete="off" placeholder="GPU box" />
           </label>
           <label>
-            IP or host name
-            <input name="host" required maxLength={253} autoComplete="off" placeholder="10.0.0.12" />
-          </label>
-          <label>
-            port
-            <input name="port" required type="number" min={1} max={65535} defaultValue={8766} />
-          </label>
-          <label>
-            token
-            <input name="token" required type="password" autoComplete="off" placeholder="the t= value of its dashboard URL" />
+            dashboard URL
+            <input
+              name="url"
+              required
+              maxLength={400}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="http://10.0.0.12:8766/?t=…"
+            />
           </label>
           <p className="herdr-modal-note">
-            The token stays on this host; the browser never sees it. Traffic to the linked host is plain HTTP, so link
+            Paste the URL its dashboard opens with. The token is kept on this host and never sent back to the browser. Traffic to the linked host is plain HTTP, so link
             hosts on a trusted network or through a tunnel.
           </p>
           <div className="herdr-modal-error" aria-live="polite">

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nodeUrl, setApiNode, wsUrl } from "./api";
 import { store } from "../store";
 import { NewSessionModal } from "../terminal/NewSession";
+import { HostsDialog } from "../components/Hosts";
 
 describe("node URLs", () => {
   afterEach(() => setApiNode(""));
@@ -105,5 +106,33 @@ describe("new session dialog", () => {
     await flush();
     expect(calls.at(-1)).toBe("/api/node/gpu-box/api/fs/dirs?path=");
     expect(host.querySelector(".path-picker")?.textContent).toContain("app/git");
+  });
+});
+
+describe("hosts dialog", () => {
+  it("links a host from its full dashboard URL", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const posts: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === "POST") posts.push(JSON.parse(String(init.body)));
+        return new Response(JSON.stringify(url === "/api/nodes" && !init ? { nodes: [] } : { ok: true }), { status: 200 });
+      }),
+    );
+    act(() => root.render(<HostsDialog close={() => undefined} />));
+    expect(host.querySelectorAll("input").length).toBe(2);
+    const url = host.querySelector<HTMLInputElement>('input[name="url"]')!;
+    url.value = "http://10.0.0.12:8766/?t=abcdefgh";
+    await act(async () => {
+      host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(posts).toEqual([{ label: "", url: "http://10.0.0.12:8766/?t=abcdefgh" }]);
+    act(() => root.unmount());
+    host.remove();
+    vi.unstubAllGlobals();
   });
 });

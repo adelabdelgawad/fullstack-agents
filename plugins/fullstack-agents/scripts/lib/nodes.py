@@ -10,6 +10,7 @@ import re
 import socket
 import threading
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 NODE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 HOST_RE = re.compile(r"^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$"
@@ -62,24 +63,30 @@ def find(node_id):
 
 
 def validate(body):
-    """A link request -> (label, host, port, token); ValueError names the bad field."""
+    """A link request {url, label?} -> (label, host, port, token); ValueError names what is wrong.
+
+    `url` is the linked host's dashboard URL as its owner opens it, e.g. http://10.0.0.12:8766/?t=TOKEN.
+    """
     if not isinstance(body, dict):
         raise ValueError("bad request")
-    host = str(body.get("host") or "").strip()
-    if not HOST_RE.match(host) or len(host) > 253:
-        raise ValueError("host must be an IP address or host name")
-    host = host.strip("[]")
+    raw = str(body.get("url") or "").strip()
+    if raw and "://" not in raw:
+        raw = "http://" + raw
     try:
-        port = int(body.get("port"))
-    except (TypeError, ValueError):
-        raise ValueError("port must be a number") from None
-    if not 1 <= port <= 65535:
-        raise ValueError("port must be 1-65535")
-    token = str(body.get("token") or "").strip()
+        url = urlsplit(raw)
+        port = url.port or 80
+    except ValueError:
+        raise ValueError("the URL's port must be 1-65535") from None
+    if url.scheme != "http":
+        raise ValueError("paste the host's dashboard URL, starting http://")
+    host = url.hostname or ""
+    if not HOST_RE.match(host) or len(host) > 253:
+        raise ValueError("the URL needs an IP address or host name")
+    token = (parse_qs(url.query).get("t") or [""])[0].strip()
     if not TOKEN_RE.match(token):
-        raise ValueError("token must be the t= value of the host's dashboard URL")
+        raise ValueError("the URL needs the dashboard's ?t= token")
     label = re.sub(r"\s+", " ", str(body.get("label") or "").strip())[:40] or host
-    return label, host, port, token
+    return label, host.strip("[]"), port, token
 
 
 def _slug(label, taken):

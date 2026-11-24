@@ -108,8 +108,8 @@ class NodesTests(unittest.TestCase):
         return out
 
     def link(self, token=REMOTE_TOKEN):
-        return self.call("POST", "/api/nodes", {"label": "GPU box", "host": "127.0.0.1",
-                                                "port": self.remote.server_address[1], "token": token})
+        url = f"http://127.0.0.1:{self.remote.server_address[1]}/next/office?t={token}"
+        return self.call("POST", "/api/nodes", {"label": "GPU box", "url": url})
 
     def test_link_saves_private_registry_and_hides_token(self):
         status, body, _ = self.link()
@@ -128,9 +128,14 @@ class NodesTests(unittest.TestCase):
         self.assertFalse(self.registry.exists())
 
     def test_link_rejects_bad_fields(self):
-        for bad in ({"host": "a b", "port": 1, "token": REMOTE_TOKEN}, {"host": "h", "port": 70000, "token": REMOTE_TOKEN},
-                    {"host": "h", "port": 80, "token": "x"}):
+        for bad in ({"url": f"http://a b:1/?t={REMOTE_TOKEN}"}, {"url": f"http://h:70000/?t={REMOTE_TOKEN}"},
+                    {"url": "http://h:80/?t=x"}, {"url": "http://h:80/"}, {"url": f"https://h/?t={REMOTE_TOKEN}"}, {}):
             self.assertEqual(self.call("POST", "/api/nodes", bad)[0], 400, bad)
+
+    def test_link_url_without_scheme_or_port(self):
+        self.assertEqual(nodes.validate({"url": f"10.0.0.12:8766/?t={REMOTE_TOKEN}"}),
+                         ("10.0.0.12", "10.0.0.12", 8766, REMOTE_TOKEN))
+        self.assertEqual(nodes.validate({"url": f"http://gpu.lan/?t={REMOTE_TOKEN}", "label": "GPU"})[1:3], ("gpu.lan", 80))
 
     def test_link_needs_local_token(self):
         self.assertEqual(self.call("GET", "/api/nodes", token="nope")[0], 403)
@@ -170,7 +175,7 @@ class NodesTests(unittest.TestCase):
 
         threading.Thread(target=fake_node, daemon=True).start()
         with patch.object(nodes, "probe", lambda *a: ""):
-            self.call("POST", "/api/nodes", {"label": "ws", "host": "127.0.0.1", "port": port, "token": REMOTE_TOKEN})
+            self.call("POST", "/api/nodes", {"label": "ws", "url": f"http://127.0.0.1:{port}/?t={REMOTE_TOKEN}"})
         host = "%s:%d" % self.server.server_address
         client = sock_mod.create_connection(self.server.server_address, timeout=5)
         client.sendall((f"GET /api/node/ws/api/herdr/client?cols=80&rows=24 HTTP/1.1\r\nHost: {host}\r\n"
