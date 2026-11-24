@@ -30,6 +30,8 @@ export interface OfficeEmployee {
   seat?: number;
   /** A leader's task list: rows done out of the rows that count (skipped and canceled do not), and any blocked. */
   progress?: { done: number; total: number; blocked: boolean };
+  /** The linked host this agent runs on ("" or absent: this host). Its id then carries the host prefix (hostKey). */
+  host?: string;
 }
 
 /** A leader's task-list progress from its session's ledger; undefined when the session tracks no tasks. */
@@ -70,12 +72,35 @@ export interface OfficeTeam {
   place?: string;
   label: string;
   employees: OfficeEmployee[];
+  /** The linked host this session runs on ("" or absent: this host). Its key then carries the host prefix. */
+  host?: string;
+}
+
+/** A host's sessions office: this host ("") or a linked one. */
+export interface OfficeHall {
+  id: string;
+  label: string;
+  offline?: boolean;
 }
 
 export interface Office {
   name: string;
   teams: OfficeTeam[];
+  /** With linked hosts: one sessions office per host, side by side, in this order. Absent: one shared Sessions office. */
+  hosts?: OfficeHall[];
 }
+
+/** One host's dashboard state, for the shared floor. */
+export interface OfficeHost extends OfficeHall {
+  state: DashState | null;
+}
+
+/** A linked host's keys and agent ids carry its id, so sessions on two hosts never share a desk, an office or a pane. */
+export const hostKey = (host: string, key: string): string => (host ? `${host}::${key}` : key);
+
+/** The key or id as that host knows it. */
+export const unhost = (host: string | undefined, key: string): string =>
+  host && key.startsWith(`${host}::`) ? key.slice(host.length + 2) : key;
 
 export interface PlacedDesk {
   x: number;
@@ -279,15 +304,41 @@ function uniquePlaces(teams: OfficeTeam[]): OfficeTeam[] {
   });
 }
 
-/** The floor: the CTO's office first, then one office per session. The CTO's name comes from the CTO team's members. */
-export function officeOf(state: DashState | null): Office {
-  if (!state) return { name: "", teams: [] };
-  const sessions = uniquePlaces(
+function onHost(employee: OfficeEmployee, host: string): OfficeEmployee {
+  return {
+    ...employee,
+    id: hostKey(host, employee.id),
+    host,
+    reports: employee.reports?.map((report) => onHost(report, host)),
+  };
+}
+
+/** One host's session offices; a linked host's keys, places and agent ids carry its id. */
+function hostTeams(host: OfficeHost): OfficeTeam[] {
+  const state = host.state;
+  if (!state) return [];
+  const teams = uniquePlaces(
     state.cards
       .map((card) => sessionOffice(card, state.session_panes))
       .filter((team): team is OfficeTeam => Boolean(team)),
   );
-  const name = (state.office_teams || []).find((rule) => rule.name === CTO_TEAM)?.members?.[0];
+  if (!host.id) return teams;
+  return teams.map((team) => ({
+    ...team,
+    key: hostKey(host.id, team.key),
+    place: hostKey(host.id, team.place || team.key),
+    host: host.id,
+    employees: team.employees.map((employee) => onHost(employee, host.id)),
+  }));
+}
+
+/** The floor: one CTO office for every host, then one office per session. With linked hosts, each host's sessions sit
+ * in that host's own sessions office (see layoutOffice). The CTO's name and the building's come from this host. */
+export function officeOfHosts(hosts: OfficeHost[]): Office {
+  const home = hosts.find((host) => !host.id)?.state ?? hosts.find((host) => host.state)?.state ?? null;
+  if (!home) return { name: "", teams: [] };
+  const sessions = hosts.flatMap(hostTeams);
+  const name = (home.office_teams || []).find((rule) => rule.name === CTO_TEAM)?.members?.[0];
   const cto = {
     key: CTO_TEAM,
     label: CTO_TEAM,
@@ -298,7 +349,13 @@ export function officeOf(state: DashState | null): Office {
       ),
     ],
   };
-  return { name: baseName(textOf(state.repo)) || "Company", teams: [cto, ...sessions] };
+  const office = { name: baseName(textOf(home.repo)) || "Company", teams: [cto, ...sessions] };
+  return hosts.length > 1 ? { ...office, hosts: hosts.map(({ id, label, offline }) => ({ id, label, offline })) } : office;
+}
+
+/** This host's floor alone: the CTO's office and one office per session. */
+export function officeOf(state: DashState | null): Office {
+  return officeOfHosts([{ id: "", label: "", state }]);
 }
 
 /** Keys in the order first seen: known ones keep their place, new ones join at the end, gone ones drop out. */
@@ -543,25 +600,52 @@ function splitFloor(inner: Rect, areaH: number, chrome: number, cto: boolean, se
 }
 
 /** One desk scale for the whole floor: the largest that fits every session space and the CTO office. */
-function floorScale(split: Split, grid: Grid | null, chrome: number): number {
+function floorScale(split: Split, grids: Grid[], chrome: number): number {
   const cap = decorCap(chrome);
   const cto = split.cto
     ? deskFit(1, split.cto.width - 2 * BUILDING.pad * cap, split.cto.height - (BUILDING.header + BUILDING.pad) * cap)
         .scale
     : 3;
-  return quantise(Math.min(grid ? grid.scale : 3, cto));
+  return quantise(Math.min(...grids.map((grid) => grid.scale), 3, cto));
+}
+
+/** One host's sessions office: its sessions, the floor area it gets and the grid of session spaces on it. */
+interface HallPlan {
+  key: string;
+  label: string;
+  teams: OfficeTeam[];
+  rect: Rect;
+  grid: Grid | null;
 }
 
 /** Grow the offices to fit their desks at the chosen scale, keeping side-by-side offices the same height. */
-function growOffices(split: Split, grid: Grid | null, scale: number, decor: number, gap: number, wall: number): void {
-  const { cto, hall } = split;
+function growOffices(split: Split, plans: HallPlan[], scale: number, decor: number, gap: number, wall: number): void {
+  const { cto } = split;
   if (cto) cto.height = Math.max(cto.height, (BUILDING.header + BUILDING.pad) * decor + DESK_H * scale);
-  if (!grid) return;
-  grid.height = Math.max(grid.height, (BUILDING.space + BUILDING.pad) * decor + DESK_H * scale);
-  const needed = BUILDING.header * decor + 1.5 * gap + grid.rows * grid.height + (grid.rows - 1) * gap;
-  hall.height = Math.max(hall.height, needed);
-  if (split.stacked && cto) hall.y = cto.y + cto.height + wall;
-  if (split.side && cto) hall.height = cto.height = Math.max(cto.height, hall.height);
+  for (const { grid, rect } of plans) {
+    if (grid) {
+      grid.height = Math.max(grid.height, (BUILDING.space + BUILDING.pad) * decor + DESK_H * scale);
+      const needed = BUILDING.header * decor + 1.5 * gap + grid.rows * grid.height + (grid.rows - 1) * gap;
+      rect.height = Math.max(rect.height, needed);
+    } else rect.height = Math.max(rect.height, (BUILDING.header + BUILDING.pad) * decor + DESK_H * scale);
+    if (split.stacked && cto) rect.y = cto.y + cto.height + wall;
+  }
+  const tallest = Math.max(...plans.map((plan) => plan.rect.height), split.side && cto ? cto.height : 0);
+  for (const { rect } of plans) rect.height = tallest;
+  if (split.side && cto) cto.height = tallest;
+}
+
+/** The sessions floor split between hosts, side by side: one office per host, or one shared Sessions office. */
+function planHalls(office: Office, sessions: OfficeTeam[], hall: Rect, wall: number): HallPlan[] {
+  if (!office.hosts) return [{ key: SESSIONS_HALL, label: "Sessions", teams: sessions, rect: hall, grid: null }];
+  const width = (hall.width - (office.hosts.length - 1) * wall) / office.hosts.length;
+  return office.hosts.map((host, index) => ({
+    key: `${SESSIONS_HALL}:${host.id || "local"}`,
+    label: `${host.id ? host.label : "Local host"}${host.offline ? " · offline" : ""}`,
+    teams: sessions.filter((team) => (team.host || "") === host.id),
+    rect: { x: hall.x + index * (width + wall), y: hall.y, width, height: hall.height },
+    grid: null,
+  }));
 }
 
 /** The lobby under the offices and the building around everything. */
@@ -593,24 +677,33 @@ export function layoutOffice(office: Office, width: number, height: number, chro
   };
   const cto = office.teams.find((team) => team.key === CTO_TEAM);
   const sessions = office.teams.filter((team) => team.key !== CTO_TEAM);
-  const split = splitFloor(inner, inner.height - b("lobby") - b("wallT"), chrome, Boolean(cto), sessions.length > 0);
+  const hasHalls = sessions.length > 0 || Boolean(office.hosts);
+  const split = splitFloor(inner, inner.height - b("lobby") - b("wallT"), chrome, Boolean(cto), hasHalls);
   const gap = 2 * BUILDING.pad * chrome;
-  const floorH = split.hall.height - BUILDING.header * decorCap(chrome) - 1.5 * gap;
-  const counts = sessions.map((team) => Math.max(OFFICE_DESKS, team.employees.length));
-  const grid = sessions.length ? planSpaces(counts, split.hall.width - 2 * gap, floorH, gap, decorCap(chrome)) : null;
-  const scale = floorScale(split, grid, chrome);
+  const plans = hasHalls ? planHalls(office, sessions, split.hall, b("wall")) : [];
+  for (const plan of plans) {
+    const floorH = plan.rect.height - BUILDING.header * decorCap(chrome) - 1.5 * gap;
+    const counts = plan.teams.map((team) => Math.max(OFFICE_DESKS, team.employees.length));
+    plan.grid = counts.length ? planSpaces(counts, plan.rect.width - 2 * gap, floorH, gap, decorCap(chrome)) : null;
+  }
+  const grids = plans.map((plan) => plan.grid).filter((grid): grid is Grid => Boolean(grid));
+  const scale = floorScale(split, grids, chrome);
   const decor = Math.max(chrome, Math.min(decorCap(chrome), scale));
-  growOffices(split, grid, scale, decor, gap, b("wall"));
+  growOffices(split, plans, scale, decor, gap, b("wall"));
   const halls: PlacedRoom[] = [];
   if (split.cto) halls.push(hallOf(CTO_TEAM, CTO_TEAM, split.cto, decor, chrome, false));
-  const floor = {
-    x: split.hall.x + gap,
-    y: split.hall.y + BUILDING.header * decor + gap / 2,
-    width: split.hall.width - 2 * gap,
-    height: 0,
-  };
-  const spaces = grid ? placeSpaces(sessions, grid, floor, gap, decor) : [];
-  if (grid) halls.push(hallOf(SESSIONS_HALL, "Sessions", split.hall, decor, chrome, true));
+  const spaces = plans.flatMap((plan) => {
+    if (!plan.grid && !office.hosts) return [];
+    halls.push(hallOf(plan.key, plan.label, plan.rect, decor, chrome, true));
+    if (!plan.grid) return [];
+    const floor = {
+      x: plan.rect.x + gap,
+      y: plan.rect.y + BUILDING.header * decor + gap / 2,
+      width: plan.rect.width - 2 * gap,
+      height: 0,
+    };
+    return placeSpaces(plan.teams, plan.grid, floor, gap, decor);
+  });
   const rooms = [...halls.filter((hall) => hall.key === CTO_TEAM), ...spaces];
   const desks = office.teams.flatMap((team) =>
     placeTeam(

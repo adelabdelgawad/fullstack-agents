@@ -9,7 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { STATE_TEXT } from "../lib/cards";
-import type { Card, DashState, WaitingEntry } from "../lib/types";
+import type { Card, WaitingEntry } from "../lib/types";
 import { openRunLog } from "../panel/Panel";
 import { focusNode, openCard, setView, store, useStore } from "../store";
 import { openNewSession } from "../terminal/HerdrOverlay";
@@ -25,7 +25,10 @@ import {
   CTO_TEAM,
   EMPTY_LAYOUT,
   layoutOffice,
-  officeOf,
+  officeOfHosts,
+  unhost,
+  hostKey,
+  type OfficeHost,
   Seating,
   type Office,
   type OfficeLayout,
@@ -142,7 +145,7 @@ function TeamZoom({
 }
 
 /** Everything waiting on the user, in one box: each entry opens its card. */
-function DecisionBox({ waiting, focus }: { waiting: WaitingEntry[]; focus: () => void }) {
+function DecisionBox({ waiting }: { waiting: HostWaiting[] }) {
   const [open, setOpen] = useState(false);
   if (!waiting.length) return null;
   return (
@@ -153,8 +156,8 @@ function DecisionBox({ waiting, focus }: { waiting: WaitingEntry[]; focus: () =>
       {open && (
         <ul>
           {waiting.map((entry) => (
-            <li key={entry.key}>
-              <button type="button" onClick={() => (focus(), entry.card && openCard(entry.card))}>
+            <li key={hostKey(entry.host, entry.key)}>
+              <button type="button" onClick={() => (focusNode(entry.host), entry.card && openCard(entry.card))}>
                 <strong>{entry.name}</strong>
                 <span>{entry.snippet || "Waiting for your answer"}</span>
               </button>
@@ -286,7 +289,6 @@ function OfficeModal({ title, close, children }: { title: string; close: () => v
 }
 
 // Stable empty values: a selector returning a fresh [] or {} on every read makes React re-render forever.
-const NO_CARDS: Card[] = [];
 const NO_PANES: Record<string, string> = {};
 const NO_WAITING: WaitingEntry[] = [];
 
@@ -361,44 +363,44 @@ function OfficeMenu({
   );
 }
 
-/** The Office: this host's building, then one building per linked host. With no linked host it is exactly the one
- * building it always was. */
+type HostWaiting = WaitingEntry & { host: string };
+
+/** The Office: one building and one CTO for every host. With linked hosts, each host's sessions sit in that host's own
+ * sessions office beside the CTO's ("Local host", then each linked host); with none it is the one office it always was. */
 export function OfficeView() {
   const node = useStore((s) => s.node);
   const nodes = useStore((s) => s.nodes);
   const nodeStates = useStore((s) => s.nodeStates);
   const state = useStore((s) => s.state);
-  if (!nodes.length) return <OfficeBuilding node="" state={state} />;
-  const hosts = [{ id: "", label: "This host", host: "" }, ...nodes];
-  return (
-    <div className="office-buildings">
-      {hosts.map((host) => {
-        const shown = host.id === node ? state : nodeStates[host.id]?.state ?? null;
-        const offline = Boolean(nodeStates[host.id]?.offline);
-        return (
-          <section key={host.id || "local"} className="office-building" aria-label={`${host.label} office`}>
-            <h2 className="office-building-title">
-              <span className={`dot${offline ? " off" : ""}`} aria-hidden="true"></span>
-              {host.label}
-              <small>
-                {host.host || (shown?.repo ? String(shown.repo).split("/").pop() : "")}
-                {offline ? " · offline" : host.id === node ? " · in focus" : ""}
-              </small>
-            </h2>
-            <OfficeBuilding node={host.id} state={shown} multi />
-          </section>
-        );
-      })}
-    </div>
+  const hosts = useMemo<OfficeHost[]>(
+    () =>
+      [{ id: "", label: "Local host" }, ...nodes].map((host) => ({
+        id: host.id,
+        label: host.label,
+        state: host.id === node ? state : nodeStates[host.id]?.state ?? null,
+        offline: host.id !== node && Boolean(nodeStates[host.id]?.offline),
+      })),
+    [node, nodes, nodeStates, state],
   );
+  return <OfficeBuilding hosts={hosts} />;
 }
 
-/** One host's office: its CTO and sessions. Any click focuses that host first, so what opens talks to it. */
-function OfficeBuilding({ node, state, multi = false }: { node: string; state: DashState | null; multi?: boolean }) {
-  const focus = () => focusNode(node);
+/** The shared floor. Anything opened in a host's office focuses that host first, so what opens talks to it. */
+function OfficeBuilding({ hosts }: { hosts: OfficeHost[] }) {
   // Desks stay put while agents work: sessions keep the order they arrived in and subagents keep their seats.
   const seating = useRef(new Seating());
-  const office = useMemo(() => seating.current.apply(officeOf(state)), [state]);
+  const office = useMemo(() => seating.current.apply(officeOfHosts(hosts)), [hosts]);
+  const anyState = hosts.some((host) => host.state);
+  /** A session office's host and the card it belongs to, as that host knows it. */
+  const sessionAt = (key: string | null) => {
+    const team = key ? office.teams.find((item) => item.key === key && item.key !== CTO_TEAM) : undefined;
+    if (!team) return null;
+    const host = team.host || "";
+    const raw = unhost(host, team.key);
+    const known = hosts.find((item) => item.id === host)?.state;
+    const card = known?.cards.find((item) => item.key === raw);
+    return card ? { host, card, panes: known?.session_panes || NO_PANES } : null;
+  };
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const placed = useRef<OfficeLayout>(EMPTY_LAYOUT);
   const [consoleId, setConsoleId] = useState<string | null>(null);
@@ -409,16 +411,19 @@ function OfficeBuilding({ node, state, multi = false }: { node: string; state: D
   const [agentSettings, setAgentSettings] = useState<string | null>(null);
   const [chatWorker, setChatWorker] = useState<string | undefined>(undefined);
   const [menu, setMenu] = useState<{ key: string; x: number; y: number } | null>(null);
-  const cards = state?.cards || NO_CARDS;
-  const panes = state?.session_panes || NO_PANES;
-  const waiting = state?.waiting || NO_WAITING;
-  /** Right-click on a session's office: a menu for that session. */
+  const waiting = useMemo<HostWaiting[]>(
+    () => hosts.flatMap((host) => (host.state?.waiting || NO_WAITING).map((entry) => ({ ...entry, host: host.id }))),
+    [hosts],
+  );
+  const menuSession = menu && menu.key !== CTO_TEAM ? sessionAt(menu.key) : null;
+  /** Right-click on a session's office: a menu for that session, on its host. */
   const contextCanvas = (event: MouseEvent<HTMLCanvasElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     const key = roomHit(placed.current, event.clientX - bounds.left, event.clientY - bounds.top);
-    if (!key || (key !== CTO_TEAM && !cards.some((card) => card.key === key))) return;
+    const session = sessionAt(key);
+    if (!key || (key !== CTO_TEAM && !session)) return;
     event.preventDefault();
-    focus();
+    if (session) focusNode(session.host);
     setMenu({ key, x: event.clientX - bounds.left, y: event.clientY - bounds.top });
   };
   const [zoom, setZoom] = useState<string | null>(null);
@@ -432,18 +437,19 @@ function OfficeBuilding({ node, state, multi = false }: { node: string; state: D
    * staff with no session have nothing to open. */
   const open = (id: string | null): boolean => {
     if (!id) return false;
-    focus();
     if (id === CTO_ID) {
       setConsoleId(CTO_ID);
       return true;
     }
     const agent = employees.find((employee) => employee.id === id);
     if (!agent?.cardKey) return false;
+    focusNode(agent.host || "");
+    const agentId = unhost(agent.host, agent.id);
     // A subagent, implementer run or shell opens live in the chat console (an older worker record its run log); a leader its console.
-    if (agent.role === "worker" && !RUN_ID.test(agent.id)) openRunLog(agent.cardKey, agent.id);
+    if (agent.role === "worker" && !RUN_ID.test(agentId)) openRunLog(agent.cardKey, agentId);
     else if (agent.role !== "lead") {
       setChatKey(agent.cardKey);
-      setChatWorker(agent.id);
+      setChatWorker(agentId);
       setConsoleId(CTO_ID);
     } else openConsole(agent.cardKey);
     return true;
@@ -453,19 +459,20 @@ function OfficeBuilding({ node, state, multi = false }: { node: string; state: D
     const x = event.clientX - bounds.left;
     const y = event.clientY - bounds.top;
     // The magnifier zooms into that office (or back out); anywhere else in a session's office opens its console.
-    focus();
     const icon = zoomIconHit(placed.current, x, y);
     if (icon) return setZoom(zoomTeam ? null : icon);
     if (open(pcHit(placed.current, x, y)) || open(hitTest(placed.current, x, y))) return;
-    const room = roomHit(placed.current, x, y);
-    const card = cards.find((item) => item.key === room);
-    if (card) openConsole(card.key);
+    const session = sessionAt(roomHit(placed.current, x, y));
+    if (session) {
+      focusNode(session.host);
+      openConsole(session.card.key);
+    }
   };
-  if (!employees.length) return <div className="office-empty">{state ? "No live sessions" : "Not reachable yet"}</div>;
+  if (!employees.length) return <div className="office-empty">{anyState ? "No live sessions" : "Not reachable yet"}</div>;
   return (
-    <section className={`office-view${multi ? " office-view-multi" : ""}`} aria-label="Live session office">
+    <section className="office-view" aria-label="Live session office">
       <div className="office-canvas-wrap">
-        <DecisionBox waiting={waiting} focus={focus} />
+        <DecisionBox waiting={waiting} />
         <TeamZoom teams={office.teams} zoom={zoomTeam} setZoom={setZoom} />
         <canvas
           ref={canvasRef}
@@ -491,8 +498,8 @@ function OfficeBuilding({ node, state, multi = false }: { node: string; state: D
         {menu && menu.key !== CTO_TEAM && (
           <OfficeMenu
             menu={menu}
-            card={cards.find((card) => card.key === menu.key)}
-            pane={panes}
+            card={menuSession?.card}
+            pane={menuSession?.panes || NO_PANES}
             close={() => setMenu(null)}
             chat={(key) => {
               setChatKey(key);

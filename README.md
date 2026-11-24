@@ -112,8 +112,8 @@ watch and drive every session from any machine on your network.
 ### Linked hosts
 
 **+ Host** in the header links another machine's dashboard: paste its full URL (`http://<ip>:<port>/?t=<token>`). The
-host picker then switches the whole page to that machine, the **Office** draws one building per
-host, and a new session asks which host and which workspace (an existing one, or a folder you pick
+host picker then switches the whole page to that machine, the **Office** keeps one CTO with an
+office per host beside him ("Local host", then each linked host), and a new session asks which host and which workspace (an existing one, or a folder you pick
 on that host). The token is kept only on your machine, in `~/.config/fullstack-agents/nodes.json`;
 the browser never sees it. Links use plain HTTP, so use them on a trusted network or over an SSH
 tunnel or VPN.

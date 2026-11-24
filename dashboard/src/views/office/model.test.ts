@@ -6,6 +6,8 @@ import {
   finished,
   layoutOffice,
   officeOf,
+  officeOfHosts,
+  unhost,
   plateColours,
   progressOf,
   SUBAGENT_SCALE,
@@ -365,5 +367,54 @@ describe("leader name plate", () => {
       .teams.flatMap((t) => t.employees)
       .find((e) => e.role === "lead" && !e.fixed);
     expect(lead?.progress).toEqual({ done: 1, total: 2, blocked: false });
+  });
+});
+
+describe("one office for every host", () => {
+  const hosts = () =>
+    officeOfHosts([
+      { id: "", label: "Local host", state: dash([card({ key: "a", sessions: [session({ id: "p1", name: "alpha" })] })]) },
+      {
+        id: "gpu",
+        label: "GPU box",
+        state: dash([card({ key: "a", sessions: [session({ id: "p1", name: "remote", state: "waiting" })] })]),
+      },
+    ]);
+
+  it("has one CTO who runs the sessions of both hosts, which never share a desk or an office", () => {
+    const office = hosts();
+    const [cto, local, remote] = office.teams;
+    expect(office.teams.filter((team) => team.key === "CTO")).toHaveLength(1);
+    expect(cto.employees[0]).toMatchObject({ sessions: 2, pose: "waiting" });
+    expect([local.key, remote.key]).toEqual(["a", "gpu::a"]);
+    expect([local.employees[0].id, remote.employees[0].id]).toEqual(["p1", "gpu::p1"]);
+    expect(remote).toMatchObject({ host: "gpu", employees: [{ host: "gpu", cardKey: "a" }] });
+    expect(unhost(remote.host, remote.employees[0].id)).toBe("p1");
+  });
+
+  it("puts each host's sessions in that host's office, beside the CTO's", () => {
+    const layout = layoutOffice(hosts(), 1600, 800);
+    expect(layout.halls.map((hall) => hall.label)).toEqual(["CTO", "Local host", "GPU box"]);
+    const [cto, local, remote] = layout.halls;
+    expect(cto.x + cto.width).toBeLessThan(local.x);
+    expect(local.x + local.width).toBeLessThan(remote.x);
+    expect(new Set(layout.halls.map((hall) => hall.height)).size).toBe(1);
+    const inside = (key: string, hall: typeof local) => {
+      const room = layout.rooms.find((item) => item.key === key)!;
+      return room.x >= hall.x && room.x + room.width <= hall.x + hall.width + 0.01;
+    };
+    expect(inside("a", local) && inside("gpu::a", remote)).toBe(true);
+  });
+
+  it("keeps an offline or empty host's office on the floor", () => {
+    const office = officeOfHosts([
+      { id: "", label: "Local host", state: dash([card()]) },
+      { id: "gpu", label: "GPU box", state: null, offline: true },
+    ]);
+    expect(layoutOffice(office, 1600, 800).halls.map((hall) => hall.label)).toEqual([
+      "CTO",
+      "Local host",
+      "GPU box · offline",
+    ]);
   });
 });

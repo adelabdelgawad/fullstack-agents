@@ -6,6 +6,7 @@ import {
   CTO_TEAM,
   finished,
   plateColours,
+  SESSIONS_HALL,
   type OfficeLayout,
   type PlacedBuilding,
   type PlacedDesk,
@@ -140,11 +141,17 @@ export function drawBackWall(ctx: CanvasRenderingContext2D, room: PlacedRoom): v
   drawPlant(ctx, x + width - 12 * s, y + band - 12 * s, s);
 }
 
-/** The shared Sessions office: a wooden floor under a back wall with its name plate. */
+/** A sessions office: a wooden floor under a back wall. A host's office (with linked hosts) carries the host's name
+ * on a plate over the clock, so the two offices beside the CTO's can be told apart. */
 function drawHall(ctx: CanvasRenderingContext2D, hall: PlacedRoom): void {
-  const { x, y, width, height, band } = hall;
+  const { x, y, width, height, band, scale: s } = hall;
   drawFloor(ctx, x, y + band, width, height - band, hall.scale);
   drawBackWall(ctx, hall);
+  if (!hall.key.startsWith(`${SESSIONS_HALL}:`)) return;
+  const plate = Math.min(width - 60 * s, Math.max(70 * s, hall.label.length * 4.5 * s + 20 * s));
+  rect(ctx, x + (width - plate) / 2, y + 4 * s, plate, 16 * s, "#1d2433");
+  ctx.fillStyle = "#f2b24c";
+  text(ctx, hall.label.toUpperCase(), x + width / 2, y + 12 * s, 7 * s, plate - 8 * s);
 }
 
 function screenColour(desk: PlacedDesk, frame: number): string {
