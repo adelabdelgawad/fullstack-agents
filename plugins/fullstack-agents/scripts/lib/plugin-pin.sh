@@ -36,3 +36,17 @@ fsa_plugin_pin() {
     jq -n --arg root "$root" --arg v "$version" '{mode: "unpinned", root: $root, version: $v, fingerprint: ""}'
   fi
 }
+
+# A release is immutable and its hooks already run: when the loaded release differs from the pin, the pin follows it
+# (resume, compact or /reload-plugins). Prints the old version and returns 0 only when it re-pinned.
+fsa_repin_stale_release() {
+  local loaded pin_file old
+  loaded=$(cd "$1" 2>/dev/null && pwd -P) || return 1
+  pin_file=$2
+  [ -s "$pin_file" ] && fsa_release_root "$loaded" > /dev/null 2>&1 || return 1
+  [ "$(jq -r '.root // ""' "$pin_file" 2>/dev/null)" != "$loaded" ] || return 1
+  old=$(jq -r '.version // .root' "$pin_file" 2>/dev/null)
+  fsa_plugin_pin "$loaded" > "$pin_file.new" 2>/dev/null && [ -s "$pin_file.new" ] && mv -f "$pin_file.new" "$pin_file" ||
+    { rm -f "$pin_file.new"; return 1; }
+  printf '%s' "$old"
+}

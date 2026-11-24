@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# UserPromptSubmit: after /reload-plugins loads another release, the session pin follows it so dispatches use it.
+set -uo pipefail
+[ -n "${FSA_IMPLEMENTER_RUN:-}" ] && exit 0
+command -v jq > /dev/null 2>&1 || exit 0
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+hook_input=""
+[ ! -t 0 ] && hook_input=$(cat || true)
+session=$(printf '%s' "$hook_input" | jq -r '.session_id // empty' 2>/dev/null)
+[ -n "$session" ] && [ -z "$(printf '%s' "$hook_input" | jq -r '.agent_id // empty' 2>/dev/null)" ] || exit 0
+. "${SCRIPT_DIR}/../scripts/lib/plugin-pin.sh"
+pin_file="$(fsa_pin_dir)/session-${session//[^A-Za-z0-9_-]/}.json"
+old=$(fsa_repin_stale_release "${SCRIPT_DIR}/.." "$pin_file") || exit 0
+jq -n --arg msg "Plugin pin updated: this session now dispatches through the loaded release $(jq -r .version "$pin_file") (was ${old})." \
+  '{hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: $msg}}'
+exit 0

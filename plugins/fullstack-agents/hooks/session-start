@@ -124,14 +124,8 @@ fi
 if [ -n "$board_session" ] && command -v jq > /dev/null 2>&1; then
     . "${PLUGIN_ROOT}/scripts/lib/plugin-pin.sh"
     pin_file="$(fsa_pin_dir)/session-${board_session}.json"
-    loaded_root=$(cd "$PLUGIN_ROOT" && pwd -P)
-    stale_release=""
-    if [ -s "$pin_file" ] && fsa_release_root "$loaded_root" > /dev/null 2>&1 &&
-        [ "$(jq -r '.root // ""' "$pin_file" 2>/dev/null)" != "$loaded_root" ]; then
-        # A release is immutable and its hooks already run: a resumed session dispatches through the same release.
-        stale_release=$(jq -r '.version // .root' "$pin_file" 2>/dev/null)
-    fi
-    if [ ! -s "$pin_file" ] || [ "$session_source" = "startup" ] || [ "$session_source" = "clear" ] || [ -n "$stale_release" ]; then
+    stale_release=$(fsa_repin_stale_release "$PLUGIN_ROOT" "$pin_file") || stale_release=""
+    if [ ! -s "$pin_file" ] || [ "$session_source" = "startup" ] || [ "$session_source" = "clear" ]; then
         mkdir -p "$(fsa_pin_dir)" && fsa_plugin_pin "$PLUGIN_ROOT" > "$pin_file" 2>/dev/null || rm -f "$pin_file"
     fi
     if [ -n "$stale_release" ] && [ -s "$pin_file" ]; then
