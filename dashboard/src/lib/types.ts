@@ -44,6 +44,7 @@ export interface Session {
   task_tracking?: Record<string, unknown>;
   engine?: string;
   updated?: number;
+  previous?: string;
   [key: string]: unknown;
 }
 

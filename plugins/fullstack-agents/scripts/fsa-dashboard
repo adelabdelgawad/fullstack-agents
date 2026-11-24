@@ -2847,7 +2847,7 @@ def build_state(repo, gc, only=None, extra=(), pane_bindings=None):
         title = (owner or {}).get("name") or label or (latest_run or {}).get("goal", "")[:90] or key
         card = {"key": key, "repo": main_root, "title": title, "label": label, "tree": tree, "worktree": tree_key if tree else "",
                 "goal": (latest_run or {}).get("goal", ""), "desc": (latest_run or {}).get("desc", ""),
-                "sessions": [{**{k: s.get(k) for k in ("id", "name", "state", "updated", "branch", "model", "workflow_phase", "workflow_at", "workflow_history", "workflow_checks", "workflow_summary", "workflow_auditor", "workflow_runs", "task_tracking", "usage")},
+                "sessions": [{**{k: s.get(k) for k in ("id", "name", "state", "updated", "branch", "model", "workflow_phase", "workflow_at", "workflow_history", "workflow_checks", "workflow_summary", "workflow_auditor", "workflow_runs", "task_tracking", "usage", "previous")},
                               "engine": s.get("engine") or "claude"} for s in g["sessions"]],
                 "workflow_runs": [r for s in g["sessions"] for r in s.get("workflow_runs", [])],
                 "runs": g["runs"][-6:],

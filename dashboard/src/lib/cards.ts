@@ -59,6 +59,32 @@ export const stageOf = (c: Card): string =>
 export const STAGE_LABEL = (c: Card): string =>
   (STAGES.find((s) => s.key === stageOf(c)) || ({} as Stage)).label || c.phase;
 
+/** The live card for an open card key: itself, else the card continuing its session after a context handoff (the new
+ * session names the old one in `previous`), else the card whose lead session sits in the pane the old one was last seen in. */
+export function followHandoff(
+  cards: Card[],
+  key: string,
+  panes: Record<string, string>,
+  lastPane?: string,
+): string | null {
+  if (cards.some((c) => c.key === key)) return key;
+  let sid = key.startsWith("session:") ? key.slice(8) : "";
+  let found: Card | null = null;
+  for (let hop = 0; sid && hop < 10; hop++) {
+    const old = sid;
+    const next = cards.find((c) => c.sessions.some((s) => s.previous === old));
+    if (!next) break;
+    found = next;
+    sid = next.sessions.find((s) => s.previous === old)!.id;
+  }
+  if (found) return found.key;
+  if (lastPane) {
+    const byPane = cards.find((c) => c.sessions[0] && panes[c.sessions[0].id] === lastPane);
+    if (byPane) return byPane.key;
+  }
+  return null;
+}
+
 export const soleSid = (c: Card): string => (c.tree && c.sessions.length === 1 ? c.sessions[0].id : "");
 
 export const worktreesOf = (c: Card, state: DashState | null): Card[] => {

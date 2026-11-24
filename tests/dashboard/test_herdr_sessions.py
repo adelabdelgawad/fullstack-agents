@@ -126,6 +126,19 @@ class HerdrSessionTests(unittest.TestCase):
                     card = self.build(snap)["cards"][0]
                 self.assertEqual((card["title"], card["now"][0]["name"]), (title, title))
 
+    def test_card_session_carries_the_session_it_continues_after_a_handoff(self):
+        snap = snapshot(("x9:p1", "claude", "idle", self.home))
+        snap["panes"][0]["agent_session"] = {"agent": "claude", "kind": "id", "value": "new-lead"}
+        session = dash.pane_session(snap["panes"][0], str(self.home), time.time())
+        session.update(id="new-lead", previous="old-lead")
+        with mock.patch.object(dash, "collect_sessions", return_value=[session]), \
+                mock.patch.object(dash, "collect_codex_sessions", return_value=[]), \
+                mock.patch.object(dash, "fresh_sessions", return_value=[]), \
+                mock.patch.object(dash, "collect_runs", return_value=[]), \
+                mock.patch.object(dash, "judge_turns"):
+            card = self.build(snap)["cards"][0]
+        self.assertEqual(card["sessions"][0]["previous"], "old-lead")
+
     def test_snapshot_carries_each_pane_tab_label(self):
         raw = {"result": {"snapshot": {"workspaces": [], "tabs": [{"tab_id": "w1:t1", "label": "Noise reduction"}],
                                        "panes": [{"pane_id": "w1:p1", "tab_id": "w1:t1"}, {"pane_id": "w1:p2", "tab_id": "gone"}]}}}

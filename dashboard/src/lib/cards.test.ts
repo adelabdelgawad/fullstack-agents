@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fleetCompare, fleetMatches, type FleetState } from "./cards";
+import { fleetCompare, fleetMatches, followHandoff, type FleetState } from "./cards";
 import type { Card } from "./types";
 
 function card(overrides: Partial<Card>): Card {
@@ -40,5 +40,32 @@ describe("fleetCompare", () => {
     const cards = [card({ key: "a", usage: { cost: 1 } }), card({ key: "b", usage: { cost: 9 } }), card({ key: "c" })];
     const fleet: FleetState = { filter: "all", sort: "cost", text: "" };
     expect([...cards].sort((a, b) => fleetCompare(a, b, fleet)).map((c) => c.key)).toEqual(["b", "a", "c"]);
+  });
+});
+
+describe("followHandoff", () => {
+  const lead = (id: string, previous?: string) => ({ id, name: id, state: "idle", previous });
+  const solo = (id: string, previous?: string) => card({ key: `session:${id}`, sessions: [lead(id, previous)] });
+
+  it("keeps the key while its card is live (catches needless re-pointing)", () => {
+    expect(followHandoff([solo("a"), solo("b", "a")], "session:a", {})).toBe("session:a");
+  });
+
+  it("follows one handoff to the card continuing the session (catches the panel closing on a handoff)", () => {
+    expect(followHandoff([solo("b", "a")], "session:a", {})).toBe("session:b");
+  });
+
+  it("follows a two-hop chain (catches stopping at the first successor)", () => {
+    const cards = [card({ key: "wt", sessions: [lead("b", "a"), lead("c", "b")] }), solo("d", "c")];
+    expect(followHandoff(cards, "session:a", {})).toBe("session:d");
+  });
+
+  it("falls back to the card in the same pane (catches a handoff whose previous is unread)", () => {
+    const cards = [solo("x"), solo("n")];
+    expect(followHandoff(cards, "session:a", { x: "p1", n: "p2" }, "p2")).toBe("session:n");
+  });
+
+  it("returns null when nothing continues the key (catches jumping to an unrelated card)", () => {
+    expect(followHandoff([solo("x")], "session:a", { x: "p1" }, "p9")).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { getJson, postJson } from "./lib/api";
-import { favKeys, needsHuman } from "./lib/cards";
+import { favKeys, followHandoff, needsHuman } from "./lib/cards";
 import { esc } from "./lib/format";
 import type { DashState, HerdrState, WaitingEntry } from "./lib/types";
 
@@ -224,6 +224,25 @@ function notify(data: DashState): void {
   document.title = n ? `(${n}) Agents` : "Agents";
 }
 
+let openPane: string | undefined;
+
+/** Keep the open card open across a context handoff: its key vanishes when the herdr pane starts a new session. */
+function followOpenCard(data: DashState): void {
+  const key = store.get().openKey;
+  if (!key) {
+    openPane = undefined;
+    return;
+  }
+  const card = data.cards.find((c) => c.key === key);
+  if (card) {
+    const lead = card.sessions[0]?.id;
+    openPane = (lead && data.session_panes?.[lead]) || openPane;
+    return;
+  }
+  const next = followHandoff(data.cards, key, data.session_panes || {}, openPane);
+  if (next) store.set({ openKey: next });
+}
+
 export async function load(): Promise<void> {
   try {
     const data = await getJson<DashState>("/api/state");
@@ -234,6 +253,7 @@ export async function load(): Promise<void> {
     uiSeen = data.ui ?? null;
     notify(data);
     store.set({ state: data, offline: false });
+    followOpenCard(data);
     stateLoadedCallbacks.forEach((fn) => fn());
     const s = store.get();
     if (s.view === "herdr" || (s.openKey && s.tab2 === "terminal")) loadHerdr();

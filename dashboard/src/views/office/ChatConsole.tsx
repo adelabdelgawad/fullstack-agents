@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { getJson, postJson } from "../../lib/api";
-import { cardAgents, needsHuman, STATE_TEXT } from "../../lib/cards";
+import { cardAgents, followHandoff, needsHuman, STATE_TEXT } from "../../lib/cards";
 import { esc } from "../../lib/format";
 import type { Card } from "../../lib/types";
 import { keepOrder } from "./model";
@@ -523,7 +523,15 @@ export function ChatConsole({
   const [key, setKey] = useState<string | null>(initial ?? null);
   const [terminal, setTerminal] = useState(false);
   const [workerId, setWorkerId] = useState<string | null>(initialWorker ?? null);
-  const current = cards.find((card) => card.key === key) || cards[0] || null;
+  const lastPane = useRef<string | undefined>(undefined);
+  const live =
+    key && !cards.some((card) => card.key === key) ? followHandoff(cards, key, panes, lastPane.current) : null;
+  useEffect(() => {
+    if (live && live !== key) setKey(live);
+  }, [live, key]);
+  const current = cards.find((card) => card.key === (live || key)) || cards[0] || null;
+  const leadId = current?.sessions[0]?.id;
+  if (leadId && current?.key === (live || key) && panes[leadId]) lastPane.current = panes[leadId];
   const worker = workersOf(current).find((item) => item.id === workerId) || null;
   const pickSession = (next: string) => {
     setKey(next);
