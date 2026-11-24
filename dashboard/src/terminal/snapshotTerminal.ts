@@ -1,3 +1,4 @@
+import { nodeUrl } from "../lib/api";
 import { ansiHtml } from "../lib/markup";
 import { getTerminal, type TerminalState } from "./liveTerminal";
 
@@ -35,7 +36,7 @@ export async function pollTerminal(): Promise<void> {
   current.polling = true;
   try {
     const since = current.hash ? `&since=${encodeURIComponent(current.hash)}` : "";
-    const response = await fetch(`/api/herdr/screen?pane=${encodeURIComponent(current.pane)}&source=recent${since}`, {
+    const response = await fetch(nodeUrl(`/api/herdr/screen?pane=${encodeURIComponent(current.pane)}&source=recent${since}`), {
       cache: "no-store",
     });
     if (getTerminal() !== current || current.mode !== "history") return;

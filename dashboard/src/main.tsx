@@ -2,6 +2,7 @@ import "./styles/retro-controls.css";
 import "./styles/fleet.css";
 import "./styles/dashboard.css";
 import "./styles/productivity.css";
+import "./styles/nodes.css";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 

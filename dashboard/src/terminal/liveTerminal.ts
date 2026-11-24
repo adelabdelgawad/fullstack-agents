@@ -1,3 +1,4 @@
+import { nodeUrl } from "../lib/api";
 import type { IDisposable, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { LIVE_UPLOAD_MAX_BYTES, filesFromPaste, uploadFiles, uploadingText, wireFileDrop } from "./files";
@@ -128,7 +129,7 @@ async function postLiveTerminal(current: TerminalState, body: unknown): Promise<
     .then(async () => {
       if (current.liveEpoch !== epoch || terminal !== current) return;
       const started = performance.now();
-      const response = await fetch("/api/herdr/live/input", {
+      const response = await fetch(nodeUrl("/api/herdr/live/input"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session, ...(body as object) }),
@@ -226,7 +227,7 @@ function openLiveStream(current: TerminalState, takeover = false): void {
   const cols = current.term?.cols ?? 0;
   const rows = current.term?.rows ?? 0;
   const stream = new EventSource(
-    `/api/herdr/live?pane=${encodeURIComponent(current.pane)}&cols=${cols}&rows=${rows}${takeover ? "&takeover=1" : ""}`,
+    nodeUrl(`/api/herdr/live?pane=${encodeURIComponent(current.pane)}&cols=${cols}&rows=${rows}${takeover ? "&takeover=1" : ""}`),
   );
   current.stream = stream;
   stream.addEventListener("ready", (event) => {

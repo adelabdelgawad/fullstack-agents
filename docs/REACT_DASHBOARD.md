@@ -35,6 +35,16 @@ style, API call, poll interval, localStorage key and keyboard shortcut stays as 
 
 A unit edits only its own files. A needed change to another unit's file is reported, never made.
 
+## Linked hosts (nodes)
+
+| Topic | Decision |
+|---|---|
+| Registry | `~/.config/fullstack-agents/nodes.json` (`$XDG_CONFIG_HOME` honoured, `FSA_NODES_FILE` overrides), written atomically with mode 0600; `plugins/fullstack-agents/scripts/lib/nodes.py` owns it |
+| Routes | `GET/POST /api/nodes` (list without tokens / add after a probe of the remote `/api/herdr` with the token), `POST /api/nodes/remove`, `GET /api/fs/dirs?path=&hidden=` (folder picker, whole filesystem, at most 500 entries) |
+| Proxy | `/api/node/<id>/api/...` forwards the same call to the linked dashboard: strips `t=`, sends the stored token as the `fsa_t` cookie, streams SSE (`/api/herdr/live`) and tunnels WebSockets with the remote Host/Origin (at most 8 tunnels). The token never reaches the browser |
+| UI | `store.node` is the focused host (`""` = this host); `lib/api.ts` `nodeUrl()`/`wsUrl()` prefix every call, and a vitest case fails on any raw `/api` fetch outside them. `components/Hosts.tsx` holds the picker and the hosts dialog, `terminal/NewSession.tsx` the host → workspace → folder flow, `OfficeView.tsx` one `OfficeBuilding` per host; the header status names the focused host |
+| Transport | Plain HTTP between dashboards: link hosts only on a trusted network or through an SSH tunnel or VPN. A new workspace must be an existing folder; the picker does not create folders |
+
 ## Module contract (fixed by U1, consumed by U2-U5)
 
 | Module | Exports | Notes |

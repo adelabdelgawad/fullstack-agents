@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from "react";
-import { getJson, postJson } from "./lib/api";
+import { getJson, nodeUrl, postJson, setApiNode } from "./lib/api";
 import { favKeys, followHandoff, needsHuman } from "./lib/cards";
 import { esc } from "./lib/format";
-import type { DashState, HerdrState, WaitingEntry } from "./lib/types";
+import type { DashState, HerdrState, NodeInfo, WaitingEntry } from "./lib/types";
 
 const ls = {
   get(key: string, fallback: string): string {
@@ -61,6 +61,17 @@ export interface StoreState {
   offline: boolean;
   toasts: Toast[];
   ctx: CtxState | null;
+  /** The focused dashboard node: "" this host, else a linked host's id. Every view and call follows it. */
+  node: string;
+  /** The linked hosts (never their tokens). */
+  nodes: NodeInfo[];
+  /** The last state of every node, focused or not, for the Office's one building per host. */
+  nodeStates: Record<string, NodeState>;
+}
+
+export interface NodeState {
+  state: DashState | null;
+  offline: boolean;
 }
 
 type Patch = Partial<StoreState> | ((s: StoreState) => Partial<StoreState>);
@@ -93,6 +104,9 @@ let current: StoreState = {
   offline: false,
   toasts: [],
   ctx: null,
+  node: "",
+  nodes: [],
+  nodeStates: {},
 };
 
 const listeners = new Set<Listener>();
@@ -243,23 +257,92 @@ function followOpenCard(data: DashState): void {
   if (next) store.set({ openKey: next });
 }
 
+function setNodeState(node: string, patch: NodeState): void {
+  store.set((s) => ({ nodeStates: { ...s.nodeStates, [node]: patch } }));
+}
+
+/** Focus another node: the panel, toasts and herdr data of the old one go; views reload from the new one. */
+export function focusNode(node: string): void {
+  if (node === store.get().node) return;
+  closePanel();
+  closeCtx();
+  setApiNode(node);
+  ls.set("node", node);
+  seen = null;
+  openPane = undefined;
+  store.set((s) => ({ node, state: s.nodeStates[node]?.state ?? null, herdrData: null }));
+  void load();
+}
+
+const NODE_TIMEOUT_MS = 4000;
+
+async function fetchNodeState(node: string): Promise<void> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), NODE_TIMEOUT_MS);
+  try {
+    const response = await fetch(nodeUrl("/api/state", node), { cache: "no-store", signal: abort.signal });
+    if (!response.ok) throw new Error(String(response.status));
+    const data = (await response.json()) as DashState;
+    if (node !== store.get().node) setNodeState(node, { state: data, offline: false });
+  } catch {
+    if (node !== store.get().node) setNodeState(node, { state: store.get().nodeStates[node]?.state ?? null, offline: true });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The host links, and the state of every node not in focus; never delays the focused node's load. */
+async function loadOtherNodes(): Promise<void> {
+  let nodes: NodeInfo[];
+  try {
+    nodes = (await getJson<{ nodes: NodeInfo[] }>("/api/nodes")).nodes || [];
+  } catch {
+    return;
+  }
+  const ids = new Set(nodes.map((n) => n.id));
+  store.set((s) => ({
+    nodes,
+    nodeStates: Object.fromEntries(Object.entries(s.nodeStates).filter(([id]) => !id || ids.has(id))),
+  }));
+  if (store.get().node && !ids.has(store.get().node)) return focusNode("");
+  await Promise.all(["", ...ids].filter((id) => id !== store.get().node).map(fetchNodeState));
+}
+
+/** Reload the host links now (after one is added or removed). */
+export function reloadNodes(): Promise<void> {
+  return loadOtherNodes();
+}
+
 export async function load(): Promise<void> {
+  void loadOtherNodes();
+  const node = store.get().node;
   try {
     const data = await getJson<DashState>("/api/state");
-    if (uiSeen && data.ui && uiSeen !== data.ui) {
+    if (node !== store.get().node) return;
+    // Only this host's UI stamp reloads the page: a linked host may run another release.
+    if (!node && uiSeen && data.ui && uiSeen !== data.ui) {
       location.reload();
       return;
     }
-    uiSeen = data.ui ?? null;
+    if (!node) uiSeen = data.ui ?? null;
     notify(data);
     store.set({ state: data, offline: false });
+    setNodeState(node, { state: data, offline: false });
     followOpenCard(data);
     stateLoadedCallbacks.forEach((fn) => fn());
     const s = store.get();
     if (s.view === "herdr" || (s.openKey && s.tab2 === "terminal")) loadHerdr();
   } catch {
+    if (node !== store.get().node) return;
     store.set({ offline: true });
+    setNodeState(node, { state: store.get().state, offline: true });
   }
+}
+
+const savedNode = ls.get("node", "");
+if (savedNode) {
+  setApiNode(savedNode);
+  current = { ...current, node: savedNode };
 }
 
 let herdrLoading: Promise<void> | null = null;

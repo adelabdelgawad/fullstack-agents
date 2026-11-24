@@ -1,3 +1,4 @@
+import { nodeUrl } from "../lib/api";
 export const LIVE_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 
 export const uploadingText = (files: File[]): string =>
@@ -6,7 +7,7 @@ export const uploadingText = (files: File[]): string =>
 export async function uploadFiles(files: File[], prefix: string): Promise<string[]> {
   const paths: string[] = [];
   for (const file of files) {
-    const response = await fetch(`${prefix}name=${encodeURIComponent(file.name || "file")}`, {
+    const response = await fetch(nodeUrl(`${prefix}name=${encodeURIComponent(file.name || "file")}`), {
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
       body: file,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { getJson, postJson } from "../../lib/api";
+import { getJson, nodeUrl, postJson } from "../../lib/api";
 import { cardAgents, followHandoff, needsHuman, STATE_TEXT } from "../../lib/cards";
 import { esc } from "../../lib/format";
 import type { Card } from "../../lib/types";
@@ -268,7 +268,7 @@ function WorkerOutput({ worker }: { worker: Worker }) {
     let live = true;
     const url = `/api/output?sid=${encodeURIComponent(worker.sid)}&id=${encodeURIComponent(worker.id)}`;
     const load = () =>
-      fetch(url, { cache: "no-store" })
+      fetch(nodeUrl(url), { cache: "no-store" })
         .then((response) => (response.ok ? response.text() : "(this item is no longer listed)"))
         .then((body) => live && setText(body))
         .catch(() => undefined);

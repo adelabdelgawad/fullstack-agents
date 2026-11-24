@@ -1,3 +1,4 @@
+import { nodeUrl } from "../lib/api";
 import { useEffect } from "react";
 import { cardOfSession, sessionOf } from "../lib/cards";
 import { copyText } from "../lib/clipboard";
@@ -133,7 +134,7 @@ function pickOut(id: string): void {
   void pollOutput();
 }
 async function fetchOutput(url: string, gone: string): Promise<string> {
-  const response = await fetch(url, { cache: "no-store" });
+  const response = await fetch(nodeUrl(url), { cache: "no-store" });
   return response.ok ? response.text() : response.status === 404 ? gone : `(error ${response.status})`;
 }
 
@@ -181,7 +182,7 @@ function paintFiles(files: any[] | null, cur?: any): void {
 
 async function changesText(want: OutState, cur: any): Promise<string> {
   const key = enc(cur.run.root),
-    response = await fetch(`/api/files?key=${key}&ref=WORKTREE`, { cache: "no-store" });
+    response = await fetch(nodeUrl(`/api/files?key=${key}&ref=WORKTREE`), { cache: "no-store" });
   if (!response.ok) {
     paintFiles(null);
     return response.status === 404 ? `${cur.run.root} is not a known worktree any more.` : `(error ${response.status})`;

@@ -1,3 +1,4 @@
+import { nodeUrl } from "../lib/api";
 import { retroCardHtml } from "../components/retroMarkup";
 import { RetroCard } from "../components/RetroControls";
 import { useEffect, useRef, useState } from "react";
@@ -64,7 +65,7 @@ function openRunsSection(cardKey: string): void {
 async function pollLog(id: string): Promise<void> {
   if (document.hidden) return;
   try {
-    const text = await (await fetch(`/api/log?id=${encodeURIComponent(id)}`, { cache: "no-store" })).text();
+    const text = await (await fetch(nodeUrl(`/api/log?id=${encodeURIComponent(id)}`), { cache: "no-store" })).text();
     if (store.get().openRun !== id || !showLog || text === logSeen) return;
     logSeen = text || "(log is empty)";
     repaint?.();

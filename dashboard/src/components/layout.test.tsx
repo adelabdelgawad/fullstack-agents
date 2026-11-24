@@ -98,6 +98,14 @@ describe("shared view layout", () => {
     expect(result.querySelector("#meta")).not.toBeNull();
   });
 
+  it("names the focused linked host in the status", () => {
+    act(() => store.set({ node: "gpu", nodes: [{ id: "gpu", label: "GPU box", host: "10.0.0.2", port: 8766 }] }));
+    const result = render("office");
+    expect(result.querySelector("#meta .node-label")?.textContent).toBe("GPU box");
+    act(() => store.set({ node: "", nodes: [] }));
+    expect(result.querySelector("#meta .node-label")).toBeNull();
+  });
+
   it.each(VIEWS)("only renders Agents actions on %s", (view) => {
     const result = render(view);
     const expected = view === "agents" ? 1 : 0;

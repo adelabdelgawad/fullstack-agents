@@ -178,3 +178,11 @@ export interface HerdrState {
   focused_workspace_id?: string | null;
   [key: string]: unknown;
 }
+
+/** A linked host's dashboard, as this host lists it (its token never reaches the browser). */
+export interface NodeInfo {
+  id: string;
+  label: string;
+  host: string;
+  port: number;
+}

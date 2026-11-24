@@ -1,11 +1,13 @@
+import { nodeUrl } from "../lib/api";
 import { useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { saidText } from "../lib/markup";
-import { load, loadHerdr, store } from "../store";
+import { loadHerdr, store } from "../store";
 import { copySelection } from "./copy";
 import { closeHerdrClient, remountHerdrClient } from "./herdrClient";
 import { HerdrMenu, type HerdrMenuItem } from "./herdrMenus";
 import { getTerminal, mountTerminal, stopTerminal, terminalSelection } from "./liveTerminal";
+import { NewSessionModal } from "./NewSession";
 
 export interface HerdrConfirmOpts {
   confirm?: string;
@@ -15,6 +17,7 @@ export interface HerdrConfirmOpts {
 interface ActionResult {
   ok: boolean;
   error?: unknown;
+  result?: unknown;
 }
 type ModalKind = "prompt" | "confirm" | "new" | "start" | "unavailable";
 interface ModalState {
@@ -87,7 +90,7 @@ export async function herdrAction(
   });
   let data: ActionResult;
   try {
-    const response = await fetch("/api/herdr/action", {
+    const response = await fetch(nodeUrl("/api/herdr/action"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, ...params }),
@@ -172,12 +175,10 @@ export function openHerdrConfirm(
   });
 }
 
+/** The new-session dialog: it picks the node and loads that node's workspaces itself. */
 export async function openNewSession(returnFocus: HTMLElement): Promise<void> {
-  if (!store.get().herdrData) await loadHerdr();
-  const data = store.get().herdrData;
-  const workspaces = (data?.workspaces || []) as Record<string, unknown>[];
   closeHerdrOverlay(false);
-  setOverlay({ kind: !data?.running || !workspaces.length ? "unavailable" : "new", returnFocus });
+  setOverlay({ kind: "new", returnFocus });
 }
 
 function openStartAgent(pane: Record<string, unknown>, returnFocus: HTMLElement): void {
@@ -369,95 +370,6 @@ function ConfirmModal({ state }: { state: ModalState }) {
   );
 }
 
-const engines = {
-  claude: ["Claude", "Opens a new tab in the space and runs cc -n '<name>'"],
-  codex: ["Codex", "Opens a new tab in the space, named <name>, and runs codex"],
-  grok: ["Grok", "Opens a new tab in the space, named <name>, and runs opencode -m xai/grok-4.7"],
-};
-
-async function submitNewSession(form: HTMLFormElement): Promise<void> {
-  const name = (form.elements.namedItem("name") as HTMLInputElement).value.trim();
-  if (!name || name.length > 80 || name.startsWith("-"))
-    return setHerdrError(
-      'Name must be 1–80 characters and not start with "-"',
-      form.closest<HTMLElement>(".herdr-modal-backdrop"),
-    );
-  const button = form.querySelector<HTMLButtonElement>('[type="submit"]')!;
-  button.disabled = true;
-  button.textContent = "starting…";
-  const result = await herdrAction(
-    "session.create",
-    {
-      workspace_id: (form.elements.namedItem("space") as HTMLSelectElement).value,
-      name,
-      engine: (form.elements.namedItem("engine") as HTMLSelectElement).value,
-    },
-    form.closest<HTMLElement>(".herdr-modal-backdrop"),
-  );
-  if (result.ok) {
-    closeHerdrOverlay();
-    void load();
-  } else {
-    button.disabled = false;
-    button.textContent = "start";
-  }
-}
-
-function changeEngine(event: React.ChangeEvent<HTMLSelectElement>): void {
-  const note = event.currentTarget.form?.querySelector<HTMLElement>("[data-engine-note]");
-  if (note) note.textContent = engines[event.currentTarget.value as keyof typeof engines][1];
-}
-
-function NewSessionModal() {
-  const data = store.get().herdrData!;
-  const workspaces = data.workspaces as Record<string, unknown>[];
-  const focused = (data.panes as Record<string, unknown>[]).find(
-    (pane) => field(pane, "pane_id") === data.focused_pane_id,
-  );
-  const current = focused ? field(focused, "workspace_id") : field(workspaces[0], "workspace_id");
-  return (
-    <ModalFrame submit={(form) => void submitNewSession(form)}>
-      <h2>new session</h2>
-      <label>
-        agent
-        <select name="engine" defaultValue="claude" onChange={changeEngine}>
-          {Object.entries(engines).map(([key, value]) => (
-            <option key={key} value={key}>
-              {value[0]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        name
-        <input name="name" maxLength={80} autoComplete="off" required autoFocus />
-      </label>
-      <label>
-        space
-        <select name="space" defaultValue={current}>
-          {workspaces.map((workspace) => (
-            <option key={field(workspace, "workspace_id")} value={field(workspace, "workspace_id")}>
-              {field(workspace, "label") || field(workspace, "workspace_id")}
-            </option>
-          ))}
-        </select>
-      </label>
-      <p className="herdr-modal-note" data-engine-note="">
-        {engines.claude[1]}
-      </p>
-      <div className="herdr-modal-error" aria-live="polite"></div>
-      <div className="herdr-modal-actions">
-        <button type="button" data-herdr-cancel="" onClick={() => closeHerdrOverlay()}>
-          cancel
-        </button>
-        <button type="submit" className="primary">
-          start
-        </button>
-      </div>
-    </ModalFrame>
-  );
-}
-
 function StartAgentModal({ state }: { state: ModalState }) {
   const kinds = (store.get().herdrData?.agent_kinds as string[] | undefined) || [];
   const initial = kinds.includes("claude") ? "claude" : kinds[0] || "claude";
@@ -511,7 +423,8 @@ function OverlayPortal({ state }: { state: Exclude<OverlayState, null> }) {
   if (state.kind === "menu") return createPortal(<HerdrMenu {...state} close={closeHerdrOverlay} />, document.body);
   if (state.kind === "prompt") return createPortal(<PromptModal state={state} />, document.body);
   if (state.kind === "confirm") return createPortal(<ConfirmModal state={state} />, document.body);
-  if (state.kind === "new") return createPortal(<NewSessionModal />, document.body);
+  if (state.kind === "new")
+    return createPortal(<NewSessionModal action={herdrAction} close={() => closeHerdrOverlay()} />, document.body);
   if (state.kind === "start") return createPortal(<StartAgentModal state={state} />, document.body);
   return createPortal(
     <ModalFrame>

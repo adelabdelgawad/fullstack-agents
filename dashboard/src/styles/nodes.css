@@ -1,0 +1,167 @@
+/* Linked hosts: the header's host selector and "+ Host" button, the hosts dialog, the folder picker and the Office's
+   per-host building titles. */
+.node-select select,
+.hosts-btn {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.node-select select:focus-visible,
+.hosts-btn:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: 1px;
+}
+.hosts-btn:hover {
+  color: inherit;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.hosts-modal,
+.new-session-modal {
+  width: min(64ch, calc(100vw - 4ch));
+}
+.hosts-list {
+  list-style: none;
+  margin: 0 0 1lh;
+  padding: 0;
+}
+.hosts-list li {
+  display: flex;
+  align-items: center;
+  gap: 1ch;
+  padding: 0.25lh 0;
+  color: var(--herdr-text);
+}
+.hosts-list .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.hosts-list .dot.off {
+  background: var(--red);
+}
+.hosts-list .hosts-addr {
+  flex: 1;
+  color: var(--herdr-overlay1);
+}
+.hosts-list button {
+  border: 0;
+  background: none;
+  color: var(--herdr-text);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.hosts-list .danger {
+  color: var(--herdr-red);
+}
+.path-row {
+  display: flex;
+  gap: 1ch;
+}
+.path-row input {
+  flex: 1;
+}
+.path-row button,
+.path-picker button {
+  border: 1px solid var(--herdr-overlay0);
+  background: transparent;
+  color: var(--herdr-text);
+  font: inherit;
+  padding: 0.2lh 1ch;
+  cursor: pointer;
+}
+.path-picker {
+  margin: -0.5lh 0 1lh;
+  border: 1px solid var(--herdr-overlay0);
+}
+.path-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 1ch;
+  padding: 0.3lh 1ch;
+  border-bottom: 1px solid var(--herdr-overlay0);
+  color: var(--herdr-text);
+  word-break: break-all;
+}
+.path-picker-head span {
+  flex: 1;
+}
+.path-picker ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 14lh;
+  overflow: auto;
+}
+.path-picker li button {
+  display: flex;
+  width: 100%;
+  gap: 1ch;
+  border: 0;
+  text-align: left;
+  padding: 0.2lh 1ch;
+}
+.path-picker li button:hover,
+.path-picker li button:focus-visible {
+  background: var(--herdr-selection-bg);
+  outline: 0;
+}
+.path-picker .git {
+  margin-left: auto;
+  color: var(--green);
+}
+.path-picker-note {
+  padding: 0.3lh 1ch;
+  color: var(--herdr-overlay1);
+}
+.office-buildings {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 100%;
+}
+.office-building-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.office-building-title .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.office-building-title .dot.off {
+  background: var(--red);
+}
+.office-building-title small {
+  color: var(--muted);
+  font-weight: 400;
+}
+.office-buildings {
+  padding: 16px;
+}
+.office-buildings .office-view-multi {
+  min-height: 0;
+  padding: 0;
+}
+.office-view-multi .office-canvas-wrap,
+.office-view-multi .office-canvas {
+  height: 70vh;
+  min-height: 360px;
+}

@@ -1,3 +1,4 @@
+import { nodeUrl } from "../lib/api";
 import { writeClipboard } from "../lib/clipboard";
 import { esc } from "../lib/format";
 import { saidText } from "../lib/markup";
@@ -35,7 +36,7 @@ export async function copyDoc(button: HTMLButtonElement, state: DashState | null
     const response = button.dataset.said || literal !== undefined
       ? null
       : await fetch(
-          `/api/doc?sid=${encodeURIComponent(button.dataset.docSid || "")}&path=${encodeURIComponent(button.dataset.doc || "")}`,
+          nodeUrl(`/api/doc?sid=${encodeURIComponent(button.dataset.docSid || "")}&path=${encodeURIComponent(button.dataset.doc || "")}`),
         );
     const text = literal !== undefined
       ? literal

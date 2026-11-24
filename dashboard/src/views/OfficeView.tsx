@@ -9,9 +9,9 @@ import {
   type RefObject,
 } from "react";
 import { STATE_TEXT } from "../lib/cards";
-import type { Card, WaitingEntry } from "../lib/types";
+import type { Card, DashState, WaitingEntry } from "../lib/types";
 import { openRunLog } from "../panel/Panel";
-import { openCard, setView, store, useStore } from "../store";
+import { focusNode, openCard, setView, store, useStore } from "../store";
 import { openNewSession } from "../terminal/HerdrOverlay";
 import "../styles/office.css";
 import { drawOffice, hitTest, pcHit, roomHit, zoomIconHit } from "./office/draw";
@@ -142,8 +142,7 @@ function TeamZoom({
 }
 
 /** Everything waiting on the user, in one box: each entry opens its card. */
-function DecisionBox() {
-  const waiting = useStore((storeState) => storeState.state?.waiting) || NO_WAITING;
+function DecisionBox({ waiting, focus }: { waiting: WaitingEntry[]; focus: () => void }) {
   const [open, setOpen] = useState(false);
   if (!waiting.length) return null;
   return (
@@ -155,7 +154,7 @@ function DecisionBox() {
         <ul>
           {waiting.map((entry) => (
             <li key={entry.key}>
-              <button type="button" onClick={() => entry.card && openCard(entry.card)}>
+              <button type="button" onClick={() => (focus(), entry.card && openCard(entry.card))}>
                 <strong>{entry.name}</strong>
                 <span>{entry.snippet || "Waiting for your answer"}</span>
               </button>
@@ -362,8 +361,41 @@ function OfficeMenu({
   );
 }
 
+/** The Office: this host's building, then one building per linked host. With no linked host it is exactly the one
+ * building it always was. */
 export function OfficeView() {
-  const state = useStore((storeState) => storeState.state);
+  const node = useStore((s) => s.node);
+  const nodes = useStore((s) => s.nodes);
+  const nodeStates = useStore((s) => s.nodeStates);
+  const state = useStore((s) => s.state);
+  if (!nodes.length) return <OfficeBuilding node="" state={state} />;
+  const hosts = [{ id: "", label: "This host", host: "" }, ...nodes];
+  return (
+    <div className="office-buildings">
+      {hosts.map((host) => {
+        const shown = host.id === node ? state : nodeStates[host.id]?.state ?? null;
+        const offline = Boolean(nodeStates[host.id]?.offline);
+        return (
+          <section key={host.id || "local"} className="office-building" aria-label={`${host.label} office`}>
+            <h2 className="office-building-title">
+              <span className={`dot${offline ? " off" : ""}`} aria-hidden="true"></span>
+              {host.label}
+              <small>
+                {host.host || (shown?.repo ? String(shown.repo).split("/").pop() : "")}
+                {offline ? " · offline" : host.id === node ? " · in focus" : ""}
+              </small>
+            </h2>
+            <OfficeBuilding node={host.id} state={shown} multi />
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+/** One host's office: its CTO and sessions. Any click focuses that host first, so what opens talks to it. */
+function OfficeBuilding({ node, state, multi = false }: { node: string; state: DashState | null; multi?: boolean }) {
+  const focus = () => focusNode(node);
   // Desks stay put while agents work: sessions keep the order they arrived in and subagents keep their seats.
   const seating = useRef(new Seating());
   const office = useMemo(() => seating.current.apply(officeOf(state)), [state]);
@@ -377,14 +409,16 @@ export function OfficeView() {
   const [agentSettings, setAgentSettings] = useState<string | null>(null);
   const [chatWorker, setChatWorker] = useState<string | undefined>(undefined);
   const [menu, setMenu] = useState<{ key: string; x: number; y: number } | null>(null);
-  const cards = useStore((storeState) => storeState.state?.cards) || NO_CARDS;
-  const panes = useStore((storeState) => storeState.state?.session_panes) || NO_PANES;
+  const cards = state?.cards || NO_CARDS;
+  const panes = state?.session_panes || NO_PANES;
+  const waiting = state?.waiting || NO_WAITING;
   /** Right-click on a session's office: a menu for that session. */
   const contextCanvas = (event: MouseEvent<HTMLCanvasElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     const key = roomHit(placed.current, event.clientX - bounds.left, event.clientY - bounds.top);
     if (!key || (key !== CTO_TEAM && !cards.some((card) => card.key === key))) return;
     event.preventDefault();
+    focus();
     setMenu({ key, x: event.clientX - bounds.left, y: event.clientY - bounds.top });
   };
   const [zoom, setZoom] = useState<string | null>(null);
@@ -398,6 +432,7 @@ export function OfficeView() {
    * staff with no session have nothing to open. */
   const open = (id: string | null): boolean => {
     if (!id) return false;
+    focus();
     if (id === CTO_ID) {
       setConsoleId(CTO_ID);
       return true;
@@ -418,6 +453,7 @@ export function OfficeView() {
     const x = event.clientX - bounds.left;
     const y = event.clientY - bounds.top;
     // The magnifier zooms into that office (or back out); anywhere else in a session's office opens its console.
+    focus();
     const icon = zoomIconHit(placed.current, x, y);
     if (icon) return setZoom(zoomTeam ? null : icon);
     if (open(pcHit(placed.current, x, y)) || open(hitTest(placed.current, x, y))) return;
@@ -425,11 +461,11 @@ export function OfficeView() {
     const card = cards.find((item) => item.key === room);
     if (card) openConsole(card.key);
   };
-  if (!employees.length) return <div className="office-empty">No live sessions</div>;
+  if (!employees.length) return <div className="office-empty">{state ? "No live sessions" : "Not reachable yet"}</div>;
   return (
-    <section className="office-view" aria-label="Live session office">
+    <section className={`office-view${multi ? " office-view-multi" : ""}`} aria-label="Live session office">
       <div className="office-canvas-wrap">
-        <DecisionBox />
+        <DecisionBox waiting={waiting} focus={focus} />
         <TeamZoom teams={office.teams} zoom={zoomTeam} setZoom={setZoom} />
         <canvas
           ref={canvasRef}

@@ -1,3 +1,4 @@
+import { nodeUrl } from "../lib/api";
 import { RetroButton, RetroCard } from "../components/RetroControls";
 import { useEffect, useState } from "react";
 import { ago } from "../lib/format";
@@ -37,7 +38,7 @@ async function loadDiff(card: Card, paint: Paint): Promise<void> {
   if (!item || !file) return;
   try {
     const text = await (
-      await fetch(`/api/diff?key=${enc(card.key)}&ref=${enc(item)}&path=${enc(file)}`, { cache: "no-store" })
+      await fetch(nodeUrl(`/api/diff?key=${enc(card.key)}&ref=${enc(item)}&path=${enc(file)}`), { cache: "no-store" })
     ).text();
     if (git.item === item && git.file === file) {
       git.diff = text;
@@ -57,7 +58,7 @@ async function loadFiles(card: Card, paint: Paint): Promise<void> {
   const ref = git.item;
   if (!ref) return;
   try {
-    git.files = await (await fetch(`/api/files?key=${enc(card.key)}&ref=${enc(ref)}`, { cache: "no-store" })).json();
+    git.files = await (await fetch(nodeUrl(`/api/files?key=${enc(card.key)}&ref=${enc(ref)}`), { cache: "no-store" })).json();
   } catch {
     return;
   }
@@ -375,7 +376,7 @@ export function GitTab({ card }: { card: Card }) {
       git.sig = sig;
       git.at = Date.now();
       try {
-        git.items = await (await fetch(`/api/changes?key=${enc(card.key)}`, { cache: "no-store" })).json();
+        git.items = await (await fetch(nodeUrl(`/api/changes?key=${enc(card.key)}`), { cache: "no-store" })).json();
       } catch {
         return;
       }

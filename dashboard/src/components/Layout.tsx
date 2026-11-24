@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { esc } from "../lib/format";
+import { HostsButton, NodeSelect } from "./Hosts";
 import type { DashState } from "../lib/types";
 import { setView, setWall, useStore, viewFromPath } from "../store";
 import type { View } from "../store";
@@ -60,11 +61,12 @@ function ViewTabs({ view, state }: { view: View; state: DashState | null }) {
   );
 }
 
-function metaHtml(state: DashState | null, offline: boolean): string {
+function metaHtml(state: DashState | null, offline: boolean, host: string): string {
   if (offline) return '<span class="dot"></span>offline — retrying';
   if (!state) return '<span class="dot"></span>loading…';
   const lock = state.locks.deploy ? '<span class="lock">deploy lock held</span> · ' : "";
-  return `<span class="dot"></span>${esc(state.repo.split("/").pop())} · ${lock}${new Date(state.generated * 1000).toLocaleTimeString()}`;
+  const where = host ? `<span class="node-label">${esc(host)}</span> · ` : "";
+  return `<span class="dot"></span>${where}${esc(state.repo.split("/").pop())} · ${lock}${new Date(state.generated * 1000).toLocaleTimeString()}`;
 }
 
 export function Layout({ actions, children }: { actions?: ReactNode; children: ReactNode }) {
@@ -72,6 +74,9 @@ export function Layout({ actions, children }: { actions?: ReactNode; children: R
   const wall = useStore((state) => state.wall);
   const state = useStore((storeState) => storeState.state);
   const offline = useStore((storeState) => storeState.offline);
+  const host = useStore((storeState) =>
+    storeState.node ? (storeState.nodes.find((n) => n.id === storeState.node)?.label ?? storeState.node) : "",
+  );
   useEffect(() => {
     if (["/", "/next", "/next/"].includes(window.location.pathname)) {
       window.history.replaceState(null, "", `/next/${view}${window.location.search}${window.location.hash}`);
@@ -85,6 +90,8 @@ export function Layout({ actions, children }: { actions?: ReactNode; children: R
       <header className={view === "herdr" ? undefined : "retro-header"}>
         <ViewTabs view={view} state={state} />
         <div className="hright">
+          <NodeSelect />
+          <HostsButton />
           {actions}
           <button
             className="favsw"
@@ -101,7 +108,7 @@ export function Layout({ actions, children }: { actions?: ReactNode; children: R
             className={`status${offline ? " error" : ""}`}
             id="meta"
             title={state ? state.repo : undefined}
-            dangerouslySetInnerHTML={{ __html: metaHtml(state, offline) }}
+            dangerouslySetInnerHTML={{ __html: metaHtml(state, offline, host) }}
           />
         </div>
       </header>

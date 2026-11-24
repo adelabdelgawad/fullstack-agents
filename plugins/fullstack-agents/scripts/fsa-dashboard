@@ -42,8 +42,10 @@ from runs_dir import read_dirs, runs_dir
 import liveness
 import herdr_web
 import goals
+import nodes
 import slash_commands
 REACT = HERE / "lib" / "dashboard-react"
+NODE_BODY_BYTES = 64 * 1024 * 1024  # a proxied file upload to a linked host
 FIRST_PROMPTS = {}
 LAST_ASKS = {}
 CODEX_META = {}
@@ -3094,6 +3096,46 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send(400, b"bad request", "text/plain")
             return False, None
 
+    def node_proxy(self, url):
+        """/api/node/<id>/api/...: the same call on a linked host's dashboard, authenticated with its stored token."""
+        parts = nodes.split_proxy_path(url.path)
+        if parts is None:
+            return self.send(400, b"bad node path", "text/plain")
+        node = nodes.find(parts[0])
+        if node is None:
+            return self.send(404, b"unknown host", "text/plain")
+        if self.command == "GET" and self.headers.get("Upgrade", "").lower() == "websocket":
+            if not herdr_web.same_origin(self.headers.get("Origin", ""), self.headers.get("Host", "")):
+                return self.send(400, b"same-origin websocket upgrade required", "text/plain")
+            return nodes.tunnel_websocket(self, node, parts[1], url.query)
+        body = None
+        if self.command == "POST":
+            length = self.headers.get("Content-Length") or "0"
+            if not re.fullmatch(r"\d{1,9}", length) or int(length) > NODE_BODY_BYTES:
+                return self.send(413, b"invalid Content-Length", "text/plain")
+            body = self.rfile.read(int(length))
+            self.body_read = True
+        return nodes.forward(self, node, parts[1], url.query, body)
+
+    def nodes_post(self, path):
+        origin = self.headers.get("Origin")
+        if origin and not herdr_web.same_origin(origin, self.headers.get("Host", "")):
+            return self.send(403, b"cross-origin request refused", "text/plain")
+        valid, body = self.herdr_json_body()
+        if not valid:
+            return
+        if path == "/api/nodes/remove":
+            if not isinstance(body, dict) or not nodes.remove(str(body.get("id") or "")):
+                return self.send(404, b"unknown host", "text/plain")
+            return self.send(200, json.dumps({"nodes": nodes.public()}).encode())
+        try:
+            node = nodes.add(body)
+        except ValueError as exc:
+            return self.send(400, str(exc).encode(), "text/plain")
+        except ConnectionError as exc:
+            return self.send(502, str(exc).encode(), "text/plain")
+        return self.send(200, json.dumps({"node": node, "nodes": nodes.public()}).encode())
+
     def herdr_upload_body(self):
         length_header = self.headers.get("Content-Length")
         if length_header is None or not re.fullmatch(r"\d+", length_header):
@@ -3339,6 +3381,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if url.path.rstrip("/") in ("", "/next", "/next/agents", "/next/herdr", "/next/history", "/next/office", "/next/goals"):
             cookie = f"fsa_t={self.server.token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000"
             return self.send(200, (REACT / "index.html").read_bytes(), "text/html; charset=utf-8", {"Set-Cookie": cookie})
+        if url.path.startswith(nodes.PROXY_PREFIX):
+            return self.node_proxy(url)
+        if url.path == "/api/nodes":
+            return self.send(200, json.dumps({"nodes": nodes.public()}).encode())
+        if url.path == "/api/fs/dirs":
+            try:
+                listing = nodes.list_dirs((q.get("path") or [""])[0], (q.get("hidden") or [""])[0] == "1")
+            except ValueError as exc:
+                return self.send(400, str(exc).encode(), "text/plain")
+            except PermissionError:
+                return self.send(403, b"permission denied", "text/plain")
+            except OSError as exc:
+                return self.send(404, f"cannot list that folder: {exc.strerror or exc}".encode(), "text/plain")
+            return self.send(200, json.dumps(listing).encode())
         if url.path == "/api/state":
             return self.send(200, self.server.state())
         if url.path == "/api/herdr":
@@ -3467,6 +3523,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         self.body_read = False
         url = urllib.parse.urlparse(self.path)
+        if self.authorised({}) and url.path.startswith(nodes.PROXY_PREFIX):
+            return self.node_proxy(url)
+        if self.authorised({}) and url.path in ("/api/nodes", "/api/nodes/remove"):
+            return self.nodes_post(url.path)
         if not self.authorised({}) or url.path not in ("/api/favourite", "/api/agent-config", "/api/herdr/send", "/api/herdr/action",
                                                           "/api/herdr/live/input", "/api/herdr/live/file", "/api/herdr/file"):
             return self.send(403, b"forbidden", "text/plain")

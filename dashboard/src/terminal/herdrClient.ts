@@ -1,3 +1,4 @@
+import { wsUrl } from "../lib/api";
 import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import type { WebglAddon } from "@xterm/addon-webgl";
@@ -152,9 +153,7 @@ function connectHerdrClient(client: HerdrClientState): void {
   client.size = `${term.cols}x${term.rows}`;
   client.setStatus?.(`connecting · ${client.renderer} · ${term.cols}×${term.rows}`);
   const query = new URLSearchParams({ cols: String(term.cols), rows: String(term.rows) });
-  const ws = new WebSocket(
-    `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/herdr/client?${query}`,
-  );
+  const ws = new WebSocket(wsUrl(`/api/herdr/client?${query}`));
   ws.binaryType = "arraybuffer";
   client.ws = ws;
   ws.onopen = () => {
