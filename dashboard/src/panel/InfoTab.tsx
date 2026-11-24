@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { cardAgents, FLAG_TEXT, STATE_TEXT } from "../lib/cards";
 import { ago, esc, fmtCost, fmtTokens, modelFamily, modelShort } from "../lib/format";
 import { lastPara, saidHtml } from "../lib/markup";
-import type { Card, DashState } from "../lib/types";
+import type { Card, DashState, Session } from "../lib/types";
 import { store } from "../store";
 import { openAgent } from "../components/OutDialog";
 import { COPY_ICON, copyDoc, resumeHtml } from "./docs";
@@ -307,6 +307,31 @@ function progressSection(c: Card, history: any[], activity: any): string {
   return infoSection(c, "progress", "Progress", body);
 }
 
+function copyButton(attrs: string, label: string): string {
+  return `<button class="copy-btn" ${attrs} data-label="1" title="${esc(label)}">${COPY_ICON} ${esc(label)}</button>`;
+}
+
+function resultCopies(message: Session): string {
+  const docs = message.docs || [];
+  const paths = docs.map((d) => d.path).join("\n");
+  const pathsLabel = docs.length === 1 ? "Copy file path" : `Copy ${docs.length} file paths`;
+  const bar =
+    `<div class="copy-bar">${copyButton(`data-said="${esc(message.id)}"`, "Copy response")}` +
+    `${docs.length ? copyButton(`data-copy="${esc(paths)}"`, pathsLabel) : ""}</div>`;
+  if (!docs.length) return bar;
+  const rows = docs
+    .map(
+      (d) =>
+        `<li><span class="mono" title="${esc(d.path)}">${esc(d.shown || d.path)}</span>` +
+        `<button class="copy-ico" data-copy="${esc(d.path)}" aria-label="Copy the path of ${esc(d.name)}" ` +
+        `title="Copy path">${COPY_ICON}</button>` +
+        `<button class="copy-ico" data-doc-sid="${esc(message.id)}" data-doc="${esc(d.path)}" ` +
+        `aria-label="Copy the content of ${esc(d.name)}" title="Copy file content">⧉</button></li>`,
+    )
+    .join("");
+  return `${bar}<div class="result-files-head">Files mentioned · ${docs.length}</div><ul class="result-files">${rows}</ul>`;
+}
+
 function resultSection(
   c: Card,
   lead: any,
@@ -320,13 +345,8 @@ function resultSection(
     ? `<div class="snip"><b>Lead-reported summary</b><pre>${esc(lead.workflow_summary)}</pre></div>`
     : message
       ? `<div class="snip">${esc(lastPara(message.said || message.said_full).slice(0, 400))}</div>` +
-        infoDisclosure(
-          c,
-          "message",
-          `Full message from ${engineName(message.engine)}`,
-          `<button class="copy-ico" data-said="${esc(message.id)}" aria-label="Copy the last message">` +
-            `${COPY_ICON}</button>${saidHtml(message)}`,
-        )
+        resultCopies(message) +
+        infoDisclosure(c, "message", `Full message from ${engineName(message.engine)}`, saidHtml(message))
       : '<div class="s">No agent update recorded.</div>';
   const auditText = audit
     ? esc(audit.state) + (audit.verdict ? ` · ${esc(audit.verdict)}` : " · no verdict recorded")
@@ -513,7 +533,7 @@ function clickInfo(event: React.MouseEvent, card: Card, state: DashState, root: 
     store.set({ openRun: button.dataset.openRun });
   } else if (button.dataset.openFlow)
     root?.querySelector<HTMLDetailsElement>('[data-info-section="runs"]')?.setAttribute("open", "");
-  else if (button.dataset.doc || button.dataset.said) void copyDoc(button as HTMLButtonElement, state);
+  else if (button.dataset.doc || button.dataset.said || button.dataset.copy !== undefined) void copyDoc(button as HTMLButtonElement, state);
 }
 
 export function InfoTab({ card, state, openRun }: { card: Card; state: DashState; openRun: string | null }) {

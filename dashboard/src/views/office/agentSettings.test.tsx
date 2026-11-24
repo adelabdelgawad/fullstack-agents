@@ -39,6 +39,18 @@ describe("agent settings form", () => {
     expect(engineModelKeys(builtin.models, "codex")).toEqual(["codex_implement"]);
   });
 
+  it("shows one implement model and folds the engine's other jobs away", () => {
+    const r = { ...reply("session", { implementer: "codex" }),
+      builtin: { ...builtin, models: { ...builtin.models, codex_investigate: "gpt-5.6-luna", codex_plan: "gpt-5.6-sol" } } };
+    const html = render(r);
+    const fold = html.indexOf("<details");
+    expect(html.indexOf("Implement model")).toBeGreaterThan(-1);
+    expect(html.indexOf("Implement model")).toBeLessThan(fold);
+    expect(html.indexOf("Codex investigate")).toBeGreaterThan(fold);
+    expect(html.indexOf("Codex plan")).toBeGreaterThan(fold);
+    expect(render(reply("default", null))).not.toContain("<details");
+  });
+
   it("offers the engine's models, keeping the built-in and a saved custom value", () => {
     expect(modelOptions(["a", "b"], "b", "custom")).toEqual(["a", "b", "custom"]);
     const r = { ...reply("session", { implementer: "codex", models: { codex_implement: "gpt-6-sol" } }),

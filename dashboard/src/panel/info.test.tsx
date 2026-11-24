@@ -695,4 +695,22 @@ describe("information UI Python parity", () => {
     expect(html).toContain("Choose a search scope");
     expect(html).not.toContain("PASS");
   });
+  it("result_shows_copy_response_and_copyable_mentioned_files", () => {
+    const card = fixture();
+    (card.now[0] as any).docs = [{ name: "plan.md", path: "/repo/docs/plan.md", shown: "docs/plan.md", size: 10 }];
+    const html = render(card, { result: true });
+    const result = html.slice(html.indexOf("<h4>Result"));
+    expect(result).toContain('data-said="lead"');
+    expect(result).toContain("Copy response");
+    expect(result).toContain('data-copy="/repo/docs/plan.md"');
+    expect(result).toContain("Copy file path");
+    expect(result).toContain("Files mentioned · 1");
+    expect(result.indexOf("Files mentioned")).toBeLessThan(result.indexOf("Full message from"));
+  });
+
+  it("result_without_files_offers_only_the_response_copy", () => {
+    const html = render(fixture(), { result: true });
+    expect(html).toContain("Copy response");
+    expect(html).not.toContain("Files mentioned");
+  });
 });

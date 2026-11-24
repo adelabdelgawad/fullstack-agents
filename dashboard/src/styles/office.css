@@ -1103,6 +1103,20 @@ html.office-page aside#panel {
   font-size: 13px;
 }
 
+.agent-settings-more {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px 16px;
+  font-size: 13px;
+}
+
+.agent-settings-more summary {
+  grid-column: 1 / -1;
+  cursor: pointer;
+  color: var(--muted, inherit);
+}
+
 .agent-settings-group label.agent-settings-check {
   flex-direction: row;
   align-items: center;

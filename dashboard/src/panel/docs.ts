@@ -26,15 +26,20 @@ export function resumeHtml(s: Session, state: DashState | null): string {
 }
 
 export async function copyDoc(button: HTMLButtonElement, state: DashState | null): Promise<void> {
+  if (button.dataset.busy) return;
+  button.dataset.busy = "1";
   let ok = false;
   const title = button.dataset.title || (button.dataset.title = button.title);
   try {
-    const response = button.dataset.said
+    const literal = button.dataset.copy;
+    const response = button.dataset.said || literal !== undefined
       ? null
       : await fetch(
           `/api/doc?sid=${encodeURIComponent(button.dataset.docSid || "")}&path=${encodeURIComponent(button.dataset.doc || "")}`,
         );
-    const text = button.dataset.said
+    const text = literal !== undefined
+      ? literal
+      : button.dataset.said
       ? saidText(button.dataset.said, state)
       : response?.ok
         ? await response.text()
@@ -43,11 +48,13 @@ export async function copyDoc(button: HTMLButtonElement, state: DashState | null
   } catch {
     ok = false;
   }
-  button.innerHTML = ok ? CHECK_ICON : "✕";
+  const idle = button.innerHTML;
+  button.innerHTML = ok ? `${CHECK_ICON}${button.dataset.label ? " Copied" : ""}` : "✕";
   button.classList.toggle("ok", ok);
   button.title = ok ? "Copied" : "Copy failed";
   setTimeout(() => {
-    button.innerHTML = COPY_ICON;
+    button.innerHTML = idle;
+    delete button.dataset.busy;
     button.classList.remove("ok");
     button.title = title;
   }, 1500);

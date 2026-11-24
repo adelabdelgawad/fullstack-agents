@@ -62,9 +62,38 @@ interface FormProps {
   setDraft: (draft: AgentSettingsValue) => void;
 }
 
-function EngineFields({ reply, draft, setDraft }: FormProps) {
+function ModelField({ reply, draft, setDraft, engine, modelKey, label }: FormProps & ModelFieldProps) {
+  const fallback = reply.builtin.models[modelKey];
+  return (
+    <label>
+      {label}
+      <select
+        value={draft.models?.[modelKey] || ""}
+        onChange={(event) => setDraft(withSetting(draft, "models", modelKey, event.target.value))}
+      >
+        <option value="">default ({fallback})</option>
+        {modelOptions(reply.model_choices?.[engine], fallback, draft.models?.[modelKey]).map((model) => (
+          <option key={model} value={model}>
+            {model}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+interface ModelFieldProps {
+  engine: string;
+  modelKey: string;
+  label: string;
+}
+
+function EngineFields(props: FormProps) {
+  const { reply, draft, setDraft } = props;
   const { builtin } = reply;
   const engine = draft.implementer || builtin.implementer;
+  const implementKey = `${engine}_implement`;
+  const otherKeys = engineModelKeys(builtin.models, engine).filter((key) => key !== implementKey);
   return (
     <fieldset className="agent-settings-group">
       <legend>Implementer</legend>
@@ -82,22 +111,17 @@ function EngineFields({ reply, draft, setDraft }: FormProps) {
           ))}
         </select>
       </label>
-      {engineModelKeys(builtin.models, engine).map((key) => (
-        <label key={key}>
-          {MODEL_LABELS[key] || key}
-          <select
-            value={draft.models?.[key] || ""}
-            onChange={(event) => setDraft(withSetting(draft, "models", key, event.target.value))}
-          >
-            <option value="">default ({builtin.models[key]})</option>
-            {modelOptions(reply.model_choices?.[engine], builtin.models[key], draft.models?.[key]).map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
-        </label>
-      ))}
+      {implementKey in builtin.models && (
+        <ModelField {...props} engine={engine} modelKey={implementKey} label="Implement model" />
+      )}
+      {otherKeys.length > 0 && (
+        <details className="agent-settings-more">
+          <summary>Other {engine} jobs (scans, planning)</summary>
+          {otherKeys.map((key) => (
+            <ModelField key={key} {...props} engine={engine} modelKey={key} label={MODEL_LABELS[key] || key} />
+          ))}
+        </details>
+      )}
       <label className="agent-settings-check">
         <input
           type="checkbox"

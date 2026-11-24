@@ -584,6 +584,57 @@ main {
   color: var(--ink);
   border-color: var(--line);
 }
+.copy-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.copy-btn:hover,
+.copy-btn:focus-visible {
+  border-color: var(--ink);
+}
+.copy-btn.ok {
+  color: #2e8b57;
+}
+.result-files-head {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.result-files {
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0;
+}
+.result-files li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  font-size: 12px;
+}
+.result-files .mono {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: all;
+}
 .copy-ico.ok {
   color: #2e8b57;
 }
