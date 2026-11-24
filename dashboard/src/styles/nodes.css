@@ -126,3 +126,17 @@
   padding: 0.3lh 1ch;
   color: var(--herdr-overlay1);
 }
+/* CTO chat sidebar: one titled group of sessions per host when hosts are linked. */
+.chat-host {
+  margin: 8px 10px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #a6b0c2);
+}
+.chat-host-empty {
+  margin: 0 10px 4px;
+  font-size: 12px;
+  color: var(--muted, #a6b0c2);
+}

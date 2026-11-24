@@ -60,6 +60,30 @@ def codex_models():
             and isinstance(m.get("slug"), str) and MODEL_RE.match(m["slug"])]
 
 
+# The first plugin release whose dispatcher and hooks read these settings. A session pinned to an older release
+# (scripts/lib/plugin-pin.sh) keeps dispatching through it, so its saved settings take effect only once it re-pins.
+SETTINGS_SINCE = (3, 112, 0)
+
+
+def pinned_release(sid):
+    """The plugin version a session dispatches through (its pin), or None when it has no readable pin."""
+    if not SID_RE.match(sid or ""):
+        return None
+    try:
+        version = json.loads((config_dir().parent / "pins" / f"session-{sid}.json").read_text()).get("version")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return version if isinstance(version, str) and version else None
+
+
+def settings_apply(version):
+    """False only for a pinned release known to predate agent settings; an unknown version gets the benefit."""
+    try:
+        return tuple(int(x) for x in version.split(".")[:3]) >= SETTINGS_SINCE
+    except (AttributeError, ValueError):
+        return True
+
+
 def model_choices():
     return {**MODEL_CHOICES, "codex": codex_models() or MODEL_CHOICES["codex"]}
 

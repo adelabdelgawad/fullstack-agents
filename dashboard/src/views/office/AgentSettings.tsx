@@ -18,6 +18,10 @@ export interface AgentConfigReply {
   subagent_models: string[];
   /** Models offered per engine (claude, codex, grok). */
   model_choices?: Record<string, string[]>;
+  /** The plugin release a session dispatches through (its pin); null when unknown. */
+  pinned_release?: string | null;
+  /** False when that release predates agent settings: saved values wait until the session re-pins. */
+  applies?: boolean;
 }
 
 const MODEL_LABELS: Record<string, string> = {
@@ -163,7 +167,13 @@ export function AgentSettingsForm(props: FormProps) {
   const { reply } = props;
   return (
     <div className="agent-settings-form">
-      {reply.scope === "default" ? (
+      {reply.scope === "session" && reply.applies === false ? (
+        <p className="agent-settings-note warn" role="alert">
+          This session runs plugin {reply.pinned_release}, which ignores agent settings: its dispatches keep the
+          environment&apos;s engine and models. Saved values apply once the session restarts or resumes
+          (<code>claude --resume</code>) or hands off, which moves it to the installed release.
+        </p>
+      ) : reply.scope === "default" ? (
         <p className="agent-settings-note">Applies to new sessions only. Running sessions keep their own settings.</p>
       ) : reply.settings === null ? (
         <p className="agent-settings-note">

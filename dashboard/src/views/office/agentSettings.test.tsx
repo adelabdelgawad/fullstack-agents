@@ -60,6 +60,12 @@ describe("agent settings form", () => {
     expect(html).toContain('<option value="gpt-6-sol" selected="">gpt-6-sol</option>');
   });
 
+  it("warns that a session pinned to a release before agent settings ignores them", () => {
+    const html = render({ ...reply("session", { implementer: "codex" }), pinned_release: "3.87.0", applies: false });
+    expect(html).toContain("runs plugin 3.87.0, which ignores agent settings");
+    expect(render({ ...reply("session", {}), pinned_release: "3.113.2", applies: true })).not.toContain("ignores");
+  });
+
   it("tells a pre-feature session that saving creates its file", () => {
     expect(render(reply("session", null))).toContain("Saving creates its settings");
     expect(render(reply("session", { implementer: "codex" }))).toContain("this session");

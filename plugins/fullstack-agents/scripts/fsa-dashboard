@@ -1501,10 +1501,13 @@ def run_conversation(runs, rid):
 
 def agent_settings_reply(sid):
     """A session's agent settings (or the CTO default when sid is None) with the built-in defaults beside them.
-    settings is null for a session that started before agent settings existed: it keeps the environment's choice."""
+    settings is null for a session that started before agent settings existed: it keeps the environment's choice.
+    applies is false when the session is pinned to a plugin release whose dispatcher ignores these settings."""
+    pinned = agent_config.pinned_release(sid) if sid else None
     return {"scope": "session" if sid else "default", "settings": agent_config.load(sid), "builtin": agent_config.BUILTIN,
             "engines": agent_config.ENGINES, "subagent_models": agent_config.SUBAGENT_MODELS,
-            "model_choices": agent_config.model_choices()}
+            "model_choices": agent_config.model_choices(), "pinned_release": pinned,
+            "applies": agent_config.settings_apply(pinned)}
 
 
 SESSION_TURNS_MAX = 300

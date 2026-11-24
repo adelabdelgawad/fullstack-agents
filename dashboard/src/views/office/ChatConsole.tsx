@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { getJson, nodeUrl, postJson } from "../../lib/api";
 import { cardAgents, followHandoff, needsHuman, STATE_TEXT } from "../../lib/cards";
 import { esc } from "../../lib/format";
 import type { Card } from "../../lib/types";
 import { keepOrder } from "./model";
-import { load, openCard, toast, useStore } from "../../store";
+import { focusNode, load, openCard, toast, useStore } from "../../store";
 import { openHerdrConfirm, openNewSession, openTabRename } from "../../terminal/HerdrOverlay";
 import { filesFromPaste, LIVE_UPLOAD_MAX_BYTES, uploadFiles } from "../../terminal/files";
 import { inline, Markdown } from "./markdown";
@@ -190,28 +190,57 @@ export function endSession(card: Card, pane: string, anchor: HTMLElement): void 
   );
 }
 
-function Sidebar({
-  cards,
+/** One host's running sessions in the chat sidebar. */
+interface SessionGroup {
+  id: string;
+  label: string;
+  cards: Card[];
+}
+
+/** The sessions of every host: this host alone, or with linked hosts one group per host ("Local host" first). */
+function useSessionGroups(): SessionGroup[] {
+  const node = useStore((s) => s.node);
+  const nodes = useStore((s) => s.nodes);
+  const nodeStates = useStore((s) => s.nodeStates);
+  const state = useStore((s) => s.state);
+  return useMemo(
+    () =>
+      [{ id: "", label: "Local host" }, ...nodes].map((host) => ({
+        id: host.id,
+        label: host.label,
+        cards: (host.id === node ? state : nodeStates[host.id]?.state)?.cards || NO_CARDS,
+      })),
+    [node, nodes, nodeStates, state],
+  );
+}
+
+function SidebarGroup({
+  group,
+  focused,
+  titled,
   current,
   pick,
   picked,
   pickWorker,
 }: {
-  cards: Card[];
+  group: SessionGroup;
+  focused: boolean;
+  titled: boolean;
   current: Card | null;
-  pick: (key: string) => void;
+  pick: (host: string, key: string) => void;
   picked: string | null;
   pickWorker: (id: string) => void;
 }) {
-  const panes = useStore((storeState) => storeState.state?.session_panes) || NO_PANES;
+  const cards = useStableCards(group.cards);
+  // Panes, workers and "end session" belong to the host in focus; another host's sessions focus it when picked.
+  const panes = useStore((storeState) => (focused ? storeState.state?.session_panes : undefined)) || NO_PANES;
   return (
-    <nav className="chat-sidebar" aria-label="Running sessions">
-      <button type="button" className="chat-new" onClick={(event) => void openNewSession(event.currentTarget)}>
-        + New session
-      </button>
+    <>
+      {titled && <h3 className="chat-host">{group.label}</h3>}
+      {titled && !cards.length && <p className="chat-host-empty">No live sessions</p>}
       {cards.map((card) => {
         const state = card.sessions[0]?.state || "";
-        const selected = card.key === current?.key;
+        const selected = focused && card.key === current?.key;
         return (
           <div key={card.key}>
             <div
@@ -219,7 +248,7 @@ function Sidebar({
                 needsHuman(card) ? " ask" : state === "working" ? " working" : ""
               }`}
             >
-              <button type="button" aria-current={selected} onClick={() => pick(card.key)}>
+              <button type="button" aria-current={selected} onClick={() => pick(group.id, card.key)}>
                 <span className="chat-sidebar-title">{sessionTitle(card)}</span>
                 <span className={`chat-state ${needsHuman(card) ? "ask" : state}`}>
                   {needsHuman(card) ? "needs you" : STATE_TEXT[state] || state || card.phase}
@@ -241,6 +270,40 @@ function Sidebar({
           </div>
         );
       })}
+    </>
+  );
+}
+
+function Sidebar({
+  current,
+  pick,
+  picked,
+  pickWorker,
+}: {
+  current: Card | null;
+  pick: (host: string, key: string) => void;
+  picked: string | null;
+  pickWorker: (id: string) => void;
+}) {
+  const node = useStore((storeState) => storeState.node);
+  const groups = useSessionGroups();
+  return (
+    <nav className="chat-sidebar" aria-label="Running sessions">
+      <button type="button" className="chat-new" onClick={(event) => void openNewSession(event.currentTarget)}>
+        + New session
+      </button>
+      {groups.map((group) => (
+        <SidebarGroup
+          key={group.id || "local"}
+          group={group}
+          focused={group.id === node}
+          titled={groups.length > 1}
+          current={current}
+          pick={pick}
+          picked={picked}
+          pickWorker={pickWorker}
+        />
+      ))}
     </nav>
   );
 }
@@ -533,7 +596,9 @@ export function ChatConsole({
   const leadId = current?.sessions[0]?.id;
   if (leadId && current?.key === (live || key) && panes[leadId]) lastPane.current = panes[leadId];
   const worker = workersOf(current).find((item) => item.id === workerId) || null;
-  const pickSession = (next: string) => {
+  /** A session on another host focuses that host first, so its chat, composer and terminal talk to it. */
+  const pickSession = (host: string, next: string) => {
+    focusNode(host);
     setKey(next);
     setWorkerId(null);
   };
@@ -558,7 +623,6 @@ export function ChatConsole({
       </div>
       <div className="chat-layout">
         <Sidebar
-          cards={cards}
           current={current}
           pick={pickSession}
           picked={worker?.id || null}

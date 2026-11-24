@@ -1081,6 +1081,10 @@ html.office-page aside#panel {
   color: var(--muted, #a6b0c2);
 }
 
+.agent-settings-note.warn {
+  color: var(--amber, #f2c46d);
+}
+
 .agent-settings-group {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

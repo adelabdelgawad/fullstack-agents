@@ -105,6 +105,18 @@ class AgentConfigApiTests(unittest.TestCase):
         self.assertTrue((self.agents / f"session-{KNOWN}.json").exists())
         self.assertFalse((self.agents / "default.json").exists())
 
+    def test_session_pinned_before_agent_settings_is_reported(self):
+        pins = Path(self.scratch.name) / "fullstack-agents" / "pins"
+        pins.mkdir(parents=True)
+        (pins / f"session-{KNOWN}.json").write_text(json.dumps({"version": "3.87.0"}))
+        body = json.loads(self.call("GET", f"/api/agent-config?sid={KNOWN}")[1])
+        self.assertEqual((body["pinned_release"], body["applies"]), ("3.87.0", False))
+        (pins / f"session-{KNOWN}.json").write_text(json.dumps({"version": "3.113.2"}))
+        body = json.loads(self.call("GET", f"/api/agent-config?sid={KNOWN}")[1])
+        self.assertEqual((body["pinned_release"], body["applies"]), ("3.113.2", True))
+        body = json.loads(self.call("GET", "/api/agent-config")[1])
+        self.assertEqual((body["pinned_release"], body["applies"]), (None, True))
+
     def test_unknown_session_and_bad_values_rejected(self):
         self.assertEqual(self.call("GET", "/api/agent-config?sid=nope")[0], 404)
         self.assertEqual(self.call("GET", "/api/agent-config?sid=../x")[0], 404)
