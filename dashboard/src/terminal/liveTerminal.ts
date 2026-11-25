@@ -4,6 +4,7 @@ import type { FitAddon } from "@xterm/addon-fit";
 import { LIVE_UPLOAD_MAX_BYTES, filesFromPaste, uploadFiles, uploadingText, wireFileDrop } from "./files";
 import { copySelection } from "./copy";
 import { wireTouchScroll } from "./touchScroll";
+import { wireDragScroll } from "./dragScroll";
 import { wireCtrlBackspaceWordErase } from "./wordErase";
 import {
   applyPendingTerminalText,
@@ -54,6 +55,8 @@ export interface TerminalState extends ScrollState {
   imageStatusTimer: ReturnType<typeof setTimeout> | null;
   started: boolean;
   lagging?: boolean;
+  /** The full text of the last drag selection that scrolled the herdr pane; null after a plain selection. */
+  dragText?: string | null;
   rtt?: number;
 }
 
@@ -63,7 +66,8 @@ export const getTerminal = (): TerminalState | null => terminal;
 
 export function terminalSelection(current = terminal): string {
   if (!current) return "";
-  if (current.mode === "live") return current.term?.hasSelection() ? current.term.getSelection() : "";
+  if (current.mode === "live")
+    return current.term?.hasSelection() ? (current.dragText ?? current.term.getSelection()) : "";
   const selection = getSelection();
   const history = current.root.querySelector(".terminal-screen");
   return selection && selection.rangeCount && history?.contains(selection.anchorNode) ? selection.toString() : "";
@@ -307,6 +311,15 @@ function startLiveTerminal(current: TerminalState, restoreFocus = false): void {
   current.fit.fit();
   current.liveDisposables = [
     wireTouchScroll(host),
+    wireDragScroll(
+      host,
+      current.term,
+      (lines) => queueTerminalScroll(current, lines),
+      (text) => {
+        current.dragText = text;
+        if (text.trim()) void copySelection(text, () => current.term?.focus());
+      },
+    ),
     current.term.onData((data) => queueTerminalInput(current, new TextEncoder().encode(data))),
     current.term.onBinary((data) =>
       queueTerminalInput(
@@ -368,9 +381,12 @@ function wireTerminalExtras(current: TerminalState): void {
     if (files.length) void attachLiveFiles(current, files);
   };
   wireFileDrop(box, (files) => void attachLiveFiles(current, files));
+  host.addEventListener("mousedown", () => (current.dragText = null), true);
   host.addEventListener("mouseup", () =>
     setTimeout(() => {
-      if (current.term?.hasSelection()) void copySelection(current.term.getSelection(), () => current.term?.focus());
+      // A drag that scrolled the herdr pane already copied its full text.
+      if (current.dragText == null && current.term?.hasSelection())
+        void copySelection(current.term.getSelection(), () => current.term?.focus());
     }),
   );
   history.addEventListener("mouseup", () =>
