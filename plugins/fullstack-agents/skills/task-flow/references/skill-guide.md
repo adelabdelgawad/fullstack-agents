@@ -20,10 +20,10 @@ Everything above **Project bindings** is project-independent; the bindings come 
 | 5. Loop | Orchestrator | Re-brief with raw output; two retries, then hand the failure to the user |
 
 The orchestrator owns every step but the writing of large changes. It never delegates the
-conclusion, the plan, or responsibility for verification. Test execution goes to the Sonnet `fullstack-agents:test-runner`, which saves full logs;
-those logs are the evidence the orchestrator reads — the runner's summary is only an index into them. Exception: a known, local
-command that finishes in about a minute with short output (a unit suite, a lint, a syntax check) the lead runs itself, saving
-its output with `tee` to the scratchpad; delegating it costs more than running it.
+conclusion, the plan, or responsibility for verification. The orchestrator runs test commands itself through Bash, each
+redirected to its own scratchpad log: a check of about a minute in the foreground, a longer suite with `run_in_background`, which
+wakes the orchestrator once when it exits. A runner agent costs a lead turn for every interim update it sends, so test execution is
+not delegated; the log, grepped for its summary and failure lines, is the evidence.
 
 ## The size threshold
 
@@ -235,8 +235,8 @@ an enforced tool restriction. Evidence for the current tree state is not rerun s
 The implementer's completion report is not evidence. Read the git diff restricted to the paths the
 run reports as touched and review it for conformity: the brief's scope, the project's architecture
 documents and language lanes, the wire contract, and — on UI diffs — accessibility (labels, roles,
-keyboard reach, focus, contrast). Then have `fullstack-agents:test-runner` (Sonnet) run the plan's test commands, and read the
-logs it names yourself — grep the result and failure lines, never trust the table alone. A targeted run that skips a surface the
+keyboard reach, focus, contrast). Then run the plan's test commands yourself (long suites with `run_in_background`, each to its
+own log) and grep the result and failure lines from those logs. A targeted run that skips a surface the
 diff touched is not a green result. The implementer does not run test suites (they are denied to the implementer); it runs only the brief's
 `BUILD:` compile or type check, so test output never inflates its context.
 

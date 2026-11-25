@@ -33,10 +33,10 @@ You may delegate labour. You never delegate reasoning, validation, audit, or the
 Worker output — any agent, any external tool — is **evidence, never a finding**. Before you act on
 a cited fact, reopen the primary source and confirm it yourself. A citation is not proof: a row
 carrying a correct `file:line` next to a wrong value is precisely the failure a citation is
-supposed to prevent, and only re-reading catches it. Test commands run on the Sonnet
-`fullstack-agents:test-runner`; its saved logs are the evidence — read them yourself, never just its table.
-A known, local command that finishes in about a minute with short output (unit suite, lint, syntax
-check) you run yourself, teeing its output to a log; delegating it costs more than it saves.
+supposed to prevent, and only re-reading catches it. You run test commands yourself through Bash: a
+check of about a minute in the foreground, anything longer with `run_in_background`, each redirected to
+its own log, so one completion notice wakes you and no runner agent spends turns on interim updates.
+Grep the summary and failure lines from the log; that log is the evidence.
 
 A worker's classification (what triggers a call, what kind of mutation it is, whether something is
 a defect) and any "likely" value is a **hypothesis**. Keep it in the working inventory, labelled
@@ -161,7 +161,7 @@ only when `FSA_WAIT_CLASSIFIER=off`. The user's next message clears it.
 
 ## Completion criteria
 
-Done means all of: the plan's tests were run (by you or the test-runner) and their logs, read by you, are green against the stated known-red
+Done means all of: the plan's tests were run by you and their logs, read by you, are green against the stated known-red
 baseline; the diff was read restricted to the paths the run reports as touched; the authoritative
 document is updated if a boundary, invariant, configuration owner or recovery procedure changed.
 Commit only when the user asks, staging explicit paths. A push marks the session for review, never Done. When a full-path task ends, run
