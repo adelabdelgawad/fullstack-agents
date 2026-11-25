@@ -314,7 +314,8 @@ function startLiveTerminal(current: TerminalState, restoreFocus = false): void {
     wireDragScroll(
       host,
       current.term,
-      (lines) => queueTerminalScroll(current, lines),
+      // Sent at once: the drag already paces itself on animation frames and herdr's replies.
+      (lines) => queueTerminalScroll(current, lines, (flush) => (flush(performance.now()), 0)),
       (text) => {
         current.dragText = text;
         if (text.trim()) void copySelection(text, () => current.term?.focus());

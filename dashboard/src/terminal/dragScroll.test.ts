@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeRows, rowShift, selectedText } from "./dragScroll";
+import { edgeSpeed, mergeRows, rowShift, selectedText } from "./dragScroll";
 
 const screen = (first: number, rows = 6) => Array.from({ length: rows }, (_, index) => `line ${first + index}`);
 
@@ -31,5 +31,11 @@ describe("drag selection past the live terminal's edge", () => {
     expect(selectedText(doc, { line: 2, col: 5 }, { line: 0, col: 6 })).toBe("one\nbeta two\ngamma");
     expect(selectedText(doc, { line: 1, col: 0 }, { line: 1, col: 4 })).toBe("beta");
     expect(selectedText(doc, { line: 2, col: 0 }, { line: 0, col: 0 })).toBe("alpha one\nbeta two");
+  });
+  it("scrolls faster the further the pointer is past the edge, in the edge's direction, up to a cap", () => {
+    expect(edgeSpeed(-1)).toBeLessThan(0);
+    expect(edgeSpeed(10)).toBeGreaterThan(0);
+    expect(Math.abs(edgeSpeed(-100))).toBeGreaterThan(Math.abs(edgeSpeed(-20)));
+    expect(edgeSpeed(5000)).toBe(edgeSpeed(500));
   });
 });

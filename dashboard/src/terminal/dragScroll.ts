@@ -15,9 +15,16 @@ export interface DragPoint {
   col: number;
 }
 
-const EDGE_TICK_MS = 80;
-const EDGE_PX_PER_LINE = 24;
 const EDGE_MAX_LINES = 5;
+const EDGE_MIN_SPEED = 8;
+const EDGE_MAX_SPEED = 120;
+/** A scroll whose frame never came is given up after this long, so the edge loop cannot stall. */
+const EDGE_FRAME_WAIT_MS = 250;
+
+/** Lines per second to scroll while the pointer is `past` pixels beyond an edge (negative: above the top). */
+export function edgeSpeed(past: number): number {
+  return Math.sign(past) * Math.min(EDGE_MAX_SPEED, EDGE_MIN_SPEED + Math.abs(past) * 0.8);
+}
 
 /** How many rows the screen moved down (scrolled up; negative: up, scrolled down) from before to after: the shift
  * that lines up the most identical non-blank rows, the one nearest the expected shift on a tie, 0 when none fit. */
@@ -86,7 +93,7 @@ function edgeDistance(host: HTMLElement, y: number): number {
   return y < rect.top ? y - rect.top : y > rect.bottom ? y - rect.bottom : 0;
 }
 
-/** One left-button drag: the rows it has seen, its two ends, and the edge-scroll timer. */
+/** One left-button drag: the rows it has seen, its two ends, and the edge-scroll loop. */
 class DragSession {
   doc: DragDoc;
   rows: string[];
@@ -94,7 +101,12 @@ class DragSession {
   focus: DragPoint;
   expected = 0;
   scrolled = false;
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private loop = 0;
+  private lastTick = 0;
+  /** Lines owed to the edge scroll, kept fractional so each frame moves a steady amount. */
+  private owed = 0;
+  /** When the last edge scroll was sent and its frame has not come yet. */
+  private waitingSince = 0;
 
   constructor(
     private host: HTMLElement,
@@ -114,9 +126,9 @@ class DragSession {
     this.x = x;
     this.y = y;
     const past = edgeDistance(this.host, y);
-    if (past && !this.timer) {
-      this.tick();
-      this.timer = setInterval(() => this.tick(), EDGE_TICK_MS);
+    if (past && !this.loop) {
+      this.lastTick = performance.now();
+      this.loop = requestAnimationFrame((now) => this.tick(now));
     } else if (!past) this.stop();
     if (this.scrolled) this.followAndPaint();
   }
@@ -136,25 +148,38 @@ class DragSession {
     this.doc = { lines, top };
     this.anchor = { ...this.anchor, line: this.anchor.line + added };
     this.rows = rows;
+    this.waitingSince = 0;
     this.followAndPaint();
   }
 
   stop(): void {
-    if (this.timer) clearInterval(this.timer);
-    this.timer = null;
+    if (this.loop) cancelAnimationFrame(this.loop);
+    this.loop = 0;
+    this.owed = 0;
   }
 
   text(): string {
     return selectedText(this.doc, this.anchor, this.focus);
   }
 
-  private tick(): void {
+  /** One animation frame past the edge: owe lines at the edge speed, and send the whole ones once herdr has
+   * answered the last scroll, so the pane moves in small even steps that never pile up behind the network. */
+  private tick(now: number): void {
     const past = edgeDistance(this.host, this.y);
-    if (!past) return;
-    const lines = Math.sign(past) * Math.min(EDGE_MAX_LINES, Math.ceil(Math.abs(past) / EDGE_PX_PER_LINE));
-    this.scrolled = true;
-    this.expected -= lines;
-    this.scroll(lines);
+    if (!past) return this.stop();
+    const speed = edgeSpeed(past);
+    this.owed = Math.max(-Math.abs(speed) / 4, Math.min(Math.abs(speed) / 4, this.owed + (speed * (now - this.lastTick)) / 1000));
+    this.lastTick = now;
+    if (this.waitingSince && now - this.waitingSince > EDGE_FRAME_WAIT_MS) this.waitingSince = 0;
+    const lines = Math.trunc(this.owed);
+    if (lines && !this.waitingSince) {
+      this.owed -= lines;
+      this.scrolled = true;
+      this.expected -= lines;
+      this.waitingSince = now;
+      this.scroll(lines);
+    }
+    this.loop = requestAnimationFrame((next) => this.tick(next));
   }
 
   private followAndPaint(): void {
