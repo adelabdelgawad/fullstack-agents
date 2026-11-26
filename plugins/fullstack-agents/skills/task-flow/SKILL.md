@@ -31,6 +31,16 @@ full path is everything below, including the ledger and team-board lifecycle.
 
 ## Always-loaded contract
 
+0. Taking from another system: when the user asks to take, copy or bring a
+   component, hook, page or feature from another repository or system (not a
+   licence-restricted reference the project forbids copying), ask before any plan:
+   "Copy it with `cp` and adapt imports, or study it and reimplement?" Default the
+   question to copy. On copy: the lead copies the files and their missing
+   dependencies verbatim with `cp` (the user's answer authorizes the write-guard
+   override for those copies), then one implementer unit only adapts imports, glue
+   and tokens without rewriting logic, and the audit diffs each copy against its
+   original. Implementers cannot read outside the repository: copy first, never
+   brief a worker to read the other system's paths.
 1. Investigate: load lane skills; search then bounded reads. Measure server vs
    browser time for latency. Establish causes from source/reproduction.
 2. Plan first in Claude: at most 40 lines; outcome, files/sites, acceptance,
