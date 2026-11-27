@@ -6,8 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AgentSettings,
   AgentSettingsForm,
-  engineModelKeys,
-  modelOptions,
+  implementerModel,
   withSetting,
   withSwitchedImplementer,
   type AgentConfigReply,
@@ -24,49 +23,50 @@ const reply = (scope: "default" | "session", settings: AgentConfigReply["setting
   settings,
   builtin,
   engines: ["claude", "codex", "grok"],
-  implementer_choices: ["claude", "codex"],
+  implementer_choices: ["codex", "claude"],
+  implementer_models: { codex: "gpt-6.1-sol", claude: "claude-sonnet-5-5" },
   subagent_models: ["haiku", "sonnet", "opus", "fable"],
 });
 const render = (r: AgentConfigReply) =>
   renderToStaticMarkup(<AgentSettingsForm reply={r} draft={r.settings || {}} setDraft={() => undefined} />);
 
 describe("agent settings form", () => {
-  it("shows built-in defaults as placeholders and default options", () => {
+  it("offers exactly Codex and Claude as radio options with each one's model as text", () => {
     const html = render(reply("default", null));
     expect(html).toContain("Applies to new sessions only");
-    expect(html).toContain("default (claude-sonnet-5)");
-    expect(html).not.toContain('type="text"');
-    expect(html).toContain('<option value="claude" selected="">Claude</option>');
+    const radios = html.match(/<input type="radio"[^>]*>/g) || [];
+    expect(radios).toHaveLength(2);
+    expect(radios[0]).toContain('value="codex"');
+    expect(radios[1]).toContain('value="claude"');
+    expect(radios[1]).toContain("checked");
+    expect(html.indexOf("Codex")).toBeLessThan(html.indexOf("Claude"));
+    // The current engine shows its effective model; the other shows the model its switch sets.
+    expect(html).toContain('<span class="agent-settings-model">gpt-6.1-sol</span>');
+    expect(html).toContain('<span class="agent-settings-model">claude-sonnet-5</span>');
     expect(html).toContain("default (haiku)");
   });
 
-  it("shows only the chosen implementer's model fields", () => {
-    expect(render(reply("default", null))).not.toContain("gpt-5.6-sol");
-    const codex = render(reply("session", { implementer: "codex" }));
-    expect(codex).toContain("default (gpt-5.6-sol)");
-    expect(codex).not.toContain("claude-sonnet-5");
-    expect(engineModelKeys(builtin.models, "codex")).toEqual(["codex_implement"]);
+  it("drops the engine model selects, the other-jobs fold and the Grok scan switch", () => {
+    const html = render(reply("session", { implementer: "codex", grok_scan: true }));
+    expect(html).not.toContain("Implement model");
+    expect(html).not.toContain("<details");
+    expect(html).not.toContain("Grok scans");
+    expect(html).not.toContain('type="checkbox"');
+    expect(html.toLowerCase()).not.toContain("grok");
+    expect(html).toContain("Subagent models");
+    expect((html.match(/<select/g) || []).length).toBe(Object.keys(builtin.subagents).length);
   });
 
-  it("shows one implement model and folds the engine's other jobs away", () => {
-    const r = { ...reply("session", { implementer: "codex" }),
-      builtin: { ...builtin, models: { ...builtin.models, codex_investigate: "gpt-5.6-luna", codex_plan: "gpt-5.6-sol" } } };
-    const html = render(r);
-    const fold = html.indexOf("<details");
-    expect(html.indexOf("Implement model")).toBeGreaterThan(-1);
-    expect(html.indexOf("Implement model")).toBeLessThan(fold);
-    expect(html.indexOf("Codex investigate")).toBeGreaterThan(fold);
-    expect(html.indexOf("Codex plan")).toBeGreaterThan(fold);
-    expect(render(reply("default", null))).not.toContain("<details");
+  it("shows the current engine's saved implement model", () => {
+    const r = reply("session", { implementer: "codex", models: { codex_implement: "gpt-6-sol" } });
+    expect(implementerModel(r, r.settings || {}, "codex")).toBe("gpt-6-sol");
+    expect(implementerModel(r, r.settings || {}, "claude")).toBe("claude-sonnet-5-5");
   });
 
-  it("offers the engine's models, keeping the built-in and a saved custom value", () => {
-    expect(modelOptions(["a", "b"], "b", "custom")).toEqual(["a", "b", "custom"]);
-    const r = { ...reply("session", { implementer: "codex", models: { codex_implement: "gpt-6-sol" } }),
-      model_choices: { codex: ["gpt-6-sol", "gpt-6-luna"] } };
-    const html = render(r);
-    expect(html).toContain('<option value="gpt-6-luna">gpt-6-luna</option>');
-    expect(html).toContain('<option value="gpt-6-sol" selected="">gpt-6-sol</option>');
+  it("names a session still on Grok and leaves both options unchecked", () => {
+    const html = render(reply("session", { implementer: "grok" }));
+    expect(html).not.toContain("checked");
+    expect(html).toContain("set to Grok by an earlier release");
   });
 
   it("warns that a session pinned to a release before agent settings ignores them", () => {
@@ -78,15 +78,6 @@ describe("agent settings form", () => {
   it("tells a pre-feature session that saving creates its file", () => {
     expect(render(reply("session", null))).toContain("Saving creates its settings");
     expect(render(reply("session", { implementer: "codex" }))).toContain("this session");
-  });
-
-  it("offers exactly Claude and Codex as the implementer", () => {
-    const html = render(reply("session", { implementer: "codex" }));
-    const engine = html.slice(html.indexOf("<select"), html.indexOf("</select>"));
-    expect(engine.match(/<option /g)).toHaveLength(2);
-    expect(engine).toContain('<option value="claude">Claude</option>');
-    expect(engine).toContain('<option value="codex" selected="">Codex</option>');
-    expect(engine).not.toContain("grok");
   });
 
   it("takes the switched engine and its saved implement model, keeping unsaved edits", () => {
@@ -130,8 +121,8 @@ describe("agent settings dialog", () => {
     fetchMock.mockResolvedValueOnce({ ok: true, text: async () => JSON.stringify(loaded) });
     await act(async () => root.render(<AgentSettings sid="lead-1" close={() => undefined} />));
     expect(fetchMock.mock.calls[0][0]).toBe("/api/agent-config?sid=lead-1");
-    const engine = host.querySelector("select") as HTMLSelectElement;
-    expect(engine.value).toBe("codex");
+    const checked = host.querySelector('input[name="implementer"]:checked') as HTMLInputElement;
+    expect(checked.value).toBe("codex");
     await act(async () => {
       (host.querySelector('button[type="submit"]') as HTMLButtonElement).click();
     });
@@ -147,16 +138,14 @@ describe("agent settings dialog", () => {
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => loaded });
     fetchMock.mockResolvedValueOnce({ ok: true, text: async () => JSON.stringify(switched) });
     await act(async () => root.render(<AgentSettings sid="lead-1" close={() => undefined} />));
-    const engine = host.querySelector("select") as HTMLSelectElement;
     await act(async () => {
-      engine.value = "codex";
-      engine.dispatchEvent(new Event("change", { bubbles: true }));
+      (host.querySelector('input[value="codex"]') as HTMLInputElement).click();
     });
     const [url, init] = fetchMock.mock.calls[1];
     expect(url).toBe("/api/agent-config");
     expect(JSON.parse(init.body)).toEqual({ sid: "lead-1", implementer: "codex" });
-    expect((host.querySelector("select") as HTMLSelectElement).value).toBe("codex");
+    expect((host.querySelector('input[name="implementer"]:checked') as HTMLInputElement).value).toBe("codex");
     expect(host.textContent).toContain("Implementer: Codex.");
-    expect(host.innerHTML).toContain('value="gpt-6.1-sol"');
+    expect(host.textContent).toContain("gpt-6.1-sol");
   });
 });

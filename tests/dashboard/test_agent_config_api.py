@@ -101,13 +101,15 @@ class AgentConfigApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(raw)["scope"], "session")
         self.assertIsNone(json.loads(raw)["settings"])
-        status, raw = self.call("POST", "/api/agent-config", {"sid": KNOWN, "settings": {"implementer": "grok"}})
+        status, raw = self.call("POST", "/api/agent-config", {"sid": KNOWN, "settings": {"implementer": "codex"}})
         self.assertEqual(status, 200, raw)
         self.assertTrue((self.agents / f"session-{KNOWN}.json").exists())
         self.assertFalse((self.agents / "default.json").exists())
 
     def test_implementer_switch_runs_the_shared_preset(self):
-        self.assertEqual(json.loads(self.call("GET", "/api/agent-config")[1])["implementer_choices"], ["claude", "codex"])
+        reply = json.loads(self.call("GET", "/api/agent-config")[1])
+        self.assertEqual(reply["implementer_choices"], ["codex", "claude"])
+        self.assertEqual(reply["implementer_models"], {"codex": "gpt-6.1-sol", "claude": "claude-sonnet-5-5"})
         self.call("POST", "/api/agent-config", {"sid": KNOWN, "settings": {"subagents": {"test-runner": "haiku"}}})
         status, raw = self.call("POST", "/api/agent-config", {"sid": KNOWN, "implementer": "codex"})
         self.assertEqual(status, 200, raw)
@@ -116,6 +118,10 @@ class AgentConfigApiTests(unittest.TestCase):
         self.assertEqual(json.loads(raw)["settings"], expected)
         self.assertEqual(json.loads((self.agents / f"session-{KNOWN}.json").read_text()), expected)
         self.assertEqual(self.call("POST", "/api/agent-config", {"sid": KNOWN, "implementer": "grok"})[0], 400)
+        # The form save offers the same two engines: a saved grok implementer is refused and nothing changes.
+        status, raw = self.call("POST", "/api/agent-config", {"sid": KNOWN, "settings": {"implementer": "grok"}})
+        self.assertEqual((status, raw), (400, b"implementer must be one of codex, claude"))
+        self.assertEqual(json.loads((self.agents / f"session-{KNOWN}.json").read_text()), expected)
         self.assertEqual(self.call("POST", "/api/agent-config", {"sid": KNOWN, "implementer": ["codex"]})[0], 400)
         self.assertEqual(self.call("POST", "/api/agent-config", {"sid": "nope", "implementer": "codex"})[0], 404)
 

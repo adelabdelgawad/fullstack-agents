@@ -20,20 +20,13 @@ export interface AgentConfigReply {
   subagent_models: string[];
   /** Models offered per engine (claude, codex, grok). */
   model_choices?: Record<string, string[]>;
+  /** Engine -> the implement model the implementer switch sets for it (read-only in the dialog). */
+  implementer_models?: Record<string, string>;
   /** The plugin release a session dispatches through (its pin); null when unknown. */
   pinned_release?: string | null;
   /** False when that release predates agent settings: saved values wait until the session re-pins. */
   applies?: boolean;
 }
-
-const MODEL_LABELS: Record<string, string> = {
-  claude_implement: "Claude implement",
-  codex_investigate: "Codex investigate",
-  codex_plan: "Codex plan",
-  codex_implement: "Codex implement",
-  grok_investigate: "Grok investigate",
-  grok_implement: "Grok implement",
-};
 
 /** The draft with one nested setting changed; an empty value removes it so the built-in default applies. */
 export function withSetting(
@@ -46,16 +39,6 @@ export function withSetting(
   if (value) next[key] = value;
   else delete next[key];
   return { ...draft, [group]: next };
-}
-
-/** The model settings of one engine: their keys start with the engine's name (claude_implement, codex_plan...). */
-export function engineModelKeys(models: Record<string, string>, engine: string): string[] {
-  return Object.keys(models).filter((key) => key.startsWith(`${engine}_`));
-}
-
-/** The engine's offered models with the built-in default and a saved value kept, without duplicates. */
-export function modelOptions(choices: string[] | undefined, builtin: string, saved: string | undefined): string[] {
-  return [...new Set([...(choices || []), builtin, ...(saved ? [saved] : [])])];
 }
 
 function configUrl(sid?: string) {
@@ -84,79 +67,46 @@ export function withSwitchedImplementer(draft: AgentSettingsValue, saved: AgentS
   return { ...draft, implementer: engine, models: model ? { ...(draft.models || {}), [key]: model } : draft.models };
 }
 
-function ModelField({ reply, draft, setDraft, engine, modelKey, label }: FormProps & ModelFieldProps) {
-  const fallback = reply.builtin.models[modelKey];
-  return (
-    <label>
-      {label}
-      <select
-        value={draft.models?.[modelKey] || ""}
-        onChange={(event) => setDraft(withSetting(draft, "models", modelKey, event.target.value))}
-      >
-        <option value="">default ({fallback})</option>
-        {modelOptions(reply.model_choices?.[engine], fallback, draft.models?.[modelKey]).map((model) => (
-          <option key={model} value={model}>
-            {model}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
+/** The implementer engines the Office offers (Codex, Claude), in the server's order. */
+export function implementerChoices(reply: AgentConfigReply): string[] {
+  return reply.implementer_choices || Object.keys(reply.implementer_models || {});
 }
 
-interface ModelFieldProps {
-  engine: string;
-  modelKey: string;
-  label: string;
+/** The implement model an engine uses: the session's saved one for its current engine, else the switch's preset. */
+export function implementerModel(reply: AgentConfigReply, draft: AgentSettingsValue, engine: string): string {
+  const key = `${engine}_implement`;
+  if (engine === (draft.implementer || reply.builtin.implementer)) {
+    return draft.models?.[key] || reply.builtin.models[key] || "";
+  }
+  return reply.implementer_models?.[engine] || reply.builtin.models[key] || "";
 }
 
-function EngineFields(props: FormProps) {
-  const { reply, draft, setDraft, switchImplementer } = props;
-  const { builtin } = reply;
-  const engine = draft.implementer || builtin.implementer;
-  // A session still set to another engine (grok from an earlier release) shows it until it switches.
-  const choices = [...new Set([...(reply.implementer_choices || reply.engines), engine])];
-  const implementKey = `${engine}_implement`;
-  const otherKeys = engineModelKeys(builtin.models, engine).filter((key) => key !== implementKey);
+function ImplementerField({ reply, draft, setDraft, switchImplementer }: FormProps) {
+  const engine = draft.implementer || reply.builtin.implementer;
+  const choices = implementerChoices(reply);
   return (
-    <fieldset className="agent-settings-group">
+    <fieldset className="agent-settings-group" role="radiogroup" aria-label="Implementer">
       <legend>Implementer</legend>
-      <label>
-        Engine
-        <select
-          value={engine}
-          onChange={(event) =>
-            switchImplementer
-              ? switchImplementer(event.target.value)
-              : setDraft({ ...draft, implementer: event.target.value })
-          }
-        >
-          {choices.map((choice) => (
-            <option key={choice} value={choice}>
-              {engineLabel(choice)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {implementKey in builtin.models && (
-        <ModelField {...props} engine={engine} modelKey={implementKey} label="Implement model" />
+      {choices.map((choice) => (
+        <label key={choice} className="agent-settings-choice">
+          <input
+            type="radio"
+            name="implementer"
+            value={choice}
+            checked={engine === choice}
+            onChange={() =>
+              switchImplementer ? switchImplementer(choice) : setDraft({ ...draft, implementer: choice })
+            }
+          />
+          <span>{engineLabel(choice)}</span>
+          <span className="agent-settings-model">{implementerModel(reply, draft, choice)}</span>
+        </label>
+      ))}
+      {!choices.includes(engine) && (
+        <p className="agent-settings-note warn">
+          This session is set to {engineLabel(engine)} by an earlier release; choose Codex or Claude.
+        </p>
       )}
-      {otherKeys.length > 0 && (
-        <details className="agent-settings-more">
-          <summary>Other {engine} jobs (scans, planning)</summary>
-          {otherKeys.map((key) => (
-            <ModelField key={key} {...props} engine={engine} modelKey={key} label={MODEL_LABELS[key] || key} />
-          ))}
-        </details>
-      )}
-      <label className="agent-settings-check">
-        <input
-          type="checkbox"
-          checked={draft.grok_scan ?? builtin.grok_scan}
-          onChange={(event) => setDraft({ ...draft, grok_scan: event.target.checked })}
-        />
-        Grok scans for wide investigations
-      </label>
     </fieldset>
   );
 }
@@ -206,7 +156,7 @@ export function AgentSettingsForm(props: FormProps) {
       ) : (
         <p className="agent-settings-note">Applies to this session from its next dispatch or subagent call.</p>
       )}
-      <EngineFields {...props} />
+      <ImplementerField {...props} />
       <SubagentFields {...props} />
     </div>
   );

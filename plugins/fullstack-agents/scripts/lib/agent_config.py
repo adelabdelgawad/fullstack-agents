@@ -9,7 +9,7 @@ CLI (hooks and the dispatcher):
   agent_config.py inherit <sid> <old>   copy the old session's settings over <sid> (a context handoff)
   agent_config.py env <sid>             KEY=value lines for codex-task.sh (only keys the session sets)
   agent_config.py hook                  PreToolUse Agent|Task: set the configured subagent model
-  agent_config.py implementer [--session <sid>] [claude|codex]
+  agent_config.py implementer [--session <sid>] [codex|claude]
                                         show, or switch, a session's implementer and its implement model
                                         (default session: FSA_SESSION_PIN, then CLAUDE_CODE_SESSION_ID)
 """
@@ -42,8 +42,10 @@ MODEL_CHOICES = {
     "grok": ["xai/grok-4.7", "xai/grok-4.6", "xai/grok-4.5", "xai/grok-4.3"],
 }
 # The implementer switch (/fullstack-agents:implementer and the Office's Implementer control): engine -> the
-# implement model it sets. The one place this mapping lives.
-IMPLEMENTER_PRESETS = {"claude": ("claude_implement", "claude-sonnet-5-5"), "codex": ("codex_implement", "gpt-6.1-sol")}
+# implement model it sets. The one place this mapping lives, in the order the Office offers them. ENGINES keeps
+# grok for the dispatcher (an IMPLEMENTER: grok brief line, FSA_IMPLEMENTER, a session saved by an earlier release);
+# the Office and the switch offer only these two.
+IMPLEMENTER_PRESETS = {"codex": ("codex_implement", "gpt-6.1-sol"), "claude": ("claude_implement", "claude-sonnet-5-5")}
 MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:\[\]-]{0,79}$")
 SID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
@@ -177,6 +179,18 @@ def inherit(sid, from_sid):
     if cfg is None:
         return None
     return save(sid, cfg)
+
+
+def implementer_models():
+    """Engine -> the implement model its switch sets, for the Office's read-only model text."""
+    return {engine: model for engine, (_, model) in IMPLEMENTER_PRESETS.items()}
+
+
+def check_office_implementer(cfg):
+    """ValueError unless a form save's implementer (when it sets one) is an engine the switch offers."""
+    engine = cfg.get("implementer") if isinstance(cfg, dict) else None
+    if engine and engine not in IMPLEMENTER_PRESETS:
+        raise ValueError("implementer must be one of " + ", ".join(IMPLEMENTER_PRESETS))
 
 
 def set_implementer(sid, engine):
