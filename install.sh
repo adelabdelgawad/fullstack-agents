@@ -136,6 +136,7 @@ SETTINGS
   info "Available commands:"
   echo "  /fullstack-agents:review     - Review code quality, security, patterns"
   echo "  /fullstack-agents:dashboard  - Start, stop or show the agent dashboard"
+  echo "  /fullstack-agents:implementer - Show or switch the implementer (claude | codex)"
 }
 
 uninstall_plugin() {

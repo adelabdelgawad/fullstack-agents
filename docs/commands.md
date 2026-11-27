@@ -62,3 +62,17 @@ started it.
 /fullstack-agents:dashboard status
 /fullstack-agents:dashboard stop
 ```
+
+---
+
+## /implementer
+
+Show or switch this session's implementer engine, the one `scripts/codex-task.sh` dispatches through.
+`claude` sets implement model `claude-sonnet-5-5`; `codex` sets `gpt-6.1-sol`. Every other agent setting is kept.
+It is the same switch as the Office Agent settings Implementer control (`agent_config.set_implementer`).
+
+```bash
+/fullstack-agents:implementer          # show
+/fullstack-agents:implementer codex
+/fullstack-agents:implementer claude
+```

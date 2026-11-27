@@ -41,6 +41,7 @@ Two slash commands remain:
 |---------|---------|
 | `/fullstack-agents:review` | Review code for quality, security, performance or pattern compliance |
 | `/fullstack-agents:dashboard` | Start, stop or show the host-level agent dashboard |
+| `/fullstack-agents:implementer` | Show or switch this session's implementer: claude (claude-sonnet-5-5) or codex (gpt-6.1-sol) |
 
 See the [Skills Reference](skills.md) for what each skill covers.
 
