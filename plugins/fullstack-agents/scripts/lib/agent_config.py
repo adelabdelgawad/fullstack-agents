@@ -9,6 +9,9 @@ CLI (hooks and the dispatcher):
   agent_config.py inherit <sid> <old>   copy the old session's settings over <sid> (a context handoff)
   agent_config.py env <sid>             KEY=value lines for codex-task.sh (only keys the session sets)
   agent_config.py hook                  PreToolUse Agent|Task: set the configured subagent model
+  agent_config.py implementer [--session <sid>] [claude|codex]
+                                        show, or switch, a session's implementer and its implement model
+                                        (default session: FSA_SESSION_PIN, then CLAUDE_CODE_SESSION_ID)
 """
 import json
 import os
@@ -35,9 +38,12 @@ BUILTIN = {"implementer": "claude", "models": {k: v[1] for k, v in MODELS.items(
 MODEL_CHOICES = {
     "claude": ["claude-sonnet-5", "claude-sonnet-5-5", "claude-opus-5", "claude-opus-5-5", "claude-haiku-5-5",
                "claude-fable-5-1"],
-    "codex": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
+    "codex": ["gpt-6.1-sol", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
     "grok": ["xai/grok-4.7", "xai/grok-4.6", "xai/grok-4.5", "xai/grok-4.3"],
 }
+# The implementer switch (/fullstack-agents:implementer and the Office's Implementer control): engine -> the
+# implement model it sets. The one place this mapping lives.
+IMPLEMENTER_PRESETS = {"claude": ("claude_implement", "claude-sonnet-5-5"), "codex": ("codex_implement", "gpt-6.1-sol")}
 MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:\[\]-]{0,79}$")
 SID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
@@ -85,7 +91,12 @@ def settings_apply(version):
 
 
 def model_choices():
-    return {**MODEL_CHOICES, "codex": codex_models() or MODEL_CHOICES["codex"]}
+    """Offered models per engine; an implementer preset's model is always offered for its engine."""
+    choices = {**MODEL_CHOICES, "codex": codex_models() or MODEL_CHOICES["codex"]}
+    for engine, (_, model) in IMPLEMENTER_PRESETS.items():
+        if model not in choices[engine]:
+            choices[engine] = [model, *choices[engine]]
+    return choices
 
 
 def path_of(sid=None):
@@ -168,6 +179,58 @@ def inherit(sid, from_sid):
     return save(sid, cfg)
 
 
+def set_implementer(sid, engine):
+    """Switch a session (None: the CTO default) to a preset implementer; every other setting is kept."""
+    if not isinstance(engine, str) or engine not in IMPLEMENTER_PRESETS:
+        raise ValueError("implementer must be one of " + ", ".join(IMPLEMENTER_PRESETS))
+    key, model = IMPLEMENTER_PRESETS[engine]
+    cfg = load(sid) or {}
+    return save(sid, {**cfg, "implementer": engine, "models": {**(cfg.get("models") or {}), key: model}})
+
+
+def current_session(environ=None):
+    """The session a command runs in: the dispatcher's pin file name first (what codex-task.sh reads), then
+    Claude Code's session id. None when neither is set."""
+    environ = os.environ if environ is None else environ
+    pin = environ.get("FSA_SESSION_PIN") or ""
+    name = os.path.basename(pin)
+    if name.startswith("session-") and name.endswith(".json"):
+        return name[len("session-"):-len(".json")]
+    return environ.get("CLAUDE_CODE_SESSION_ID") or environ.get("CLAUDE_SESSION_ID") or None
+
+
+def describe_implementer(sid, cfg):
+    """One line per fact: the session, its effective implementer and implement model, and whether they apply."""
+    cfg = cfg or {}
+    engine = cfg.get("implementer") or BUILTIN["implementer"]
+    key = f"{engine}_implement"
+    model = (cfg.get("models") or {}).get(key) or BUILTIN["models"].get(key, "n/a")
+    lines = [f"session: {sid}", f"implementer: {engine}", f"implement model: {model}"]
+    pinned = pinned_release(sid)
+    if not settings_apply(pinned):
+        lines.append(f"note: this session dispatches through plugin {pinned}, which ignores agent settings; "
+                     "they apply once it resumes or hands off onto the installed release")
+    return lines
+
+
+def implementer_cli(args):
+    sid = None
+    if args[:1] == ["--session"] and len(args) >= 2:
+        sid, args = args[1], args[2:]
+    sid = sid or current_session()
+    if not sid or len(args) > 1:
+        print("agent_config: usage: implementer [--session <sid>] [" + "|".join(IMPLEMENTER_PRESETS) + "]"
+              + ("" if sid else " (no session id: set FSA_SESSION_PIN or CLAUDE_CODE_SESSION_ID)"), file=sys.stderr)
+        return 2
+    try:
+        cfg = set_implementer(sid, args[0].strip().lower()) if args else load(sid)
+    except (OSError, ValueError) as exc:
+        print(f"agent_config: {exc}", file=sys.stderr)
+        return 1
+    print("\n".join(describe_implementer(sid, cfg)))
+    return 0
+
+
 def env_lines(cfg):
     lines = []
     if cfg.get("implementer"):
@@ -201,6 +264,8 @@ def main(argv):
         if out:
             print(json.dumps(out))
         return 0
+    if argv[:1] == ["implementer"]:
+        return implementer_cli(argv[1:])
     if len(argv) == 3 and argv[0] == "inherit":
         try:
             cfg = inherit(argv[1], argv[2])

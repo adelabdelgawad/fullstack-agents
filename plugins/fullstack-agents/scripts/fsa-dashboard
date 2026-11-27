@@ -1505,7 +1505,8 @@ def agent_settings_reply(sid):
     applies is false when the session is pinned to a plugin release whose dispatcher ignores these settings."""
     pinned = agent_config.pinned_release(sid) if sid else None
     return {"scope": "session" if sid else "default", "settings": agent_config.load(sid), "builtin": agent_config.BUILTIN,
-            "engines": agent_config.ENGINES, "subagent_models": agent_config.SUBAGENT_MODELS,
+            "engines": agent_config.ENGINES, "implementer_choices": list(agent_config.IMPLEMENTER_PRESETS),
+            "subagent_models": agent_config.SUBAGENT_MODELS,
             "model_choices": agent_config.model_choices(), "pinned_release": pinned,
             "applies": agent_config.settings_apply(pinned)}
 
@@ -3559,7 +3560,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if sid and not self.agent_session_known(sid):
                 return self.send(404, b"unknown session", "text/plain")
             try:
-                agent_config.save(sid, body.get("settings"))
+                # {"implementer": engine} is the implementer switch (the same call as /fullstack-agents:implementer);
+                # {"settings": {...}} saves the whole form.
+                if "implementer" in body:
+                    agent_config.set_implementer(sid, body["implementer"])
+                else:
+                    agent_config.save(sid, body.get("settings"))
             except (ValueError, OSError) as exc:
                 return self.send(400, str(exc).encode(), "text/plain")
             return self.send(200, json.dumps(agent_settings_reply(sid)).encode(), "application/json")

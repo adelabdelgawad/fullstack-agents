@@ -79,7 +79,8 @@ class AgentConfigApiTests(unittest.TestCase):
             {"slug": "gpt-6-sol", "visibility": "list"}, {"slug": "gpt-reserve", "visibility": "hide"}]}))
         with patch.dict(os.environ, {"CODEX_HOME": self.scratch.name}):
             reply = json.loads(self.call("GET", "/api/agent-config")[1])
-        self.assertEqual(reply["model_choices"]["codex"], ["gpt-6-sol"])
+        # The cache's visible models, plus the implementer switch's codex model (always offered).
+        self.assertEqual(reply["model_choices"]["codex"], ["gpt-6.1-sol", "gpt-6-sol"])
         with patch.dict(os.environ, {"CODEX_HOME": str(Path(self.scratch.name) / "none")}):
             reply = json.loads(self.call("GET", "/api/agent-config")[1])
         self.assertIn("gpt-5.6-sol", reply["model_choices"]["codex"])
@@ -104,6 +105,19 @@ class AgentConfigApiTests(unittest.TestCase):
         self.assertEqual(status, 200, raw)
         self.assertTrue((self.agents / f"session-{KNOWN}.json").exists())
         self.assertFalse((self.agents / "default.json").exists())
+
+    def test_implementer_switch_runs_the_shared_preset(self):
+        self.assertEqual(json.loads(self.call("GET", "/api/agent-config")[1])["implementer_choices"], ["claude", "codex"])
+        self.call("POST", "/api/agent-config", {"sid": KNOWN, "settings": {"subagents": {"test-runner": "haiku"}}})
+        status, raw = self.call("POST", "/api/agent-config", {"sid": KNOWN, "implementer": "codex"})
+        self.assertEqual(status, 200, raw)
+        expected = {"implementer": "codex", "models": {"codex_implement": "gpt-6.1-sol"},
+                    "subagents": {"test-runner": "haiku"}}
+        self.assertEqual(json.loads(raw)["settings"], expected)
+        self.assertEqual(json.loads((self.agents / f"session-{KNOWN}.json").read_text()), expected)
+        self.assertEqual(self.call("POST", "/api/agent-config", {"sid": KNOWN, "implementer": "grok"})[0], 400)
+        self.assertEqual(self.call("POST", "/api/agent-config", {"sid": KNOWN, "implementer": ["codex"]})[0], 400)
+        self.assertEqual(self.call("POST", "/api/agent-config", {"sid": "nope", "implementer": "codex"})[0], 404)
 
     def test_session_pinned_before_agent_settings_is_reported(self):
         pins = Path(self.scratch.name) / "fullstack-agents" / "pins"

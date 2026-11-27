@@ -3,7 +3,15 @@ import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AgentSettings, AgentSettingsForm, engineModelKeys, modelOptions, withSetting, type AgentConfigReply } from "./AgentSettings";
+import {
+  AgentSettings,
+  AgentSettingsForm,
+  engineModelKeys,
+  modelOptions,
+  withSetting,
+  withSwitchedImplementer,
+  type AgentConfigReply,
+} from "./AgentSettings";
 
 const builtin = {
   implementer: "claude",
@@ -16,6 +24,7 @@ const reply = (scope: "default" | "session", settings: AgentConfigReply["setting
   settings,
   builtin,
   engines: ["claude", "codex", "grok"],
+  implementer_choices: ["claude", "codex"],
   subagent_models: ["haiku", "sonnet", "opus", "fable"],
 });
 const render = (r: AgentConfigReply) =>
@@ -27,7 +36,7 @@ describe("agent settings form", () => {
     expect(html).toContain("Applies to new sessions only");
     expect(html).toContain("default (claude-sonnet-5)");
     expect(html).not.toContain('type="text"');
-    expect(html).toContain("default (claude)");
+    expect(html).toContain('<option value="claude" selected="">Claude</option>');
     expect(html).toContain("default (haiku)");
   });
 
@@ -71,6 +80,26 @@ describe("agent settings form", () => {
     expect(render(reply("session", { implementer: "codex" }))).toContain("this session");
   });
 
+  it("offers exactly Claude and Codex as the implementer", () => {
+    const html = render(reply("session", { implementer: "codex" }));
+    const engine = html.slice(html.indexOf("<select"), html.indexOf("</select>"));
+    expect(engine.match(/<option /g)).toHaveLength(2);
+    expect(engine).toContain('<option value="claude">Claude</option>');
+    expect(engine).toContain('<option value="codex" selected="">Codex</option>');
+    expect(engine).not.toContain("grok");
+  });
+
+  it("takes the switched engine and its saved implement model, keeping unsaved edits", () => {
+    const draft = { implementer: "claude", models: { codex_plan: "edited" }, grok_scan: true };
+    const saved = { implementer: "codex", models: { codex_implement: "gpt-6.1-sol", codex_plan: "old" } };
+    expect(withSwitchedImplementer(draft, saved)).toEqual({
+      implementer: "codex",
+      models: { codex_plan: "edited", codex_implement: "gpt-6.1-sol" },
+      grok_scan: true,
+    });
+    expect(withSwitchedImplementer(draft, null)).toBe(draft);
+  });
+
   it("drops an emptied setting so the built-in applies", () => {
     const draft = withSetting({ models: { codex_plan: "x" } }, "models", "codex_plan", "");
     expect(draft.models).toEqual({});
@@ -110,5 +139,24 @@ describe("agent settings dialog", () => {
     expect(url).toBe("/api/agent-config");
     expect(JSON.parse(init.body)).toEqual({ sid: "lead-1", settings: { implementer: "codex" } });
     expect(host.textContent).toContain("Saved.");
+  });
+
+  it("changing the implementer runs the server switch at once", async () => {
+    const loaded = reply("session", { implementer: "claude" });
+    const switched = reply("session", { implementer: "codex", models: { codex_implement: "gpt-6.1-sol" } });
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => loaded });
+    fetchMock.mockResolvedValueOnce({ ok: true, text: async () => JSON.stringify(switched) });
+    await act(async () => root.render(<AgentSettings sid="lead-1" close={() => undefined} />));
+    const engine = host.querySelector("select") as HTMLSelectElement;
+    await act(async () => {
+      engine.value = "codex";
+      engine.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const [url, init] = fetchMock.mock.calls[1];
+    expect(url).toBe("/api/agent-config");
+    expect(JSON.parse(init.body)).toEqual({ sid: "lead-1", implementer: "codex" });
+    expect((host.querySelector("select") as HTMLSelectElement).value).toBe("codex");
+    expect(host.textContent).toContain("Implementer: Codex.");
+    expect(host.innerHTML).toContain('value="gpt-6.1-sol"');
   });
 });

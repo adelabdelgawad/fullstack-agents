@@ -58,6 +58,48 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(agent_config.env_lines(cfg),
                          ["FSA_IMPLEMENTER=grok", "FSA_GROK_MODEL_IMPLEMENT=xai/grok-5", "FSA_GROK_INVESTIGATE=1"])
 
+    def test_set_implementer_switches_engine_and_its_implement_model_and_keeps_the_rest(self):
+        agent_config.save("s1", {"implementer": "grok", "models": {"codex_plan": "gpt-x"}, "grok_scan": True})
+        self.assertEqual(agent_config.set_implementer("s1", "codex"),
+                         {"implementer": "codex", "models": {"codex_plan": "gpt-x", "codex_implement": "gpt-6.1-sol"},
+                          "grok_scan": True})
+        cfg = agent_config.set_implementer("s1", "claude")
+        self.assertEqual((cfg["implementer"], cfg["models"]["claude_implement"]), ("claude", "claude-sonnet-5-5"))
+        self.assertEqual(agent_config.load("s1"), cfg)
+        self.assertEqual(agent_config.set_implementer("fresh", "codex")["implementer"], "codex")
+        for bad in ("grok", "gpt", "", None, ["codex"]):
+            with self.assertRaises(ValueError):
+                agent_config.set_implementer("s1", bad)
+        self.assertIn("gpt-6.1-sol", agent_config.model_choices()["codex"])
+
+    def test_current_session_prefers_the_dispatcher_pin(self):
+        self.assertEqual(agent_config.current_session(
+            {"FSA_SESSION_PIN": "/x/pins/session-abc.json", "CLAUDE_CODE_SESSION_ID": "other"}), "abc")
+        self.assertEqual(agent_config.current_session({"CLAUDE_CODE_SESSION_ID": "cc"}), "cc")
+        self.assertIsNone(agent_config.current_session({}))
+
+    def test_implementer_cli_shows_and_switches_the_current_session(self):
+        script = SCRIPTS / "lib" / "agent_config.py"
+        env = {**os.environ, "FSA_SESSION_PIN": "", "CLAUDE_CODE_SESSION_ID": "s9"}
+
+        def cli(*args):
+            return subprocess.run([sys.executable, "-I", str(script), "implementer", *args], capture_output=True,
+                                  text=True, env=env, timeout=30)
+
+        shown = cli()
+        self.assertEqual(shown.returncode, 0, shown.stderr)
+        self.assertIn("implementer: claude", shown.stdout)
+        self.assertFalse(agent_config.path_of("s9").exists())
+        run = cli("Codex")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout.splitlines(), ["session: s9", "implementer: codex", "implement model: gpt-6.1-sol"])
+        self.assertEqual(agent_config.load("s9")["models"]["codex_implement"], "gpt-6.1-sol")
+        self.assertEqual(cli("--session", "s8", "claude").stdout.splitlines()[1:],
+                         ["implementer: claude", "implement model: claude-sonnet-5-5"])
+        self.assertEqual(cli("grok").returncode, 1)
+        env["CLAUDE_CODE_SESSION_ID"] = ""
+        self.assertEqual(cli("codex").returncode, 2)
+
     def test_hook_sets_the_configured_subagent_model(self):
         agent_config.save("s1", {"subagents": {"bounded-extractor": "sonnet"}})
         event = {"session_id": "s1", "tool_input": {"subagent_type": "fullstack-agents:bounded-extractor", "prompt": "p"}}

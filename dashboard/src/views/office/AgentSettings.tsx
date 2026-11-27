@@ -15,6 +15,8 @@ export interface AgentConfigReply {
   settings: AgentSettingsValue | null;
   builtin: Required<AgentSettingsValue>;
   engines: string[];
+  /** Engines the implementer switch offers (agent_config.IMPLEMENTER_PRESETS); each sets its own implement model. */
+  implementer_choices?: string[];
   subagent_models: string[];
   /** Models offered per engine (claude, codex, grok). */
   model_choices?: Record<string, string[]>;
@@ -64,6 +66,22 @@ interface FormProps {
   reply: AgentConfigReply;
   draft: AgentSettingsValue;
   setDraft: (draft: AgentSettingsValue) => void;
+  /** Runs the implementer switch on the server (the same call as /fullstack-agents:implementer). */
+  switchImplementer?: (engine: string) => void;
+}
+
+/** "codex" -> "Codex": display only. */
+export function engineLabel(engine: string): string {
+  return engine.charAt(0).toUpperCase() + engine.slice(1);
+}
+
+/** The draft after the server switched the implementer: its engine and that engine's saved implement model. */
+export function withSwitchedImplementer(draft: AgentSettingsValue, saved: AgentSettingsValue | null): AgentSettingsValue {
+  const engine = saved?.implementer;
+  if (!engine) return draft;
+  const key = `${engine}_implement`;
+  const model = saved?.models?.[key];
+  return { ...draft, implementer: engine, models: model ? { ...(draft.models || {}), [key]: model } : draft.models };
 }
 
 function ModelField({ reply, draft, setDraft, engine, modelKey, label }: FormProps & ModelFieldProps) {
@@ -93,9 +111,11 @@ interface ModelFieldProps {
 }
 
 function EngineFields(props: FormProps) {
-  const { reply, draft, setDraft } = props;
+  const { reply, draft, setDraft, switchImplementer } = props;
   const { builtin } = reply;
   const engine = draft.implementer || builtin.implementer;
+  // A session still set to another engine (grok from an earlier release) shows it until it switches.
+  const choices = [...new Set([...(reply.implementer_choices || reply.engines), engine])];
   const implementKey = `${engine}_implement`;
   const otherKeys = engineModelKeys(builtin.models, engine).filter((key) => key !== implementKey);
   return (
@@ -104,13 +124,16 @@ function EngineFields(props: FormProps) {
       <label>
         Engine
         <select
-          value={draft.implementer || ""}
-          onChange={(event) => setDraft({ ...draft, implementer: event.target.value || undefined })}
+          value={engine}
+          onChange={(event) =>
+            switchImplementer
+              ? switchImplementer(event.target.value)
+              : setDraft({ ...draft, implementer: event.target.value })
+          }
         >
-          <option value="">default ({builtin.implementer})</option>
-          {reply.engines.map((engine) => (
-            <option key={engine} value={engine}>
-              {engine}
+          {choices.map((choice) => (
+            <option key={choice} value={choice}>
+              {engineLabel(choice)}
             </option>
           ))}
         </select>
@@ -207,6 +230,19 @@ export function AgentSettings({ sid, close }: { sid?: string; close: () => void 
       live = false;
     };
   }, [sid]);
+  const switchImplementer = async (engine: string) => {
+    setStatus("Switching implementer…");
+    try {
+      const data = await postJson<AgentConfigReply>("/api/agent-config", { sid, implementer: engine });
+      if (data) {
+        setReply(data);
+        setDraft((current) => withSwitchedImplementer(current, data.settings));
+      }
+      setStatus(`Implementer: ${engineLabel(engine)}.`);
+    } catch (error) {
+      setStatus(`Implementer not changed (${(error as Error).message}).`);
+    }
+  };
   const save = async () => {
     setStatus("Saving…");
     try {
@@ -226,7 +262,12 @@ export function AgentSettings({ sid, close }: { sid?: string; close: () => void 
         void save();
       }}
     >
-      <AgentSettingsForm reply={reply} draft={draft} setDraft={setDraft} />
+      <AgentSettingsForm
+        reply={reply}
+        draft={draft}
+        setDraft={setDraft}
+        switchImplementer={(engine) => void switchImplementer(engine)}
+      />
       <div className="agent-settings-actions">
         <span role="status">{status}</span>
         <button type="button" onClick={() => setDraft({})}>
