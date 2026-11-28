@@ -1,11 +1,11 @@
-import { nodeUrl } from "../lib/api";
+import { getJson, nodeUrl } from "../lib/api";
 import { retroCardHtml } from "../components/retroMarkup";
 import { RetroCard } from "../components/RetroControls";
 import { useEffect, useRef, useState } from "react";
 import { cardAgents, FLAG_TEXT, STATE_TEXT } from "../lib/cards";
 import { ago, esc, fmtCost, fmtTokens, modelFamily, modelShort } from "../lib/format";
-import { lastPara, saidHtml } from "../lib/markup";
-import type { Card, DashState, Session } from "../lib/types";
+import { lastPara, mdHtml, saidHtml } from "../lib/markup";
+import type { Card, DashState, Session, SessionQuestion } from "../lib/types";
 import { store } from "../store";
 import { openAgent } from "../components/OutDialog";
 import { COPY_ICON, copyDoc, resumeHtml } from "./docs";
@@ -364,6 +364,51 @@ function resultSection(
   );
 }
 
+const QUESTIONS_REFRESH_MS = 10000;
+/** Each lead session's '#' questions, fetched from /api/session-history while its Information tab is open. */
+const sessionQuestions = new Map<string, SessionQuestion[]>();
+const questionsOf = (c: Card): SessionQuestion[] => sessionQuestions.get(c.sessions?.[0]?.id || "") || [];
+
+function syncQuestions(sid: string | undefined): (() => void) | undefined {
+  if (!sid) return;
+  let live = true;
+  const load = () =>
+    getJson<{ questions?: SessionQuestion[] }>(`/api/session-history?sid=${encodeURIComponent(sid)}`)
+      .then((data) => {
+        const next = data.questions || [];
+        if (!live || JSON.stringify(next) === JSON.stringify(sessionQuestions.get(sid) || [])) return;
+        sessionQuestions.set(sid, next);
+        repaint?.();
+      })
+      .catch(() => {});
+  void load();
+  const timer = setInterval(() => !document.hidden && void load(), QUESTIONS_REFRESH_MS);
+  return () => {
+    live = false;
+    clearInterval(timer);
+  };
+}
+
+/** Prompts the user started with '#', newest first, each with its turn's final reply folded under it. */
+export function questionsSection(c: Card, questions: SessionQuestion[]): string {
+  const item = (q: SessionQuestion) =>
+    `<article class="info-question"><div class="info-question-text">${esc(q.question)}</div>` +
+    `<div class="s">Asked ${esc(stamp(q.asked))}${q.done ? "" : " · turn still running"}</div>` +
+    (q.answer
+      ? infoDisclosure(
+          c,
+          `question-${q.asked}-${q.question.length}`,
+          q.done ? "Answer" : "Answer so far",
+          `<div class="said-full">${mdHtml(q.answer)}</div>`,
+        ) + `<div class="copy-bar">${copyButton(`data-copy="${esc(q.answer)}"`, "Copy answer")}</div>`
+      : '<div class="s">No answer yet.</div>') +
+    `</article>`;
+  const body = questions.length
+    ? [...questions].reverse().map(item).join("")
+    : '<div class="s">Start a prompt with # to keep it here with its answer.</div>';
+  return infoSection(c, "questions", `Questions${questions.length ? ` (${questions.length})` : ""}`, body);
+}
+
 function sessionDetails(c: Card, state: DashState, now: any[], sessions: any[], runs: any[]): string {
   const body =
     (now.length ? now : sessions).map((session) => resumeHtml(session, state)).join("") +
@@ -386,7 +431,12 @@ function runsDetails(c: Card, desc: string, registered: string, tasks: string, r
   return infoDisclosure(c, "runs", "Worker and audit runs", body);
 }
 
-export function infoHtml(c: Card, state: DashState, openRun: string | null): string {
+export function infoHtml(
+  c: Card,
+  state: DashState,
+  openRun: string | null,
+  questions: SessionQuestion[] = questionsOf(c),
+): string {
   const tasks = runTasks(c, openRun);
   const sessions: any[] = c.sessions || [],
     now: any[] = c.now || [],
@@ -431,7 +481,7 @@ export function infoHtml(c: Card, state: DashState, openRun: string | null): str
     `${taskProgressHtml(c)}${workersSection(c)}${activitySection(c, state)}` +
     `<div class="session-activity">${liveHtml(c)}</div>` +
     `${summarySection(c, status, phase, lead, auditor, activity)}${progressSection(c, history, activity)}` +
-    `${resultSection(c, lead, message, audit, leadChecks, checks, blockers)}` +
+    `${resultSection(c, lead, message, audit, leadChecks, checks, blockers)}${questionsSection(c, questions)}` +
     `${sessionDetails(c, state, now, sessions, runs)}${runsDetails(c, desc, registered, tasks, runs)}` +
     `${taskListHtml(c)}</div>`
   );
@@ -543,6 +593,7 @@ export function InfoTab({ card, state, openRun }: { card: Card; state: DashState
   repaint = () => update((n) => n + 1);
   useEffect(() => paintInfo(root.current, card, state, openRun), [card, state, openRun, tick]);
   useEffect(() => syncLog(card, openRun), [card, openRun]);
+  useEffect(() => syncQuestions(card.sessions?.[0]?.id), [card.sessions?.[0]?.id]);
   useEffect(() => listenForToggles(root.current, card.key), [card.key]);
   return (
     <RetroCard className="info-surface">

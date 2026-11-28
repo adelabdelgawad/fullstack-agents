@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Card, DashState } from "../lib/types";
-import { infoHtml } from "./InfoTab";
+import { infoHtml, InfoTab } from "./InfoTab";
 import { dismissed, infoOpen } from "./panelLib";
 
 const now = 2_000_000_000;
@@ -712,5 +712,74 @@ describe("information UI Python parity", () => {
     const html = render(fixture(), { result: true });
     expect(html).toContain("Copy response");
     expect(html).not.toContain("Files mentioned");
+  });
+
+  it("questions_list_hash_prompts_newest_first_with_collapsible_copyable_answers", () => {
+    const card = fixture();
+    infoOpen.set(card.key, new Map([["questions", true]]));
+    const html = infoHtml(card, state(card), null, [
+      {
+        question: "Why <b>slow</b>?",
+        asked: 1_700_000_000,
+        answer: "The **cache** misses.",
+        answered: 1_700_000_050,
+        done: true,
+      },
+      { question: "Which port?", asked: 1_700_000_200, answer: "8300 so far", answered: 1_700_000_210, done: false },
+      { question: "Pending?", asked: 1_700_000_300, answer: "", answered: 0, done: false },
+    ]);
+    const root = document.createElement("div");
+    root.innerHTML = html;
+    const section = root.querySelector('[data-info-section="questions"]')!;
+    expect(section.querySelector("h4")?.textContent).toBe("Questions (3)");
+    const items = [...section.querySelectorAll(".info-question")];
+    expect(items.map((el) => el.querySelector(".info-question-text")?.textContent)).toEqual([
+      "Pending?",
+      "Which port?",
+      "Why <b>slow</b>?",
+    ]);
+    expect(items[0].textContent).toContain("No answer yet.");
+    expect(items[1].querySelector("summary")?.textContent).toBe("Answer so far");
+    const answer = items[2].querySelector<HTMLDetailsElement>("details")!;
+    expect(answer.querySelector("summary")?.textContent).toBe("Answer");
+    expect(answer.open).toBe(false);
+    expect(answer.querySelector(".said-full b")?.textContent).toBe("cache");
+    expect(items[2].querySelector<HTMLElement>("[data-copy]")?.dataset.copy).toBe("The **cache** misses.");
+  });
+
+  it("questions_section_explains_the_hash_marker_when_empty", () => {
+    const html = render(fixture(), { questions: true });
+    expect(html).toContain("Questions</h4>");
+    expect(html).toContain("Start a prompt with # to keep it here with its answer.");
+  });
+
+  it("info_tab_fetches_the_sessions_questions", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            turns: [],
+            totals: {},
+            questions: [{ question: "Fetched?", asked: 1, answer: "Yes.", answered: 2, done: true }],
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const card = fixture();
+    const host = document.createElement("div");
+    document.body.append(host);
+    const { createRoot } = await import("react-dom/client");
+    const { act } = await import("react");
+    const app = createRoot(host);
+    await act(async () => app.render(<InfoTab card={card} state={state(card)} openRun={null} />));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(fetchMock.mock.calls.map((c) => String((c as unknown[])[0]))).toContain("/api/session-history?sid=lead");
+    expect(host.querySelector(".info-question-text")?.textContent).toBe("Fetched?");
+    act(() => app.unmount());
+    host.remove();
+    vi.unstubAllGlobals();
   });
 });

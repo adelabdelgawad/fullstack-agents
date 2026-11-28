@@ -1578,9 +1578,38 @@ def _turn_prompt(d):
     return chat_prompt(d, d.get("message") or {}) if d.get("type") == "user" else ""
 
 
+QUESTIONS_MAX = 100
+QUESTION_TEXT = 4000
+QUESTION_ANSWER = 20000
+
+
+def _question(d, prompt):
+    """A prompt the user marked for the Information tab's Questions by starting it with '#', shown without the marks:
+    the turn's own prompt, or one sent mid-turn (recorded as a human queued_command attachment)."""
+    if not prompt and ask_of(d) and d.get("type") == "attachment":
+        prompt = str(d["attachment"].get("prompt") or "")
+    text = (prompt or "").strip()
+    return text.lstrip("#").strip() if text.startswith("#") else ""
+
+
+def _reply_text(d):
+    """The agent's last non-empty text block in one transcript line (Claude or Codex); tool steps are not replies."""
+    if d.get("type") == "response_item":
+        p = d.get("payload") or {}
+        return codex_text(p) if p.get("type") == "message" and p.get("role") == "assistant" else ""
+    if d.get("type") != "assistant" or d.get("isSidechain"):
+        return ""
+    content = (d.get("message") or {}).get("content")
+    texts = [b.get("text", "").strip() for b in content if isinstance(b, dict) and b.get("type") == "text"] \
+        if isinstance(content, list) else [str(content or "").strip()]
+    texts = [t for t in texts if t]
+    return texts[-1] if texts else ""
+
+
 def session_turns(path):
     """One row per prompt of one session, oldest first: prompt, model, outcome, tokens, est. cost, context fill at
-    the end of the turn, compactions and times, plus session totals. Cached by path, size and mtime."""
+    the end of the turn, compactions and times, plus session totals and the '#' questions (each with its turn's final
+    text reply). Cached by path, size and mtime."""
     try:
         info = os.stat(path)
     except OSError:
@@ -1592,6 +1621,7 @@ def session_turns(path):
             return hit[1]
     engine = "claude"
     st, rows, turn, start_models = new_tally(), [], None, {}
+    questions, asking = [], []  # asking: the questions of the open turn, answered by its last text reply
     with open(path, "rb") as fh:
         for raw in fh:
             try:
@@ -1604,6 +1634,23 @@ def session_turns(path):
                 engine = "codex"
             at = iso_epoch(d.get("timestamp") or "")
             prompt = _turn_prompt(d)
+            question = _question(d, prompt)
+            if prompt:
+                for q in asking:
+                    q["done"] = True
+                asking = []
+            if question:
+                last = questions[-1] if questions else None
+                if last and last["question"] == question[:QUESTION_TEXT] and not last["answer"]:
+                    if last not in asking:  # a queued prompt recorded both mid-turn and as the next turn's prompt
+                        asking.append(last)
+                else:
+                    q = {"question": question[:QUESTION_TEXT], "asked": at, "answer": "", "answered": 0, "done": False}
+                    questions.append(q)
+                    asking.append(q)
+            reply = _reply_text(d)
+            for q in asking if reply else ():
+                q["answer"], q["answered"] = clip(reply, QUESTION_ANSWER), at
             if prompt:
                 if turn:
                     rows.append(_turn_row(turn, st, start_models, False))
@@ -1616,11 +1663,13 @@ def session_turns(path):
                 turn["updated"] = max(at, turn["updated"])
     if turn:
         rows.append(_turn_row(turn, st, start_models, True))
+    for q in asking:
+        q["done"] = bool(turn and turn["done"])
     total_tokens = sum(sum(t.values()) for t in st["models"].values())
     totals = {"turns": len(rows), "tokens": total_tokens, "cost": models_cost(st["models"]),
               "compactions": st["compactions"], "model": st["model"],
               "interrupted": sum(r["state"] == "interrupted" for r in rows)}
-    result = {"turns": rows[-SESSION_TURNS_MAX:], "totals": totals}
+    result = {"turns": rows[-SESSION_TURNS_MAX:], "totals": totals, "questions": questions[-QUESTIONS_MAX:]}
     with _TURNS_LOCK:
         if len(_TURNS_CACHE) > 16:
             _TURNS_CACHE.clear()

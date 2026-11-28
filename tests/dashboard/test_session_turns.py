@@ -98,6 +98,76 @@ class SessionTurnsTests(unittest.TestCase):
         self.assertEqual(dash.session_turns("/nonexistent/x.jsonl"), {"turns": [], "totals": {}})
 
 
+def queued(prompt, ts="2026-11-21T10:00:03Z", kind="human"):
+    """A prompt the user sent mid-turn, as Claude Code records it."""
+    return {"type": "attachment", "timestamp": ts, "isSidechain": False,
+            "attachment": {"type": "queued_command", "prompt": prompt, "origin": {"kind": kind}}}
+
+
+class SessionQuestionsTests(unittest.TestCase):
+    """The Information tab's Questions: '#'-prefixed prompts, each with the final text reply of its turn."""
+
+    def read(self, rows):
+        return SessionTurnsTests.read(self, rows)["questions"]
+
+    def test_hash_prompt_gets_the_turns_last_text_reply(self):
+        questions = self.read([
+            user("Fix the login page"),
+            assistant("m1", [text("Fixed.")], "end_turn"),
+            user("#  Why does the cache\nmiss on Mondays?", ts="2026-11-21T10:01:00Z"),
+            assistant("m2", [text("Let me look."), tool("Read")], "tool_use"),
+            user([{"type": "tool_result", "tool_use_id": "t1", "content": "# not a prompt"}]),
+            user("<system-reminder>\n# reminder\n</system-reminder>"),
+            user("# hook feedback", isMeta=True),
+            assistant("m3", [text("Interim note."), tool("Bash")], "tool_use"),
+            assistant("m4", [text("The TTL resets at midnight UTC.")], "end_turn", ts="2026-11-21T10:02:00Z"),
+            user("Thanks, now deploy", ts="2026-11-21T10:03:00Z"),
+            assistant("m5", [text("Deployed.")], "end_turn"),
+        ])
+        self.assertEqual(len(questions), 1)
+        q = questions[0]
+        self.assertEqual(q["question"], "Why does the cache\nmiss on Mondays?")
+        self.assertEqual(q["answer"], "The TTL resets at midnight UTC.")
+        self.assertTrue(q["done"])
+        self.assertEqual(q["answered"] - q["asked"], 60)
+
+    def test_mid_turn_hash_prompt_answered_by_the_turns_final_reply(self):
+        questions = self.read([
+            user("Refactor the router"),
+            assistant("m1", [tool("Bash")], "tool_use"),
+            queued("# which port does it use?"),
+            queued("# from a teammate", kind="agent"),
+            queued("not a question"),
+            assistant("m2", [text("Router done; it listens on 8300.")], "end_turn"),
+        ])
+        self.assertEqual([(q["question"], q["answer"], q["done"]) for q in questions],
+                         [("which port does it use?", "Router done; it listens on 8300.", True)])
+
+    def test_queued_prompt_that_became_the_next_turn_is_listed_once(self):
+        questions = self.read([
+            user("Long task"),
+            assistant("m1", [tool("Bash")], "tool_use"),
+            queued("# status?"),
+            user("# status?", ts="2026-11-21T10:05:00Z"),
+            assistant("m2", [text("All green.")], "end_turn"),
+        ])
+        self.assertEqual([(q["question"], q["answer"]) for q in questions], [("status?", "All green.")])
+
+    def test_open_turn_question_is_not_done(self):
+        questions = self.read([user("# still thinking?"), assistant("m1", [text("Checking."), tool("Bash")], "tool_use")])
+        self.assertEqual((questions[0]["answer"], questions[0]["done"]), ("Checking.", False))
+
+    def test_codex_hash_prompt(self):
+        def item(payload, kind="response_item"):
+            return {"type": kind, "timestamp": "2026-11-21T10:00:00Z", "payload": payload}
+        questions = self.read([
+            item({"type": "message", "role": "user", "content": [{"type": "input_text", "text": "# what changed?"}]}),
+            item({"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Two files."}]}),
+            item({"type": "task_complete"}, "event_msg"),
+        ])
+        self.assertEqual([(q["question"], q["answer"], q["done"]) for q in questions], [("what changed?", "Two files.", True)])
+
+
 class HistoryLineageTests(unittest.TestCase):
     def test_handoff_prompt_names_the_session_it_continues(self):
         old = "f0b9c55b-2e6f-465f-b94c-2afdd0994746"

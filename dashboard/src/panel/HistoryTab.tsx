@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { RetroCard } from "../components/RetroControls";
 import { getJson } from "../lib/api";
 import { ago, fmtCost, fmtTokens, modelFamily, modelShort } from "../lib/format";
-import type { Card, HistoryEntry } from "../lib/types";
+import type { Card, HistoryEntry, SessionQuestion } from "../lib/types";
 import { useStore } from "../store";
 import { SessionsTable } from "../views/HistoryView";
 
@@ -31,6 +31,7 @@ export interface TurnTotals {
 export interface SessionHistory {
   turns: Turn[];
   totals: TurnTotals;
+  questions?: SessionQuestion[];
 }
 
 const OUTCOME: Record<string, string> = {

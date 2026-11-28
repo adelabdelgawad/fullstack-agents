@@ -92,6 +92,15 @@ export interface WaitingEntry {
   [key: string]: unknown;
 }
 
+/** A prompt the user started with '#', with the final text reply of its turn (/api/session-history `questions`). */
+export interface SessionQuestion {
+  question: string;
+  asked: number;
+  answer: string;
+  answered: number;
+  done: boolean;
+}
+
 export interface HistoryEntry {
   id: string;
   name: string;

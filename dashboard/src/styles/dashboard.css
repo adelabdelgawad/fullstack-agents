@@ -1125,6 +1125,14 @@ aside pre {
 .info-run {
   margin-top: 12px;
 }
+.info-question {
+  margin-top: 12px;
+}
+.info-question-text {
+  font-weight: 600;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 #info {
   flex: 1;
   min-height: 0;
