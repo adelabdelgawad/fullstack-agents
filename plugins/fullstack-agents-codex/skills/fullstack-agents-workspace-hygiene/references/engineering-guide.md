@@ -13,8 +13,11 @@ classifies every git worktree under the root:
 
 ## Procedure
 
-1. Report first, delete second: show the groups with sizes and ask which groups to remove. Only
-   the user's answer authorizes deletion; a group approved once covers that group only.
+1. Standing authorization: rebuildable caches (build targets and stale artifacts in them,
+   `.next`, other `--caches` rows) and `safe` worktrees are removed without asking, then reported
+   (step 7); a disk or host guard blocking work is reason enough. Ask first, with sizes, only for
+   `probably safe` worktrees, `keep` rows and branches needing `-D`; an approved group covers that
+   group only. A project rule that requires asking wins.
 2. Before removing, re-run the report: a worktree that changed state since the report moves to keep.
 3. Claims: when other sessions share the repository, read the team board (`team-coordination`); a
    claimed path is keep.
