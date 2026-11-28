@@ -33,6 +33,8 @@ sheet or table that breaks one rule is not done. Copy the applicable bullets int
 - Build from the project's shared table, toolbar, filter, pagination and sheet components; never
   a hand-rolled table or native `<select>`. Narrow screens render each row as a card.
 - Empty, loading and error states are explicit; an error offers Retry.
+- A record route's browser title shows the record's name, never its id or slug: it comes from the
+  same label the breadcrumb shows for that segment (one source, no second fetch for the title).
 
 **Row actions**
 - View (eye icon) first: opens the read-only View sheet. Edit (pencil icon), shown only with the
