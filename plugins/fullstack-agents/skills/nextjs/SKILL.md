@@ -15,6 +15,15 @@ Required: relevant [data-freshness](references/data-freshness.md) and
 [live-updates](references/live-updates.md). For list pages load `data-table`. A new or redesigned
 page follows [page-composition](references/page-composition.md).
 
+**List and CRUD pages** follow the "Page contract" in [data-table](../data-table/SKILL.md) (toolbar, filter
+pane, row actions, sheets) and [sheet rules](../data-table/references/edit-sheet-pattern.md).
+- View: the eye action fetches the full record, then opens a read-only sheet of every field and
+  child item as text; no inputs, no Save.
+- Edit: the pencil action fetches the full record, then opens the shared form prefilled, child
+  items as editable rows with inline Add, one footer Save/Cancel.
+- Create: the toolbar's primary button opens the same form empty; Save closes it and updates the
+  list from the server's returned record.
+
 ## Detailed guide
 
 Complete rules/examples: [references/skill-guide.md](references/skill-guide.md).

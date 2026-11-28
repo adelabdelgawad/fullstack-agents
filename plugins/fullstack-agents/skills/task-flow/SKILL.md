@@ -84,6 +84,9 @@ with runnable checks, one `BUILD:` command the implementer sandbox can run (no `
 ranges; test changes get a `PATTERN:` example. Attach only needed skills.
 Frontend briefs state first-paint data and post-hydration request budget
 (zero for primary content). The lead loads `nextjs` before writing the brief.
+A frontend brief that creates or changes a page, sheet or table copies the applicable
+`data-table` "Page contract" bullets (or lists `data-table` under `SKILLS:` and names
+`references/edit-sheet-pattern.md`) and states what each sheet's View, Edit and Create show.
 
 Search → ranged reads → bounded extraction only if the narrowed set is still
 too wide. Delegated scans need exact `FILES:` and `REPORT:` table contracts
@@ -126,15 +129,15 @@ Markdown links are relocated.
 - Line 12: Roles
 - Line 28: The size threshold
 - Line 59: Briefs
-- Line 154: Parallel implementation
-- Line 175: Visible workers (only when the user says "use herdr")
-- Line 193: Watching a run
-- Line 227: Auditing
-- Line 285: Scanning wide
-- Line 315: Cost discipline
-- Line 328: Reporting the phase
-- Line 366: Working alongside other sessions
-- Line 377: Project bindings
+- Line 162: Parallel implementation
+- Line 183: Visible workers (only when the user says "use herdr")
+- Line 201: Watching a run
+- Line 235: Auditing
+- Line 293: Scanning wide
+- Line 323: Cost discipline
+- Line 336: Reporting the phase
+- Line 374: Working alongside other sessions
+- Line 385: Project bindings
 
 ## Task list visible in the dashboard
 

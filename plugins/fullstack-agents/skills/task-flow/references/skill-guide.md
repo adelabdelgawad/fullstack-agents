@@ -111,6 +111,14 @@ everything after paint — the implementer builds what was asked. The lead loads
 (`nextjs`) itself before writing such a brief; naming it in `SKILLS:` loads it for the implementer
 only, never for the lead.
 
+A frontend brief that creates or changes a page, sheet or table carries the page contract
+explicitly, because the implementer builds only what the brief says. Either copy the applicable
+bullets of the `data-table` SKILL.md "Page contract" into the brief, or list `data-table` under
+`SKILLS:` and name `references/edit-sheet-pattern.md` as the authoritative document. In both cases
+the brief states, for each sheet, what View shows (every field and child item, read-only), what
+Edit shows (the same form prefilled, child items as editable rows with inline Add, one footer Save)
+and what Create shows (the same form empty), in the user's domain words.
+
 The orchestrator already located every change site with grep while planning, so the brief hands
 those locations over: each site as `file:line` (or a line range) with what changes there — for a
 SQL site, the placeholder numbers already taken and the free one to use. The implementer then
